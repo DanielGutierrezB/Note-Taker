@@ -50,6 +50,10 @@ export function avisar(texto, tono) {
     if (!t) {
         t = document.createElement('div');
         t.className = 'tostada';
+        // Que un lector de pantalla lo diga: es por donde la app cuenta lo que
+        // pasó solo (una toma que se abrió, un audio que se cayó).
+        t.setAttribute('role', 'status');
+        t.setAttribute('aria-live', 'polite');
         document.body.appendChild(t);
     }
     t.textContent = texto;

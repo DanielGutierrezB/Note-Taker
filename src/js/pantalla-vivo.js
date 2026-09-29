@@ -38,9 +38,40 @@ import { estiloDeVista } from './colores.js';
 let app = null;
 let estado = null;
 let audio = null;
+let terminando = false;
 
-/** Un repintado que llegó con una línea agarrada y quedó esperando (`texto.arrastrando`). */
+/** Un repintado que llegó en un momento en que no se podía hacer, y quedó esperando. */
 let pendiente = false;
+
+/**
+ * Un botón del mouse apretado en la pantalla (fuera de un IN/OUT). Mientras
+ * tanto no se repinta: repintar entre el apretar y el soltar dejaba el clic
+ * cayendo en otro nodo, y el navegador no se lo daba a nadie. Uno de cada diez
+ * clics —abrir, cerrar, una vista— no hacía nada.
+ */
+let pulsando = false;
+
+/** Un acento a medio escribir (tecla muerta): repintar lo partía en «´é». */
+let componiendo = false;
+
+/**
+ * El texto con un borde recién soltado, mientras el motor contesta. Se deja
+ * tal cual —con la línea donde se soltó— en vez de repintarlo con el estado
+ * viejo, que hacía volver la línea a su palabra de antes hasta la respuesta.
+ */
+let enVuelo = null;
+
+/** El texto cuyo IN u OUT está bajo el puntero: no se le agregan palabras ahí. */
+let sobreBorde = null;
+
+/** Cuándo llegó el último estado del motor, para darse cuenta si se calló. */
+let ultimoAvisoMs = 0;
+
+/** Lo último que se tecleó en un campo, para no tomar como atajo lo que sigue. */
+let ultimaTeclaEnCampo = 0;
+
+/** El foco de un campo que desapareció al repintar y hay que buscar en su nuevo sitio. */
+let focoPendiente = null;
 
 /** Cuántas palabras de antes del IN se ven con la toma abierta: las que hacen falta para correrlo. */
 const ORILLA_ABIERTA = 24;
@@ -92,12 +123,49 @@ export function conectar(contexto) {
     document.addEventListener('keydown', alTeclado);
     window.nt.onGrabarAviso(alAviso);
 
-    // Soltar sin cambiar nada no trae estado nuevo, así que el repintado que
-    // esperó se hace acá. Con un cambio lo hace la respuesta del motor, y
-    // repintar antes con el estado viejo haría saltar la línea para atrás.
-    texto.alSoltarCualquiera(cambio => {
-        if (pendiente && !cambio) pintar();
+    // Soltar sin cambiar nada no trae estado nuevo: el texto se repinta ya.
+    // Con un cambio, lo repinta la respuesta del motor (`enVuelo`).
+    texto.alSoltarCualquiera(cambio => { if (!cambio) pintar(); });
+
+    const pantalla = $('#vista-vivo');
+    pantalla.addEventListener('pointerdown', e => {
+        if (e.target.closest('.borde')) return;
+        pulsando = true;
     });
+    // Después del clic y no en el `pointerup`: el clic llega después, y
+    // repintar antes lo volvía a perder. Y después de que `alSeleccionar` lea
+    // la selección, que también espera un turno: repintar antes la dejaba
+    // apuntando a nodos que ya no están y el comentario no se abría.
+    const soltarPulsacion = () => setTimeout(() => {
+        pulsando = false;
+        if (pendiente) pintar();
+    }, 30);
+    window.addEventListener('pointerup', soltarPulsacion);
+    window.addEventListener('pointercancel', soltarPulsacion);
+    window.addEventListener('blur', soltarPulsacion);
+    pantalla.addEventListener('pointerover', e => {
+        const b = e.target.closest('.borde');
+        if (b) sobreBorde = claveDe(b.closest('[data-texto]'));
+    });
+    pantalla.addEventListener('pointerout', e => {
+        if (e.target.closest('.borde')) sobreBorde = null;
+    });
+    document.addEventListener('compositionstart', () => { componiendo = true; });
+    document.addEventListener('compositionend', () => {
+        componiendo = false;
+        if (pendiente) pintar();
+    });
+    pantalla.addEventListener('input', e => {
+        const c = e.target.closest('[data-campo="comentario"]');
+        if (c && vista.comentando) vista.comentando.borrador = c.value;
+    });
+
+    // La barra de arriba —timecode, estado, nivel— se refresca sola, aunque el
+    // motor no mande nada: si el audio se cae, el motor deja de mandar estados,
+    // y esta pantalla seguía diciendo «escuchando» con el timecode quieto.
+    setInterval(() => {
+        if (estado && $('#vista-vivo').classList.contains('es-activa')) pintarBarra();
+    }, 150);
 }
 
 export function ver(primerEstado, elAudio) {
@@ -106,6 +174,7 @@ export function ver(primerEstado, elAudio) {
     vista.abierta = null;
     vista.elegida = null;
     vista.comentando = null;
+    ultimoAvisoMs = Date.now();
     verVista('vista-vivo');
     pintar();
 }
@@ -116,6 +185,7 @@ function alAviso(aviso) {
     if (!aviso) return;
     if (aviso.tipo === 'estado') {
         estado = aviso.estado;
+        ultimoAvisoMs = Date.now();
         for (const ev of aviso.eventos || []) contar(ev);
         pintar();
         return;
@@ -141,21 +211,41 @@ function contar(ev) {
 
 /* ─── Dibujar ─────────────────────────────────────────────────────────── */
 
+/**
+ * Sin estado del motor por más que esto, algo se calló: el audio no llega, o el
+ * motor se trabó. Lo normal es uno por segundo.
+ */
+const MOTOR_CALLADO_MS = 6000;
+
+/** Lo de arriba: timecode, estado de la sesión y nivel. Barato: va seguido. */
+function pintarBarra() {
+    const fps = estado.fps;
+    const callado = !terminando && Date.now() - ultimoAvisoMs > MOTOR_CALLADO_MS;
+    const conAudio = audio ? { ...audio, caido: audio.caido || callado } : (callado ? { caido: true } : null);
+    const est = estados.deSesion(estado, conAudio);
+    $('#vivo-tc').textContent = fmt.timecode(estado.segundos, fps);
+    if (!terminando) {
+        $('#vivo-estado').textContent = est.palabra;
+        $('#vivo-estado').style.color =
+            est.clave === 'sin audio' ? 'var(--error)'
+                : (est.clave === 'abierta' || est.clave === 'releyendo' ? 'var(--accent)' : 'var(--ok)');
+    }
+    if (audio) {
+        const barra = $('#vivo-nivel');
+        barra.firstElementChild.style.width = `${Math.min(100, (audio.pico || 0) * 140)}%`;
+        barra.dataset.pico = audio.pico > 0.95 ? 'clip' : (audio.pico > 0.7 ? 'alto' : '');
+    }
+}
+
 function pintar() {
     if (!estado) return;
-    if (texto.arrastrando()) {
+    if (pulsando || componiendo) {
         pendiente = true;
         return;
     }
     pendiente = false;
     const fps = estado.fps;
-    const est = estados.deSesion(estado, audio);
-
-    $('#vivo-tc').textContent = fmt.timecode(estado.segundos, fps);
-    $('#vivo-estado').textContent = est.palabra;
-    $('#vivo-estado').style.color =
-        est.clave === 'sin audio' ? 'var(--error)'
-            : (est.clave === 'abierta' || est.clave === 'releyendo' ? 'var(--accent)' : 'var(--ok)');
+    pintarBarra();
 
     const vivas = estado.tomas.filter(t => !t.descartada);
     $('#vivo-tomas').textContent = vivas.length;
@@ -171,8 +261,14 @@ function pintar() {
     botonHistoria($('#btn-deshacer'), h.atras, h.queAtras, 'Deshacer');
     botonHistoria($('#btn-rehacer'), h.adelante, h.queAdelante, 'Rehacer');
 
-    const foco = recordarFoco();
+    const foco = focoPendiente || recordarFoco();
+    focoPendiente = null;
+    const pantalla = $('#vista-vivo');
+    const habiaFoco = pantalla.contains(document.activeElement) && document.activeElement !== pantalla;
     const rollos = recordarRollos();
+    const quedan = textosQueSeQuedan();
+    const lienzo = pantalla.querySelector('.scroll');
+    const arriba = lienzo ? lienzo.scrollTop : 0;
 
     $('#ahora').innerHTML = ahora(fps);
     const items = laLista();
@@ -184,15 +280,36 @@ function pintar() {
                claquetas aparecen acá también, en su lugar: con el aplauso, diciendo
                «claqueta» o con la tecla K.</span></div>`;
 
-    montarTextos();
-    devolverRollos(rollos);
+    montarTextos(quedan);
+    devolverRollos(rollos, quedan);
+    if (lienzo) lienzo.scrollTop = arriba;
     devolverFoco(foco);
+    // El foco estaba en algo de esta pantalla que ya no existe (un botón que se
+    // repintó, el campo de una toma que se cerró): vuelve a la pantalla y no al
+    // `<body>`, así el teclado sigue siendo de acá.
+    if (habiaFoco && !pantalla.contains(document.activeElement)) pantalla.focus({ preventScroll: true });
+}
 
-    if (audio) {
-        const barra = $('#vivo-nivel');
-        barra.firstElementChild.style.width = `${Math.min(100, (audio.pico || 0) * 140)}%`;
-        barra.dataset.pico = audio.pico > 0.95 ? 'clip' : (audio.pico > 0.7 ? 'alto' : '');
+/**
+ * Los textos que NO se rehacen en este repintado: el que se está arrastrando,
+ * el que espera la respuesta de un borde soltado, y aquel cuyo IN/OUT está bajo
+ * el puntero —si le entran palabras, la línea se corre justo antes de agarrarla
+ * (medido: 293 px con seis palabras nuevas)—. Se sacan del DOM viejo y se
+ * vuelven a poner en el hueco nuevo, con sus escuchas y todo.
+ */
+function textosQueSeQuedan() {
+    const claves = new Set();
+    const agarrado = texto.arrastrado();
+    if (agarrado && agarrado.parentElement) claves.add(claveDe(agarrado.parentElement));
+    if (enVuelo && Date.now() < enVuelo.hasta) claves.add(enVuelo.clave);
+    if (sobreBorde) claves.add(sobreBorde);
+    const quedan = new Map();
+    for (const hueco of document.querySelectorAll('#vista-vivo [data-texto]')) {
+        const clave = claveDe(hueco);
+        const t = hueco.querySelector('.transcript');
+        if (t && claves.has(clave)) quedan.set(clave, t);
     }
+    return quedan;
 }
 
 function botonHistoria(boton, hay, que, verbo) {
@@ -304,6 +421,7 @@ function filaToma(t, fps) {
     return `<div class="bloque-toma con-vista ${abierta ? 'es-abierta' : ''}"
         data-estado="${est.clave}" style="${estiloDeVista(estado.vistas, t.vista)}">
       <div class="fila guarda ${vista.elegida === t.id ? 'es-elegida' : ''}"
+           role="button" tabindex="0" aria-expanded="${abierta}"
            data-estado="${est.clave}" data-toma="${t.id}" data-hace="plegar"
            ${est.porque ? `title="${esc(est.porque)}"` : ''}>
         <span class="chevron">${icono('chevron')}</span>
@@ -402,6 +520,7 @@ function comentariosDe(t) {
       <div class="comentar">
         <span class="v3">Comentar <q>${esc(c.texto)}</q></span>
         <input type="text" data-campo="comentario" data-toma="${t.id}"
+               value="${esc(c.borrador || '')}"
                placeholder="Qué pasa en este pedazo — va al XML como marcador blanco">
         <button class="btn" type="button" data-hace="guardar-comentario" data-toma="${t.id}">Comentar</button>
         <button class="btn btn-tenue" type="button" data-hace="cancelar-comentario">Cancelar</button>
@@ -444,26 +563,40 @@ function pintarInterruptores(desactivadas) {
  * Van aparte porque llevan escuchas de puntero, que un `innerHTML` no puede
  * traer. Cada hueco dice qué texto es (`data-texto`) y de qué toma.
  */
-function montarTextos() {
+function montarTextos(quedan) {
     for (const hueco of document.querySelectorAll('#vista-vivo [data-texto]')) {
         const cual = hueco.dataset.texto;
+        const clave = claveDe(hueco);
+        if (quedan && quedan.has(clave)) {
+            hueco.append(quedan.get(clave));
+            continue;
+        }
         const toma = estado.tomas.find(t => t.id === Number(hueco.dataset.toma));
+        // Soltar un borde: el texto queda como se soltó hasta que el motor
+        // conteste (`enVuelo`), y ahí se repinta con lo que dijo.
+        const enviar = hacer => (borde, ms, el) => {
+            enVuelo = { clave, el, hasta: Date.now() + 8000 };
+            Promise.resolve(hacer(borde, ms)).finally(() => {
+                if (enVuelo && enVuelo.el === el) enVuelo = null;
+                pintar();
+            });
+        };
         if (cual === 'espera') {
             hueco.append(texto.textoDe({
                 modo: 'inactiva',
                 palabras: sueltasLibres(),
                 vacio: 'Escuchando… lo que se diga va a aparecer acá.'
-            }, (borde, ms) => abrir(ms)));
+            }, enviar((borde, ms) => abrir(ms))));
         } else if (cual === 'abierta' && toma) {
             hueco.append(texto.textoDe({
                 modo: 'abierta',
                 antes: sueltasLibres().filter(w => w.t < toma.inMs).slice(-ORILLA_ABIERTA),
-                palabras: toma.palabras,
+                palabras: recortarAbierta(toma.palabras),
                 comentarios: toma.comentarios,
                 vacio: 'Todavía no se oyó nada de esta toma.'
-            }, (borde, ms) => borde === 'out'
+            }, enviar((borde, ms) => (borde === 'out'
                 ? pedir(() => window.nt.grabarCerrarToma(ms))
-                : editar({ tipo: 'borde', toma: toma.id, borde, paredMs: ms })));
+                : editar({ tipo: 'borde', toma: toma.id, borde, paredMs: ms })))));
         } else if (cual === 'cerrada' && toma) {
             hueco.append(texto.textoDe({
                 modo: 'cerrada',
@@ -472,9 +605,26 @@ function montarTextos() {
                 despues: toma.despues,
                 comentarios: toma.comentarios,
                 vacio: 'Esta toma no tiene texto.'
-            }, (borde, ms) => editar({ tipo: 'borde', toma: toma.id, borde, paredMs: ms })));
+            }, enviar((borde, ms) => editar({ tipo: 'borde', toma: toma.id, borde, paredMs: ms }))));
         }
     }
+}
+
+/**
+ * Cuántas palabras de una toma abierta larga se dibujan: el principio, para
+ * poder correr el IN, y el final, que es lo que se está diciendo. Una toma de
+ * veinte minutos son tres mil palabras, y repintarlas cada segundo costaba
+ * 18 ms más casi 2 ms por cada movimiento del mouse al arrastrar.
+ */
+const ABIERTA_PRINCIPIO = 40;
+const ABIERTA_FINAL = 300;
+
+function recortarAbierta(palabras) {
+    const ws = palabras || [];
+    if (ws.length <= ABIERTA_PRINCIPIO + ABIERTA_FINAL + 20) return ws;
+    const salteadas = ws.length - ABIERTA_PRINCIPIO - ABIERTA_FINAL;
+    return ws.slice(0, ABIERTA_PRINCIPIO)
+        .concat([{ corte: salteadas }], ws.slice(-ABIERTA_FINAL));
 }
 
 /**
@@ -498,12 +648,15 @@ function recordarRollos() {
     return rollos;
 }
 
-function devolverRollos(rollos) {
+function devolverRollos(rollos, quedan) {
     for (const hueco of document.querySelectorAll('#vista-vivo [data-texto]')) {
         const t = hueco.querySelector('.transcript');
         if (!t) continue;
         const antes = rollos.get(claveDe(hueco));
-        t.scrollTop = !antes || antes.alFondo ? t.scrollHeight : antes.arriba;
+        // El que se quedó igual vuelve a donde estaba: sacarlo del DOM y volver
+        // a meterlo le borra el scroll.
+        if (quedan && quedan.has(claveDe(hueco)) && antes) t.scrollTop = antes.arriba;
+        else t.scrollTop = !antes || antes.alFondo ? t.scrollHeight : antes.arriba;
         marcarTapado(t);
         t.onscroll = () => marcarTapado(t);
     }
@@ -541,10 +694,23 @@ function recordarFoco() {
 function devolverFoco(f) {
     if (!f) return;
     const donde = f.enAhora ? '#ahora' : '#lista-vivo';
-    const campo = document.querySelector(`${donde} [data-campo="${f.campo}"][data-toma="${f.toma}"]`);
-    if (!campo) return;
+    const campo = document.querySelector(`${donde} [data-campo="${f.campo}"][data-toma="${f.toma}"]`)
+        || document.querySelector(`#vista-vivo [data-campo="${f.campo}"][data-toma="${f.toma}"]`);
+    if (!campo) {
+        // El campo se fue: pasa con la nota de la toma abierta cuando «Pausa»
+        // la cierra mientras se escribe. La toma sigue en la lista, así que se
+        // despliega ahí y se sigue escribiendo en su nota, sin perder nada ni
+        // mandar las letras que vienen como atajos.
+        const toma = estado && estado.tomas.find(t => String(t.id) === String(f.toma));
+        if (f.campo === 'nota' && toma && toma.outMs != null && vista.abierta !== `t${toma.id}`) {
+            vista.abierta = `t${toma.id}`;
+            focoPendiente = { ...f, enAhora: false };
+            setTimeout(pintar, 0);
+        }
+        return;
+    }
     campo.value = f.valor;
-    campo.focus();
+    campo.focus({ preventScroll: true });
     campo.setSelectionRange(f.desde, f.hasta);
 }
 
@@ -577,6 +743,9 @@ function filaClaqueta(c, fps) {
 async function alClic(e) {
     const boton = e.target.closest('[data-hace]');
     if (!boton) return;
+    // El foco vuelve a la pantalla: con el botón enfocado, el Enter siguiente
+    // lo volvía a apretar en vez de abrir o cerrar la toma.
+    if (e.detail > 0) $('#vista-vivo').focus({ preventScroll: true });
 
     const toma = boton.dataset.toma ? Number(boton.dataset.toma) : null;
     switch (boton.dataset.hace) {
@@ -641,9 +810,13 @@ function alSeleccionar(e) {
             texto: elegidas.map(w => w.textContent).join(' ')
         };
         sel.removeAllRanges();
+        // El botón ya se soltó: se pinta ahora y no cuando venza la espera del
+        // clic, que dejaba el campo sin foco y lo que se tecleaba iba a parar a
+        // los atajos.
+        pulsando = false;
         pintar();
         const campo = document.querySelector(`[data-campo="comentario"][data-toma="${vista.comentando.toma}"]`);
-        if (campo) campo.focus();
+        if (campo) campo.focus({ preventScroll: true });
     }, 0);
 }
 
@@ -679,7 +852,12 @@ async function alCambiar(e) {
  */
 async function abrir(ms) {
     const mio = turno.tomar();
-    const nuevo = await window.nt.grabarAbrirToma(ms);
+    let nuevo = null;
+    try {
+        nuevo = await window.nt.grabarAbrirToma(ms);
+    } catch (e) {
+        avisar(`No se pudo abrir la toma: ${e.message}`, 'error');
+    }
     if (turno.atrasada(mio) || !nuevo) return;
     estado = nuevo;
     pintar();
@@ -723,14 +901,25 @@ async function editar(cambio) {
  */
 async function pedir(hacer) {
     const mio = turno.tomar();
-    const nuevo = await hacer();
-    if (turno.atrasada(mio) || !nuevo) return;
-    estado = nuevo;
+    let nuevo = null;
+    try {
+        nuevo = await hacer();
+    } catch (e) {
+        avisar(`No se pudo: ${e.message}`, 'error');
+    }
+    if (turno.atrasada(mio)) return;
+    if (nuevo) estado = nuevo;
     pintar();
 }
 
 async function volver(cual) {
-    const r = cual === 'deshacer' ? await window.nt.grabarDeshacer() : await window.nt.grabarRehacer();
+    let r = null;
+    try {
+        r = cual === 'deshacer' ? await window.nt.grabarDeshacer() : await window.nt.grabarRehacer();
+    } catch (e) {
+        avisar(`No se pudo ${cual}: ${e.message}`, 'error');
+    }
+    if (!r) return;
     if (r.estado) { estado = r.estado; pintar(); }
     if (r.error) avisar(r.error, 'error');
     else if (r.ok) avisar(`${cual === 'deshacer' ? 'Deshecho' : 'Rehecho'}: ${r.que}`);
@@ -758,7 +947,11 @@ function escribiendo() {
 
 async function alTeclado(e) {
     if (!$('#vista-vivo').classList.contains('es-activa')) return;
+    // Con Ajustes o Diagnóstico abiertos encima, el teclado es de ellos: una
+    // «p» en el selector de idioma cambiaba la vista de una toma.
+    if (document.querySelector('.telon.es-activa')) return;
     if (escribiendo()) {
+        ultimaTeclaEnCampo = Date.now();
         const campo = document.activeElement;
         if (campo.dataset.campo === 'comentario') {
             if (e.key === 'Enter') { e.preventDefault(); return guardarComentario(); }
@@ -771,12 +964,33 @@ async function alTeclado(e) {
         return;
     }
 
+    // Tecla mantenida apretada: una sola vez. Mantener la K ponía cinco
+    // claquetas, y mantener Enter abría y cerraba tomas.
+    if (e.repeat || e.isComposing) return;
+    // Recién se estaba escribiendo en un campo que desapareció al repintar: lo
+    // que sigue es texto, no atajos. Se estira mientras se siga tecleando.
+    if (Date.now() - ultimaTeclaEnCampo < 1500) {
+        ultimaTeclaEnCampo = Date.now();
+        return;
+    }
+
     const meta = e.metaKey || e.ctrlKey;
     if (meta && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         return volver(e.shiftKey ? 'rehacer' : 'deshacer');
     }
     if (meta) return;
+
+    // Sobre un control con foco, las teclas son del control: Enter en un botón
+    // lo aprieta (antes abría o cerraba una toma), y en una fila la despliega.
+    const control = e.target && e.target.closest && e.target.closest('button, select, a, [role="button"]');
+    if (control) {
+        if ((e.key === 'Enter' || e.key === ' ') && control.matches('[data-hace="plegar"]')) {
+            e.preventDefault();
+            control.click();
+        }
+        return;
+    }
 
     const tecla = e.key.toLowerCase();
     if (tecla === 'k') {
@@ -811,14 +1025,22 @@ async function terminar() {
     if (!ok) return;
 
     $('#btn-terminar').disabled = true;
+    terminando = true;
     $('#vivo-estado').textContent = 'terminando';
-    // Primero se deja de mandar y después se termina: un pedazo que llegara
-    // entre las dos cosas iría a una sesión que ya está cerrando su audio.
-    await fuente.dejarDeMandar();
-    const salida = await window.nt.grabarTerminar();
-    await fuente.cerrar();
-    $('#btn-terminar').disabled = false;
-    app.irACierre(salida);
+    let salida = null;
+    try {
+        // Primero se deja de mandar y después se termina: un pedazo que llegara
+        // entre las dos cosas iría a una sesión que ya está cerrando su audio.
+        await fuente.dejarDeMandar();
+        salida = await window.nt.grabarTerminar();
+        await fuente.cerrar();
+    } catch (e) {
+        avisar(`No se pudo terminar: ${e.message}`, 'error');
+    } finally {
+        terminando = false;
+        $('#btn-terminar').disabled = false;
+    }
+    if (salida) app.irACierre(salida);
 }
 
 /** El nivel lo sigue midiendo la fuente (`grabar/fuente.js`), y la barra lo dibuja acá. */

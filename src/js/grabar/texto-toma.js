@@ -21,19 +21,25 @@
  *              que quedó guardado.
  */
 
-let arrastre = false;
+/** El texto cuya línea está agarrada, o null. */
+let agarrado = null;
 let alTerminar = () => {};
 
 /**
- * Si hay una línea agarrada en este momento.
+ * El texto que se está arrastrando, si hay uno.
  *
- * La pantalla se repinta sola cada tres segundos con lo que manda el motor, y
- * repintar reemplaza el texto entero: la línea que se estaba arrastrando
- * desaparecería de debajo del cursor. Mientras esto diga que sí, la pantalla
- * espera.
+ * La pantalla se repinta sola cada segundo, y repintar reemplaza los textos
+ * enteros: la línea que se arrastra desaparecería de debajo del cursor. La
+ * pantalla deja ESTE texto como está y repinta lo demás —antes congelaba todo,
+ * y mientras se buscaba dónde cortar se paraban el timecode y el medidor—.
  */
+export function arrastrado() {
+    return agarrado;
+}
+
+/** Compatibilidad: si hay una línea agarrada. */
 export function arrastrando() {
-    return arrastre;
+    return Boolean(agarrado);
 }
 
 /** Lo que hay que hacer al soltar, con si el borde cambió de palabra o no. */
@@ -94,26 +100,57 @@ function palabraDespuesDe(b) {
     return n;
 }
 
+/**
+ * La palabra más cercana al puntero, dentro del texto.
+ *
+ * `elementFromPoint` solo acierta si el puntero está ENCIMA de una palabra: con
+ * el interlineado del texto, la mitad del área —entre renglones, en los
+ * espacios— no devolvía nada, la línea se trababa y un movimiento en diagonal
+ * se salteaba palabras. Si no acierta, se busca por geometría: el renglón que
+ * está a la altura del puntero, y en él la palabra más cercana en x.
+ */
 function palabraBajo(texto, x, y) {
     const donde = document.elementFromPoint(x, y);
-    const span = donde && donde.closest('.palabra');
-    return span && texto.contains(span) ? span : null;
+    const span = donde && donde.closest && donde.closest('.palabra');
+    if (span && texto.contains(span)) return span;
+    let mejor = null;
+    let distancia = Infinity;
+    for (const w of texto.querySelectorAll('.palabra')) {
+        const r = w.getBoundingClientRect();
+        if (!r.width) continue;
+        const dy = y < r.top ? r.top - y : (y > r.bottom ? y - r.bottom : 0);
+        const dx = x < r.left ? r.left - x : (x > r.right ? x - r.right : 0);
+        // El renglón pesa mucho más que la distancia en x: se queda en el
+        // renglón del puntero aunque la palabra quede lejos a un costado.
+        const d = dy * 1000 + dx;
+        if (d < distancia) { distancia = d; mejor = w; }
+    }
+    return mejor;
 }
 
 /**
- * Si llevar la línea a esa palabra la pasaría del otro lado de la otra línea.
+ * Si la línea quedó mal parada: del otro lado de la otra línea, o pegada a ella
+ * sin ninguna palabra en medio.
  *
- * Un OUT antes del IN es una toma de duración negativa: el motor la rechaza al
- * soltar, pero mientras tanto lo gris se dibujaba al revés y no se entendía qué
- * iba a pasar. La línea se frena contra la otra, que es lo que se espera de
- * dos bordes.
+ * Se mira DESPUÉS de mover y no antes: antes se miraba de qué lado de la otra
+ * línea estaba la palabra, y soltar el IN en la mitad derecha de la última
+ * palabra antes del OUT lo mandaba más allá del OUT; soltar el OUT pegado al
+ * IN dejaba una toma de largo cero. Una toma necesita al menos una palabra.
  */
-function cruzaria(texto, b, span) {
+function malParada(texto, b) {
     const otra = texto.querySelector(`.borde:not([data-borde="${b.dataset.borde}"])`);
     if (!otra) return false;
-    const antesDeLaOtra = !!(span.compareDocumentPosition(otra) & Node.DOCUMENT_POSITION_FOLLOWING);
-    return b.dataset.borde === 'out' ? antesDeLaOtra : !antesDeLaOtra;
+    const inB = b.dataset.borde === 'in' ? b : otra;
+    const outB = b.dataset.borde === 'in' ? otra : b;
+    if (!(inB.compareDocumentPosition(outB) & Node.DOCUMENT_POSITION_FOLLOWING)) return true;
+    for (let n = inB.nextElementSibling; n && n !== outB; n = n.nextElementSibling) {
+        if (n.classList.contains('palabra')) return false;
+    }
+    return true;
 }
+
+/** Cuánto se desplaza el texto por movimiento cuando el puntero está en un borde. */
+const PASO_DE_SCROLL = 14;
 
 /**
  * Arrastrar una línea hasta el hueco entre dos palabras.
@@ -122,51 +159,93 @@ function cruzaria(texto, b, span) {
  * de sitio la saca del documento y la vuelve a meter, y eso suelta la captura
  * del puntero. Con `setPointerCapture` el arrastre avanzaba una palabra y se
  * trababa ahí (lo aprendió Class Cut).
+ *
+ * **Y se cancela en cuanto el botón no está apretado**: un `pointerup` perdido
+ * (Cmd-Tab a mitad, un diálogo del sistema) dejaba la línea pegada al mouse y
+ * el siguiente clic en cualquier lado guardaba el borde donde hubiera quedado.
+ * Cancelar devuelve la línea a su sitio y no guarda nada.
  */
 function empezar(texto, b, alSoltar) {
+    if (agarrado) return;
     const previa = palabraDespuesDe(b);
     const desde = previa ? previa.dataset.t : null;
-    arrastre = true;
+    const origen = { padre: b.parentNode, siguiente: b.nextSibling };
+    agarrado = texto;
     b.classList.add('es-arrastrando');
     texto.classList.add('es-moviendo');
 
     const mover = e => {
+        if (!(e.buttons & 1)) { cancelar(); return; }
+        // Llevado más allá del borde de arriba o de abajo del texto, se
+        // desplaza: si no, solo se podía soltar en lo que ya estaba a la vista.
+        // Afuera y no «cerca»: en un campo de tres renglones, una zona adentro
+        // del borde tapaba el renglón entero y el texto se movía debajo del
+        // cursor justo al ir a soltar ahí.
+        const caja = texto.getBoundingClientRect();
+        if (e.clientY < caja.top) texto.scrollTop -= PASO_DE_SCROLL;
+        else if (e.clientY > caja.bottom) texto.scrollTop += PASO_DE_SCROLL;
+
         const span = palabraBajo(texto, e.clientX, e.clientY);
-        if (!span || cruzaria(texto, b, span)) return;
+        if (!span) return;
+        const antes = { padre: b.parentNode, siguiente: b.nextSibling };
         // A qué lado de la palabra: por la mitad, como cualquier cursor de
         // texto. Si ya está de ese lado no se toca, que mover el nodo en cada
         // pixel hace saltar el renglón entero.
-        const caja = span.getBoundingClientRect();
-        if (e.clientX > caja.left + caja.width / 2) {
+        const r = span.getBoundingClientRect();
+        if (e.clientX > r.left + r.width / 2) {
             if (b.previousElementSibling === span) return;
             span.after(b);
         } else {
             if (b.nextElementSibling === span) return;
             span.before(b);
         }
+        if (malParada(texto, b)) {
+            antes.padre.insertBefore(b, antes.siguiente);
+            return;
+        }
         marcarOrillas(texto);
     };
 
-    const soltar = () => {
+    const terminar = () => {
         window.removeEventListener('pointermove', mover);
         window.removeEventListener('pointerup', soltar);
-        window.removeEventListener('pointercancel', soltar);
+        window.removeEventListener('pointercancel', cancelar);
+        window.removeEventListener('blur', cancelar);
         b.classList.remove('es-arrastrando');
         texto.classList.remove('es-moviendo');
-        arrastre = false;
+        agarrado = null;
+    };
 
+    function cancelar() {
+        terminar();
+        origen.padre.insertBefore(b, origen.siguiente);
+        marcarOrillas(texto);
+        alTerminar(false);
+    }
+
+    function soltar() {
+        terminar();
         const despues = palabraDespuesDe(b);
         const paredMs = despues ? despues.dataset.t : null;
         // Soltarla donde estaba no es un cambio, y soltarla al final del todo
         // no dice ninguna palabra: en los dos casos se deja como estaba.
         const cambio = paredMs !== null && paredMs !== desde;
-        if (cambio) alSoltar(b.dataset.borde, Number(paredMs));
+        if (cambio) {
+            // Hasta que conteste el motor, la línea se ve «guardándose» y el
+            // texto no se repinta (ver `enVuelo` en pantalla-vivo.js).
+            b.classList.add('es-guardando');
+            alSoltar(b.dataset.borde, Number(paredMs), texto);
+        } else {
+            origen.padre.insertBefore(b, origen.siguiente);
+            marcarOrillas(texto);
+        }
         alTerminar(cambio);
-    };
+    }
 
     window.addEventListener('pointermove', mover);
     window.addEventListener('pointerup', soltar);
-    window.addEventListener('pointercancel', soltar);
+    window.addEventListener('pointercancel', cancelar);
+    window.addEventListener('blur', cancelar);
 }
 
 /**
@@ -185,11 +264,25 @@ function empezar(texto, b, alSoltar) {
 export function textoDe(p, alSoltar) {
     const texto = document.createElement('div');
     texto.className = `transcript es-${p.modo}${alSoltar ? ' es-movible' : ''}`;
-    const poner = w => texto.append(palabra(w, p.comentarios), document.createTextNode(' '));
+    const poner = w => {
+        // Lo que se dejó de dibujar en el medio de una toma larga (ver
+        // `recortarAbierta` en pantalla-vivo.js).
+        if (w.corte) {
+            const c = document.createElement('span');
+            c.className = 'transcript-corte';
+            c.textContent = `… ${w.corte} palabras más …`;
+            texto.append(c, document.createTextNode(' '));
+            return;
+        }
+        texto.append(palabra(w, p.comentarios), document.createTextNode(' '));
+    };
     const conBarra = (cual, pista) => {
         const b = barra(cual, pista);
         if (alSoltar) {
             b.onpointerdown = e => {
+                // Solo el botón principal: un clic derecho o con Ctrl también
+                // empezaba a arrastrar.
+                if (e.button !== 0 || !e.isPrimary) return;
                 // Sin esto el arrastre selecciona texto.
                 e.preventDefault();
                 empezar(texto, b, alSoltar);

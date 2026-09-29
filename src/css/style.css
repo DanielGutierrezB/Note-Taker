@@ -1305,9 +1305,49 @@ kbd {
   color: var(--on-accent);
 }
 
+/* Soltada y esperando al motor: la línea se queda donde se soltó, latiendo,
+   hasta que conteste. */
+.borde.es-guardando {
+  animation: borde-guardando 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes borde-guardando {
+  from { opacity: 1; }
+  to { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .borde.es-guardando { animation: none; opacity: 0.7; }
+}
+
+.transcript-corte {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* La pantalla recibe el foco cuando lo que lo tenía se repintó: sin anillo,
+   porque no es un control. */
+#vista-vivo:focus {
+  outline: none;
+}
+
 /* La línea viaja debajo del cursor: sin esto `elementFromPoint` la devuelve a
    ella en vez de a la palabra de detrás y el arrastre se traba. */
 .borde.es-arrastrando { pointer-events: none; }
+
+/* Mientras se arrastra, la pastilla se vuelve una rayita de 3 px, como en Class
+   Cut. Con su ancho de pastilla, cada vez que entraba en un renglón empujaba
+   las palabras de la derecha casi 30 px: la que estaba bajo el cursor se corría
+   y el borde caía una palabra antes de la que se estaba señalando. */
+.borde.es-arrastrando {
+  width: 3px;
+  padding: 0;
+  margin: 0 2px;
+}
+
+.borde.es-arrastrando .borde-etiqueta {
+  display: none;
+}
 
 .transcript.es-moviendo {
   user-select: none;
