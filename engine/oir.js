@@ -16,16 +16,19 @@
  * momento en que la herramienta se enteró. Con una clase de tres horas eso es lo
  * único que mantiene los tiempos cerrados de punta a punta.
  *
- * **Los dos ciclos.** El de señales corre seguido con un modelo liviano y su
- * texto se tira: solo sirve para ver si alguien dijo "3, 2, 1", "Pausa" o
- * "claqueta". El de toma corre una vez, al cerrar, con el modelo grande, y ESE
- * texto es el que queda. Así el transcript nunca se arma de pedazos pegados, que
+ * **Los dos ciclos.** El de señales corre seguido: busca "3, 2, 1", "Pausa" y
+ * "claqueta", y su texto es el que se ve en pantalla mientras se habla. Lo oye
+ * el modelo grande ya cargado en `whisper-server` (`oido-residente.js`), y si
+ * ese no está, `whisper-cli` con el liviano. El de toma corre una vez, al
+ * cerrar, con el modelo grande y alineación por DTW, y ESE texto es el que
+ * queda en el XML. Así el transcript nunca se arma de pedazos pegados, que
  * es de donde salen las palabras cortadas y los tiempos que no cierran.
  */
 
 const paths = require('./paths');
 const captura = require('./captura');
 const transcribe = require('./transcribe');
+const residente = require('./oido-residente');
 
 /**
  * Palabras de Whisper → palabras con hora del día.
@@ -51,6 +54,20 @@ function aHoraDelDia(words, sesion, desdeSec) {
             hasta: Math.round(base + (w.end != null ? w.end : seg) * 1000)
         };
     });
+}
+
+/**
+ * El ciclo de señales, por el servidor con el modelo grande cargado
+ * (`oido-residente.js`). Null si no está o si falla esta vez: entonces se oye
+ * por `whisper-cli` como antes, y la pasada no se pierde.
+ */
+async function delResidente(archivo, idioma) {
+    if (!residente.listo()) return null;
+    try {
+        return await residente.transcribir(archivo, idioma);
+    } catch (e) {
+        return null;
+    }
 }
 
 /**
@@ -94,7 +111,8 @@ async function escuchar(params) {
         // siempre en silencio dejaría a la toma marcada como degradada mintiendo.
         if (!p.liviano && p.modelo && p.modelo.path) opciones.model = p.modelo;
 
-        const salida = await transcribe.runWhisper(recortado.archivo, opciones);
+        const salida = (p.liviano && await delResidente(recortado.archivo, opciones.language))
+            || await transcribe.runWhisper(recortado.archivo, opciones);
 
         // Whisper rellena los silencios con repeticiones y con créditos de
         // subtítulos aprendidos de memoria: sobre un tramo donde nadie hablaba

@@ -407,33 +407,18 @@ b {
   padding: var(--sp-5);
 }
 
-.columnas {
-  display: flex;
-  gap: var(--sp-5);
-  align-items: flex-start;
+/* Un interruptor: un botón que se queda apretado. Apretado lleva el recuadro
+   encendido, que es como esta app dice "elegido" (ver `.fila.es-elegida`), y no
+   el acento, que es de la acción principal. */
+.btn-interruptor[aria-pressed='true'] {
+  border-color: var(--border-field);
+  color: var(--text-primary);
 }
 
-.columnas > .principal {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* El costado: las claquetas. A menos de 1000 px
-   baja debajo en vez de apretar la lista de tomas, que es lo que se escanea. */
-.columnas > .costado {
-  flex: 0 0 300px;
-  min-width: 0;
-}
-
-@media (max-width: 1000px) {
-  .columnas {
-    flex-direction: column;
-  }
-
-  .columnas > .costado {
-    flex: 1 1 auto;
-    width: 100%;
-  }
+/* Compacto: fuera lo gris de alrededor de cada toma. El campo de espera no,
+   porque ahí TODO es gris: es lo que se oye sin toma. */
+.es-compacto .transcript:not(.es-inactiva) .es-orilla {
+  display: none;
 }
 
 
@@ -628,7 +613,7 @@ b {
   color: var(--error);
 }
 
-.pastilla[data-estado='descartada'] {
+.pastilla[data-estado='desactivada'] {
   background: transparent;
   color: var(--text-muted);
 }
@@ -662,7 +647,7 @@ b {
   border-left-color: var(--error);
 }
 
-.guarda[data-estado='descartada'] {
+.guarda[data-estado='desactivada'] {
   border-left-color: var(--hairline);
 }
 
@@ -779,30 +764,77 @@ b {
   transform: rotate(90deg);
 }
 
-/* La fila de una claqueta, en el costado de 300 px: dos renglones, porque en
-   uno lo primero que se recorta es el número, que es justo con lo que el
-   editor la busca (ver `filaClaqueta`). Sigue midiendo lo mismo que una fila
-   de toma por renglón. */
-.fila-claqueta {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-  padding: var(--sp-1) var(--sp-3) var(--sp-2);
+/* La fila de una claqueta, en la lista con las tomas: un renglón de 32 px como
+   ellas, pero sin fondo de color —no es una toma, no tiene vista— y sin chevron,
+   porque no tiene nada que desplegar. El icono ocupa el sitio del chevron para
+   que el número quede en la misma columna que el de las tomas. */
+.fila-claqueta,
+.fila-claqueta:hover {
   cursor: default;
+  background: transparent;
 }
 
-.claqueta-arriba,
-.claqueta-abajo {
+.fila-claqueta .hp-ico {
+  color: var(--text-secondary);
+}
+
+/* Los tres estados de una toma: un solo control con tres posiciones, porque
+   son excluyentes. */
+.estados-toma {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.estados-toma .btn[aria-pressed='true'] {
+  border-color: var(--border-field);
+  color: var(--text-primary);
+  background: var(--bg-inset);
+}
+
+/* Los comentarios sobre un pedazo del texto: van al XML como marcador blanco. */
+.comentarios {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin-top: var(--sp-3);
+}
+
+.comentario {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
   min-height: var(--row-xs);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.comentario q {
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+
+.comentario .crece {
   min-width: 0;
 }
 
-.claqueta-abajo {
-  min-height: 0;
-  flex-wrap: wrap;
+.comentar {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  margin-top: var(--sp-3);
+}
+
+.comentar input {
+  flex: 1 1 auto;
+}
+
+.transcript .palabra.es-comentada {
+  text-decoration: underline;
+  text-decoration-color: var(--text-muted);
+  text-underline-offset: 3px;
 }
 
 .etiqueta-vista {
@@ -859,15 +891,15 @@ b {
   border-bottom-color: var(--border-field);
 }
 
-/* Una descartada no va en el XML, así que no lleva el color de un marcador que
+/* Una desactivada no va en el XML, así que no lleva el color de un marcador que
    no va a existir. */
-.con-vista[data-estado='descartada'] > .fila,
-.con-vista[data-estado='descartada'] > .cuerpo-toma {
+.con-vista[data-estado='desactivada'] > .fila,
+.con-vista[data-estado='desactivada'] > .cuerpo-toma {
   --borde-vista: var(--hairline);
   background: var(--bg-surface);
 }
 
-.con-vista[data-estado='descartada'] .etiqueta-vista {
+.con-vista[data-estado='desactivada'] .etiqueta-vista {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-muted);
 }
@@ -1195,12 +1227,25 @@ kbd {
 
 /* El campo de espera se escribe solo y no crece: tres renglones, lo nuevo
    entra abajo y lo viejo se desvanece arriba. Sigue teniendo scroll, para
-   subir a buscar dónde empezó la toma si hace falta. */
+   subir a buscar dónde empezó la toma si hace falta.
+
+   El desvanecido va SOLO cuando hay texto escondido arriba (`es-tapado`, lo
+   pone `pantalla-vivo.js`). Puesto siempre, con un renglón solo se comía
+   justo el único renglón que había. */
 .transcript.es-inactiva {
   margin-top: 0;
   max-height: calc(13px * 1.8 * 3 + var(--sp-3) * 2);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
+}
+
+.transcript.es-tapado {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+}
+
+/* Todavía no es de ninguna toma, pero es lo que hay que poder leer para saber
+   dónde poner el IN: va en el segundo nivel y no en el tercero. */
+.transcript.es-inactiva .es-orilla {
+  color: var(--text-secondary);
 }
 
 .transcript.es-abierta {

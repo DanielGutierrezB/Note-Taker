@@ -296,6 +296,53 @@ module.exports = function (t) {
         }
     });
 
+    t.test('descartar saca de la sesión una toma cerrada, sin desactivarla antes', () => {
+        const dir = carpeta();
+        try {
+            const inicial = grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 40; i++) grabacion.pcm(pedazo());
+            grabacion.abrirToma(inicial.ceroMs + 200);
+            grabacion.cerrarToma(inicial.ceroMs + 1500);
+            const estado = grabacion.editar({ tipo: 'eliminar', toma: 1 });
+            t.eq(estado.tomas.length, 0, 'ya no está');
+            const r = grabacion.deshacer();
+            t.eq(r.estado.tomas.length, 1, 'y ⌘Z la devuelve');
+            t.ok(r.que.includes('descartar'), r.que);
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('la abierta no se descarta: primero se cierra', () => {
+        const dir = carpeta();
+        try {
+            grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 20; i++) grabacion.pcm(pedazo());
+            grabacion.abrirToma();
+            const estado = grabacion.editar({ tipo: 'eliminar', toma: 1 });
+            t.eq(estado.tomas.length, 1);
+            t.eq(estado.historia.atras, 1, 'sin un paso vacío en el historial');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('desactivar la saca del XML pero la deja en la sesión', () => {
+        const dir = carpeta();
+        try {
+            const inicial = grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 40; i++) grabacion.pcm(pedazo());
+            grabacion.abrirToma(inicial.ceroMs + 200);
+            grabacion.cerrarToma(inicial.ceroMs + 1500);
+            const estado = grabacion.editar({ tipo: 'descartar', toma: 1, descartada: true });
+            t.eq(estado.tomas.length, 1, 'sigue en la sesión');
+            const xml = fs.readFileSync(inicial.archivos.xml, 'utf8');
+            t.ok(!/<name>PV<\/name>/.test(xml), 'y no está en el XML');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
     t.test('el estado trae lo suelto, que es el texto del campo de espera', () => {
         const dir = carpeta();
         try {

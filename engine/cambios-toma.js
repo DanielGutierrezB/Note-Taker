@@ -25,12 +25,12 @@ const vivo = require('./notas-vivo');
  *
  *   vista             { vista }                       qué cámara usa la toma
  *   nota              { texto }                       la nota del director
- *   descartar         { descartada }                  fuera del XML, o de vuelta
+ *   descartar         { descartada }                  desactivar: fuera del XML, o de vuelta
  *   borde             { borde:'in'|'out', paredMs }   mover un borde a una palabra
  *   reabrir           —                               "Pausa" cerró de más
  *   comentar          { desdeMs, hastaMs, texto, comentario }  sobre un pedazo del texto
  *   borrar-comentario { indice }
- *   eliminar          —                               borrarla de la sesión
+ *   eliminar          —                               descartar: sacarla de la sesión
  *
  * Todo pasa por acá y todo escribe el XML: la pantalla no guarda nada por su
  * cuenta, así que lo que se ve y lo que está en el archivo son lo mismo siempre.
@@ -92,7 +92,7 @@ function editar(sesion, cambio) {
     //
     // Lo único que se decide acá es qué es la foto de después, y es null cuando
     // la toma ya no está en la sesión. Se mira en la LISTA y no en el tipo del
-    // cambio: un `eliminar` que se plantó —la toma no estaba descartada— deja la
+    // cambio: un `eliminar` que se plantó —la toma estaba abierta— deja la
     // toma donde estaba, así que su foto es la de antes y no hay paso que anotar.
     historial.anotar(sesion.historia, {
         que: comoSeLlama(c),
@@ -118,12 +118,12 @@ function comoSeLlama(c) {
     switch (c.tipo) {
         case 'vista': return `poner ${cual} en ${c.vista}`;
         case 'nota': return `la nota de ${cual}`;
-        case 'descartar': return `${c.descartada ? 'descartar' : 'recuperar'} ${cual}`;
+        case 'descartar': return `${c.descartada ? 'desactivar' : 'activar'} ${cual}`;
         case 'comentar': return `comentar «${vivo.limpio(String(c.texto || '')).slice(0, 30)}»`;
         case 'borrar-comentario': return `quitar un comentario de ${cual}`;
         case 'borde': return `mover el ${c.borde === 'in' ? 'IN' : 'OUT'} de ${cual}`;
         case 'reabrir': return `reabrir ${cual}`;
-        case 'eliminar': return `eliminar ${cual}`;
+        case 'eliminar': return `descartar ${cual}`;
         case 'abrir': return `abrir ${cual}`;
         case 'cerrar': return `cerrar ${cual}`;
         // Las que no son de ninguna toma, así que no la nombran. Están acá y
@@ -169,29 +169,30 @@ function anotarDeLaSesion(sesion, campo, antes, cambio) {
 }
 
 /**
- * Eliminar una toma: sacarla de la sesión.
+ * Descartar una toma: sacarla de la sesión.
  *
- * No es lo mismo que descartarla y por eso son dos gestos. Descartar la deja
- * fuera del XML pero la conserva —su texto sigue contando para las repeticiones
- * y para la cobertura del temario, y se puede recuperar—; eliminar la borra, y
- * entonces lo que la toma decía deja de existir para el resto de la clase.
+ * Es el tercero de los tres estados que se le ofrecen a cada toma en la
+ * pantalla, y en el motor se sigue llamando `eliminar` porque así se llama en
+ * Class Cut, de donde viene:
  *
- * **Es la única acción destructiva de esta pantalla, y no pregunta.** No hace
- * falta un cartel porque hay dos cosas puestas antes: solo se puede eliminar una
- * toma que YA está descartada —o sea que alguien decidió dos veces, y el botón
- * no aparece nunca al lado de una toma viva— y el gesto se deshace como todos los
- * demás. Un cartel de confirmación en medio de una clase que se está grabando es
- * un renglón que hay que leer con el profesor hablando: cuesta más que el error
- * que evita, y el error ya está cubierto.
+ *   Mantener     va al XML (lo de siempre)
+ *   Desactivar   fuera del XML pero en la sesión: se vuelve a activar
+ *                (`descartada: true`, el nombre que tiene en el sidecar)
+ *   Descartar    fuera de la sesión: su texto deja de contar para nada
+ *
+ * **No pregunta y se deshace con Cmd-Z**, como todo lo demás de esta pantalla.
+ * En Class Cut solo se podía sobre una toma ya descartada, para que fueran dos
+ * decisiones; acá los tres estados están a la vista y juntos, y lo que evita el
+ * accidente es el historial. Un cartel de confirmación en medio de una clase
+ * que se está grabando es un renglón que hay que leer con el profesor hablando.
+ *
+ * La abierta no se descarta: primero se cierra. Descartarla dejaría al ciclo de
+ * señales metiendo palabras en una toma que ya no existe.
  */
 function eliminar(sesion, toma) {
-    // Sin descartarla antes no se elimina. Se planta en silencio en vez de tirar
-    // porque el camino honesto —el botón, que solo existe en una descartada— no
-    // puede llegar acá: esto es la red de abajo, no un mensaje para nadie.
-    //
     // Y no contesta si pudo: quien anota mira si la toma quedó en la sesión, que
     // es la misma pregunta hecha una sola vez para todos los gestos (ver `editar`).
-    if (!toma.descartada) return;
+    if (toma.outMs == null) return;
     const tomas = sesion.estado.tomas;
     tomas.splice(tomas.indexOf(toma), 1);
 }

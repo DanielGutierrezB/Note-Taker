@@ -122,28 +122,26 @@
       <button id="btn-terminar" class="btn" type="button">Terminar</button>
     </div>
 
+    <!-- Una sola columna: las claquetas van en la lista, en su orden, como una
+         fila más. En un costado aparte había que cruzar la pantalla para saber
+         qué toma venía después de cuál claqueta. -->
     <div class="scroll">
-      <div class="columnas">
-        <div class="principal">
-          <div class="seccion">
-            <div class="seccion-titulo"><span>Ahora</span></div>
-            <div id="ahora"></div>
-          </div>
-          <div class="seccion">
-            <div class="seccion-titulo">
-              <span>Tomas y claquetas</span>
-              <span id="vivo-cuantas" class="v3"></span>
-            </div>
-            <div id="lista-vivo" class="lista"></div>
-          </div>
+      <div class="seccion">
+        <div class="seccion-titulo"><span>Ahora</span></div>
+        <div id="ahora"></div>
+      </div>
+      <div class="seccion">
+        <div class="seccion-titulo">
+          <span>Tomas y claquetas</span>
+          <span id="vivo-cuantas" class="v3"></span>
+          <span class="crece"></span>
+          <button id="btn-desactivadas" class="btn btn-tenue btn-interruptor" type="button"
+                  aria-pressed="false" hidden
+                  title="Las desactivadas siguen en la sesión y se pueden volver a activar: esto solo las saca de la vista"></button>
+          <button id="btn-compacto" class="btn btn-tenue btn-interruptor" type="button" aria-pressed="false"
+                  title="Esconde lo gris de antes del IN y de después del OUT de cada toma: queda solo el texto de la toma">Compacto</button>
         </div>
-
-        <aside class="costado">
-          <div class="seccion">
-            <div class="seccion-titulo"><span>Claquetas</span></div>
-            <div id="lista-claquetas" class="lista"></div>
-          </div>
-        </aside>
+        <div id="lista-vivo" class="lista"></div>
       </div>
     </div>
 

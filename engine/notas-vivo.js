@@ -759,6 +759,64 @@ function quitarClaqueta(estado, n) {
     return estado.claquetas;
 }
 
+/** Cuántas de las últimas palabras oídas se recuerdan para encontrarlas en la pasada siguiente. */
+const RECIENTES = 12;
+
+/** El pedazo más largo de esas que se busca, y cuánto puede correrse de hora. */
+const ENGANCHE_MAX = 8;
+const ENGANCHE_CORRIMIENTO_MS = 2500;
+
+/**
+ * La misma palabra oída dos veces, aunque una de las dos venga entera y la otra
+ * cortada («funcion» y «funcionando»).
+ */
+function mismaPalabra(a, b) {
+    if (!a || !b) return false;
+    return a === b || (Math.min(a.length, b.length) >= 3 && (a.startsWith(b) || b.startsWith(a)));
+}
+
+/**
+ * En qué palabra de la ventana nueva empieza lo que no se había oído.
+ *
+ * **Por el texto y no por la hora.** Sin la alineación contra el sonido (DTW,
+ * que en vivo cuesta demasiado), la hora que Whisper le pone a una palabra se
+ * corre hasta medio segundo de una pasada a otra. Con ventanas que se solapan
+ * cuatro segundos, comparar horas perdía palabras —la nueva caía "antes" de la
+ * última guardada— y repetía otras —la vieja caía "después"—: medido sobre una
+ * prueba real por Zoom, «Esto inicia la primera toma» llegaba como «inicia la
+ * toma», y «voy a» dos veces.
+ *
+ * Lo que se busca es la cola de lo ya oído (`estado.recientes`) adentro de la
+ * ventana nueva: el pedazo más largo que coincida, cerca de su hora, y se sigue
+ * después de él. Es lo que hacen las implementaciones de Whisper en vivo
+ * (whisper_streaming). Si no aparece —otra forma de escribir lo mismo, o
+ * silencio entre medio— se vuelve a la hora, que es lo que había.
+ */
+function dondeSigue(estado, nuevas) {
+    const recientes = estado.recientes || [];
+    if (recientes.length) {
+        const textos = nuevas.map(w => norm(w.texto));
+        const ultima = recientes[recientes.length - 1];
+        for (let largo = Math.min(ENGANCHE_MAX, recientes.length); largo >= 1; largo--) {
+            const cola = recientes.slice(-largo);
+            // Una sola palabra es poco para creerle ("la", "y"): se le pide que
+            // caiga casi a la misma hora.
+            const margen = largo === 1 ? 800 : ENGANCHE_CORRIMIENTO_MS;
+            let donde = -1;
+            for (let j = 0; j + largo <= textos.length; j++) {
+                if (!cola.every((r, k) => mismaPalabra(textos[j + k], r.n))) continue;
+                if (Math.abs(nuevas[j + largo - 1].t - ultima.t) > margen) continue;
+                donde = j + largo;
+            }
+            if (donde !== -1) return donde;
+        }
+    }
+    const desde = estado.ultimaPalabraMs;
+    if (desde == null) return 0;
+    const i = nuevas.findIndex(w => w.t > desde);
+    return i === -1 ? nuevas.length : i;
+}
+
 /**
  * Mete palabras nuevas y abre o cierra tomas según lo que se dijo.
  *
@@ -776,28 +834,46 @@ function quitarClaqueta(estado, n) {
  * primer minuto. Ahora los duplicados se descartan acá, donde se sabe qué es una
  * palabra repetida y qué es una señal repetida.
  *
+ * **Lo del final de la ventana se mira pero no se cree** (`firmeHastaMs`). La
+ * última palabra de un pedazo suele estar cortada a la mitad —«funcion» por
+ * «funcionando»— y la pasada siguiente, que la oye entera, ya no podía
+ * arreglarla porque la palabra quedaba guardada. Ahora lo que termina después de
+ * ese límite no se guarda ni dispara señales: vuelve a llegar en la pasada
+ * siguiente, con audio de los dos lados. Pero SÍ se usa para mirar qué sigue a
+ * "Pausa": sin eso, «pausa» al borde de la parte firme de «pausa en el flujo»
+ * quedaba como última palabra, o sea con silencio detrás, y cerraba la toma.
+ *
  * @param {object} estado el de la sesión (de `estadoNuevo`), se muta
- * @param {Array} palabras [{t, texto}] la ventana entera, en orden
+ * @param {Array} palabras [{t, texto, hasta}] la ventana entera, en orden
+ * @param {object} [opciones] { firmeHastaMs } — sin él, todo es firme
  * @returns {Array} qué pasó, para poder contarlo en la pantalla y en el registro
  */
-function aplicarSenales(estado, palabras) {
-    const nuevas = (palabras || []).filter(w => w && w.t != null);
-    if (!nuevas.length) return [];
+function aplicarSenales(estado, palabras, opciones) {
+    const todas = (palabras || []).filter(w => w && w.t != null);
+    if (!todas.length) return [];
+    const firme = opciones && Number.isFinite(opciones.firmeHastaMs) ? opciones.firmeHastaMs : Infinity;
+    const esFirme = w => (w.hasta != null ? w.hasta : w.t) <= firme;
+    // Las firmes son un prefijo: las palabras llegan en orden.
+    let cuantasFirmes = 0;
+    while (cuantasFirmes < todas.length && esFirme(todas[cuantasFirmes])) cuantasFirmes++;
+    const nuevas = todas;
 
     const yaVista = marca => {
         const previa = estado.ultimaSenal[marca.tipo];
         return previa != null && Math.abs(nuevas[marca.hasta].t - previa) < MISMA_SENAL_MS;
     };
 
-    const marcas = senales(nuevas).filter(m => !yaVista(m));
-    const desdePalabra = estado.ultimaPalabraMs;
+    const marcas = senales(nuevas).filter(m => m.hasta < cuantasFirmes && !yaVista(m));
+    // Dónde empieza lo que no se había oído: por el TEXTO y no por la hora (ver
+    // `dondeSigue`).
+    const inicioNuevo = dondeSigue(estado, nuevas);
     const eventos = [];
     let cursor = 0;
 
     const guardar = (hasta) => {
         const toma = tomaAbierta(estado);
-        for (let i = cursor; i < hasta; i++) {
-            if (nuevas[i].t <= desdePalabra) continue;
+        const tope = Math.min(hasta, cuantasFirmes);
+        for (let i = Math.max(cursor, inicioNuevo); i < tope; i++) {
             // Con una toma abierta la palabra es suya; sin ninguna, queda en el
             // colchón por si alguien abre a mano en los próximos segundos (ver
             // `sueltas` en `estadoNuevo` y `abrirToma`).
@@ -879,8 +955,16 @@ function aplicarSenales(estado, palabras) {
     guardar(nuevas.length);
     // Hasta acá se oyó, haya o no toma abierta: una palabra que se dijo entre dos
     // tomas no es de nadie, pero tampoco puede volver a aparecer en la siguiente
-    // ventana como si fuera nueva.
-    estado.ultimaPalabraMs = Math.max(desdePalabra, nuevas[nuevas.length - 1].t);
+    // ventana como si fuera nueva. Hasta la última FIRME: lo de después vuelve.
+    // Las señales cuentan como oídas aunque no se guarden: son lo que la pasada
+    // siguiente va a encontrar al principio de su ventana.
+    if (cuantasFirmes > inicioNuevo) {
+        estado.ultimaPalabraMs = Math.max(estado.ultimaPalabraMs || -Infinity, nuevas[cuantasFirmes - 1].t);
+        estado.recientes = (estado.recientes || [])
+            .concat(nuevas.slice(inicioNuevo, cuantasFirmes).map(w => ({ n: norm(w.texto), t: w.t })))
+            .filter(r => r.n)
+            .slice(-RECIENTES);
+    }
 
     // El colchón se recorta a su ventana. Sin esto, una clase de tres horas
     // donde nadie abre ninguna toma acumula en memoria todas sus palabras, y

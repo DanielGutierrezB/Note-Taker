@@ -147,14 +147,41 @@ El color va de **fondo**, nunca de letra: el rojo de Profesor da 3,2:1 sobre la
 tarjeta, debajo del 4,5 que pide el texto. La sigla va rellena con la tinta que
 contrasta contra su color, y el tinte del bloque está medido para que el texto
 más tenue siga pasando 4,5:1 encima con los cinco colores
-(`node tools/contrastes.js`). Una toma descartada pierde el color: su marcador
+(`node tools/contrastes.js`). Una toma desactivada pierde el color: su marcador
 no va a existir.
+
+### Mantener, desactivar, descartar
+
+Cada toma cerrada, al desplegarla, tiene sus tres estados en un solo control:
+
+| | qué pasa |
+|---|---|
+| **Mantener** | va al XML (lo de siempre) |
+| **Desactivar** | no va al XML, pero sigue en la lista y se vuelve a mantener |
+| **Descartar** | sale de la sesión; ⌘Z la devuelve |
+
+La abierta no se descarta: primero se cierra. **Reabrir** aparece en la última
+toma cuando no hay otra abierta, para cuando «Pausa» cerró de más.
+**Ocultar desactivadas** las saca de la vista sin tocarlas.
+
+**Compacto** esconde lo gris de antes del IN y de después del OUT de cada toma,
+para leer solo el texto de la toma; apagado, se ve el antes y el después para
+validar dónde quedó cada borde. El campo de espera no cambia: ahí todo es gris.
+
+**Comentar un pedazo**: seleccionar palabras del texto de una toma abre un campo
+para comentarlas. El comentario va al XML como un marcador blanco en ese tramo,
+además de la nota de la toma entera, y las palabras comentadas quedan subrayadas.
+
+Las **claquetas** van en la misma lista, en su lugar entre las tomas, con su
+número, timecode, la frase con la que se dijeron, si es la referencia y cómo
+quitarlas. En un costado aparte había que cruzar la pantalla y comparar
+timecodes para saber qué toma venía después de qué claqueta.
 
 Un detalle que costó descubrir: **el umbral de "todavía está hablando" no puede
 ser el mismo que el hueco entre dos palabras.** Lo que la app tiene oído va
-siempre atrasado, y se sabe cuánto —el ciclo corre cada tres segundos y Whisper
-tarda algo más de uno—, así que la última palabra en memoria puede ser de hace
-cuatro segundos con el profesor hablando sin parar. Con el umbral en 1,5 s el
+siempre atrasado, y se sabe cuánto —el ciclo corre cada segundo, oye con medio
+segundo de cola y Whisper tarda otro medio—, así que la última palabra en
+memoria puede ser de hace varios segundos con el profesor hablando sin parar. Con el umbral en 1,5 s el
 retroceso no se disparaba nunca, o sea que el arreglo no servía justo en el
 único caso para el que existe.
 
@@ -335,7 +362,7 @@ node tools/ver-marcadores.js --fps 29.97
 ```
 
 Escribe un XML de prueba en `/tmp` con las cinco vistas, tres claquetas y una
-toma descartada que no tiene que aparecer.
+toma desactivada que no tiene que aparecer.
 
 ## Las dos lecturas de Whisper
 
@@ -343,13 +370,62 @@ Hay dos ciclos y la separación es lo que protege el transcript.
 
 | | cuándo | modelo | qué queda |
 |---|---|---|---|
-| **señales** | cada 3 s, con 1,2 s de solape | el liviano (`ggml-small`) | solo la hora de las señales |
-| **toma** | al cerrar cada toma | el grande (`large-v3-turbo`) | el texto |
+| **en vivo** | cada 1 s, sobre los últimos 6 s | el grande (`large-v3-turbo`), cargado en `whisper-server` | el texto que se ve mientras se habla, y la hora de las señales |
+| **toma** | al cerrar cada toma | el grande, con alineación DTW (`whisper-cli`) | el texto del XML |
 
-El de señales es rápido y de calidad mediana: lo único que se le cree es que una
-señal SONÓ y a qué hora. El de toma corre una vez, sobre la toma entera, y ESE
-texto es el que queda. Así el transcript nunca se arma pegando pedazos, que es
-de donde salen las palabras cortadas y los tiempos que no cierran.
+### El texto en vivo
+
+Hasta la versión anterior el ciclo en vivo era el de Class Cut tal cual: cada
+3 s, relanzando `whisper-cli` con el modelo chico (`ggml-small`). En Class Cut
+ese texto se tiraba —solo servía para oír «3, 2, 1» y «Pausa»— así que no
+importaba que fuera malo. Acá se muestra, y se notaba: sobre el audio de una
+prueba por Zoom escribía «Proven, no Proven», «¡Sigual!», e inventaba «nos
+vemos en el próximo vídeo, ¡hasta la próxima!» sobre los silencios.
+
+Qué modelo usar salió de medir y no de elegir. Para español, en las
+comparaciones publicadas de 2026 (FLEURS y similares), el orden en error por
+palabra es Qwen3-ASR 1.7B (~3,4 %), Whisper large-v3-turbo (~3,6 %), Parakeet
+TDT v3 (~4,5–4,9 %) y el SpeechAnalyzer de macOS (~5,4 %); Whisper small queda
+bastante más atrás. Parakeet es el más rápido (corre en el Neural Engine) y
+SpeechAnalyzer el de menos latencia, pero los dos se equivocan más en español.
+Qwen3-ASR acierta apenas más que el turbo y necesita otro motor entero.
+
+Y en esta máquina (M3 Max), sobre pedazos de 6 s del audio de Zoom:
+
+| | por pasada | texto |
+|---|---|---|
+| `whisper-cli` + small | 0,76 s | «Esto inicia el primera tomo» |
+| `whisper-cli` + turbo | 0,96 s | «esto inicia la primera toma» |
+| `whisper-server` + turbo | **0,54 s** | «esto inicia la primera toma» |
+
+Casi todo el costo de una pasada era cargar el modelo. Con el turbo cargado de
+una vez en `whisper-server` (`engine/oido-residente.js`), el modelo bueno sale
+más rápido que el chico relanzado. Si el servidor no está o se cae, el ciclo
+vuelve a `whisper-cli` con el chico y la clase sigue.
+
+Tres cosas más del ciclo, cada una por algo que se vio:
+
+- **Lo del final de cada pasada no se cree todavía** (`COLA_MS`). La última
+  palabra de un pedazo suele estar cortada («funcion» por «funcionando»); la
+  pasada siguiente la oye entera. Pero se mira para saber qué sigue a «Pausa»,
+  o «pausa en el flujo» cerraría la toma.
+- **El solape se engancha por el texto y no por la hora.** Sin DTW, la hora de
+  una palabra se corre hasta medio segundo de una pasada a otra, y comparar
+  horas perdía palabras («Esto inicia la primera toma» llegaba como «inicia la
+  toma») y repetía otras. Se busca la cola de lo ya oído adentro de la ventana
+  nueva y se sigue después, como hace whisper_streaming.
+- **Cada segundo sobre seis.** Medido con una sesión de verdad sobre esa prueba,
+  desde que se dice una palabra hasta que aparece: 2,9 s de mediana y 4,1 s en
+  el peor décimo (antes, más de cinco).
+
+`node tools/medir-vivo.js --wav=<audio> --salida=/tmp/textos.txt` recorre un
+audio con la forma vieja y la nueva y deja los dos textos al lado del de
+referencia.
+
+El de toma sigue siendo el que queda: corre una vez, sobre la toma entera, con
+la alineación contra el sonido, y ESE texto es el del XML. Así el transcript
+del XML nunca se arma pegando pedazos, que es de donde salen las palabras
+cortadas y los tiempos que no cierran.
 
 **El solape no es un descuido.** Una señal que caiga justo en el borde entre dos
 pasadas aparece partida en las dos y completa en ninguna; con el solape llega

@@ -56,11 +56,17 @@ function barra(cual, pista) {
     return b;
 }
 
-function palabra(w) {
+function palabra(w, comentarios) {
     const s = document.createElement('span');
     s.className = 'palabra';
     s.dataset.t = w.t;
+    if (w.hasta != null) s.dataset.hasta = w.hasta;
     s.textContent = w.texto;
+    // Subrayada si cae en un pedazo comentado: es lo que dice dónde está cada
+    // comentario de la lista de abajo.
+    if ((comentarios || []).some(c => w.t >= c.desdeMs && w.t <= c.hastaMs)) {
+        s.classList.add('es-comentada');
+    }
     return s;
 }
 
@@ -171,6 +177,7 @@ function empezar(texto, b, alSoltar) {
  *   antes     palabras de antes del IN (en gris)
  *   palabras  las de la toma (en la inactiva, todo lo oído)
  *   despues   las de después del OUT (en gris)
+ *   comentarios [{desdeMs, hastaMs}] los pedazos comentados, que se subrayan
  *   vacio     qué decir si no hay ninguna palabra
  * @param {function(string, number)} [alSoltar] (borde, hora de la palabra); sin
  *   él las líneas se ven pero no se mueven
@@ -178,7 +185,7 @@ function empezar(texto, b, alSoltar) {
 export function textoDe(p, alSoltar) {
     const texto = document.createElement('div');
     texto.className = `transcript es-${p.modo}${alSoltar ? ' es-movible' : ''}`;
-    const poner = w => texto.append(palabra(w), document.createTextNode(' '));
+    const poner = w => texto.append(palabra(w, p.comentarios), document.createTextNode(' '));
     const conBarra = (cual, pista) => {
         const b = barra(cual, pista);
         if (alSoltar) {

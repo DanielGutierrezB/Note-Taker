@@ -114,6 +114,7 @@ function resolveTool(name) {
 const ffprobe = () => resolveTool('ffprobe');
 const ffmpeg = () => resolveTool('ffmpeg');
 const whisper = () => resolveTool('whisper-cli');
+const whisperServer = () => resolveTool('whisper-server');
 const escucharApp = () => resolveTool('escuchar-app');
 
 
@@ -375,11 +376,18 @@ function doctor() {
             info: escucharApp()
         },
         {
-            key: 'modelo liviano (notas en vivo)',
+            key: 'whisper-server (el texto en vivo)',
             required: false,
-            nota: 'Sin él, la toma de notas en vivo escucha las señales del profesor ' +
-                'con el modelo grande: funciona, pero gasta un segundo cada tres en vez ' +
-                'de un décimo, durante los cuarenta minutos que dura una clase.',
+            nota: 'Sin él, el texto en vivo se oye relanzando whisper-cli con el modelo ' +
+                'liviano en cada pasada: sale más lento y con más errores. Con él, el ' +
+                'modelo grande queda cargado y cada pasada tarda medio segundo.',
+            info: whisperServer()
+        },
+        {
+            key: 'modelo liviano (respaldo del texto en vivo)',
+            required: false,
+            nota: 'Es con el que se oye si whisper-server no arranca. Sin él, el ' +
+                'respaldo relanza el modelo grande en cada pasada.',
             info: modeloLiviano()
         },
         // Y el escalón de abajo, que solo se sabe si está mirando lo que pesa cada
@@ -418,7 +426,7 @@ function doctor() {
 function clearCache() { cache.clear(); }
 
 module.exports = {
-    resolveTool, ffprobe, ffmpeg, whisper, escucharApp,
+    resolveTool, ffprobe, ffmpeg, whisper, whisperServer, escucharApp,
     whisperModel, vadModel, modeloLiviano, modelDirs, MODEL_PREFERENCE,
     // El escalón de abajo, que es lo que la política de reintento le pregunta
     // cuando el sistema se lleva a whisper-cli (`engine/insistir.js`).

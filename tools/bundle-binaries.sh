@@ -212,7 +212,7 @@ build_whisper() {
             sed 's/^/    /'
     fi
 
-    log "compilando whisper-cli para $WHISPER_ARCH"
+    log "compilando whisper-cli y whisper-server para $WHISPER_ARCH"
     cmake -S "$WHISPER_SRC" -B "$WHISPER_SRC/build" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=OFF \
@@ -222,7 +222,7 @@ build_whisper() {
         -DGGML_NATIVE=OFF \
         -DGGML_CPU_ARM_ARCH="$WHISPER_ARCH" \
         -DWHISPER_BUILD_TESTS=OFF \
-        -DWHISPER_BUILD_SERVER=OFF \
+        -DWHISPER_BUILD_SERVER=ON \
         > /dev/null || { echo "✗ falló el cmake de whisper.cpp" >&2; return 1; }
 
     cmake --build "$WHISPER_SRC/build" --config Release -j "$(sysctl -n hw.ncpu)" \
@@ -230,6 +230,10 @@ build_whisper() {
 
     cp "$WHISPER_SRC/build/bin/whisper-cli" "$DEST/whisper-cli"
     resign "$DEST/whisper-cli"
+    # El mismo whisper.cpp, con el modelo cargado de una vez: es el que oye el
+    # ciclo de señales (`engine/oido-residente.js`).
+    cp "$WHISPER_SRC/build/bin/whisper-server" "$DEST/whisper-server"
+    resign "$DEST/whisper-server"
 }
 
 # Reparar el enlazado de un bundle ya armado no necesita volver a compilar
@@ -301,9 +305,11 @@ else
     exit 1
 fi
 
-if otool -L "$DEST/whisper-cli" | tail -n +2 | grep -qv -e '/usr/lib/' -e '/System/'; then
-    echo "  ✗ whisper-cli depende de algo que no es del sistema:" >&2
-    otool -L "$DEST/whisper-cli" | tail -n +2 | grep -v -e '/usr/lib/' -e '/System/' >&2
-    exit 1
-fi
-echo "  whisper-cli: solo frameworks del sistema · $(du -h "$DEST/whisper-cli" | cut -f1)"
+for b in whisper-cli whisper-server; do
+    if otool -L "$DEST/$b" | tail -n +2 | grep -qv -e '/usr/lib/' -e '/System/'; then
+        echo "  ✗ $b depende de algo que no es del sistema:" >&2
+        otool -L "$DEST/$b" | tail -n +2 | grep -v -e '/usr/lib/' -e '/System/' >&2
+        exit 1
+    fi
+    echo "  $b: solo frameworks del sistema · $(du -h "$DEST/$b" | cut -f1)"
+done

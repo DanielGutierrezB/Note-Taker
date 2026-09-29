@@ -21,12 +21,12 @@
  * Cómo está una toma.
  *
  * El orden importa: se contesta lo MÁS URGENTE que le pase. Una toma
- * descartada que además quedó sin releer se dice descartada, porque ya no va al
+ * desactivada que además quedó sin releer se dice desactivada, porque ya no va al
  * XML y lo otro deja de importar.
  */
 export function deToma(toma, estado) {
     if (!toma) return { clave: 'lista', palabra: 'lista' };
-    if (toma.descartada) return { clave: 'descartada', palabra: 'descartada' };
+    if (toma.descartada) return { clave: 'desactivada', palabra: 'desactivada' };
     if (toma.outMs == null) return { clave: 'abierta', palabra: 'abierta' };
     if (toma.relectura && toma.relectura.estado === 'sin-leer') {
         return {
@@ -234,7 +234,8 @@ export function deWhisper(doctor) {
     const de = k => (doctor.tools || []).find(t => t.key === k) || {};
     const cli = de('whisper-cli');
     const grande = de('modelo de Whisper');
-    const liviano = de('modelo liviano (notas en vivo)');
+    const servidor = de('whisper-server (el texto en vivo)');
+    const liviano = de('modelo liviano (respaldo del texto en vivo)');
 
     if (!cli.found || !grande.found) {
         return {
@@ -248,13 +249,18 @@ export function deWhisper(doctor) {
                   'dónde se buscó.'
         };
     }
-    if (!liviano.found) {
+    // Con whisper-server el texto en vivo sale del modelo grande ya cargado, y
+    // el liviano no hace falta. Sin él funciona igual, pero peor, y eso se dice.
+    if (!servidor.found) {
         return {
             clave: 'modelo liviano',
-            palabra: 'sin modelo liviano',
+            palabra: liviano.found ? 'texto en vivo lento' : 'texto en vivo muy lento',
             listo: 'si',
-            porque: 'Funciona, pero el ciclo que oye el conteo va con el modelo grande: ' +
-                'gasta un segundo cada tres en vez de un décimo, durante toda la clase.'
+            porque: liviano.found
+                ? 'Falta whisper-server: el texto en vivo sale del modelo liviano relanzado en ' +
+                  'cada pasada, más tarde y con más errores. Las tomas se releen igual con el grande.'
+                : 'Falta whisper-server y no hay modelo liviano: cada pasada relanza el modelo ' +
+                  'grande, y el texto en vivo llega con varios segundos de atraso.'
         };
     }
     return { clave: 'listo', palabra: 'listo', listo: 'si' };

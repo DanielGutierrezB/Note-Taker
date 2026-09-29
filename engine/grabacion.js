@@ -50,6 +50,7 @@ const nombreDeSesion = require('./nombre-de-sesion');
 const workspace = require('./workspace');
 
 const espejo = require('./espejo');
+const residente = require('./oido-residente');
 const oirToma = require('./oir-toma');
 const relecturas = require('./relecturas');
 const cambiosToma = require('./cambios-toma');
@@ -58,12 +59,31 @@ const sesionesGrabadas = require('./sesiones-grabadas');
 /**
  * Cada cuánto se escucha buscando señales, y cuánto se escucha.
  *
+ * Cada segundo, sobre los últimos seis. Antes era cada tres sobre poco más de
+ * cuatro, relanzando whisper-cli con el modelo chico: el texto aparecía tarde y
+ * mal. Con el modelo grande ya cargado (`oido-residente.js`) una pasada de seis
+ * segundos tarda medio, así que se puede oír más seguido y con más audio
+ * alrededor, que es de donde Whisper saca el contexto para acertar.
+ *
+ * Medido con una sesión de verdad sobre el audio de una prueba por Zoom, desde
+ * que se dice una palabra hasta que aparece: cada 1,5 s con 0,7 s de cola, 3,3 s
+ * de mediana y 5,4 s en el peor décimo; cada 1 s con 0,5 s, 2,9 y 4,1, con el
+ * mismo texto. Más seguido que esto la GPU pasa más de la mitad del tiempo en el
+ * ciclo, y la relectura de las tomas cerradas la necesita.
+ *
  * La ventana se solapa con la anterior a propósito: una señal que caiga justo en
- * el borde entre dos pedazos aparece partida en los dos y en ninguno completa. Un
- * segundo alcanza para "3, 2, 1", que es la señal más larga.
+ * el borde entre dos pedazos aparece partida en los dos y en ninguno completa.
+ * Lo repetido lo descarta `aplicarSenales`.
+ *
+ * `COLA_MS` es lo del final de cada pasada que se oye pero no se cree todavía:
+ * la última palabra de un pedazo suele estar cortada, y la siguiente pasada la
+ * oye entera (ver `firmeHastaMs` en `aplicarSenales`).
  */
-const CICLO_MS = 3000;
+const CICLO_MS = 1000;
 const SOLAPE_MS = 1200;
+const CONTEXTO_MS = 6000;
+const NUEVO_MIN_MS = 700;
+const COLA_MS = 500;
 
 /** Cuánto se le da a Whisper alrededor de un golpe para leer la frase. */
 const MARGEN_CLAQUETA_MS = 4000;
@@ -180,7 +200,12 @@ function iniciar(params) {
     // `sinReloj` es para la simulación, que empuja el ciclo a mano después de
     // cada pedazo: con el reloj andando las dos pasadas se pisarían y la que
     // llegara segunda no vería nada.
-    if (!p.sinReloj) sesion.timer = setInterval(() => { buscarSenales(); }, CICLO_MS);
+    if (!p.sinReloj) {
+        sesion.timer = setInterval(() => { buscarSenales(); }, CICLO_MS);
+        // El modelo grande cargado para el texto en vivo. No se espera: mientras
+        // carga, el ciclo oye por whisper-cli como siempre (`oir.escuchar`).
+        residente.arrancar({ idioma: sesion.estado.idioma || 'es' });
+    }
     espejo.escribir(sesion);
     return espejo.resumen(sesion);
 }
@@ -248,8 +273,9 @@ function oirTramo(desdeMs, hastaMs, liviano) {
 async function buscarSenales() {
     if (!sesion || sesion.buscando || !sesion.captura) return;
     const hasta = espejo.grabadoHastaMs(sesion);
-    const desde = Math.max(sesion.captura.desdeMs, sesion.escuchadoHastaMs - SOLAPE_MS);
-    if (hasta - desde < 1500) return;
+    if (hasta - sesion.escuchadoHastaMs < NUEVO_MIN_MS) return;
+    const desde = Math.max(sesion.captura.desdeMs,
+        Math.min(sesion.escuchadoHastaMs - SOLAPE_MS, hasta - CONTEXTO_MS));
 
     sesion.buscando = true;
     try {
@@ -265,7 +291,7 @@ async function buscarSenales() {
         if (oido && oido.palabras.length) {
             // La ventana entera, incluido el solape: quitar acá lo ya oído deshacía
             // el solape justo cuando servía (ver `aplicarSenales`).
-            eventos = vivo.aplicarSenales(sesion.estado, oido.palabras);
+            eventos = vivo.aplicarSenales(sesion.estado, oido.palabras, { firmeHastaMs: hasta - COLA_MS });
             for (const ev of eventos) {
                 if (ev.tipo === 'cerrada') relecturas.encolar(sesion, ev.toma);
             }
@@ -286,7 +312,7 @@ async function buscarSenales() {
             eventos,
             oyendo: (oido ? oido.palabras : []).map(w => w.texto).join(' ')
         });
-        sesion.escuchadoHastaMs = hasta;
+        sesion.escuchadoHastaMs = hasta - COLA_MS;
     } catch (err) {
         if (sesion) sesion.avisar({ tipo: 'error', mensaje: err.message });
     } finally {
@@ -460,6 +486,9 @@ async function cerrarSesion() {
 function cerrarLoAbierto() {
     if (sesion.timer) clearInterval(sesion.timer);
     sesion.timer = null;
+    // Sin audio entrando no hay nada que oír en vivo, y el gigabyte y medio del
+    // modelo le hace falta a la relectura de las últimas tomas.
+    residente.apagar();
 
     const abierta = vivo.tomaAbierta(sesion.estado);
     if (abierta) {

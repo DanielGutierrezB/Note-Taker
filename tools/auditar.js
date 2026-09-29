@@ -66,11 +66,11 @@ const VARA = {
      */
     tamanos: [32, 18, 13, 12, 11],
     chicos: 0,
-    // La fila que se repite veinte veces en una clase. La de claqueta va en
-    // dos renglones a propósito (ver `filaClaqueta`), así que tiene su propio
-    // techo en vez de romper el de todas.
+    // La fila que se repite veinte veces en una clase. La de claqueta va en la
+    // misma lista y mide lo mismo: tiene su propio renglón en el informe para
+    // que se vea cuál de las dos se pasó.
     filaAlta: 32.9,
-    filaClaquetaAlta: 56,
+    filaClaquetaAlta: 32.9,
     cromo: 0.20
 };
 

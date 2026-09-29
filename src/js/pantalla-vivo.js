@@ -26,7 +26,7 @@
  * de la vista y no de la clase.
  */
 
-import { $, esc, avisar, verVista } from './chrome.js';
+import { $, esc, avisar, verVista, pref } from './chrome.js';
 import { icono } from './iconos.js';
 import * as fmt from './formato.js';
 import * as estados from './estados.js';
@@ -45,8 +45,18 @@ let pendiente = false;
 /** Cuántas palabras de antes del IN se ven con la toma abierta: las que hacen falta para correrlo. */
 const ORILLA_ABIERTA = 24;
 
-/** Lo de la vista y no de la clase: qué está abierto y qué está elegido. */
-const vista = { abierta: null, elegida: null };
+/**
+ * Lo de la vista y no de la clase: qué está abierto, qué está elegido, cómo se
+ * mira la lista y el comentario a medio escribir, si hay uno.
+ */
+const vista = {
+    abierta: null,
+    elegida: null,
+    compacto: pref.leer('vivo.compacto', false),
+    sinDesactivadas: pref.leer('vivo.sinDesactivadas', false),
+    // { toma, desdeMs, hastaMs, texto }: el pedazo seleccionado que se está comentando.
+    comentando: null
+};
 
 /** Descarta las respuestas que llegan tarde (`turnos.js`). */
 const turno = mostrador();
@@ -62,9 +72,22 @@ export function conectar(contexto) {
 
     $('#ahora').addEventListener('click', alClic);
     $('#lista-vivo').addEventListener('click', alClic);
-    $('#lista-claquetas').addEventListener('click', alClic);
     $('#ahora').addEventListener('change', alCambiar);
     $('#lista-vivo').addEventListener('change', alCambiar);
+    // Seleccionar un pedazo del texto de una toma abre el campo para comentarlo.
+    $('#ahora').addEventListener('mouseup', alSeleccionar);
+    $('#lista-vivo').addEventListener('mouseup', alSeleccionar);
+
+    $('#btn-compacto').addEventListener('click', () => {
+        vista.compacto = !vista.compacto;
+        pref.guardar('vivo.compacto', vista.compacto);
+        pintar();
+    });
+    $('#btn-desactivadas').addEventListener('click', () => {
+        vista.sinDesactivadas = !vista.sinDesactivadas;
+        pref.guardar('vivo.sinDesactivadas', vista.sinDesactivadas);
+        pintar();
+    });
 
     document.addEventListener('keydown', alTeclado);
     window.nt.onGrabarAviso(alAviso);
@@ -82,6 +105,7 @@ export function ver(primerEstado, elAudio) {
     audio = elAudio;
     vista.abierta = null;
     vista.elegida = null;
+    vista.comentando = null;
     verVista('vista-vivo');
     pintar();
 }
@@ -136,8 +160,11 @@ function pintar() {
     const vivas = estado.tomas.filter(t => !t.descartada);
     $('#vivo-tomas').textContent = vivas.length;
     $('#vivo-claquetas').textContent = estado.claquetas.length;
+    const desactivadas = estado.tomas.filter(t => t.descartada).length;
     $('#vivo-cuantas').textContent = estado.tomas.length
-        ? `${estado.tomas.length} en total` : '';
+        ? `${vivas.length} van al XML${desactivadas ? ` · ${desactivadas} desactivada${desactivadas === 1 ? '' : 's'}` : ''}`
+        : '';
+    pintarInterruptores(desactivadas);
     $('#vivo-donde').textContent = estado.archivos ? estado.archivos.xml : '';
 
     const h = estado.historia || {};
@@ -148,17 +175,14 @@ function pintar() {
     const rollos = recordarRollos();
 
     $('#ahora').innerHTML = ahora(fps);
-    $('#lista-vivo').innerHTML = estado.tomas.length
-        ? [...estado.tomas].reverse().map(t => filaToma(t, fps)).join('')
+    const items = laLista();
+    $('#lista-vivo').innerHTML = items.length
+        ? items.map(it => (it.toma ? filaToma(it.toma, fps) : filaClaqueta(it.claqueta, fps))).join('')
         : `<div class="vacio">${icono('toma')}
              <span class="vacio-titulo">Todavía no hay ninguna toma</span>
-             <span class="v3">La primera se abre sola cuando alguien diga «3, 2, 1».</span></div>`;
-    $('#lista-claquetas').innerHTML = estado.claquetas.length
-        ? estado.claquetas.map(c => filaClaqueta(c, fps)).join('')
-        : `<div class="vacio">${icono('claqueta')}
-             <span class="vacio-titulo">Sin claquetas</span>
-             <span class="v3">Se anotan solas con el aplauso o diciendo «claqueta»,
-               y a mano con la tecla K.</span></div>`;
+             <span class="v3">La primera se abre sola cuando alguien diga «3, 2, 1». Las
+               claquetas aparecen acá también, en su lugar: con el aplauso, diciendo
+               «claqueta» o con la tecla K.</span></div>`;
 
     montarTextos();
     devolverRollos(rollos);
@@ -250,7 +274,9 @@ retrocede solo hasta donde empezó la frase. Tecla: Enter">
                placeholder="Nota de esta toma — se escribe en el marcador del XML">
         <div data-texto="abierta" data-toma="${abierta.id}"></div>
         <p class="v3 pista">Arrastrá el <b class="pista-in">IN</b> para mover el
-          principio, o el <b class="pista-out">OUT</b> hacia atrás para cerrarla en esa palabra.</p>
+          principio, o el <b class="pista-out">OUT</b> hacia atrás para cerrarla en esa palabra.
+          Seleccioná un pedazo para comentarlo.</p>
+        ${comentariosDe(abierta)}
       </div>
     </div>`;
 }
@@ -303,26 +329,113 @@ function primeras(t) {
 function cuerpoToma(t) {
     // La abierta se edita arriba, en «Ahora»: dos textos movibles de la misma
     // toma serían dos líneas de IN que se pisan.
-    const texto = t.outMs == null
-        ? '<p class="v3">Está abierta: su texto y sus bordes están arriba, en «Ahora».</p>'
-        : `<div data-texto="cerrada" data-toma="${t.id}"></div>
-           <p class="v3 pista">Lo gris es lo que se dijo fuera de la toma. Arrastrá el
-             <b class="pista-in">IN</b> o el <b class="pista-out">OUT</b> para moverlos.</p>`;
+    if (t.outMs == null) {
+        return `<div class="cuerpo-toma">
+            <p class="v3">Está abierta: su texto, su nota y sus bordes están arriba, en «Ahora».</p>
+        </div>`;
+    }
     return `<div class="cuerpo-toma">
         <input type="text" data-campo="nota" data-toma="${t.id}"
-               value="${esc(t.comentario || '')}" placeholder="Nota de esta toma">
-        ${texto}
+               value="${esc(t.comentario || '')}" placeholder="Nota de toda la toma — va en el marcador del XML">
+        <div data-texto="cerrada" data-toma="${t.id}"></div>
+        <p class="v3 pista">Lo gris es lo que se dijo fuera de la toma. Arrastrá el
+          <b class="pista-in">IN</b> o el <b class="pista-out">OUT</b> para moverlos, o
+          seleccioná un pedazo para comentarlo.</p>
+        ${comentariosDe(t)}
         <div class="campo-fila" style="margin-top:8px">
-          ${vistas(t)}
+          ${t.descartada ? '' : vistas(t)}
           <span class="crece"></span>
-          ${t.descartada
-            ? `<button class="btn" type="button" data-hace="recuperar" data-toma="${t.id}">
-                 ${icono('recuperar')} Recuperar</button>`
-            : `<button class="btn btn-tenue" type="button" data-hace="descartar" data-toma="${t.id}"
-                 title="La saca del XML, pero se puede recuperar">
-                 ${icono('descartar')} Descartar</button>`}
+          ${sePuedeReabrir(t)
+            ? `<button class="btn btn-tenue" type="button" data-hace="reabrir" data-toma="${t.id}"
+                 title="Si «Pausa» la cerró de más: la toma sigue abierta y vuelve a juntar lo que se dice">
+                 ${icono('abrirToma')} Reabrir</button>`
+            : ''}
+          ${estadosDe(t)}
         </div>
     </div>`;
+}
+
+/**
+ * Los tres estados de una toma, en un solo control porque son excluyentes.
+ *
+ *   Mantener     va al XML
+ *   Desactivar   no va al XML, pero sigue acá y se vuelve a mantener
+ *   Descartar    sale de la sesión; se deshace con ⌘Z
+ */
+function estadosDe(t) {
+    const activa = !t.descartada;
+    return `<span class="estados-toma" role="group" aria-label="Estado de la toma ${t.id}">
+      <button class="btn btn-tenue" type="button" data-hace="mantener" data-toma="${t.id}"
+              aria-pressed="${activa}" title="Va al XML">Mantener</button>
+      <button class="btn btn-tenue" type="button" data-hace="desactivar" data-toma="${t.id}"
+              aria-pressed="${!activa}"
+              title="No va al XML, pero sigue acá: con Mantener vuelve">Desactivar</button>
+      <button class="btn btn-tenue" type="button" data-hace="descartar" data-toma="${t.id}"
+              title="La saca de la sesión. Se deshace con ⌘Z">${icono('descartar')} Descartar</button>
+    </span>`;
+}
+
+/** Reabrir solo la última, y solo si no hay otra abierta: es lo único que el motor honra. */
+function sePuedeReabrir(t) {
+    const ultima = estado.tomas[estado.tomas.length - 1];
+    return t === ultima && estado.abierta == null && !t.descartada;
+}
+
+/**
+ * Los comentarios sobre pedazos del texto, y el campo para uno nuevo.
+ *
+ * Van al XML como marcadores blancos en el tramo comentado, además de la nota
+ * de la toma entera. El campo aparece cuando se selecciona un pedazo del texto
+ * de ESTA toma (`alSeleccionar`).
+ */
+function comentariosDe(t) {
+    const lista = (t.comentarios || []).map((c, i) => `
+      <div class="comentario">
+        <span class="hp-ico">${icono('comentar')}</span>
+        <q>${esc(c.texto)}</q>
+        <span class="crece">${esc(c.comentario)}</span>
+        <button class="btn btn-tenue btn-ico" type="button" data-hace="borrar-comentario"
+                data-toma="${t.id}" data-indice="${i}" title="Quitar este comentario">${icono('cerrar')}</button>
+      </div>`).join('');
+    const c = vista.comentando && vista.comentando.toma === t.id ? vista.comentando : null;
+    const campo = c ? `
+      <div class="comentar">
+        <span class="v3">Comentar <q>${esc(c.texto)}</q></span>
+        <input type="text" data-campo="comentario" data-toma="${t.id}"
+               placeholder="Qué pasa en este pedazo — va al XML como marcador blanco">
+        <button class="btn" type="button" data-hace="guardar-comentario" data-toma="${t.id}">Comentar</button>
+        <button class="btn btn-tenue" type="button" data-hace="cancelar-comentario">Cancelar</button>
+      </div>` : '';
+    return lista || campo ? `<div class="comentarios">${lista}</div>${campo}` : '';
+}
+
+/**
+ * Tomas y claquetas en una sola lista, la más nueva arriba.
+ *
+ * Juntas y en su orden porque es como se leen: «la claqueta 2 vino entre la
+ * toma 3 y la 4» es lo que el editor necesita para saber en qué archivo de
+ * Premiere cae cada toma. En un costado aparte había que cruzar la pantalla y
+ * comparar timecodes para saberlo.
+ */
+function laLista() {
+    const tomas = estado.tomas
+        .filter(t => !(vista.sinDesactivadas && t.descartada))
+        .map(t => ({ ms: t.inMs, toma: t }));
+    const claquetas = (estado.claquetas || []).map(c => ({ ms: c.ms, claqueta: c }));
+    return tomas.concat(claquetas).sort((a, b) => b.ms - a.ms);
+}
+
+function pintarInterruptores(desactivadas) {
+    const compacto = $('#btn-compacto');
+    compacto.setAttribute('aria-pressed', String(vista.compacto));
+    $('#vista-vivo').classList.toggle('es-compacto', vista.compacto);
+
+    const boton = $('#btn-desactivadas');
+    boton.hidden = !desactivadas && !vista.sinDesactivadas;
+    boton.setAttribute('aria-pressed', String(vista.sinDesactivadas));
+    boton.textContent = vista.sinDesactivadas
+        ? `Desactivadas escondidas (${desactivadas})`
+        : 'Ocultar desactivadas';
 }
 
 /**
@@ -346,6 +459,7 @@ function montarTextos() {
                 modo: 'abierta',
                 antes: sueltasLibres().filter(w => w.t < toma.inMs).slice(-ORILLA_ABIERTA),
                 palabras: toma.palabras,
+                comentarios: toma.comentarios,
                 vacio: 'Todavía no se oyó nada de esta toma.'
             }, (borde, ms) => borde === 'out'
                 ? pedir(() => window.nt.grabarCerrarToma(ms))
@@ -356,6 +470,7 @@ function montarTextos() {
                 antes: toma.antes,
                 palabras: toma.palabras,
                 despues: toma.despues,
+                comentarios: toma.comentarios,
                 vacio: 'Esta toma no tiene texto.'
             }, (borde, ms) => editar({ tipo: 'borde', toma: toma.id, borde, paredMs: ms })));
         }
@@ -389,7 +504,14 @@ function devolverRollos(rollos) {
         if (!t) continue;
         const antes = rollos.get(claveDe(hueco));
         t.scrollTop = !antes || antes.alFondo ? t.scrollHeight : antes.arriba;
+        marcarTapado(t);
+        t.onscroll = () => marcarTapado(t);
     }
+}
+
+/** Desvanecer arriba solo si hay texto escondido arriba. */
+function marcarTapado(t) {
+    t.classList.toggle('es-tapado', t.scrollTop > 1);
 }
 
 function claveDe(hueco) {
@@ -405,8 +527,9 @@ function claveDe(hueco) {
  */
 function recordarFoco() {
     const a = document.activeElement;
-    if (!a || !a.matches('#vista-vivo [data-campo="nota"]')) return null;
+    if (!a || !a.matches('#vista-vivo [data-campo]')) return null;
     return {
+        campo: a.dataset.campo,
         toma: a.dataset.toma,
         enAhora: !!a.closest('#ahora'),
         valor: a.value,
@@ -418,7 +541,7 @@ function recordarFoco() {
 function devolverFoco(f) {
     if (!f) return;
     const donde = f.enAhora ? '#ahora' : '#lista-vivo';
-    const campo = document.querySelector(`${donde} [data-campo="nota"][data-toma="${f.toma}"]`);
+    const campo = document.querySelector(`${donde} [data-campo="${f.campo}"][data-toma="${f.toma}"]`);
     if (!campo) return;
     campo.value = f.valor;
     campo.focus();
@@ -426,32 +549,26 @@ function devolverFoco(f) {
 }
 
 /**
- * Una claqueta en el costado.
+ * Una claqueta, en la lista con las tomas.
  *
- * Va en dos renglones y no en uno, que es lo contrario de una fila de toma, y
- * es por el ancho: el costado mide 300 px y acá hay que decir cinco cosas —el
- * número, el timecode, si es la referencia, cómo está y cómo quitarla—. En un
- * renglón, lo primero que se recortaba era el nombre, o sea justo el número
- * con el que el editor la busca en su pizarra.
- *
- * El orden de prioridad queda escrito así: arriba lo que identifica (número y
- * timecode), abajo lo que se confirma (referencia, estado) y la acción.
+ * Un renglón de 32 px como una toma, pero sin fondo de color ni chevron: no es
+ * una toma, no tiene vista ni nada que desplegar. Lo que la identifica va a la
+ * izquierda —el icono, el número, el timecode, la frase con la que se dijo— y
+ * lo que se confirma a la derecha: si es la referencia, cómo está y quitarla.
  */
 function filaClaqueta(c, fps) {
     const est = estados.deClaqueta(c);
     return `<div class="fila fila-claqueta guarda" data-estado="${est.clave}"
         data-claqueta="${c.n}" ${est.porque ? `title="${esc(est.porque)}"` : ''}>
-      <div class="claqueta-arriba">
-        <span class="fila-nombre">Claqueta ${c.n}</span>
-        <time class="fila-dato tc">${fmt.timecodeDe(c.ms, estado.ceroMs, fps)}</time>
-        <span class="crece"></span>
-        <button class="btn btn-tenue btn-ico" type="button" data-hace="quitar-claqueta"
-                data-claqueta="${c.n}" title="Quitarla: no era una claqueta">${icono('cerrar')}</button>
-      </div>
-      <div class="claqueta-abajo">
-        ${c.n === 1 ? '<span class="pastilla" data-estado="listo" title="Es contra esta que el editor correlaciona los archivos en Premiere">referencia</span>' : ''}
-        <span class="pastilla" data-estado="${est.clave}">${esc(est.palabra)}</span>
-      </div>
+      <span class="hp-ico">${icono('claqueta')}</span>
+      <span class="fila-nombre">Claqueta ${c.n}</span>
+      <time class="fila-dato tc">${fmt.timecodeDe(c.ms, estado.ceroMs, fps)}</time>
+      ${c.frase ? `<span class="fila-nota">«${esc(c.frase)}»</span>` : ''}
+      <span class="crece"></span>
+      ${c.n === 1 ? '<span class="pastilla" data-estado="listo" title="Es contra esta que el editor correlaciona los archivos en Premiere">referencia</span>' : ''}
+      <span class="pastilla" data-estado="${est.clave}">${esc(est.palabra)}</span>
+      <button class="btn btn-tenue btn-ico" type="button" data-hace="quitar-claqueta"
+              data-claqueta="${c.n}" title="Quitarla: no era una claqueta">${icono('cerrar')}</button>
     </div>`;
 }
 
@@ -474,12 +591,73 @@ async function alClic(e) {
         case 'vista':
             await editar({ tipo: 'vista', toma, vista: boton.dataset.vista });
             break;
-        case 'descartar': await editar({ tipo: 'descartar', toma, descartada: true }); break;
-        case 'recuperar': await editar({ tipo: 'descartar', toma, descartada: false }); break;
+        case 'mantener': await editar({ tipo: 'descartar', toma, descartada: false }); break;
+        case 'desactivar': await editar({ tipo: 'descartar', toma, descartada: true }); break;
+        case 'descartar':
+            await editar({ tipo: 'eliminar', toma });
+            if (!estado.tomas.some(t => t.id === toma)) {
+                vista.abierta = null;
+                avisar(`Toma ${toma} descartada. ⌘Z la devuelve.`);
+            }
+            break;
+        case 'reabrir': await editar({ tipo: 'reabrir', toma }); break;
+        case 'guardar-comentario': await guardarComentario(); break;
+        case 'cancelar-comentario':
+            vista.comentando = null;
+            pintar();
+            break;
+        case 'borrar-comentario':
+            await editar({ tipo: 'borrar-comentario', toma, indice: Number(boton.dataset.indice) });
+            break;
         case 'quitar-claqueta':
             await pedir(() => window.nt.grabarQuitarClaqueta(Number(boton.dataset.claqueta)));
             break;
     }
+}
+
+/**
+ * Un pedazo seleccionado del texto de una toma abre el campo para comentarlo.
+ *
+ * Se mira en el turno siguiente porque durante el `mouseup` la selección
+ * todavía no está cerrada. Lo gris no cuenta: un comentario es sobre lo que
+ * está adentro de la toma, que es lo que va al XML.
+ */
+function alSeleccionar(e) {
+    if (texto.arrastrando() || e.target.closest('.borde')) return;
+    const hueco = e.target.closest('[data-texto="abierta"], [data-texto="cerrada"]');
+    if (!hueco) return;
+    setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+        const rango = sel.getRangeAt(0);
+        const elegidas = [...hueco.querySelectorAll('.palabra:not(.es-orilla)')]
+            .filter(w => rango.intersectsNode(w));
+        if (!elegidas.length) return;
+        const ultima = elegidas[elegidas.length - 1];
+        vista.comentando = {
+            toma: Number(hueco.dataset.toma),
+            desdeMs: Number(elegidas[0].dataset.t),
+            hastaMs: Number(ultima.dataset.hasta || ultima.dataset.t),
+            texto: elegidas.map(w => w.textContent).join(' ')
+        };
+        sel.removeAllRanges();
+        pintar();
+        const campo = document.querySelector(`[data-campo="comentario"][data-toma="${vista.comentando.toma}"]`);
+        if (campo) campo.focus();
+    }, 0);
+}
+
+async function guardarComentario() {
+    const c = vista.comentando;
+    if (!c) return;
+    const campo = document.querySelector(`[data-campo="comentario"][data-toma="${c.toma}"]`);
+    const comentario = campo ? campo.value.trim() : '';
+    if (!comentario) {
+        if (campo) campo.focus();
+        return;
+    }
+    vista.comentando = null;
+    await editar({ tipo: 'comentar', toma: c.toma, desdeMs: c.desdeMs, hastaMs: c.hastaMs, texto: c.texto, comentario });
 }
 
 async function alCambiar(e) {
@@ -563,7 +741,7 @@ async function volver(cual) {
 /**
  * Sobre la toma elegida, que es la que el editor tocó por última vez; si no
  * tocó ninguna, la abierta; si no hay abierta, la última que no esté
- * descartada. Sin esa cadena, una tecla apretada mientras se abre la toma
+ * desactivada. Sin esa cadena, una tecla apretada mientras se abre la toma
  * siguiente cae sobre otra.
  */
 function laDeLasTeclas() {
@@ -581,9 +759,15 @@ function escribiendo() {
 async function alTeclado(e) {
     if (!$('#vista-vivo').classList.contains('es-activa')) return;
     if (escribiendo()) {
+        const campo = document.activeElement;
+        if (campo.dataset.campo === 'comentario') {
+            if (e.key === 'Enter') { e.preventDefault(); return guardarComentario(); }
+            if (e.key === 'Escape') { vista.comentando = null; return pintar(); }
+            return;
+        }
         // Enter en un campo guarda y suelta el foco, que es lo que uno espera
         // de un campo de una sola línea. Lo demás se lo queda el campo.
-        if (e.key === 'Enter') document.activeElement.blur();
+        if (e.key === 'Enter') campo.blur();
         return;
     }
 

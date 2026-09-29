@@ -171,7 +171,8 @@ export const DOCTOR = {
         { key: 'ffmpeg', required: true, found: true, name: 'ffmpeg', source: 'incluido en la app', searched: [] },
         { key: 'whisper-cli', required: true, found: true, name: 'whisper-cli', source: 'incluido en la app', searched: [] },
         { key: 'modelo de Whisper', required: true, found: true, name: 'ggml-large-v3-turbo.bin', source: '/Library/Application Support/Note Taker/models', searched: [] },
-        { key: 'modelo liviano (notas en vivo)', required: false, found: true, name: 'ggml-small.bin', source: '/Library/Application Support/Note Taker/models', searched: [] },
+        { key: 'whisper-server (el texto en vivo)', required: false, found: true, name: 'whisper-server', source: 'incluido en la app', searched: [] },
+        { key: 'modelo liviano (respaldo del texto en vivo)', required: false, found: true, name: 'ggml-small.bin', source: '/Library/Application Support/Note Taker/models', searched: [] },
         { key: 'modelo al que bajar si el grande se muere', required: false, found: true, name: 'ggml-small.bin', source: '488 MB contra 1.5 GB del grande', searched: [] }
     ]
 };

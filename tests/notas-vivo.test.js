@@ -145,6 +145,57 @@ module.exports = function (t) {
         t.deep(e.tomas[0].palabras.map(w => w.texto), ['Hola', 'mundo']);
     });
 
+    t.test('el solape se engancha por el texto aunque la hora se corra', () => {
+        // Sin DTW la hora de una palabra se corre de una pasada a otra. La
+        // regresión, medida en una prueba por Zoom: «Esto inicia la primera
+        // toma» quedaba en «inicia la toma», y «voy a» salía dos veces.
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'voy'], [300, 'a'], [600, 'iniciar'], [1100, 'una']]));
+        // La pasada siguiente oye lo mismo 400 ms antes, y sigue.
+        vivo.aplicarSenales(e, palabras([
+            [-400, 'voy'], [-100, 'a'], [200, 'iniciar'], [700, 'una'], [1000, 'toma'], [1400, 'nueva']
+        ]));
+        t.deep(e.sueltas.map(w => w.texto), ['voy', 'a', 'iniciar', 'una', 'toma', 'nueva'],
+            'ni repetidas ni perdidas');
+    });
+
+    t.test('y aunque la hora se corra para el otro lado', () => {
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'puedo'], [400, 'ver'], [800, 'cómo']]));
+        vivo.aplicarSenales(e, palabras([[450, 'puedo'], [850, 'ver'], [1250, 'cómo'], [1600, 'está']]));
+        t.deep(e.sueltas.map(w => w.texto), ['puedo', 'ver', 'cómo', 'está']);
+    });
+
+    t.group('notas-vivo · la cola de cada pasada');
+
+    t.test('lo del final no se guarda: vuelve entero en la pasada siguiente', () => {
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'cómo'], [400, 'está'], [800, 'funcion']]),
+            { firmeHastaMs: T0 + 800 });
+        t.deep(e.sueltas.map(w => w.texto), ['cómo', 'está'], '«funcion» cortada, esperando');
+        vivo.aplicarSenales(e, palabras([[0, 'cómo'], [400, 'está'], [800, 'funcionando'], [1500, 'bien']]));
+        t.deep(e.sueltas.map(w => w.texto), ['cómo', 'está', 'funcionando', 'bien']);
+    });
+
+    t.test('"pausa" al borde mira lo que sigue en la cola y no cierra', () => {
+        // Sin la cola para mirar, «pausa» quedaba última de lo firme, o sea con
+        // silencio detrás, y «acá hacemos una pausa en el flujo» cerraba la toma.
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, '3,'], [400, '2,'], [800, '1.'], [1600, 'Hola']]));
+        vivo.aplicarSenales(e, palabras([[5000, 'pausa'], [5300, 'en'], [5600, 'el']]),
+            { firmeHastaMs: T0 + 5000 + 300 });
+        t.eq(e.tomas[0].outMs, null, 'sigue abierta');
+    });
+
+    t.test('una señal en la cola espera a la pasada siguiente', () => {
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'bueno'], [400, '3,'], [800, '2,'], [1200, '1.']]),
+            { firmeHastaMs: T0 + 900 });
+        t.eq(e.tomas.length, 0, 'todavía no');
+        vivo.aplicarSenales(e, palabras([[400, '3,'], [800, '2,'], [1200, '1.'], [2000, 'Hola']]));
+        t.eq(e.tomas.length, 1, 'y ahí sí, una sola');
+    });
+
     t.group('notas-vivo · abrir a mano');
 
     t.test('abre una toma donde se apretó, con el profesor callado', () => {

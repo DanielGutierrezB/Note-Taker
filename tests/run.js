@@ -22,6 +22,7 @@ const FILES = [
     'golpe.test.js',
     'captura.test.js',
     'audio-app.test.js',
+    'oido-residente.test.js',
     'insistir.test.js',
     'notas-vivo.test.js',
     'claquetas.test.js',
