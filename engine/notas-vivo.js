@@ -45,77 +45,30 @@ const CAMARA = 0;
 const PANTALLA = 1;
 
 /**
- * Los colores con los que la app dice de qué fuente es algo.
- *
- * Son los de `.cam-0` y `.cam-1` en `src/css/visor.css`, que a su vez son las dos
- * primeras etiquetas de clip del XML (`CLIP_LABELS` en `fcp-xml.js`): la cámara
- * llega a Premiere en Cerulean y el grabador de pantalla en Rose. La tira del
- * reproductor, los bloques del guion y ahora las tomas de esta pantalla usan los
- * mismos dos, porque son la misma pregunta en tres sitios.
- *
- * Escritos acá además de en la hoja de estilo porque el CSS no se puede leer
- * desde el motor y esta lista es la que la pantalla consulta;
- * `tests/colores.test.js` falla si los dos lados se separan.
- */
-const CERULEO = '#3f7fb5';
-const ROSA = '#b1567c';
-
-/**
  * Las vistas que se pueden elegir: con qué se ve cada una y de qué color va.
  *
- * **Cada vista tiene DOS colores y son dos cosas distintas a propósito.** Si esto
- * parece un error y da ganas de dejar uno solo, es lo que hay que leer antes:
+ * `colorDeMarcador` es el entero nativo de Premiere (`pproColor`) y es lo que
+ * se escribe en el XML. Sale de un XML de verdad del director de contenido, no
+ * de elegirlo: si acá se escribiera otro, el mismo tipo de toma llegaría a la
+ * secuencia de un color distinto según quién tomó las notas.
  *
- * - `colorDeMarcador` es el entero nativo de Premiere (`pproColor`) y es lo que
- *   se escribe en el XML. Sale de un XML de verdad del director de contenido, no
- *   de elegirlo: si acá se escribiera otro, el mismo tipo de toma llegaría a la
- *   secuencia de un color distinto según quién tomó las notas. Quien lo escribe
- *   es `notas-xml.js`.
+ * **Es también el color con el que la pantalla pinta la toma**, y no hay un
+ * segundo color para eso. Class Cut sí tenía uno (`colorEnLaApp`) porque allá
+ * la lista de tomas convivía con un reproductor que ya usaba esos colores para
+ * otra cosa. Note Taker no tiene reproductor, y dos colores para lo mismo solo
+ * lograban que el profesor se viera azul mientras se grababa y llegara rojo a
+ * Premiere. Cómo se pinta sin perder contraste está en `src/js/colores.js`.
  *
- * - `colorEnLaApp` es de qué color se ve la toma EN LA PANTALLA DE GRABAR. No es
- *   una traducción del de arriba: son dos preguntas diferentes. El marcador
- *   contesta "de qué color va a aparecer esto en Premiere"; la lista de tomas
- *   contesta **qué vista eligió el director en esta toma**, que son cinco cosas
- *   y no dos.
- *
- *   Con qué se ve cada vista es otra pregunta y tiene su propio campo acá al
- *   lado (`fuente`). No se pueden mezclar: `R`, `S`, `MG` y `X2` se resuelven
- *   todas con el grabador de pantalla —así se previsualizan— y aun así se pintan
- *   distinto, porque quien está grabando necesita reconocer de un golpe de vista
- *   cuál de las cinco puso en cada toma, que es lo que después va a tener que
- *   revisar y lo que decide el color del marcador. De qué entrada salió la
- *   imagen ya lo está viendo en el monitor.
- *
- * `PV` y `R` llevan además los colores de las dos fuentes —cerúleo y rosa— y eso
- * también es a propósito: son las dos primeras etiquetas de clip del XML
- * (`CLIP_LABELS` en `fcp-xml.js`) y los dos `.cam-N` de `src/css/visor.css`, así
- * que en la tira del reproductor y en los bloques del guion esos dos colores ya
- * están diciendo eso, y quien graba mirando esta lista es el mismo que después
- * abre el reproductor. `R` es donde los dos campos chocan de frente: su marcador
- * es naranja y así se queda, porque es el que el CD viene usando, pero en la app
- * va rosa.
- *
- * Las otras tres coinciden con su marcador, y también por elección: no tienen un
- * color propio en el reproductor con el que pelear, así que el de Premiere es el
- * que más dice.
- *
- * Antes eran un solo campo, y no se notaba porque todas coincidían por
- * casualidad. El único sitio que los mezclaba era la hoja de estilo, que sacaba
- * su hexadecimal del entero del marcador; ahora saca cada uno de su campo y
- * `tests/colores.test.js` fija cuáles coinciden a propósito y cuáles no.
- *
- * **La `fuente` vive acá y en ningún otro lado.** Antes estaba escrita dos veces
- * y en desacuerdo: `cutplan.js` solo conocía `PV` y `R` —así que una toma en
- * `MG` caía en la primera cámara con un aviso de "vista desconocida"— y la
- * maqueta tenía su propia tabla donde sí sabía a dónde iban las otras cuatro. O
- * sea que el diseño se miraba con un mapeo que la app no tenía.
+ * `fuente` es con qué se ve cada vista en Class Cut (cámara o pantalla). Acá no
+ * se usa para nada más que el `viewMap`, y se queda para que un XML hecho con
+ * Note Taker se abra en Class Cut sin traducir nada.
  */
 const VISTAS = [
-    { nombre: 'PV', titulo: 'Profesor', fuente: CAMARA, colorDeMarcador: 4281740498, colorEnLaApp: CERULEO },
-    { nombre: 'R', titulo: 'Pantalla', fuente: PANTALLA, colorDeMarcador: 4280578025, colorEnLaApp: ROSA },
-    { nombre: 'S', titulo: 'Slides', fuente: PANTALLA, colorDeMarcador: 4281828977, colorEnLaApp: '#718637' },
-    { nombre: 'MG', titulo: 'Multi', fuente: PANTALLA, colorDeMarcador: 4292277273, colorEnLaApp: '#19f4d6' },
-    { nombre: 'X2', titulo: 'Doble', fuente: PANTALLA, colorDeMarcador: 4289825711, colorEnLaApp: '#af8bb1' }
+    { nombre: 'PV', titulo: 'Profesor', fuente: CAMARA, colorDeMarcador: 4281740498 },
+    { nombre: 'R', titulo: 'Pantalla', fuente: PANTALLA, colorDeMarcador: 4280578025 },
+    { nombre: 'S', titulo: 'Slides', fuente: PANTALLA, colorDeMarcador: 4281828977 },
+    { nombre: 'MG', titulo: 'Multi', fuente: PANTALLA, colorDeMarcador: 4292277273 },
+    { nombre: 'X2', titulo: 'Doble', fuente: PANTALLA, colorDeMarcador: 4289825711 }
 ];
 
 const VISTA_POR_DEFECTO = 'PV';
@@ -579,16 +532,26 @@ function arranqueDeLaTirada(sueltas, hastaMs) {
  * donde se apretó. Eso también es correcto: es el caso de abrir ANTES de que
  * alguien hable, que es como se usa cuando uno se adelanta.
  *
+ * **Con `exacto`, el IN va donde se pidió y no se retrocede.** Es el gesto de
+ * arrastrar el IN hasta una palabra del texto suelto: ahí quien toma notas ya
+ * eligió dónde empieza, mirando, y adivinar el arranque de la frase sería
+ * pisarle la decisión.
+ *
  * @param {object} estado el de la sesión, se muta
  * @param {number} ms la hora del día del gesto, en el reloj del audio
+ * @param {object} [opciones] { exacto, ahoraMs } — `ahoraMs` es desde dónde se
+ *   cuenta cuánto retrocedió, cuando `ms` no es "ahora"
  * @returns {{toma: object, retrocedioSec: number}|null} null si ya hay una abierta
  */
-function abrirToma(estado, ms) {
+function abrirToma(estado, ms, opciones) {
     if (tomaAbierta(estado)) return null;
+    const o = opciones || {};
 
     const sueltas = estado.sueltas || [];
-    const desde = arranqueDeLaTirada(sueltas, ms);
-    const inMs = desde === -1 ? ms : sueltas[desde].t;
+    const desde = o.exacto
+        ? sueltas.findIndex(w => w.t >= ms)
+        : arranqueDeLaTirada(sueltas, ms);
+    const inMs = (o.exacto || desde === -1) ? ms : sueltas[desde].t;
 
     const toma = nuevaToma(estado, inMs, '');
     if (desde !== -1) {
@@ -600,7 +563,65 @@ function abrirToma(estado, ms) {
         estado.sueltas = sueltas.slice(0, desde);
     }
     estado.tomas.push(toma);
-    return { toma, retrocedioSec: Math.round((ms - inMs) / 100) / 10 };
+    const desdeCuando = o.ahoraMs != null ? o.ahoraMs : ms;
+    return { toma, retrocedioSec: Math.max(0, Math.round((desdeCuando - inMs) / 100) / 10) };
+}
+
+/** Las dos listas juntas, en orden y sin repetir lo que esté en las dos. */
+function juntas(a, b) {
+    const vistas = new Set();
+    return (a || []).concat(b || [])
+        .filter(w => {
+            const clave = `${w.t}|${w.texto}`;
+            if (vistas.has(clave)) return false;
+            vistas.add(clave);
+            return true;
+        })
+        .sort((x, y) => x.t - y.t);
+}
+
+/**
+ * Corre el IN de la toma que está ABIERTA.
+ *
+ * Es otro caso que el de una toma cerrada, y por eso va aparte de `moverBorde`:
+ * una toma abierta todavía no se releyó, así que no tiene orillas guardadas
+ * —las palabras de antes de su IN están en `sueltas`, sin dueño— y moverle el
+ * IN es pasar palabras de una lista a la otra. Hacia atrás, las sueltas que
+ * quedan adentro pasan a ser de la toma; hacia adelante, las de la toma que
+ * quedan afuera vuelven a estar sueltas, y un "abrir a mano" posterior puede
+ * volver a encontrarlas.
+ *
+ * @returns {boolean} si se movió
+ */
+function moverInAbierta(estado, toma, ms) {
+    if (!toma || toma.outMs != null || !Number.isFinite(ms)) return false;
+    const todas = juntas(estado.sueltas, toma.palabras);
+    toma.inMs = ms;
+    toma.palabras = todas.filter(w => w.t >= ms);
+    estado.sueltas = todas.filter(w => w.t < ms);
+    return true;
+}
+
+/**
+ * Cierra la toma abierta en una palabra concreta, y no en la última.
+ *
+ * Es el gesto de arrastrar el OUT hacia atrás sobre el texto de la toma que
+ * está corriendo: el profesor dijo "Pausa" tarde, o siguió hablando de otra
+ * cosa, y el final bueno es una palabra de antes. El OUT cae en el arranque de
+ * esa palabra —exclusivo, como en todo lo demás (`repartir`)— y lo que quedó
+ * después pasa a ser la orilla de la toma y, además, palabras sueltas: se
+ * dijeron sin toma, y el próximo "abrir a mano" tiene que poder encontrarlas.
+ *
+ * @returns {boolean} si se cerró
+ */
+function cerrarEn(estado, toma, ms) {
+    if (!toma || toma.outMs != null || !Number.isFinite(ms) || ms <= toma.inMs) return false;
+    const afuera = (toma.palabras || []).filter(w => w.t >= ms);
+    toma.palabras = (toma.palabras || []).filter(w => w.t < ms);
+    toma.despues = afuera;
+    toma.outMs = ms;
+    estado.sueltas = juntas(estado.sueltas, afuera);
+    return true;
 }
 
 /**
@@ -1117,6 +1138,8 @@ module.exports = {
     repeticiones,
     tomaAbierta,
     abrirToma,
+    moverInAbierta,
+    cerrarEn,
     arranqueDeLaTirada,
     HUECO_DE_TIRADA_SEC,
     RETROCESO_MAX_SEC,

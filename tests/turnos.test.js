@@ -26,6 +26,19 @@ module.exports = async t => {
 
     t.group('grabar · el mostrador de turnos');
 
+    t.test('la pantalla en vivo solo le pide al mostrador lo que el mostrador tiene', () => {
+        // La pantalla llamaba `turno.pedir()` y `turno.esElUltimo()`, que no
+        // existen: cada botón que pasaba por ahí (Cerrar toma, Claqueta, las
+        // vistas, la nota) tiraba antes de llegar al motor, y en silencio,
+        // porque el error queda en una promesa que nadie espera.
+        const fs = require('fs');
+        const codigo = fs.readFileSync(path.join(__dirname, '..', 'src', 'js', 'pantalla-vivo.js'), 'utf8');
+        const usados = new Set([...codigo.matchAll(/\bturno\.(\w+)\(/g)].map(m => m[1]));
+        t.ok(usados.size > 0, 'la pantalla usa el mostrador');
+        const m = mostrador();
+        for (const k of usados) t.eq(typeof m[k], 'function', `turno.${k} existe`);
+    });
+
     t.test('la respuesta de un pedido solo sirve', () => {
         const m = mostrador();
         t.eq(m.atrasada(m.tomar()), false);

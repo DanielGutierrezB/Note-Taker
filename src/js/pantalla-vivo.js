@@ -7,8 +7,9 @@
  * - **Dos elementos grandes y no más**: el timecode y el estado de la sesión.
  *   Son los dos que hay que poder leer sin acercarse. Todo lo demás vive en la
  *   escala de 13/12/11.
- * - **La tarjeta "Ahora" arriba del todo**, con la toma abierta y su nota en
- *   edición. Es donde está la mano del editor el 90 % del tiempo, y ahí vive
+ * - **La tarjeta "Ahora" arriba del todo**: sin toma, el campo de la próxima
+ *   con lo que se va oyendo; con una abierta, la toma con su nota y sus bordes
+ *   arrastrables. Es donde está la mano del editor el 90 % del tiempo, y ahí vive
  *   el único botón primario de la pantalla: **Abrir toma** cuando no hay
  *   ninguna, **Cerrar toma** cuando la hay. Son la misma acción con el signo
  *   cambiado —poner el borde acá— y nunca se ven las dos a la vez, así que la
@@ -31,11 +32,18 @@ import * as fmt from './formato.js';
 import * as estados from './estados.js';
 import * as fuente from './grabar/fuente.js';
 import { mostrador } from './grabar/turnos.js';
+import * as texto from './grabar/texto-toma.js';
+import { estiloDeVista } from './colores.js';
 
 let app = null;
 let estado = null;
 let audio = null;
-let oyendo = '';
+
+/** Un repintado que llegó con una línea agarrada y quedó esperando (`texto.arrastrando`). */
+let pendiente = false;
+
+/** Cuántas palabras de antes del IN se ven con la toma abierta: las que hacen falta para correrlo. */
+const ORILLA_ABIERTA = 24;
 
 /** Lo de la vista y no de la clase: qué está abierto y qué está elegido. */
 const vista = { abierta: null, elegida: null };
@@ -60,6 +68,13 @@ export function conectar(contexto) {
 
     document.addEventListener('keydown', alTeclado);
     window.nt.onGrabarAviso(alAviso);
+
+    // Soltar sin cambiar nada no trae estado nuevo, así que el repintado que
+    // esperó se hace acá. Con un cambio lo hace la respuesta del motor, y
+    // repintar antes con el estado viejo haría saltar la línea para atrás.
+    texto.alSoltarCualquiera(cambio => {
+        if (pendiente && !cambio) pintar();
+    });
 }
 
 export function ver(primerEstado, elAudio) {
@@ -67,7 +82,6 @@ export function ver(primerEstado, elAudio) {
     audio = elAudio;
     vista.abierta = null;
     vista.elegida = null;
-    oyendo = '';
     verVista('vista-vivo');
     pintar();
 }
@@ -78,7 +92,6 @@ function alAviso(aviso) {
     if (!aviso) return;
     if (aviso.tipo === 'estado') {
         estado = aviso.estado;
-        if (typeof aviso.oyendo === 'string') oyendo = aviso.oyendo;
         for (const ev of aviso.eventos || []) contar(ev);
         pintar();
         return;
@@ -106,6 +119,11 @@ function contar(ev) {
 
 function pintar() {
     if (!estado) return;
+    if (texto.arrastrando()) {
+        pendiente = true;
+        return;
+    }
+    pendiente = false;
     const fps = estado.fps;
     const est = estados.deSesion(estado, audio);
 
@@ -126,6 +144,9 @@ function pintar() {
     botonHistoria($('#btn-deshacer'), h.atras, h.queAtras, 'Deshacer');
     botonHistoria($('#btn-rehacer'), h.adelante, h.queAdelante, 'Rehacer');
 
+    const foco = recordarFoco();
+    const rollos = recordarRollos();
+
     $('#ahora').innerHTML = ahora(fps);
     $('#lista-vivo').innerHTML = estado.tomas.length
         ? [...estado.tomas].reverse().map(t => filaToma(t, fps)).join('')
@@ -138,7 +159,10 @@ function pintar() {
              <span class="vacio-titulo">Sin claquetas</span>
              <span class="v3">Se anotan solas con el aplauso o diciendo «claqueta»,
                y a mano con la tecla K.</span></div>`;
-    $('#oyendo-vivo').textContent = oyendo || 'Silencio.';
+
+    montarTextos();
+    devolverRollos(rollos);
+    devolverFoco(foco);
 
     if (audio) {
         const barra = $('#vivo-nivel');
@@ -153,11 +177,30 @@ function botonHistoria(boton, hay, que, verbo) {
 }
 
 /**
+ * Lo que se oyó y no está en ninguna toma, y que todavía puede entrar en una.
+ *
+ * Las sueltas que el motor manda se filtran contra la última toma cerrada: lo
+ * de antes de su OUT ya tuvo su oportunidad, y un deshacer puede dejar ahí
+ * palabras que ya son de la toma (el historial repone tomas, no las sueltas).
+ */
+function sueltasLibres() {
+    const cerradas = estado.tomas.filter(t => t.outMs != null);
+    const desde = cerradas.length ? Math.max(...cerradas.map(t => t.outMs)) : -Infinity;
+    return (estado.sueltas || []).filter(w => w.t >= desde);
+}
+
+/**
  * La tarjeta de lo que está pasando ahora.
  *
- * Con una toma abierta muestra su texto entrando y su nota; sin ninguna, dice
- * qué se está esperando — que es información y no un vacío: quien mira quiere
- * saber que la app sigue escuchando.
+ * **Sin toma abierta es el campo de una toma que todavía no empezó**: el texto
+ * de lo que se está oyendo va entrando abajo y lo viejo se desvanece arriba,
+ * en gris, con el IN esperando al final. Es el mismo lugar y la misma forma
+ * que va a tener la toma, a propósito: si el profesor arrancó sin decir el
+ * conteo, arrastrar el IN hasta la palabra donde empezó ES abrir la toma.
+ *
+ * **Con una toma abierta es la toma**, pintada del color de su vista, y el
+ * texto suelto deja de verse: lo que se oye ahora es de la toma. De lo de antes
+ * quedan unas pocas palabras en gris, las justas para poder correr el IN.
  */
 function ahora(fps) {
     const abierta = estado.tomas.find(t => t.id === estado.abierta);
@@ -165,9 +208,10 @@ function ahora(fps) {
         // Sin toma abierta, la acción principal de la pantalla es abrirla: es
         // lo que hay que poder hacer rápido si el profesor arrancó sin decir el
         // conteo, que es como se pierden las tomas.
-        return `<div class="tarjeta"><div class="tarjeta-cabeza">
+        return `<div class="tarjeta tarjeta-espera">
+          <div class="tarjeta-cabeza">
             <span class="hp-ico" style="color:var(--text-muted)">${icono('oido')}</span>
-            <span class="v1">Esperando el «3, 2, 1»</span>
+            <span class="v1">Sin toma abierta</span>
             <span class="pastilla" data-estado="escuchando">escuchando</span>
             <span class="crece"></span>
             <button class="btn btn-primario" type="button" data-hace="abrir"
@@ -176,12 +220,19 @@ retrocede solo hasta donde empezó la frase. Tecla: Enter">
               ${icono('abrirToma')} Abrir toma</button>
             <button class="btn" type="button" data-hace="claqueta">
               ${icono('claqueta')} Claqueta</button>
-          </div></div>`;
+          </div>
+          <div class="tarjeta-cuerpo">
+            <div data-texto="espera"></div>
+            <p class="v3 pista">Se abre sola con «3, 2, 1». Si ya empezó, arrastrá el
+              <b class="pista-in">IN</b> hasta la primera palabra de la toma.</p>
+          </div>
+        </div>`;
     }
 
-    const texto = (abierta.palabras || []).map(w => esc(w.texto)).join(' ');
-    return `<div class="tarjeta guarda" data-estado="abierta">
+    return `<div class="tarjeta guarda con-vista" data-estado="abierta"
+        style="${estiloDeVista(estado.vistas, abierta.vista)}">
       <div class="tarjeta-cabeza">
+        <span class="etiqueta-vista">${esc(abierta.vista)}</span>
         <span class="v1">Toma ${abierta.id}</span>
         <span class="pastilla" data-estado="abierta">abierta</span>
         <time class="fila-dato tc">${fmt.timecodeDe(abierta.inMs, estado.ceroMs, fps)}</time>
@@ -197,32 +248,40 @@ retrocede solo hasta donde empezó la frase. Tecla: Enter">
         <input type="text" data-campo="nota" data-toma="${abierta.id}"
                value="${esc(abierta.comentario || '')}"
                placeholder="Nota de esta toma — se escribe en el marcador del XML">
-        <div class="transcript" style="margin-top:8px">${texto ||
-            '<span class="orilla">Todavía no se oyó nada de esta toma.</span>'}</div>
+        <div data-texto="abierta" data-toma="${abierta.id}"></div>
+        <p class="v3 pista">Arrastrá el <b class="pista-in">IN</b> para mover el
+          principio, o el <b class="pista-out">OUT</b> hacia atrás para cerrarla en esa palabra.</p>
       </div>
     </div>`;
 }
 
-/** El selector de vista: cinco rectángulos, uno encendido. */
+/**
+ * El selector de vista: cinco rectángulos, cada uno con su color.
+ *
+ * El elegido va relleno del color del marcador y los demás lo llevan en una
+ * rayita abajo: así el color de cada vista se aprende mirando el selector, que
+ * es lo que hace falta para leer la lista de un vistazo.
+ */
 function vistas(toma) {
-    return `<span class="campo-fila" style="gap:2px">${(estado.vistas || []).map(v =>
-        `<button class="btn btn-ico" type="button" data-hace="vista" data-vista="${v.nombre}"
-           data-toma="${toma.id}" title="${esc(v.titulo)} · tecla ${v.nombre[0]}"
-           style="${toma.vista === v.nombre
-            ? `border-color:var(--border-field);color:var(--vista-${v.nombre.toLowerCase()})`
-            : 'color:var(--text-muted)'}">${v.nombre}</button>`).join('')}</span>`;
+    return `<span class="selector-vista">${(estado.vistas || []).map(v =>
+        `<button class="btn btn-ico btn-vista ${toma.vista === v.nombre ? 'es-elegida' : ''}"
+           type="button" data-hace="vista" data-vista="${v.nombre}" data-toma="${toma.id}"
+           aria-pressed="${toma.vista === v.nombre}"
+           title="${esc(v.titulo)} · tecla ${v.nombre[0]}"
+           style="${estiloDeVista(estado.vistas, v.nombre)}">${v.nombre}</button>`).join('')}</span>`;
 }
 
 function filaToma(t, fps) {
     const est = estados.deToma(t, estado);
     const abierta = vista.abierta === `t${t.id}`;
     const dur = t.outMs != null ? (t.outMs - t.inMs) / 1000 : null;
-    return `<div class="${abierta ? 'es-abierta' : ''}">
+    return `<div class="bloque-toma con-vista ${abierta ? 'es-abierta' : ''}"
+        data-estado="${est.clave}" style="${estiloDeVista(estado.vistas, t.vista)}">
       <div class="fila guarda ${vista.elegida === t.id ? 'es-elegida' : ''}"
            data-estado="${est.clave}" data-toma="${t.id}" data-hace="plegar"
            ${est.porque ? `title="${esc(est.porque)}"` : ''}>
         <span class="chevron">${icono('chevron')}</span>
-        <span class="etiqueta-vista" data-vista="${esc(t.vista)}">${esc(t.vista)}</span>
+        <span class="etiqueta-vista">${esc(t.vista)}</span>
         <span class="fila-nombre">Toma ${t.id}</span>
         <time class="fila-dato tc">${fmt.timecodeDe(t.inMs, estado.ceroMs, fps)}</time>
         ${dur != null ? `<span class="fila-dato">${fmt.duracion(dur)}</span>` : ''}
@@ -242,18 +301,17 @@ function primeras(t) {
 }
 
 function cuerpoToma(t) {
-    const orilla = ws => (ws || []).map(w => `<span class="orilla">${esc(w.texto)}</span>`).join(' ');
-    const dentro = (t.palabras || []).map(w =>
-        `<span class="palabra" data-t="${w.t}" data-toma="${t.id}">${esc(w.texto)}</span>`).join(' ');
-    return `<div class="tarjeta" style="margin:2px 0 0">
-      <div class="tarjeta-cuerpo" style="padding-top:12px">
+    // La abierta se edita arriba, en «Ahora»: dos textos movibles de la misma
+    // toma serían dos líneas de IN que se pisan.
+    const texto = t.outMs == null
+        ? '<p class="v3">Está abierta: su texto y sus bordes están arriba, en «Ahora».</p>'
+        : `<div data-texto="cerrada" data-toma="${t.id}"></div>
+           <p class="v3 pista">Lo gris es lo que se dijo fuera de la toma. Arrastrá el
+             <b class="pista-in">IN</b> o el <b class="pista-out">OUT</b> para moverlos.</p>`;
+    return `<div class="cuerpo-toma">
         <input type="text" data-campo="nota" data-toma="${t.id}"
                value="${esc(t.comentario || '')}" placeholder="Nota de esta toma">
-        <div class="transcript" style="margin-top:8px">
-          ${orilla(t.antes)} ${dentro} ${orilla(t.despues)}</div>
-        <p class="v3" style="margin-top:6px">
-          Lo gris es lo que se dijo fuera de los bordes. Clic en una palabra para
-          mover el IN o el OUT hasta ahí.</p>
+        ${texto}
         <div class="campo-fila" style="margin-top:8px">
           ${vistas(t)}
           <span class="crece"></span>
@@ -264,8 +322,107 @@ function cuerpoToma(t) {
                  title="La saca del XML, pero se puede recuperar">
                  ${icono('descartar')} Descartar</button>`}
         </div>
-      </div>
     </div>`;
+}
+
+/**
+ * Pone los textos con sus bordes en los huecos que dejó el HTML.
+ *
+ * Van aparte porque llevan escuchas de puntero, que un `innerHTML` no puede
+ * traer. Cada hueco dice qué texto es (`data-texto`) y de qué toma.
+ */
+function montarTextos() {
+    for (const hueco of document.querySelectorAll('#vista-vivo [data-texto]')) {
+        const cual = hueco.dataset.texto;
+        const toma = estado.tomas.find(t => t.id === Number(hueco.dataset.toma));
+        if (cual === 'espera') {
+            hueco.append(texto.textoDe({
+                modo: 'inactiva',
+                palabras: sueltasLibres(),
+                vacio: 'Escuchando… lo que se diga va a aparecer acá.'
+            }, (borde, ms) => abrir(ms)));
+        } else if (cual === 'abierta' && toma) {
+            hueco.append(texto.textoDe({
+                modo: 'abierta',
+                antes: sueltasLibres().filter(w => w.t < toma.inMs).slice(-ORILLA_ABIERTA),
+                palabras: toma.palabras,
+                vacio: 'Todavía no se oyó nada de esta toma.'
+            }, (borde, ms) => borde === 'out'
+                ? pedir(() => window.nt.grabarCerrarToma(ms))
+                : editar({ tipo: 'borde', toma: toma.id, borde, paredMs: ms })));
+        } else if (cual === 'cerrada' && toma) {
+            hueco.append(texto.textoDe({
+                modo: 'cerrada',
+                antes: toma.antes,
+                palabras: toma.palabras,
+                despues: toma.despues,
+                vacio: 'Esta toma no tiene texto.'
+            }, (borde, ms) => editar({ tipo: 'borde', toma: toma.id, borde, paredMs: ms })));
+        }
+    }
+}
+
+/**
+ * Dónde estaba cada texto con scroll, para dejarlo igual después de repintar.
+ *
+ * El que estaba abajo del todo —lo normal: es donde entra lo nuevo— se queda
+ * abajo, así el texto se va escribiendo solo. El que alguien subió para buscar
+ * dónde poner el IN se queda donde lo dejó: que salte abajo cada tres segundos
+ * haría imposible encontrar la palabra.
+ */
+function recordarRollos() {
+    const rollos = new Map();
+    for (const hueco of document.querySelectorAll('#vista-vivo [data-texto]')) {
+        const t = hueco.querySelector('.transcript');
+        if (!t) continue;
+        rollos.set(claveDe(hueco), {
+            arriba: t.scrollTop,
+            alFondo: t.scrollHeight - t.scrollTop - t.clientHeight < 8
+        });
+    }
+    return rollos;
+}
+
+function devolverRollos(rollos) {
+    for (const hueco of document.querySelectorAll('#vista-vivo [data-texto]')) {
+        const t = hueco.querySelector('.transcript');
+        if (!t) continue;
+        const antes = rollos.get(claveDe(hueco));
+        t.scrollTop = !antes || antes.alFondo ? t.scrollHeight : antes.arriba;
+    }
+}
+
+function claveDe(hueco) {
+    return `${hueco.dataset.texto}:${hueco.dataset.toma || ''}`;
+}
+
+/**
+ * La nota a medio escribir sobrevive al repintado.
+ *
+ * La pantalla se repinta cada tres segundos y la nota se guarda al salir del
+ * campo, así que sin esto lo escrito entre un repintado y el siguiente se
+ * perdía, con el cursor y todo, en medio de una frase.
+ */
+function recordarFoco() {
+    const a = document.activeElement;
+    if (!a || !a.matches('#vista-vivo [data-campo="nota"]')) return null;
+    return {
+        toma: a.dataset.toma,
+        enAhora: !!a.closest('#ahora'),
+        valor: a.value,
+        desde: a.selectionStart,
+        hasta: a.selectionEnd
+    };
+}
+
+function devolverFoco(f) {
+    if (!f) return;
+    const donde = f.enAhora ? '#ahora' : '#lista-vivo';
+    const campo = document.querySelector(`${donde} [data-campo="nota"][data-toma="${f.toma}"]`);
+    if (!campo) return;
+    campo.value = f.valor;
+    campo.focus();
+    campo.setSelectionRange(f.desde, f.hasta);
 }
 
 /**
@@ -302,8 +459,6 @@ function filaClaqueta(c, fps) {
 
 async function alClic(e) {
     const boton = e.target.closest('[data-hace]');
-    const palabra = e.target.closest('.palabra');
-    if (palabra) return moverBorde(palabra);
     if (!boton) return;
 
     const toma = boton.dataset.toma ? Number(boton.dataset.toma) : null;
@@ -334,38 +489,25 @@ async function alCambiar(e) {
 }
 
 /**
- * Mover un borde haciendo clic en una palabra.
- *
- * Se pregunta cuál de los dos: un clic sin preguntar sobre un texto de
- * doscientas palabras es un borde movido por accidente, y acá el accidente
- * cuesta una relectura de Whisper con la clase corriendo.
- */
-async function moverBorde(palabra) {
-    const toma = Number(palabra.dataset.toma);
-    const paredMs = Number(palabra.dataset.t);
-    const ok = await window.nt.confirmar({
-        titulo: `¿Abrir el IN de la toma ${toma} acá?`,
-        ok: 'Mover el IN',
-        mensaje: `La toma va a empezar en «${palabra.textContent}». Cancelá si lo que ` +
-            'querías era mover el OUT: para eso, hacé clic en la última palabra que quede adentro.'
-    });
-    await editar({ tipo: 'borde', toma, borde: ok ? 'in' : 'out', paredMs });
-}
-
-/**
  * Abrir una toma a mano, y decir cuánto retrocedió.
  *
  * El aviso no es cosmético: el motor pone el IN al principio de la frase que
  * el profesor venía diciendo, o sea ANTES de donde se apretó. Sin decirlo, el
  * borde aparece en un sitio que nadie pidió y parece un error; dicho, es lo
  * que uno quería y no tuvo que hacer.
+ *
+ * Con `ms` es el IN soltado sobre una palabra del campo de espera: ahí el
+ * borde está donde se lo puso, y no hay nada que explicar.
  */
-async function abrir() {
-    const nuevo = await window.nt.grabarAbrirToma();
-    if (!nuevo) return;
+async function abrir(ms) {
+    const mio = turno.tomar();
+    const nuevo = await window.nt.grabarAbrirToma(ms);
+    if (turno.atrasada(mio) || !nuevo) return;
     estado = nuevo;
     pintar();
-    if (nuevo.retrocedioSec > 0.5) {
+    if (ms != null) {
+        if (nuevo.abierta != null) avisar(`Toma ${nuevo.abierta} abierta desde donde pusiste el IN.`);
+    } else if (nuevo.retrocedioSec > 0.5) {
         avisar(`Toma ${nuevo.abierta} abierta ${nuevo.retrocedioSec} s atrás, ` +
             'desde donde arrancó la frase.');
     } else if (nuevo.abierta != null) {
@@ -402,9 +544,9 @@ async function editar(cambio) {
  * señales puede haber mandado un estado más nuevo.
  */
 async function pedir(hacer) {
-    const mio = turno.pedir();
+    const mio = turno.tomar();
     const nuevo = await hacer();
-    if (!turno.esElUltimo(mio) || !nuevo) return;
+    if (turno.atrasada(mio) || !nuevo) return;
     estado = nuevo;
     pintar();
 }

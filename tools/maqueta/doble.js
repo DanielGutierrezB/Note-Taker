@@ -13,7 +13,7 @@
  * recorre es el mismo que recorre la app de verdad.
  */
 
-import { estadoEnVivo, SESIONES, AJUSTES, ENTRADAS, DOCTOR, OYENDO } from './datos.js';
+import { estadoEnVivo, SESIONES, AJUSTES, ENTRADAS, DOCTOR } from './datos.js';
 
 const escenarios = new Set(
     (new URLSearchParams(location.search).get('e') || '').split(',').filter(Boolean));
@@ -89,8 +89,8 @@ window.nt = {
     grabarQuitarClaqueta: async () => estadoEnVivo(),
     grabarEditar: async () => estadoEnVivo(),
     grabarEditarGrabada: async () => ({ ok: true }),
-    grabarAbrirToma: async () => ({ ...estadoEnVivo(), abierta: 7, retrocedioSec: 4.2 }),
-    grabarCerrarToma: async () => estadoEnVivo(),
+    grabarAbrirToma: async ms => abrirEn(ms),
+    grabarCerrarToma: async ms => cerrarEn(ms),
     grabarDeshacer: async () => ({ ok: true, que: 'poner la toma 4 en S', estado: estadoEnVivo() }),
     grabarRehacer: async () => ({ ok: false, estado: estadoEnVivo() }),
     grabarEstado: async () => estadoEnVivo(),
@@ -182,8 +182,10 @@ async function aplicar() {
 
     if (hay('en-vivo') || hay('toma-abierta') || hay('releyendo') || hay('sin-audio')) {
         const estado = estadoEnVivo(estadoDeLaClase());
+        vivo = estado;
         app.irAVivo(estado, { abierto: true, caido: hay('sin-audio'), pico: 0.42 });
-        document.getElementById('oyendo-vivo').textContent = OYENDO;
+        // Una toma cerrada desplegada: es donde se ven los dos bordes y las orillas.
+        if (hay('desplegada')) document.querySelector('#lista-vivo [data-hace="plegar"][data-toma="1"]').click();
         return;
     }
 
@@ -196,14 +198,52 @@ async function aplicar() {
     if (hay('diagnostico')) app.verDiagnostico();
 }
 
+/**
+ * El estado en vivo de la maqueta, que abrir y cerrar sí cambian.
+ *
+ * Es lo mínimo para poder ARRASTRAR en la maqueta y ver qué pasa: soltar el IN
+ * en el campo de espera abre la toma 7 en esa palabra, y soltar su OUT la
+ * cierra. Lo demás (mover bordes de una cerrada, las vistas, las notas) vuelve
+ * el estado tal cual, porque ahí lo que se mira es la pantalla, no el motor.
+ */
+let vivo = null;
+
+function abrirEn(ms) {
+    const base = vivo || estadoEnVivo();
+    if (base.abierta != null) return base;
+    const sueltas = base.sueltas || [];
+    const desde = ms != null ? ms : (sueltas.length ? sueltas[Math.max(0, sueltas.length - 8)].t : base.ceroMs);
+    const toma = {
+        ...base.tomas[0], id: 7, vista: 'PV', comentario: '', outMs: null, relectura: null,
+        inMs: desde, palabras: sueltas.filter(w => w.t >= desde), antes: [], despues: []
+    };
+    vivo = { ...base, abierta: 7, tomas: base.tomas.concat([toma]), sueltas: sueltas.filter(w => w.t < desde) };
+    return { ...vivo, retrocedioSec: ms != null ? 0 : 4.2 };
+}
+
+function cerrarEn(ms) {
+    const base = vivo || estadoEnVivo();
+    const toma = base.tomas.find(t => t.id === base.abierta);
+    if (!toma) return base;
+    const hasta = ms != null ? ms : (toma.palabras.length ? toma.palabras[toma.palabras.length - 1].hasta : toma.inMs + 1000);
+    const cerrada = {
+        ...toma, outMs: hasta,
+        palabras: toma.palabras.filter(w => w.t < hasta),
+        despues: toma.palabras.filter(w => w.t >= hasta)
+    };
+    vivo = { ...base, abierta: null, tomas: base.tomas.map(t => (t === toma ? cerrada : t)), sueltas: cerrada.despues };
+    return vivo;
+}
+
 function estadoDeLaClase() {
     if (hay('toma-abierta')) {
         const base = estadoEnVivo();
+        const palabras = base.tomas[0].palabras.slice(0, 12).map(w => ({
+            ...w, t: w.t + 990000, hasta: w.hasta + 990000
+        }));
         const abierta = {
             ...base.tomas[5], id: 7, outMs: null, comentario: '', relectura: null,
-            palabras: base.tomas[0].palabras.slice(0, 12).map(w => ({
-                ...w, t: w.t + 990000, hasta: w.hasta + 990000
-            }))
+            inMs: palabras[0].t, palabras
         };
         return { abierta: 7, tomas: base.tomas.concat([abierta]) };
     }

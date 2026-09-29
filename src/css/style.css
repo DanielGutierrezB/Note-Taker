@@ -187,17 +187,10 @@
      Queda la fuerte, y solo donde de verdad separa algo: los paneles flotantes. */
   --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(0, 0, 0, 0.5);
 
-  /* ── Los colores de las cinco vistas ───────────────────────────────────
-     NO son los `colorDeMarcador` que van al XML: son los de la PANTALLA, y son
-     dos preguntas distintas (el porqué está en `VISTAS`, en
-     `engine/notas-vivo.js`). Estos están corridos de los de Class Cut para que
-     la etiqueta pase 4.5:1 sobre `--bg-surface`, medido con
-     `tools/contrastes.js`; el entero que viaja al XML no cambió. */
-  --vista-pv: #7fb2e8;
-  --vista-r: #e88bb0;
-  --vista-s: #b5cf6b;
-  --vista-mg: #5fd9c8;
-  --vista-x2: #c7a9e0;
+  /* Las cinco vistas NO tienen color acá: cada bloque lo recibe en `--vista`
+     desde `colorDeMarcador`, que es el mismo entero que va al XML
+     (`src/js/colores.js`). Así la toma se ve en la pantalla del color con el
+     que va a llegar su marcador a Premiere. */
 }
 
 * {
@@ -425,7 +418,7 @@ b {
   min-width: 0;
 }
 
-/* El costado: claquetas, lo que se está oyendo y la cámara. A menos de 1000 px
+/* El costado: las claquetas. A menos de 1000 px
    baja debajo en vez de apretar la lista de tomas, que es lo que se escanea. */
 .columnas > .costado {
   flex: 0 0 300px;
@@ -743,7 +736,9 @@ b {
    WCAG 1.4.11 se cumple para «whether a component is selected or focused». La
    guarda no se usa para esto: ahí dice el ESTADO, y un canal es un significado. */
 .fila.es-elegida {
-  border-color: var(--border-field);
+  border-top-color: var(--border-field);
+  border-right-color: var(--border-field);
+  border-bottom-color: var(--border-field);
 }
 
 .fila-nombre {
@@ -814,20 +809,109 @@ b {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   min-width: 26px;
   height: 18px;
   padding: 0 var(--sp-2);
   border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--vista, rgba(255, 255, 255, 0.06));
+  color: var(--vista-tinta, var(--text-secondary));
 }
 
-.etiqueta-vista[data-vista='PV'] { color: var(--vista-pv); }
-.etiqueta-vista[data-vista='R']  { color: var(--vista-r); }
-.etiqueta-vista[data-vista='S']  { color: var(--vista-s); }
-.etiqueta-vista[data-vista='MG'] { color: var(--vista-mg); }
-.etiqueta-vista[data-vista='X2'] { color: var(--vista-x2); }
+/* ── El color de la vista en el bloque de la toma ──────────────────────────
+   El color va de FONDO y nunca de letra: el rojo de «Profesor» da 3,2:1 sobre
+   la tarjeta, debajo del 4,5 que pide el texto. La sigla va rellena del color
+   entero con la tinta que contrasta contra él, y el bloque lleva el color
+   mezclado con el fondo más oscuro: lo bastante para reconocerlo de reojo, lo
+   bastante poco para que las tres voces de texto sigan pasando 4,5:1 encima
+   (lo mide `tools/contrastes.js`). Contra `--bg-surface` no alcanzaba: el
+   cian de «Multi» aclaraba tanto el bloque que el gris bajaba a 3,3:1. La guarda de la izquierda sigue diciendo el
+   estado: un canal, un significado. */
+.con-vista {
+  --tinte: color-mix(in srgb, var(--vista) 16%, var(--bg-inset));
+}
+
+.tarjeta.con-vista,
+.con-vista > .fila,
+.con-vista > .cuerpo-toma {
+  --borde-vista: color-mix(in srgb, var(--vista) 40%, var(--hairline));
+  background: var(--tinte);
+  border-top-color: var(--borde-vista);
+  border-right-color: var(--borde-vista);
+  border-bottom-color: var(--borde-vista);
+}
+
+/* El cuerpo no tiene guarda: su borde izquierdo es uno más. */
+.con-vista > .cuerpo-toma {
+  border-left-color: var(--borde-vista);
+}
+
+.con-vista > .fila:hover {
+  background: color-mix(in srgb, var(--vista) 18%, var(--bg-inset));
+}
+
+/* La elegida conserva su recuadro encendido por encima del color. */
+.con-vista > .fila.es-elegida {
+  border-top-color: var(--border-field);
+  border-right-color: var(--border-field);
+  border-bottom-color: var(--border-field);
+}
+
+/* Una descartada no va en el XML, así que no lleva el color de un marcador que
+   no va a existir. */
+.con-vista[data-estado='descartada'] > .fila,
+.con-vista[data-estado='descartada'] > .cuerpo-toma {
+  --borde-vista: var(--hairline);
+  background: var(--bg-surface);
+}
+
+.con-vista[data-estado='descartada'] .etiqueta-vista {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+
+/* La toma de la lista y su cuerpo desplegado son un solo bloque. */
+.cuerpo-toma {
+  margin-top: var(--sp-1);
+  padding: var(--sp-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+/* El campo de espera: la tarjeta de una toma que todavía no empezó. El borde
+   punteado es lo que la distingue de una toma de verdad sin decir nada. */
+.tarjeta-espera {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border-field);
+}
+
+/* El selector de vista: el elegido relleno de su color, los demás con una
+   rayita de ese color abajo, que es como se aprende qué color es cada uno. */
+.selector-vista {
+  display: inline-flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.btn-vista {
+  color: var(--text-muted);
+  box-shadow: inset 0 -2px 0 var(--vista);
+}
+
+.btn-vista.es-elegida {
+  background: var(--vista);
+  color: var(--vista-tinta);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.btn-vista.es-elegida:hover {
+  background: var(--vista);
+  filter: brightness(1.08);
+}
 
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -1096,11 +1180,12 @@ kbd {
    ────────────────────────────────────────────────────────────────────────── */
 
 .transcript {
+  margin-top: var(--sp-3);
   padding: var(--sp-3);
   background: var(--bg-inset);
   border-radius: var(--radius-sm);
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.8;
   color: var(--text-primary);
   user-select: text;
   -webkit-user-select: text;
@@ -1108,20 +1193,100 @@ kbd {
   overflow-y: auto;
 }
 
+/* El campo de espera se escribe solo y no crece: tres renglones, lo nuevo
+   entra abajo y lo viejo se desvanece arriba. Sigue teniendo scroll, para
+   subir a buscar dónde empezó la toma si hace falta. */
+.transcript.es-inactiva {
+  margin-top: 0;
+  max-height: calc(13px * 1.8 * 3 + var(--sp-3) * 2);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
+}
+
+.transcript.es-abierta {
+  max-height: 160px;
+}
+
 /* Lo que quedó fuera de los bordes: está para poder mover el IN o el OUT
    MIRANDO la frase que quedó afuera, que es la que dice si el corte está bien
    puesto. Va en el tercer nivel de texto: es contexto, no contenido. */
-.transcript .orilla {
+.transcript .es-orilla,
+.transcript-vacio {
   color: var(--text-muted);
 }
 
-.transcript .palabra {
-  cursor: text;
+.transcript-vacio {
+  font-size: 12px;
 }
 
-.transcript .palabra:hover {
-  background: var(--layer-hover);
+/* ── Los bordes de la toma, dentro del texto ───────────────────────────────
+   Una pastilla con su nombre y no una rayita de 3 px: dice qué es sin tener
+   que aprenderlo, y se agarra. Azul donde entra, roja donde sale, como en
+   Class Cut. Viaja en el texto mientras se arrastra (`texto-toma.js`). */
+.borde {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 var(--sp-2);
+  margin: 0 1px;
+  border-radius: var(--radius-sm);
+  vertical-align: -3px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--on-accent);
+  user-select: none;
+  -webkit-user-select: none;
+  /* Sin esto, en trackpad el navegador lo toma como desplazamiento. */
+  touch-action: none;
 }
+
+.borde.es-in { background: var(--accent); }
+.borde.es-out { background: var(--error); }
+
+.transcript.es-movible .borde { cursor: ew-resize; }
+
+/* El área que responde es más ancha que lo que se ve. */
+.borde::after {
+  content: '';
+  position: absolute;
+  inset: -4px -6px;
+}
+
+.transcript.es-movible .borde:hover,
+.borde.es-arrastrando {
+  box-shadow: 0 0 0 2px var(--bg-inset), 0 0 0 3px currentColor;
+  color: var(--on-accent);
+}
+
+/* La línea viaja debajo del cursor: sin esto `elementFromPoint` la devuelve a
+   ella en vez de a la palabra de detrás y el arrastre se traba. */
+.borde.es-arrastrando { pointer-events: none; }
+
+.transcript.es-moviendo {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: ew-resize;
+}
+
+.transcript.es-movible .palabra:hover {
+  background: var(--layer-hover);
+  border-radius: 2px;
+}
+
+/* Los nombres de los bordes en las pistas, del mismo color que el borde. */
+.pista {
+  margin-top: var(--sp-2);
+}
+
+.pista-in,
+.pista-out {
+  font-weight: 600;
+}
+
+.pista-in { color: var(--accent); }
+.pista-out { color: var(--error); }
 
 
 /* ──────────────────────────────────────────────────────────────────────────

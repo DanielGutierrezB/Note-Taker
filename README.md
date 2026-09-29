@@ -108,6 +108,48 @@ Si el profesor está callado, no hay nada que retroceder y la toma empieza donde
 se apretó. Eso también es correcto: es el caso de abrir **antes** de que alguien
 hable, que es como se usa cuando uno se adelanta.
 
+### El campo de espera y los bordes que se arrastran
+
+![La tarjeta «Ahora» sin toma abierta: lo que se oye entra abajo y el IN espera al final](docs/capturas/en-vivo-1180.png)
+
+Sin ninguna toma abierta, la tarjeta **Ahora** es el campo de la toma que
+todavía no empezó: borde punteado, lo que se va oyendo entrando abajo en gris y
+lo viejo desvaneciéndose arriba, tres renglones y no más. Al final espera la
+pastilla azul del **IN**.
+
+**Arrastrar el IN hasta una palabra abre la toma ahí**, exacto y sin el
+retroceso automático de Enter: quien arrastró ya eligió dónde. Es el arreglo
+para cuando el profesor arrancó sin conteo y el retroceso no acertó la frase.
+
+Con una toma abierta, la tarjeta pasa a ser **la toma**, y el texto suelto deja
+de verse hasta que se cierre. Adelante quedan unas pocas palabras en gris, las
+justas para correr el IN hacia atrás, y al final del texto la pastilla roja del
+**OUT**: arrastrarla hacia atrás cierra la toma en esa palabra. En las tomas ya
+cerradas de la lista, las dos pastillas se mueven sobre lo que quedó guardado
+y el tramo se relee. Ninguna de las dos puede pasar al otro lado de la otra.
+
+Es el mismo gesto que en Class Cut: la línea viaja por el texto mientras se
+arrastra y lo gris cambia en el acto, así que se ve qué entra antes de soltar.
+Mientras hay una agarrada, la pantalla no se repinta.
+
+### Cada toma, del color de su marcador
+
+![Una toma abierta en «Profesor»: el bloque teñido del mismo rojo que su marcador en Premiere](docs/capturas/toma-abierta-1180.png)
+
+El bloque de cada toma lleva el color de su vista, que es **el mismo color con
+el que llega su marcador a Premiere**: rojo para Profesor (PV), naranja para
+Pantalla (R), verde para Slides (S), cian para Multi (MG) y lila para Doble
+(X2). Sale del mismo entero que se escribe en el XML, así que no pueden
+separarse. En el selector de vista, la elegida va rellena de su color y las
+otras lo llevan en una rayita abajo.
+
+El color va de **fondo**, nunca de letra: el rojo de Profesor da 3,2:1 sobre la
+tarjeta, debajo del 4,5 que pide el texto. La sigla va rellena con la tinta que
+contrasta contra su color, y el tinte del bloque está medido para que el texto
+más tenue siga pasando 4,5:1 encima con los cinco colores
+(`node tools/contrastes.js`). Una toma descartada pierde el color: su marcador
+no va a existir.
+
 Un detalle que costó descubrir: **el umbral de "todavía está hablando" no puede
 ser el mismo que el hueco entre dos palabras.** Lo que la app tiene oído va
 siempre atrasado, y se sabe cuánto —el ciclo corre cada tres segundos y Whisper
@@ -231,9 +273,9 @@ sonido de Zoom directo, sin drivers y sin tocar la configuración de Zoom.
    que darlo: sin él, el sonido llega en silencio y no hay forma de preguntarlo
    de otra manera. Se revisa en Ajustes del Sistema → Privacidad y seguridad →
    Grabación de audio del sistema.
-4. Apenas empieza la grabación, «Oyendo» en la pantalla de En vivo muestra lo
-   que Whisper entiende. Si ahí no aparece lo que dice el profesor, se termina y
-   se elige otra entrada.
+4. Apenas empieza la grabación, la tarjeta «Ahora» de En vivo muestra lo que
+   Whisper entiende. Si ahí no aparece lo que dice el profesor, se termina y se
+   elige otra entrada.
 
 Seguís oyendo la llamada en tus auriculares como siempre, y no se graba nada más
 de la Mac: ni notificaciones, ni otra app que suene.

@@ -512,12 +512,14 @@ function editar(cambio) {
     return cambiosToma.editar(sesion, cambio);
 }
 
-function abrirToma() {
-    return cambiosToma.abrirToma(sesion);
+/** `ms`, si viene, es la palabra donde se soltó el IN; sin él, ahora. */
+function abrirToma(ms) {
+    return cambiosToma.abrirToma(sesion, { ms: ms == null ? undefined : Number(ms) });
 }
 
-function cerrarToma() {
-    return cambiosToma.cerrarToma(sesion);
+/** `ms`, si viene, es la palabra donde se soltó el OUT; sin él, la última dicha. */
+function cerrarToma(ms) {
+    return cambiosToma.cerrarToma(sesion, { ms: ms == null ? undefined : Number(ms) });
 }
 
 function deshacer() {

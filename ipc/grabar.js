@@ -128,8 +128,8 @@ function registrar({ ipcMain, app, send, anotar }) {
      * IN, que es lo único que la ventana no puede saber sola y lo que le deja
      * decir «abierta 4 s atrás, desde donde arrancó la frase».
      */
-    ipcMain.handle('grabar-abrir-toma', () => {
-        const estado = grabacion.abrirToma();
+    ipcMain.handle('grabar-abrir-toma', (event, ms) => {
+        const estado = grabacion.abrirToma(ms);
         anotar('grabar.abrir-toma', {
             toma: estado && estado.abierta,
             retrocedioSec: estado && estado.retrocedioSec
@@ -137,7 +137,7 @@ function registrar({ ipcMain, app, send, anotar }) {
         return estado;
     });
 
-    ipcMain.handle('grabar-cerrar-toma', () => grabacion.cerrarToma());
+    ipcMain.handle('grabar-cerrar-toma', (event, ms) => grabacion.cerrarToma(ms));
 
     /**
      * Deshacer y rehacer lo que el editor hizo a mano.

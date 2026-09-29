@@ -20,11 +20,11 @@ function palabras(texto, desdeSeg) {
 }
 
 const VISTAS = [
-    { nombre: 'PV', titulo: 'Profesor', fuente: 0, colorDeMarcador: 4281740498, colorEnLaApp: '#7fb2e8' },
-    { nombre: 'R', titulo: 'Pantalla', fuente: 1, colorDeMarcador: 4280578025, colorEnLaApp: '#e88bb0' },
-    { nombre: 'S', titulo: 'Slides', fuente: 1, colorDeMarcador: 4281828977, colorEnLaApp: '#b5cf6b' },
-    { nombre: 'MG', titulo: 'Multi', fuente: 1, colorDeMarcador: 4292277273, colorEnLaApp: '#5fd9c8' },
-    { nombre: 'X2', titulo: 'Doble', fuente: 1, colorDeMarcador: 4289825711, colorEnLaApp: '#c7a9e0' }
+    { nombre: 'PV', titulo: 'Profesor', fuente: 0, colorDeMarcador: 4281740498 },
+    { nombre: 'R', titulo: 'Pantalla', fuente: 1, colorDeMarcador: 4280578025 },
+    { nombre: 'S', titulo: 'Slides', fuente: 1, colorDeMarcador: 4281828977 },
+    { nombre: 'MG', titulo: 'Multi', fuente: 1, colorDeMarcador: 4292277273 },
+    { nombre: 'X2', titulo: 'Doble', fuente: 1, colorDeMarcador: 4289825711 }
 ];
 
 const TOMAS = [
@@ -81,6 +81,15 @@ const CLAQUETAS = [
     { n: 3, ms: seg(712), paredMs: seg(712), frase: '', confirmada: true, origen: 'editor' }
 ];
 
+/**
+ * Lo que se oyó después de la última toma, sin ninguna abierta: el texto del
+ * campo de espera. Empieza apenas después del OUT de la 6 (1010 s).
+ */
+const SUELTAS = palabras(
+    'bueno ahora vamos con lo siguiente entonces lo que hacemos acá es tomar el ' +
+    'disparador y conectarlo con la condición de salida y fíjense que cuando ' +
+    'cambia el valor se vuelve a evaluar todo el flujo desde el principio', 1015);
+
 /** El estado de una sesión en curso, como lo manda `espejo.resumen`. */
 export function estadoEnVivo(extra) {
     return Object.assign({
@@ -101,6 +110,7 @@ export function estadoEnVivo(extra) {
         releyendo: 0,
         terminando: false,
         abierta: null,
+        sueltas: SUELTAS,
         historia: { atras: 3, adelante: 0, queAtras: 'poner la toma 4 en S', queAdelante: '' },
         tomas: TOMAS
     }, extra || {});
@@ -171,7 +181,3 @@ export const SALIDA = {
     terminando: false,
     archivos: estadoEnVivo().archivos
 };
-
-export const OYENDO =
-    'entonces lo que hacemos acá es tomar el disparador y conectarlo con la ' +
-    'condición de salida tres dos uno';

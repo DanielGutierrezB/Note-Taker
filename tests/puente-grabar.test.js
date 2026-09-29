@@ -61,14 +61,14 @@ module.exports = function (t) {
 
     t.group('puente · lo que contesta');
 
-    t.test('las vistas salen con su nombre y sus dos colores', () => {
+    t.test('las vistas salen con su nombre y un solo color, el del marcador', () => {
         const p = armar();
         const vistas = p.llamar('grabar-vistas');
         t.eq(vistas.length, 5);
         for (const v of vistas) {
             t.ok(v.nombre, 'tiene nombre');
             t.ok(v.colorDeMarcador, 'y el color que va al XML');
-            t.ok(v.colorEnLaApp, 'y el de la pantalla, que es otra pregunta');
+            t.eq(v.colorEnLaApp, undefined, 'la pantalla pinta con ese mismo');
         }
     });
 

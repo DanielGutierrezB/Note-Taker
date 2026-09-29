@@ -120,6 +120,11 @@ function resumen(sesion) {
         // Cerrando: el audio ya está cerrado y se releen las últimas tomas.
         terminando: Boolean(sesion.terminando),
         abierta: abierta ? abierta.id : null,
+        // Lo que se oyó sin ninguna toma abierta, de los últimos segundos. Es
+        // el texto de la tarjeta de "Ahora" cuando no hay toma —el que se va
+        // escribiendo y se desvanece arriba— y, con una toma abierta, lo gris
+        // de antes de su IN: lo que deja arrastrar el IN hacia atrás.
+        sueltas: (e.sueltas || []).slice(-120),
         // Qué hay para deshacer y para rehacer, con el nombre del paso que toca:
         // es lo que deja que los dos botones se apaguen cuando no hay nada y
         // digan en su título qué van a revertir antes de apretarlos.

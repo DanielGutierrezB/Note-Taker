@@ -263,6 +263,71 @@ module.exports = function (t) {
         t.ok(abarca <= 31, `el colchón abarca ${abarca} s`);
     });
 
+    t.group('notas-vivo · los bordes arrastrados');
+
+    const tirada = () => palabras([
+        [0, 'Bueno'], [400, 'entonces'], [800, 'lo'], [1200, 'que'], [1600, 'hacemos']
+    ]);
+    const textos = ws => ws.map(w => w.texto);
+
+    t.test('el IN soltado en una palabra abre ahí, sin retroceder', () => {
+        // Quien arrastró ya eligió la palabra: el retroceso automático al
+        // principio de la tirada movería el borde de donde lo puso.
+        const e = nuevo();
+        vivo.aplicarSenales(e, tirada());
+        const r = vivo.abrirToma(e, T0 + 800, { exacto: true, ahoraMs: T0 + 4000 });
+        t.eq(r.toma.inMs, T0 + 800);
+        t.deep(textos(r.toma.palabras), ['lo', 'que', 'hacemos']);
+        t.deep(textos(e.sueltas), ['Bueno', 'entonces'], 'lo de antes sigue suelto, para poder correrlo');
+        t.eq(r.retrocedioSec, 3.2, 'y cuánto antes de ahora quedó');
+    });
+
+    t.test('el IN de la abierta se corre para atrás sobre lo suelto', () => {
+        const e = nuevo();
+        vivo.aplicarSenales(e, tirada());
+        const { toma } = vivo.abrirToma(e, T0 + 800, { exacto: true });
+        t.ok(vivo.moverInAbierta(e, toma, T0 + 400));
+        t.eq(toma.inMs, T0 + 400);
+        t.deep(textos(toma.palabras), ['entonces', 'lo', 'que', 'hacemos']);
+        t.deep(textos(e.sueltas), ['Bueno']);
+    });
+
+    t.test('y para adelante, devolviendo lo que deja afuera', () => {
+        const e = nuevo();
+        vivo.aplicarSenales(e, tirada());
+        const { toma } = vivo.abrirToma(e, T0 + 400, { exacto: true });
+        vivo.moverInAbierta(e, toma, T0 + 1200);
+        t.deep(textos(toma.palabras), ['que', 'hacemos']);
+        t.deep(textos(e.sueltas), ['Bueno', 'entonces', 'lo'], 'sin perder ni duplicar ninguna');
+    });
+
+    t.test('el IN de una cerrada no se mueve por acá', () => {
+        // Esa se relee (`moverBorde` + relectura): su texto ya no está en las sueltas.
+        const e = nuevo();
+        const { toma } = vivo.abrirToma(e, T0);
+        toma.outMs = T0 + 2000;
+        t.eq(vivo.moverInAbierta(e, toma, T0 + 400), false);
+    });
+
+    t.test('el OUT soltado en una palabra cierra ahí', () => {
+        const e = nuevo();
+        const { toma } = vivo.abrirToma(e, T0);
+        vivo.aplicarSenales(e, tirada());
+        t.ok(vivo.cerrarEn(e, toma, T0 + 1200));
+        t.eq(toma.outMs, T0 + 1200);
+        t.deep(textos(toma.palabras), ['Bueno', 'entonces', 'lo']);
+        t.deep(textos(toma.despues), ['que', 'hacemos'], 'lo de después queda de orilla');
+        t.deep(textos(e.sueltas), ['que', 'hacemos'], 'y suelto, para la toma siguiente');
+    });
+
+    t.test('el OUT no cierra en el IN ni antes', () => {
+        const e = nuevo();
+        const { toma } = vivo.abrirToma(e, T0 + 800);
+        t.eq(vivo.cerrarEn(e, toma, T0 + 800), false);
+        t.eq(vivo.cerrarEn(e, toma, T0 + 400), false);
+        t.eq(toma.outMs, null);
+    });
+
     t.group('notas-vivo · el final de una toma');
 
     t.test('finDeToma usa el final de la última palabra', () => {

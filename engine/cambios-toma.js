@@ -60,8 +60,13 @@ function editar(sesion, cambio) {
             // Serían dos segundos de GPU para dejar la toma igual. Del historial
             // se ocupa el portero de más abajo, que ve que la toma no se movió.
             const estaba = c.borde === 'in' ? toma.inMs : toma.outMs;
-            if (c.paredMs != null && Number(c.paredMs) !== estaba &&
-                vivo.moverBorde(toma, c.borde, Number(c.paredMs))) {
+            if (c.paredMs == null || Number(c.paredMs) === estaba) break;
+            // La toma abierta no se relee hasta cerrarse, así que su IN se
+            // mueve pasando palabras entre ella y las sueltas (`moverInAbierta`)
+            // en vez de pedirle el texto a Whisper.
+            if (toma.outMs == null && c.borde === 'in') {
+                vivo.moverInAbierta(sesion.estado, toma, Number(c.paredMs));
+            } else if (vivo.moverBorde(toma, c.borde, Number(c.paredMs))) {
                 relecturas.encolar(sesion, toma.id);
             }
             break;
@@ -274,9 +279,15 @@ function volver(sesion, hacia) {
  * Va al historial como todo lo demás, y ahí la foto de antes es `null` porque
  * la toma no existía: deshacer la saca de la sesión, igual que eliminarla.
  */
-function abrirToma(sesion) {
+function abrirToma(sesion, opciones) {
     if (!sesion) return null;
-    const abierto = vivo.abrirToma(sesion.estado, espejo.grabadoHastaMs(sesion));
+    const o = opciones || {};
+    const ahora = espejo.grabadoHastaMs(sesion);
+    // Con `ms` es el IN arrastrado hasta una palabra del texto suelto: ahí se
+    // abre exacto, sin retroceder, porque quien lo puso ya eligió dónde.
+    const abierto = Number.isFinite(o.ms)
+        ? vivo.abrirToma(sesion.estado, Math.min(o.ms, ahora), { exacto: true, ahoraMs: ahora })
+        : vivo.abrirToma(sesion.estado, ahora);
     // Ya había una abierta. Llega solo: entre que la pantalla dibujó el botón y
     // el clic, el ciclo de señales pudo haber oído un conteo —tres segundos—.
     if (!abierto) return espejo.resumen(sesion);
@@ -300,12 +311,20 @@ function abrirToma(sesion) {
  * historial como todo lo demás: apretarlo de más es el error más probable de esta
  * pantalla, y tiene que costar una tecla arreglarlo.
  */
-function cerrarToma(sesion) {
+function cerrarToma(sesion, opciones) {
     if (!sesion) return null;
+    const o = opciones || {};
     const toma = vivo.tomaAbierta(sesion.estado);
     if (!toma) return espejo.resumen(sesion);
     const antes = historial.foto(toma);
-    toma.outMs = vivo.finDeToma(toma, espejo.grabadoHastaMs(sesion));
+    // Con `ms` es el OUT arrastrado hacia atrás sobre el texto de la toma: se
+    // cierra en esa palabra. Sin él, en la última palabra dicha, que es lo que
+    // hacen el botón y la tecla.
+    if (Number.isFinite(o.ms)) {
+        if (!vivo.cerrarEn(sesion.estado, toma, o.ms)) return espejo.resumen(sesion);
+    } else {
+        toma.outMs = vivo.finDeToma(toma, espejo.grabadoHastaMs(sesion));
+    }
     relecturas.encolar(sesion, toma.id);
     historial.anotar(sesion.historia, {
         que: comoSeLlama({ tipo: 'cerrar', toma: toma.id }),

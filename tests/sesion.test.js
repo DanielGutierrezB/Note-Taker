@@ -224,6 +224,88 @@ module.exports = function (t) {
         }
     });
 
+    t.test('abrir con la hora de una palabra pone el IN ahí', () => {
+        // Es el IN arrastrado en el campo de espera.
+        const dir = carpeta();
+        try {
+            const inicial = grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 40; i++) grabacion.pcm(pedazo());
+            const estado = grabacion.abrirToma(inicial.ceroMs + 1000);
+            t.eq(estado.tomas[0].inMs, inicial.ceroMs + 1000);
+            t.eq(estado.retrocedioSec > 0, true, 'contado desde ahora');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('una palabra del futuro no abre más adelante que lo grabado', () => {
+        const dir = carpeta();
+        try {
+            const inicial = grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            let r;
+            for (let i = 0; i < 20; i++) r = grabacion.pcm(pedazo());
+            const estado = grabacion.abrirToma(inicial.ceroMs + 3600000);
+            t.near(estado.tomas[0].inMs - inicial.ceroMs, r.segundos * 1000, 50);
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('cerrar con la hora de una palabra pone el OUT ahí', () => {
+        const dir = carpeta();
+        try {
+            const inicial = grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 20; i++) grabacion.pcm(pedazo());
+            grabacion.abrirToma(inicial.ceroMs + 500);
+            for (let i = 0; i < 40; i++) grabacion.pcm(pedazo());
+            const estado = grabacion.cerrarToma(inicial.ceroMs + 2000);
+            t.eq(estado.abierta, null);
+            t.eq(estado.tomas[0].outMs, inicial.ceroMs + 2000);
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('un OUT en el IN o antes no cierra nada', () => {
+        const dir = carpeta();
+        try {
+            const inicial = grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 20; i++) grabacion.pcm(pedazo());
+            grabacion.abrirToma(inicial.ceroMs + 1000);
+            const estado = grabacion.cerrarToma(inicial.ceroMs + 900);
+            t.ok(estado.abierta != null, 'sigue abierta');
+            t.eq(estado.historia.atras, 1, 'y no dejó un paso vacío en el historial');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('el IN de la abierta se mueve sin cerrarla y se deshace', () => {
+        const dir = carpeta();
+        try {
+            const inicial = grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 40; i++) grabacion.pcm(pedazo());
+            grabacion.abrirToma(inicial.ceroMs + 1500);
+            const estado = grabacion.editar({ tipo: 'borde', toma: 1, borde: 'in', paredMs: inicial.ceroMs + 700 });
+            t.eq(estado.tomas[0].inMs, inicial.ceroMs + 700);
+            t.eq(estado.abierta, 1, 'sigue abierta');
+            const r = grabacion.deshacer();
+            t.eq(r.estado.tomas[0].inMs, inicial.ceroMs + 1500);
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('el estado trae lo suelto, que es el texto del campo de espera', () => {
+        const dir = carpeta();
+        try {
+            const estado = grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            t.ok(Array.isArray(estado.sueltas), 'aunque esté vacío');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
     t.test('abrir dos veces seguidas no deja dos abiertas', () => {
         // Llega solo: entre que la pantalla dibuja el botón y el clic, el
         // ciclo de señales pudo haber oído un conteo.

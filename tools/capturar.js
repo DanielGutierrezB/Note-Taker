@@ -32,7 +32,7 @@ function arg(nombre, def) {
 const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
     'sin-carpeta', 'sesiones', 'preparar', 'preparar-sin-audio', 'sin-whisper',
     'preparar-microfono', 'preparar-zoom-falso', 'sin-zoom',
-    'en-vivo', 'toma-abierta', 'releyendo', 'sin-audio', 'terminada',
+    'en-vivo', 'en-vivo,desplegada', 'toma-abierta', 'releyendo', 'sin-audio', 'terminada',
     'ajustes', 'diagnostico', 'iconos'
 ];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
@@ -64,7 +64,7 @@ async function main() {
                 await pagina.goto(`${sitio.url}?e=${escenario}`, { waitUntil: 'networkidle0' });
                 await new Promise(r => setTimeout(r, 800));
 
-                const archivo = path.join(DESTINO, `${escenario}-${ancho}.png`);
+                const archivo = path.join(DESTINO, `${escenario.replace(/,/g, '+')}-${ancho}.png`);
                 await pagina.screenshot({ path: archivo });
                 await pagina.close();
 

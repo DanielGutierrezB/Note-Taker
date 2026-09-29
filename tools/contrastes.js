@@ -52,6 +52,38 @@ function tokens() {
     return salida;
 }
 
+/**
+ * Cuánto color de la vista lleva un bloque. Son los porcentajes de
+ * `color-mix()` en `.con-vista` (style.css): se leen de ahí para que el CSS y
+ * esta medición no puedan separarse.
+ */
+const TINTE_HOVER = (() => {
+    const css = fs.readFileSync(CSS, 'utf8');
+    const m = css.match(/\.con-vista > \.fila:hover\s*\{[^}]*var\(--vista\)\s+(\d+)%,\s*var\(--([a-z-]+)\)/);
+    if (!m) throw new Error('No encontré el tinte de hover de .con-vista en style.css');
+    return { p: Number(m[1]) / 100, sobre: m[2] };
+})();
+
+/** `color-mix(in srgb, a p, b)`: interpolación sobre los valores sRGB, como la hace el navegador. */
+function mezcla(a, b, p) {
+    const x = hex2rgb(a);
+    const y = hex2rgb(b);
+    const c = k => Math.round(x[k] * p + y[k] * (1 - p)).toString(16).padStart(2, '0');
+    return `#${c('r')}${c('g')}${c('b')}`;
+}
+
+/**
+ * `src/js/colores.js` es un módulo de la ventana; acá se evalúa su código tal
+ * cual en vez de copiar sus dos funciones, que es lo que haría que la tabla
+ * mintiera el día que cambien.
+ */
+function cargarColores() {
+    const fuente = fs.readFileSync(path.join(__dirname, '..', 'src', 'js', 'colores.js'), 'utf8')
+        .replace(/^export /gm, '');
+    // eslint-disable-next-line no-new-func
+    return new Function(`${fuente}; return { hexDeMarcador, tintaSobre };`)();
+}
+
 function fmt(n) {
     return `${n.toFixed(2)}:1`;
 }
@@ -90,18 +122,33 @@ function main() {
         console.log(`  ${marca(contra.r, 4.5)} ${k.padEnd(18)} ${fmt(contra.r)}  (peor: ${contra.s})`);
     }
 
-    // Las vistas: su etiqueta se lee sobre una tarjeta.
-    console.log('\nVISTAS — la etiqueta, sobre --bg-surface\n');
-    for (const k of [...t.keys()].filter(x => x.startsWith('vista-'))) {
-        const r = ratio(t.get(k), t.get('bg-surface'));
-        if (r < peor.n) peor = { n: r, k, s: 'bg-surface' };
-        console.log(`  ${marca(r, 4.5)} ${k.padEnd(18)} ${fmt(r)}`);
+    // Las vistas: el color del marcador va de FONDO (ver `src/js/colores.js`).
+    // Dos cosas que medir por vista: la sigla, con su tinta sobre el color
+    // entero, y las tres voces de texto sobre el bloque teñido — en hover, que
+    // es el tinte más fuerte y por eso el peor caso.
+    console.log('\nVISTAS — la sigla sobre su color, y el texto sobre el bloque teñido\n');
+    const { VISTAS } = require('../engine/notas-vivo');
+    const { hexDeMarcador, tintaSobre } = cargarColores();
+    for (const v of VISTAS) {
+        const color = hexDeMarcador(v.colorDeMarcador);
+        const tinta = tintaSobre(color);
+        const sigla = ratio(tinta, color);
+        const bloque = mezcla(color, t.get(TINTE_HOVER.sobre), TINTE_HOVER.p);
+        const texto = ['text-primary', 'text-secondary', 'text-muted']
+            .map(k => ({ k, r: ratio(t.get(k), bloque) }))
+            .sort((a, b) => a.r - b.r)[0];
+        for (const [n, k, s] of [[sigla, `sigla ${v.nombre}`, color], [texto.r, texto.k, `bloque ${v.nombre}`]]) {
+            if (n < peor.n) peor = { n, k, s };
+        }
+        console.log(`  ${marca(Math.min(sigla, texto.r), 4.5)} ${v.nombre.padEnd(3)} ${color}  ` +
+            `sigla ${fmt(sigla)}  ·  --${texto.k} sobre el bloque ${fmt(texto.r)}`);
     }
 
     // Las tintas: van ENCIMA de un relleno de color, así que cada una se mide
     // contra el suyo. Un mismo gris oscuro daría 4:1 sobre uno y 9:1 sobre otro.
     console.log('\nTINTAS — el texto sobre un relleno de color\n');
-    for (const [tinta, fondo] of [['on-accent', 'accent'], ['on-ok', 'ok'],
+    // `on-accent` sobre `error` es la pastilla del OUT en el texto de una toma.
+    for (const [tinta, fondo] of [['on-accent', 'accent'], ['on-accent', 'error'], ['on-ok', 'ok'],
         ['on-warn', 'warn'], ['on-error', 'error']]) {
         if (!t.has(tinta) || !t.has(fondo)) continue;
         const r = ratio(t.get(tinta), t.get(fondo));
