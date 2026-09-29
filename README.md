@@ -316,6 +316,27 @@ pedazos de 4096 muestras—, así que el resto del motor no distingue de dónde 
 El tamaño del pedazo importa: `golpe.js` mide el pico y el promedio de cada uno
 para reconocer el aplauso, y sus umbrales se midieron con ese tamaño.
 
+**La tasa es la del dispositivo, no la del tap.** El primer ayudante declaraba
+los 48 kHz del formato del tap, pero las muestras llegan al ritmo del
+dispositivo agregado, que sigue a la salida del sistema. Con unos AirPods y Zoom
+usando su micrófono, el Bluetooth pasa a modo llamada y la salida baja a 24 kHz:
+el WAV quedaba **al doble de velocidad y con la mitad de la duración** (en las
+pruebas del 29/09, 84,3 s de clase y 42,1 s de audio). Whisper oía la clase
+acelerada —de ahí el texto peor y los «Gracias» inventados— y los marcadores
+caían a la mitad de donde van. Ahora el ayudante lee la tasa del agregado,
+escucha cuando cambia a mitad de la clase, toma solo los canales del tap (antes
+promediaba también el micrófono de los AirPods) y entrega siempre 48 kHz. Y Node
+mide cuántas muestras llegan de verdad por segundo (`medirTasa` en
+`engine/audio-app.js`): si alguna vez no coincide con lo declarado, lo corrige y
+lo avisa en pantalla y en el registro.
+
+**Sobre el silencio no se escribe.** Zoom manda ceros exactos cuando nadie habla,
+y sobre eso Whisper escribe lo que aprendió de los subtítulos: «Gracias.»,
+«Gracias por ver el video.». `engine/sonido.js` mide el nivel de cada recorte:
+si no suena nada no se le pregunta a Whisper, y una palabra sin sonido alrededor
+(−60 dBFS, lejos de la voz, de −13 a −30, y del ruido de sala más bajo de un
+micrófono, −55) se descarta.
+
 **Lo que la lista no deja elegir en verde.** Los nombres de la lista confunden, y
 el error se descubría después de la clase:
 
@@ -370,7 +391,7 @@ Hay dos ciclos y la separación es lo que protege el transcript.
 
 | | cuándo | modelo | qué queda |
 |---|---|---|---|
-| **en vivo** | cada 1 s, sobre los últimos 6 s | el grande (`large-v3-turbo`), cargado en `whisper-server` | el texto que se ve mientras se habla, y la hora de las señales |
+| **en vivo** | cada 1 s, sobre los últimos 6 s | el grande (`large-v3-turbo`) con DTW, cargado en `whisper-server` | el texto que se ve mientras se habla, y la hora de las señales |
 | **toma** | al cerrar cada toma | el grande, con alineación DTW (`whisper-cli`) | el texto del XML |
 
 ### El texto en vivo
@@ -414,6 +435,10 @@ Tres cosas más del ciclo, cada una por algo que se vio:
   horas perdía palabras («Esto inicia la primera toma» llegaba como «inicia la
   toma») y repetía otras. Se busca la cola de lo ya oído adentro de la ventana
   nueva y se sigue después, como hace whisper_streaming.
+- **Con DTW, como la relectura.** Son estos tiempos los que ponen el IN de
+  «3, 2, 1» y el OUT de «Pausa». Sin la alineación contra el sonido caían hasta
+  medio segundo corridos, y la relectura —que sí la usa— después ponía las
+  palabras a un lado distinto del borde. Cuesta 0,15 s por pasada.
 - **Cada segundo sobre seis.** Medido con una sesión de verdad sobre esa prueba,
   desde que se dice una palabra hasta que aparece: 2,9 s de mediana y 4,1 s en
   el peor décimo (antes, más de cinco).

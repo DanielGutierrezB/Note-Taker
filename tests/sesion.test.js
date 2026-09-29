@@ -296,6 +296,30 @@ module.exports = function (t) {
         }
     });
 
+    t.test('mover el borde de una cerrada reparte las palabras al instante', () => {
+        // Antes el borde volvía a su palabra de antes hasta que terminaba la
+        // relectura, varios segundos después: arrastrar parecía no hacer nada.
+        const dir = carpeta();
+        try {
+            const inicial = grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 60; i++) grabacion.pcm(pedazo());
+            const c = inicial.ceroMs;
+            grabacion.abrirToma(c + 100);
+            grabacion.cerrarToma(c + 3000);
+            const toma = grabacion.resumen().tomas[0];
+            // Palabras a mano, como las habría dejado el ciclo.
+            const ws = [[200, 'uno'], [800, 'dos'], [1400, 'tres'], [2000, 'cuatro']]
+                .map(([ms, texto]) => ({ t: c + ms, hasta: c + ms + 300, texto }));
+            grabacion._sesion().estado.tomas[0].palabras = ws;
+            t.ok(toma, 'hay toma');
+            const estado = grabacion.editar({ tipo: 'borde', toma: 1, borde: 'in', paredMs: c + 1400 });
+            t.deep(estado.tomas[0].palabras.map(w => w.texto), ['tres', 'cuatro']);
+            t.deep(estado.tomas[0].antes.map(w => w.texto), ['uno', 'dos'], 'lo de antes, en gris');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
     t.test('descartar saca de la sesión una toma cerrada, sin desactivarla antes', () => {
         const dir = carpeta();
         try {

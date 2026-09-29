@@ -38,8 +38,29 @@ const NIVEL_CADA_MS = 80;
 /** El bundle de Zoom. Es un prefijo: la app y su proceso de audio lo comparten. */
 const ZOOM = 'us.zoom';
 
+/**
+ * Cuánto se mira para saber a qué ritmo llegan las muestras, cuánto se espera
+ * antes de la primera medición, y cuánto tiene que apartarse de lo declarado
+ * para creerle a la medición y no a la declaración.
+ */
+const VENTANA_DE_TASA_MS = 6000;
+const PRIMERA_MEDICION_MS = 4000;
+const TOLERANCIA_DE_TASA = 0.05;
+const TASAS = [8000, 11025, 16000, 22050, 24000, 32000, 44100, 48000, 88200, 96000];
+
 let hijo = null;
 let mandando = false;
+/** La tasa que dijo el ayudante (la del WAV) y la que de verdad trae el audio. */
+let tasaDeclarada = 0;
+let tasaReal = 0;
+/** [ms, muestras acumuladas]: lo último que llegó, para medir la tasa. */
+let marcas = [];
+let muestrasTotales = 0;
+let candidata = 0;
+/** El estado del remuestreo, entre pedazos seguidos (ver `remuestrear`). */
+let fase = 0;
+let previa = 0;
+let reloj = () => Date.now();
 let resto = Buffer.alloc(0);
 let alPcm = () => {};
 let avisar = () => {};
@@ -118,6 +139,7 @@ function abrir(p) {
     alPcm = typeof o.alPcm === 'function' ? o.alPcm : () => {};
     avisar = typeof o.avisar === 'function' ? o.avisar : () => {};
     resto = Buffer.alloc(0);
+    reiniciarTasa(0);
     mandando = false;
     cerrando = false;
     pico = 0;
@@ -143,7 +165,9 @@ function abrir(p) {
                 let j = null;
                 try { j = JSON.parse(linea); } catch (e) { continue; }
                 if (j.listo) {
-                    contestar({ ok: true, sampleRate: Math.round(j.sampleRate), canales: 1, procesos: j.procesos });
+                    tasaDeclarada = tasaReal = Math.round(j.sampleRate);
+                    contestar({ ok: true, sampleRate: tasaDeclarada, canales: 1, procesos: j.procesos,
+                        tasaDelDispositivo: j.tasaDelDispositivo || null });
                 } else if (j.error) {
                     contestar({ ok: false, error: j.error, codigo: j.codigo });
                 }
@@ -171,6 +195,8 @@ function abrir(p) {
  * dispositivo de salida— y se re-empaqueta en 4096 (ver arriba).
  */
 function recibir(datos) {
+    medirTasa(datos.length / 2);
+    if (tasaReal && tasaDeclarada && tasaReal !== tasaDeclarada) datos = remuestrear(datos);
     resto = resto.length ? Buffer.concat([resto, datos]) : datos;
     const bytes = MUESTRAS_POR_PEDAZO * 2;
     while (resto.length >= bytes) {
@@ -197,11 +223,85 @@ function recibir(datos) {
     }
 }
 
+/**
+ * La red de abajo del ayudante: cuántas muestras llegan de verdad por segundo.
+ *
+ * Existe por un error que costó dos sesiones de prueba: con unos AirPods en
+ * modo llamada la salida del sistema baja a 24 kHz y el ayudante declaraba los
+ * 48 del tap. El WAV quedaba al doble de velocidad y con la mitad de la
+ * duración —84,3 s de clase, 42,1 s de audio—, Whisper oía la clase acelerada
+ * y los marcadores caían a la mitad de donde van. El ayudante ya lee la tasa
+ * correcta y remuestrea (`nativo/escuchar-app.swift`), pero lo que no se mide
+ * no se sabe: si alguna vez vuelve a declarar una cosa y entregar otra, esto
+ * lo ve en cuatro segundos, remuestrea a la tasa declarada, que es la del WAV,
+ * y lo avisa.
+ *
+ * Se cree a la medición solo si cae cerca de una tasa de verdad y dos veces
+ * seguidas: un pipe que se atrasa y entrega de golpe no es un audio a otra tasa.
+ */
+function medirTasa(muestras) {
+    if (!tasaDeclarada) return;
+    const ahora = reloj();
+    muestrasTotales += muestras;
+    marcas.push([ahora, muestrasTotales]);
+    while (marcas.length > 2 && ahora - marcas[0][0] > VENTANA_DE_TASA_MS) marcas.shift();
+    const [t0, m0] = marcas[0];
+    if (ahora - t0 < PRIMERA_MEDICION_MS) return;
+    // Las muestras del primer registro ya estaban cuando se tomó su hora.
+    const medida = (muestrasTotales - m0) / ((ahora - t0) / 1000);
+    const cercana = TASAS.reduce((a, b) => (Math.abs(b - medida) < Math.abs(a - medida) ? b : a));
+    if (Math.abs(medida / cercana - 1) > TOLERANCIA_DE_TASA) { candidata = 0; return; }
+    if (cercana === tasaReal) { candidata = 0; return; }
+    if (candidata !== cercana) { candidata = cercana; return; }
+    const antes = tasaReal;
+    tasaReal = cercana;
+    candidata = 0;
+    fase = 0;
+    avisar({ tipo: 'tasa', declarada: tasaDeclarada, real: tasaReal, antes,
+        mensaje: `El audio de Zoom llega a ${tasaReal / 1000} kHz y no a ${tasaDeclarada / 1000}: ` +
+            'se corrige solo, pero conviene avisarlo.' });
+}
+
+/**
+ * De la tasa real a la declarada, interpolando. Es el mismo remuestreo que el
+ * ayudante (`remuestrear` en `escuchar-app.swift`), con su estado entre pedazos.
+ */
+function remuestrear(datos) {
+    const n = Math.floor(datos.length / 2);
+    if (!n) return Buffer.alloc(0);
+    const paso = tasaReal / tasaDeclarada;
+    const salida = [];
+    let p = fase;
+    const x = i => (i < 0 ? previa : datos.readInt16LE(i * 2));
+    while (p < n - 1) {
+        const i = Math.floor(p);
+        const f = p - i;
+        const a = x(i);
+        salida.push(Math.round(a + (x(i + 1) - a) * f));
+        p += paso;
+    }
+    fase = p - n;
+    previa = x(n - 1);
+    const buf = Buffer.alloc(salida.length * 2);
+    for (let k = 0; k < salida.length; k++) buf.writeInt16LE(Math.max(-32768, Math.min(32767, salida[k])), k * 2);
+    return buf;
+}
+
 /** Desde acá los pedazos van a la grabación. Antes solo se medían. */
 function empezarAMandar() { mandando = true; }
 function dejarDeMandar() { mandando = false; }
 
 function abierto() { return Boolean(hijo); }
+
+function reiniciarTasa(declarada) {
+    tasaDeclarada = tasaReal = declarada;
+    marcas = [];
+    muestrasTotales = 0;
+    candidata = 0;
+    fase = 0;
+    previa = 0;
+    reloj = () => Date.now();
+}
 
 function cerrar() {
     mandando = false;
@@ -229,5 +329,7 @@ module.exports = {
         resto = Buffer.alloc(0);
         ultimoNivel = 0;
         pico = 0;
+        reiniciarTasa(p.tasa || 0);
+        if (p.reloj) reloj = p.reloj;
     }
 };

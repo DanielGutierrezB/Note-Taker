@@ -614,6 +614,9 @@ module.exports = {
     renombrarGrabada,
     borrarGrabada,
     // Para poder empujar el ciclo desde una prueba o desde el arnés, sin esperar
-    // los tres segundos del reloj.
-    buscarSenales
+    // el segundo del reloj.
+    buscarSenales,
+    // Para las pruebas que necesitan poner palabras a mano en una toma, que es
+    // lo que en vivo hace el ciclo de señales con Whisper.
+    _sesion: () => sesion
 };

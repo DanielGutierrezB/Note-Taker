@@ -67,6 +67,13 @@ function editar(sesion, cambio) {
             if (toma.outMs == null && c.borde === 'in') {
                 vivo.moverInAbierta(sesion.estado, toma, Number(c.paredMs));
             } else if (vivo.moverBorde(toma, c.borde, Number(c.paredMs))) {
+                // Las palabras se reparten YA con lo que hay, y la relectura
+                // afina después. Sin esto el borde volvía a su palabra de antes
+                // hasta que terminaba la relectura —cargar 1,6 GB de modelo y
+                // pasar la toma entera, peleando la GPU con el texto en vivo—, y
+                // arrastrar el IN parecía no hacer nada durante varios segundos.
+                const guardadas = (toma.antes || []).concat(toma.palabras || [], toma.despues || []);
+                Object.assign(toma, vivo.repartir(guardadas, toma));
                 relecturas.encolar(sesion, toma.id);
             }
             break;

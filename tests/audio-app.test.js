@@ -70,6 +70,52 @@ module.exports = async function (t) {
         t.ok(niveles.length && niveles[0] > 0.4, `el medidor sí: ${niveles[0]}`);
     });
 
+    t.group('audio-app · la tasa de verdad');
+
+    /**
+     * Le pasa `segundos` de audio a `tasa` muestras por segundo, de a 10 ms,
+     * con un reloj que avanza a mano. `rafaga` junta de a tantos pedazos, como
+     * un pipe que se atrasa y entrega de golpe.
+     */
+    function alimentar(tasa, segundos, declarada, rafaga) {
+        const pedazos = [];
+        const avisos = [];
+        let ahora = 1000;
+        audioApp._conectar({
+            alPcm: p => pedazos.push(p), avisar: a => avisos.push(a), mandando: true,
+            tasa: declarada, reloj: () => ahora
+        });
+        const porPedazo = tasa / 100;
+        const junta = rafaga || 1;
+        for (let i = 0; i < segundos * 100; i += junta) {
+            ahora += 10 * junta;
+            audioApp.recibir(Buffer.alloc(porPedazo * 2 * junta));
+        }
+        const muestras = pedazos.length * audioApp.MUESTRAS_POR_PEDAZO;
+        return { muestras, avisos: avisos.filter(a => a.tipo === 'tasa') };
+    }
+
+    t.test('audio a 24 kHz declarado a 48 se corrige y se avisa', () => {
+        // El error real: AirPods en modo llamada, 84,3 s de clase y 42,1 de WAV.
+        const r = alimentar(24000, 20, 48000);
+        t.eq(r.avisos.length, 1, 'un aviso');
+        t.eq(r.avisos[0].real, 24000);
+        // Los primeros segundos se miden antes de saber: lo que importa es que
+        // desde ahí el WAV reciba 48.000 muestras por segundo.
+        t.ok(r.muestras > 20 * 48000 * 0.75, `llegaron ${r.muestras} muestras, a 48 kHz`);
+    });
+
+    t.test('audio a la tasa declarada pasa tal cual y no avisa nada', () => {
+        const r = alimentar(48000, 20, 48000);
+        t.eq(r.avisos.length, 0);
+        t.near(r.muestras, 20 * 48000, audioApp.MUESTRAS_POR_PEDAZO);
+    });
+
+    t.test('un pipe que entrega a ráfagas no es otra tasa', () => {
+        const r = alimentar(48000, 20, 48000, 50);
+        t.eq(r.avisos.length, 0);
+    });
+
     t.group('audio-app · el ayudante');
 
     t.test('abre, dice la tasa y manda el audio cuando se le pide', conFalso('ok', async () => {

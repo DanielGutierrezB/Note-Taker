@@ -29,6 +29,7 @@ const paths = require('./paths');
 const captura = require('./captura');
 const transcribe = require('./transcribe');
 const residente = require('./oido-residente');
+const sonido = require('./sonido');
 
 /**
  * Palabras de Whisper → palabras con hora del día.
@@ -51,7 +52,11 @@ function aHoraDelDia(words, sesion, desdeSec) {
             texto: w.text,
             // El final también, que es lo que deja saber si una palabra se comió
             // un silencio, y de donde sale el OUT de una toma (`finDeToma`).
-            hasta: Math.round(base + (w.end != null ? w.end : seg) * 1000)
+            // Nunca antes de empezar: el DTW puede poner el comienzo después del
+            // `end` que calculó el modelo («esto»: 0,70 s contra 0,23), y una
+            // palabra que termina antes de empezar le mentía a la cola del ciclo
+            // y al OUT.
+            hasta: Math.round(base + Math.max(w.end != null ? w.end : seg, seg) * 1000)
         };
     });
 }
@@ -111,6 +116,11 @@ async function escuchar(params) {
         // siempre en silencio dejaría a la toma marcada como degradada mintiendo.
         if (!p.liviano && p.modelo && p.modelo.path) opciones.model = p.modelo;
 
+        // Un recorte donde no suena nada no se le pasa a Whisper: lo único que
+        // puede devolver es lo que inventa sobre el silencio (`sonido.js`).
+        const nivel = sonido.niveles(recortado.archivo);
+        if (!sonido.algoSuena(nivel)) return { palabras: [], colapsadas: 0, mudas: 0 };
+
         const salida = (p.liviano && await delResidente(recortado.archivo, opciones.language))
             || await transcribe.runWhisper(recortado.archivo, opciones);
 
@@ -120,10 +130,14 @@ async function escuchar(params) {
         // Una toma abierta sobre un silencio es exactamente la situación que lo
         // dispara, así que la defensa va también acá y no solo en post.
         const limpias = transcribe.collapseLoops(salida.words || []);
+        // Y lo que quedó escrito sobre un silencio sin repetirse: «Gracias.»
+        // suelto, o tres, que el colapso no alcanza a ver como bucle.
+        const oidas = sonido.conSonido(limpias.words, nivel);
 
         return {
-            palabras: aHoraDelDia(limpias.words, p.sesion, recortado.desdeSec),
-            colapsadas: limpias.removed
+            palabras: aHoraDelDia(oidas.words, p.sesion, recortado.desdeSec),
+            colapsadas: limpias.removed,
+            mudas: oidas.mudas
         };
     } finally {
         captura.tirar(recortado);

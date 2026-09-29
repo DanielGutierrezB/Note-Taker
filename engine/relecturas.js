@@ -39,6 +39,11 @@ const vivo = require('./notas-vivo');
  */
 function encolar(sesion, id) {
     if (!sesion || !sesion.viva) return;
+    // Una toma que ya espera no se encola dos veces: arrastrar un borde tres
+    // veces seguidas pedía tres relecturas iguales, una detrás de otra, y cada
+    // una es cargar el modelo grande. La que espera va a leer los bordes que
+    // haya cuando le toque, que son los últimos.
+    if (sesion.cola.includes(id)) return;
     sesion.cola.push(id);
     // `rehaciendo` guarda la promesa de la pasada en curso, y no un booleano:
     // `terminar` la espera, para no soltar la sesión con tomas a medio releer.

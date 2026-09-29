@@ -28,6 +28,7 @@ const fs = require('fs');
 const net = require('net');
 
 const paths = require('./paths');
+const transcribe = require('./transcribe');
 
 /** Cuánto se espera a que el modelo termine de cargar antes de darlo por perdido. */
 const ARRANQUE_MAX_MS = 60000;
@@ -79,7 +80,13 @@ function arrancar(opciones) {
                 '-mc', '0',
                 // Los ruidos (golpes, risas) sin tokens de texto: sobre un pedazo
                 // de toc-toc, whisper-cli escribía «Gracias.» seis veces.
-                '-sns'
+                '-sns',
+                // La alineación contra el sonido, igual que la relectura. Son
+                // estos tiempos los que ponen el IN de «3, 2, 1» y el OUT de
+                // «Pausa»: sin DTW caían hasta medio segundo corridos, y la
+                // relectura, que sí lo usa, después ponía las palabras en otro
+                // lado que el borde. Cuesta 0,15 s por pasada (0,69 contra 0,54).
+                ...dtw(modelo)
             ], { stdio: ['ignore', 'ignore', 'pipe'] });
             este.hijo.stderr.on('data', () => {});
             // Que no quede vivo con el gigabyte y medio del modelo si la app se
@@ -103,6 +110,12 @@ function arrancar(opciones) {
         }
     })();
     return este.cargando;
+}
+
+/** `-nfa -dtw <preset>` si el modelo tiene preset: con flash attention, DTW no corre. */
+function dtw(modelo) {
+    const preset = transcribe.DTW_POR_MODELO[modelo.name];
+    return preset ? ['-nfa', '-dtw', preset] : [];
 }
 
 function listo() {
@@ -129,12 +142,19 @@ function palabrasDe(respuesta) {
             const pieza = String(w.word == null ? '' : w.word);
             if (!pieza.trim() || /^\s*\[.*\]\s*$/.test(pieza)) continue;
             const ultima = out[out.length - 1];
+            // `t_dtw` viene en centésimas y en -1 cuando no se pudo ubicar, igual
+            // que en el JSON de whisper-cli (`dtwDelSegmento` en transcribe.js).
+            // De la palabra vale el de su primera pieza que traiga dato.
+            const dtwSec = typeof w.t_dtw === 'number' && w.t_dtw >= 0 ? w.t_dtw / 100 : null;
             if (ultima && !/^\s/.test(pieza)) {
                 ultima.text += pieza;
                 ultima.end = Math.max(ultima.end, w.end);
+                if (ultima.dtw == null && dtwSec != null) ultima.dtw = dtwSec;
                 continue;
             }
-            out.push({ start: w.start, end: Math.max(w.end, w.start), text: pieza.trim() });
+            const palabra = { start: w.start, end: Math.max(w.end, w.start), text: pieza.trim() };
+            if (dtwSec != null) palabra.dtw = dtwSec;
+            out.push(palabra);
         }
     }
     return out;

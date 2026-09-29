@@ -84,9 +84,15 @@ function registrar({ ipcMain, app, send, anotar }) {
     ipcMain.handle('audio-app-abrir', async () => {
         const r = await audioApp.abrir({
             alPcm: chunk => grabacion.pcm(chunk),
-            avisar: aviso => send('audio-app', aviso)
+            avisar: aviso => {
+                // Que el audio llegue a otra tasa que la declarada es de lo poco
+                // que arruina una clase en silencio: va al registro siempre.
+                if (aviso && aviso.tipo === 'tasa') anotar('audio-app.tasa', aviso);
+                send('audio-app', aviso);
+            }
         });
-        anotar('audio-app.abrir', { ok: r.ok, codigo: r.codigo || null, sampleRate: r.sampleRate || null });
+        anotar('audio-app.abrir', { ok: r.ok, codigo: r.codigo || null, sampleRate: r.sampleRate || null,
+            tasaDelDispositivo: r.tasaDelDispositivo || null });
         return r;
     });
 

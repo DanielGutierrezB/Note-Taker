@@ -15,6 +15,7 @@
  */
 
 import * as oido from './oido.js';
+import { avisar } from '../chrome.js';
 
 /** La entrada de Zoom, que no es un dispositivo y por eso no tiene un id suyo. */
 export const ZOOM = { id: 'app:zoom', nombre: 'Audio de Zoom (la llamada)', tipo: 'app' };
@@ -34,6 +35,9 @@ function engancharZoom() {
         if (!escuchandoZoom || !aviso) return;
         if (aviso.tipo === 'nivel') avisos.alNivel(aviso.pico);
         if (aviso.tipo === 'caido') avisos.alCaerse();
+        // El motor ya lo corrigió (`medirTasa` en `engine/audio-app.js`): se
+        // dice para que quede a la vista, no para que alguien haga algo.
+        if (aviso.tipo === 'tasa') avisar(aviso.mensaje, 'error');
     });
 }
 

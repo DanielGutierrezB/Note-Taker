@@ -30,6 +30,20 @@ module.exports = function (t) {
         t.eq(palabras[1].end, 0.85, 'y termina donde terminó la última');
     });
 
+    t.test('el DTW de la palabra es el de su primera pieza con dato, en segundos', () => {
+        const palabras = residente.palabrasDe({
+            segments: [{
+                words: [
+                    { word: ' in', start: 0.38, end: 0.51, t_dtw: -1 },
+                    { word: 'icia', start: 0.51, end: 0.85, t_dtw: 106 },
+                    { word: ' la', start: 0.85, end: 0.96, t_dtw: 118 }
+                ]
+            }]
+        });
+        t.eq(palabras[0].dtw, 1.06, '-1 es «no sé», no cero');
+        t.eq(palabras[1].dtw, 1.18);
+    });
+
     t.test('las marcas entre corchetes no son palabras', () => {
         const palabras = residente.palabrasDe({
             segments: [{ words: [{ word: ' [_BEG_]', start: 0, end: 0 }, { word: ' hola', start: 0.1, end: 0.4 }] }]
