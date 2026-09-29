@@ -10,6 +10,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "atajo": "bash tools/atajo-dev.sh",
     "test": "node tests/run.js",
     "maqueta": "node tools/maqueta/abrir.js",
     "auditar": "node tools/auditar.js",

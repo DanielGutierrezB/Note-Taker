@@ -363,7 +363,19 @@ npm install
 npm start          # la app
 npm test           # 221 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
+npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```
+
+`npm run atajo` deja en el Escritorio un `.app` que abre esta copia del código
+con doble clic, sin Terminal de por medio. Es un bundle de verdad y no un
+archivo `.command` porque un `.command` deja una ventana de Terminal abierta
+mientras la app corre, y cerrarla mataría la grabación.
+
+Lleva su propio identificador (`com.codigo.notetaker.dev`), así que sus
+permisos de micrófono y sus preferencias no se pisan con los de la app
+instalada. Si el repo se mueve o falta `node_modules`, el atajo lo dice en un
+cartel en vez de no hacer nada; lo que la app escriba queda en
+`~/Library/Logs/note-taker-dev.log`.
 
 Para las herramientas externas alcanza con Homebrew:
 
