@@ -29,7 +29,8 @@
       "version.json",
       "engine/**/*",
       "ipc/**/*",
-      "src/**/*"
+      "src/**/*",
+      "nativo/**/*"
     ],
     "mac": {
       "category": "public.app-category.video",

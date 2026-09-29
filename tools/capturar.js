@@ -33,7 +33,7 @@ const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
     'sin-carpeta', 'sesiones', 'preparar', 'preparar-sin-audio', 'sin-whisper',
     'preparar-microfono', 'preparar-zoom-falso', 'sin-zoom',
     'en-vivo', 'en-vivo,desplegada', 'toma-abierta', 'releyendo', 'sin-audio', 'terminada',
-    'ajustes', 'diagnostico', 'iconos'
+    'ajustes', 'diagnostico', 'faltan-modelos', 'iconos'
 ];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
 const ALTO = Number(arg('alto', 840));

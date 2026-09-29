@@ -28,6 +28,23 @@ if (hay('preparar-microfono')) ajustes = { ...ajustes, dispositivo: 'MacBook Pro
 if (hay('preparar-zoom-falso')) ajustes = { ...ajustes, dispositivo: 'ZoomAudioDevice (Virtual)' };
 if (hay('preparar-sin-audio') || hay('sin-zoom')) ajustes = { ...ajustes, dispositivo: null };
 
+let oyenteDependencias = null;
+const DEPENDENCIAS = [
+    ['modelo-grande', 'Modelo de Whisper (large-v3-turbo)', 'Relee cada toma cerrada y escribe el texto que va al XML. También es el que oye el texto en vivo.', true, 'Descargar (1,6 GB)'],
+    ['modelo-liviano', 'Modelo liviano (small)', 'El respaldo: si el grande se cae a mitad de una toma, se relee con este.', false, 'Descargar (488 MB)'],
+    ['ffmpeg', 'ffmpeg', 'Corta el audio grabado en los pedazos que se le pasan a Whisper.', true, null],
+    ['ffprobe', 'ffprobe', 'Lee cuánto dura y cómo está hecho un audio.', true, null],
+    ['whisper-cli', 'whisper-cli', 'Transcribe: sin él no se oye el conteo, ni la pausa, ni hay texto.', true, null],
+    ['whisper-server', 'whisper-server', 'Deja el modelo cargado para el texto en vivo.', false, null],
+    ['escuchar-app', 'Escucha de Zoom', 'Graba el sonido de la llamada de Zoom directo.', false, null]
+];
+const faltanModelos = new URLSearchParams(location.search).get('e') === 'faltan-modelos';
+const dependencias = DEPENDENCIAS.map(([clave, nombre, para, requerida, etiqueta]) => {
+    const esta = !(faltanModelos && etiqueta);
+    return { clave, nombre, para, requerida, esta, donde: esta ? '/Applications/Note Taker.app' : null,
+        accion: esta ? null : { tipo: 'descargar', etiqueta } };
+});
+
 /** El oyente del sonido de Zoom, para poder mandarle nivel desde `conAudio`. */
 let oyenteZoom = null;
 
@@ -60,6 +77,20 @@ window.nt = {
     },
     carpetasEnDisco: async rutas => Object.fromEntries((rutas || []).map(r => [r, true])),
 
+    // Lo que falta. `?e=faltan-modelos` es la Mac del compañero: el instalador
+    // publicado no trae los modelos. La descarga es de mentira y avanza sola.
+    dependenciasEstado: async () => dependencias.map(d => ({ ...d })),
+    dependenciasInstalar: async clave => {
+        const d = dependencias.find(x => x.clave === clave);
+        for (let pct = 0; pct <= 100; pct += 20) {
+            if (oyenteDependencias) oyenteDependencias({ clave, pct, texto: `${Math.round(pct * 16) / 10} de 1,6 GB` });
+            await espera(120);
+        }
+        if (d) { d.esta = true; d.accion = null; d.donde = '~/Library/Application Support/Note Taker/models'; }
+        return { ok: true };
+    },
+    dependenciasCancelar: async () => true,
+    onDependenciasProgreso: cb => { oyenteDependencias = cb; },
     updateCheck: async () => ({ hay: false, motivo: 'Estás al día.' }),
     updateDownload: async () => ({ ok: true }),
     updateCancel: async () => ({ ok: true }),

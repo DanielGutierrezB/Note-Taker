@@ -19,6 +19,7 @@ import * as sesiones from './pantalla-sesiones.js';
 import * as preparar from './pantalla-preparar.js';
 import * as vivo from './pantalla-vivo.js';
 import * as cierre from './pantalla-cierre.js';
+import * as dependencias from './dependencias.js';
 
 const app = {
     ajustes: null,
@@ -60,7 +61,11 @@ async function arrancar() {
     $('#btn-volver').innerHTML = `${icono('volver')}<span>Sesiones</span>`;
     $('#btn-volver').addEventListener('click', () => app.irASesiones());
 
-    $('#btn-ajustes').addEventListener('click', () => { pintarAjustes(); app.verAjustes(); });
+    $('#btn-ajustes').addEventListener('click', () => {
+        pintarAjustes();
+        dependencias.refrescar();
+        app.verAjustes();
+    });
     $('#btn-diagnostico').addEventListener('click', () => app.verDiagnostico());
     for (const b of $$('[data-cerrar]')) {
         b.addEventListener('click', () => verPanel(b.dataset.cerrar, false));
@@ -84,9 +89,49 @@ async function arrancar() {
     conectarActualizaciones();
 
     await sesiones.ver();
+    await revisarDependencias();
 
     const info = await window.nt.appInfo();
     window.nt.anotar('ventana.lista', { version: info.version });
+}
+
+/* ─── Lo que falta ────────────────────────────────────────────────────── */
+
+/**
+ * Al abrir: si falta algo, se dice antes de que nadie arme una sesión.
+ *
+ * Lo imprescindible se avisa cada vez que se abre mientras falte —sin eso no se
+ * puede grabar—; lo recomendado, una sola vez: después vive en Ajustes, para no
+ * insistir con algo que la persona decidió no instalar.
+ */
+async function revisarDependencias() {
+    await dependencias.montar($('#deps-ajustes'));
+    await dependencias.montar($('#deps-inicio'));
+    $('#btn-deps-todo').addEventListener('click', async () => {
+        $('#btn-deps-todo').disabled = true;
+        try { await dependencias.instalarTodo(); } finally { $('#btn-deps-todo').disabled = false; }
+    });
+    dependencias.alActualizar(() => {
+        const { requeridas, otras } = dependencias.faltan();
+        $('#deps-titulo').textContent = requeridas.length ? 'Falta algo para poder grabar' : 'Antes de empezar';
+        $('#deps-dice').textContent = requeridas.length
+            ? 'Sin lo que está en rojo, Note Taker no puede grabar ni escribir las notas. ' +
+              'Cada botón lo instala por vos; los modelos se bajan una sola vez.'
+            : (otras.length
+                ? 'Se puede grabar, pero con esto la app anda mejor. Lo podés instalar ahora o después desde Ajustes.'
+                : 'Está todo.');
+        $('#btn-deps-todo').hidden = !requeridas.length && !otras.length;
+        // Ya no falta nada: el aviso se cierra solo.
+        if (!requeridas.length && !otras.length) verPanel('telon-dependencias', false);
+    });
+    await dependencias.refrescar();
+
+    const { requeridas, otras } = dependencias.faltan();
+    const yaAvisado = pref.leer('dependencias.avisadas', false);
+    if (requeridas.length || (otras.length && !yaAvisado)) {
+        verPanel('telon-dependencias', true);
+        pref.guardar('dependencias.avisadas', true);
+    }
 }
 
 /* ─── Ajustes ─────────────────────────────────────────────────────────── */

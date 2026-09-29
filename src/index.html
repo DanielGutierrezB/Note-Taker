@@ -204,6 +204,12 @@
         <span class="v3">Es la primera mitad del nombre del XML.</span>
       </label>
       <div class="campo">
+        <span class="rotulo">Lo que la app necesita</span>
+        <span class="v3">Si falta algo, el botón de al lado lo instala. Los modelos se
+          bajan una sola vez y quedan en tu carpeta de usuario.</span>
+        <div id="deps-ajustes"></div>
+      </div>
+      <div class="campo">
         <span class="rotulo">Actualizaciones</span>
         <div class="campo-fila">
           <button id="btn-buscar-update" class="btn" type="button">Buscar una versión nueva</button>
@@ -214,6 +220,28 @@
     <div class="panel-pie">
       <button id="btn-log" class="btn btn-tenue" type="button">Guardar el registro</button>
       <button class="btn" type="button" data-cerrar="telon-ajustes">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Lo que falta, al abrir ─────────────────────────────────────────
+     Sale solo si falta algo. En una Mac nueva es lo primero que se ve: el
+     instalador publicado no trae los modelos (pesan más que el tope de un
+     archivo en GitHub), y sin ellos no se puede grabar. -->
+<div class="telon" id="telon-dependencias">
+  <div class="panel">
+    <div class="panel-cabeza">
+      <span class="v1" id="deps-titulo">Antes de empezar</span>
+      <span class="crece"></span>
+      <button class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-dependencias"></button>
+    </div>
+    <div class="panel-cuerpo">
+      <p class="v2" id="deps-dice"></p>
+      <div id="deps-inicio"></div>
+    </div>
+    <div class="panel-pie">
+      <button class="btn btn-tenue" type="button" data-cerrar="telon-dependencias">Ahora no</button>
+      <button id="btn-deps-todo" class="btn btn-primario" type="button">Instalar lo que falta</button>
     </div>
   </div>
 </div>

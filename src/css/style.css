@@ -1056,6 +1056,23 @@ select {
   color: var(--text-secondary);
 }
 
+/* Una dependencia: su botón va al lado del nombre, y la barra de avance abajo. */
+.dep .check-titulo .btn {
+  flex: 0 0 auto;
+}
+
+.dep-progreso {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+
+.dep-barra {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
 .check-arreglo {
   display: flex;
   align-items: center;

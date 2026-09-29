@@ -2,14 +2,10 @@
 #
 # tools/publish-release.sh — Publica una versión para que el botón la encuentre.
 #
-# Sube el PKG de actualización como release del propio repo, que es lo que la app
-# consulta (ver `engine/updates.js`).
-#
-# El instalador completo NO se sube. GitHub no acepta archivos de más de 2 GiB
-# en un release y ese pesa 3.8 GB por los modelos. Tampoco hace falta: se usa una
-# sola vez, cuando se instala la app en una máquina nueva, y para eso se pasa a
-# mano (disco, Drive, lo que sea). El de actualización, que es el que la app baja
-# sola, entra de sobra con sus 146 MB.
+# Sube el instalador de la app como release del propio repo. Es lo que la app
+# consulta para actualizarse (`engine/updates.js`) y lo que se baja para
+# instalarla en una Mac nueva: no trae los modelos (pesan más que el tope de dos
+# gigas de GitHub) y la app los ofrece bajar al abrir (`engine/dependencias.js`).
 #
 #   bash tools/publish-release.sh
 #   bash tools/publish-release.sh notas/0.3.0.md
@@ -35,8 +31,8 @@ VERSION=$(node -p "require('./package.json').version")
 OWNER=$(node -p "require('./engine/updates').DEFAULTS.owner")
 REPO=$(node -p "require('./engine/updates').DEFAULTS.repo")
 
-UPDATE_PKG="dist/NoteTaker-${VERSION}-arm64-update.pkg"
-FULL_PKG="dist/NoteTaker-${VERSION}-arm64.pkg"
+UPDATE_PKG="dist/NoteTaker-${VERSION}-arm64.pkg"
+FULL_PKG="dist/NoteTaker-${VERSION}-arm64-con-modelos.pkg"
 
 command -v gh >/dev/null || { echo "Falta gh (brew install gh)."; exit 1; }
 
@@ -65,11 +61,13 @@ else
         --repo "${OWNER}/${REPO}" \
         --title "Note Taker ${VERSION}" \
         --notes "$(cat <<'NOTAS'
-Actualización de la app. Los modelos no se vuelven a descargar: siguen
-instalados en /Library/Application Support/Note Taker.
+Instalador de Note Taker para Macs con Apple Silicon.
 
-Desde la app: el número de versión, arriba a la izquierda, o Diagnóstico →
-Buscar actualización.
+En una Mac nueva: abrí el .pkg (si macOS lo frena, clic derecho → Abrir). Al
+abrir la app por primera vez te avisa lo que falta —los modelos de Whisper,
+unos 2 GB— y los baja con un botón. Después ya no se vuelven a bajar.
+
+Para actualizar: Ajustes → Buscar una versión nueva.
 NOTAS
 )"
 fi

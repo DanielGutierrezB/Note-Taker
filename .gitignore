@@ -11,3 +11,4 @@ tests/tmp/
 # lo que hay que revisar es la pantalla, no el PNG.
 .maqueta/
 .nt-*/
+vendor/

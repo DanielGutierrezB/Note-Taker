@@ -10,6 +10,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('nt', {
     appInfo: () => ipcRenderer.invoke('app-info'),
     doctor: () => ipcRenderer.invoke('doctor'),
+    dependenciasEstado: () => ipcRenderer.invoke('dependencias-estado'),
+    dependenciasInstalar: clave => ipcRenderer.invoke('dependencias-instalar', clave),
+    dependenciasCancelar: clave => ipcRenderer.invoke('dependencias-cancelar', clave),
+    onDependenciasProgreso: callback => {
+        ipcRenderer.on('dependencias-progreso', (event, p) => callback(p));
+    },
 
     ajustesLeer: () => ipcRenderer.invoke('ajustes-leer'),
     ajustesGuardar: datos => ipcRenderer.invoke('ajustes-guardar', datos),

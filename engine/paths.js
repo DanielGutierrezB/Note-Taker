@@ -32,6 +32,9 @@ function bundledDirs() {
     }
     dirs.push(path.join(appRoot(), 'bin', 'mac'));
     dirs.push(path.join(appRoot(), 'bin'));
+    // Lo que la app arma o baja por la persona (`engine/dependencias.js`) va a
+    // su carpeta de usuario, que no pide contraseña.
+    dirs.push(path.join(process.env.HOME || '', 'Library', 'Application Support', 'Note Taker', 'bin'));
     return dirs;
 }
 

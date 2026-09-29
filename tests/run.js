@@ -24,6 +24,7 @@ const FILES = [
     'audio-app.test.js',
     'oido-residente.test.js',
     'sonido.test.js',
+    'dependencias.test.js',
     'insistir.test.js',
     'notas-vivo.test.js',
     'claquetas.test.js',

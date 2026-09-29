@@ -20,6 +20,7 @@ const paths = require('./engine/paths');
 const ajustes = require('./engine/ajustes');
 const updates = require('./engine/updates');
 const registro = require('./engine/registro');
+const dependencias = require('./engine/dependencias');
 const ipcGrabar = require('./ipc/grabar');
 const devShot = require('./dev-shot');
 
@@ -154,6 +155,18 @@ ipcMain.handle('registro-descargar', () => {
 });
 
 ipcMain.handle('doctor', async () => paths.doctor());
+
+// Lo que falta, y el botón que lo instala (`engine/dependencias.js`). El avance
+// va por un canal aparte porque una descarga de 1,6 GB tarda minutos.
+ipcMain.handle('dependencias-estado', () => dependencias.estado());
+ipcMain.handle('dependencias-instalar', async (event, clave) => {
+    const r = await dependencias.instalar(clave, p => {
+        if (!event.sender.isDestroyed()) event.sender.send('dependencias-progreso', { clave, ...p });
+    });
+    registro.anotar('main', 'dependencias.instalar', { clave, ok: r.ok, error: r.error || null });
+    return r;
+});
+ipcMain.handle('dependencias-cancelar', (event, clave) => dependencias.cancelar(clave));
 
 // ─── Ajustes ──────────────────────────────────────────────────────────
 

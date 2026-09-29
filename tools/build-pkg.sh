@@ -1,25 +1,30 @@
 #!/bin/bash
 #
-# tools/build-pkg.sh — Arma los dos instaladores de una versión.
+# tools/build-pkg.sh — Arma el instalador de una versión.
 #
-# Son dos porque los modelos de Whisper pesan casi todo y son los mismos en
-# todas las versiones. Si viajaran dentro del `.app`, actualizar la app sería
-# volver a bajar dos gigas para cambiar unos kilobytes de código; peor todavía,
-# reemplazar el `.app` los borraría y habría que reinstalarlos igual.
+#   NoteTaker-<v>-arm64.pkg              la app, ~150 MB   el que se publica
+#   NoteTaker-<v>-arm64-con-modelos.pkg  app + modelos     solo con --con-modelos
 #
-#   NoteTaker-<v>-arm64.pkg          completo   ~2 GB   primera instalación
-#   NoteTaker-<v>-arm64-update.pkg   solo app   ~120 MB  lo que descarga el botón
+# El que se publica NO lleva los modelos de Whisper. Pesan más de dos gigas, que
+# es el tope de un archivo en un release de GitHub, y además no hace falta: la
+# app se da cuenta al abrir de que faltan y los baja con un botón, a la carpeta
+# del usuario y verificados contra su huella (`engine/dependencias.js`). El
+# mismo instalador sirve para una Mac nueva y para actualizar, porque reemplaza
+# la app y no toca los modelos.
 #
-# El completo son dos componentes: la app a /Applications y los modelos a
-# /Library/Application Support/Note Taker, que es donde `engine/paths.js` los
-# busca. El de actualización lleva solo el primero, así que se instala sobre lo
-# que ya está y deja los modelos en su lugar, intactos.
+# El que lleva los modelos es para pasar a mano a una Mac sin buena conexión:
+# la app a /Applications y los modelos a /Library/Application Support/Note Taker,
+# que es donde `engine/paths.js` los busca primero.
 #
 #   bash tools/build-pkg.sh
+#   bash tools/build-pkg.sh --con-modelos
 #
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+CON_MODELOS=0
+[ "${1:-}" = "--con-modelos" ] && CON_MODELOS=1
 
 VERSION=$(node -p "require('./package.json').version")
 IDENT=$(node -p "require('./package.json').build.appId")
@@ -60,11 +65,14 @@ APP="$OUT/mac-arm64/${APP_NAME}.app"
 echo "→ firmando ad-hoc"
 codesign --force --deep --sign - "$APP" 2>/dev/null || true
 
+rm -rf "$STAGE"
+mkdir -p "$STAGE"
+
+if [ "$CON_MODELOS" = 1 ]; then
 # ── 2. Los modelos ───────────────────────────────────────────────────
 MODELS="bin/mac/models"
 [ -d "$MODELS" ] || { echo "Faltan los modelos de Whisper: corré tools/bundle-binaries.sh"; exit 1; }
 
-rm -rf "$STAGE"
 mkdir -p "$STAGE/payload"
 echo "→ juntando los modelos"
 # `ditto` y no `cp`: sin `--norsrc` cada archivo viaja con un `._` al lado, que
@@ -116,6 +124,8 @@ for m in "$STAGE/payload/models"/*; do
     echo "    $(du -sh "$m" | cut -f1)  $(basename "$m")"
 done
 
+fi
+
 # ── 3. Los componentes ───────────────────────────────────────────────
 echo "→ armando los componentes"
 pkgbuild --quiet \
@@ -125,12 +135,14 @@ pkgbuild --quiet \
     --version "$VERSION" \
     "$STAGE/app.pkg"
 
-pkgbuild --quiet \
-    --root "$STAGE/payload" \
-    --install-location "$DATA_DIR" \
-    --identifier "${IDENT}.models" \
-    --version "$VERSION" \
-    "$STAGE/models.pkg"
+if [ "$CON_MODELOS" = 1 ]; then
+    pkgbuild --quiet \
+        --root "$STAGE/payload" \
+        --install-location "$DATA_DIR" \
+        --identifier "${IDENT}.models" \
+        --version "$VERSION" \
+        "$STAGE/models.pkg"
+fi
 
 # ── 4. Los instaladores ──────────────────────────────────────────────
 distribution() {
@@ -152,21 +164,25 @@ distribution() {
     }
 }
 
-echo "→ instalador completo"
-distribution "${APP_NAME} ${VERSION}" app models > "$STAGE/full.dist"
-productbuild --distribution "$STAGE/full.dist" --package-path "$STAGE" \
+echo "→ instalador"
+distribution "${APP_NAME} ${VERSION}" app > "$STAGE/app.dist"
+productbuild --distribution "$STAGE/app.dist" --package-path "$STAGE" \
     "$OUT/NoteTaker-${VERSION}-arm64.pkg"
+HECHOS=("$OUT/NoteTaker-${VERSION}-arm64.pkg")
 
-echo "→ instalador de actualización"
-distribution "${APP_NAME} ${VERSION}" app > "$STAGE/update.dist"
-productbuild --distribution "$STAGE/update.dist" --package-path "$STAGE" \
-    "$OUT/NoteTaker-${VERSION}-arm64-update.pkg"
+if [ "$CON_MODELOS" = 1 ]; then
+    echo "→ instalador con modelos"
+    distribution "${APP_NAME} ${VERSION}" app models > "$STAGE/full.dist"
+    productbuild --distribution "$STAGE/full.dist" --package-path "$STAGE" \
+        "$OUT/NoteTaker-${VERSION}-arm64-con-modelos.pkg"
+    HECHOS+=("$OUT/NoteTaker-${VERSION}-arm64-con-modelos.pkg")
+fi
 
 rm -rf "$STAGE"
 
 echo ""
 echo "Listo:"
-for f in "$OUT/NoteTaker-${VERSION}-arm64.pkg" "$OUT/NoteTaker-${VERSION}-arm64-update.pkg"; do
+for f in "${HECHOS[@]}"; do
     echo "  $(du -h "$f" | cut -f1)  $f"
 done
 echo ""

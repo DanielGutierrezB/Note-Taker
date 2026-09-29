@@ -634,20 +634,35 @@ tests/                   corredor propio: node tests/run.js
 ## Distribución
 
 ```bash
-bash tools/bundle-binaries.sh   # ffmpeg, ffprobe y whisper-cli adentro de la app
-npm run build                   # los dos instaladores
-npm run publish                 # el release en GitHub
+bash tools/bundle-binaries.sh        # ffmpeg, ffprobe, whisper-cli, whisper-server y la escucha de Zoom
+npm run build                        # el instalador de la app
+bash tools/build-pkg.sh --con-modelos   # además, uno con los modelos para pasar a mano
+npm run publish                      # el release en GitHub
 ```
 
-Son dos instaladores porque los modelos son casi todo el peso y son los mismos
-entre versiones: si viajaran dentro del `.app`, cada actualización sería bajar
-dos gigas para cambiar unos kilobytes, y reemplazar el `.app` los borraría. El
-instalador completo los deja una vez en
-`/Library/Application Support/Note Taker` y ahí se quedan; el de actualización
-lleva solo la app.
+**El instalador que se publica no trae los modelos de Whisper.** Pesan más de
+dos gigas, que es el tope de un archivo en un release de GitHub. Tampoco hace
+falta: al abrir, la app ve qué le falta y lo ofrece instalar.
 
-**La app no está firmada con Developer ID.** La primera vez macOS la va a frenar
-y hay que darle «Abrir igual» en Ajustes → Privacidad y seguridad.
+### Lo que falta se instala desde la app
+
+Al abrir la primera vez, si falta algo, aparece un aviso con la lista y un botón
+por cada cosa, más «Instalar lo que falta». Lo imprescindible (sin lo que no se
+puede grabar) se avisa cada vez que se abre mientras falte; lo recomendado, una
+sola vez. La misma lista está siempre en **Ajustes → Lo que la app necesita**.
+
+| qué | cómo se instala |
+|---|---|
+| modelo grande (large-v3-turbo, 1,6 GB) y liviano (small, 488 MB) | se bajan de Hugging Face a `~/Library/Application Support/Note Taker/models`, sin contraseña, y se verifican contra su SHA-256 |
+| ffmpeg, ffprobe, whisper-cli, whisper-server | vienen en la app; si faltan (desarrollo), con Homebrew. Sin Homebrew, el botón abre la Terminal con su instalador oficial |
+| escucha de Zoom | viene en la app; si falta, se compila en la Mac con las herramientas de Apple (y si no están, el botón abre su instalador) |
+
+Lo vive `engine/dependencias.js` (qué hay, cómo se instala) y
+`src/js/dependencias.js` (la lista con sus botones y el avance).
+
+**La app no está firmada con Developer ID.** La primera vez macOS la va a frenar:
+clic derecho sobre el `.pkg` → Abrir, o «Abrir igual» en Ajustes del Sistema →
+Privacidad y seguridad.
 
 ## Estado
 
