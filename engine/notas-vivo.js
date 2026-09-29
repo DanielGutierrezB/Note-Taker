@@ -1,0 +1,956 @@
+'use strict';
+/**
+ * notas-vivo.js — Las notas de rodaje, mientras la clase se está grabando.
+ *
+ * El profesor dice "3, 2, 1" y la toma se abre, dice "Pausa" y se cierra, y dice
+ * "claqueta" (o aplaude) y queda una marca de sincronía. De eso sale el XML que
+ * el editor importa en Premiere (`notas-xml.js`).
+ *
+ * **Una sesión es una clase entera, grabada de corrido.** No hay "parar y
+ * seguir": la clase dura lo que dure y de ella sale UN XML, con todas las tomas
+ * y todas las claquetas adentro. Eso es lo que hace que los tiempos cierren en
+ * el total, que es lo único que el editor no puede arreglar después.
+ *
+ * **Todo va con la HORA DEL DÍA en milisegundos.** Es lo que permite que el
+ * reloj de la app y el del audio sean el mismo: las palabras y los golpes se
+ * estampan por su posición en el WAV (`oir.aHoraDelDia`, `grabacion.pcm`), no
+ * por cuándo la app se enteró. Pasarlo a los cuadros que entiende Premiere es
+ * trabajo de `notas-xml.js`, que es lo único que conoce el formato.
+ *
+ * **La latencia no perjudica la precisión**, y es lo que hace que todo esto
+ * funcione. Cuando el profesor dice "Pausa", el OUT no se pone donde la
+ * herramienta se dio cuenta: se pone en el timecode de esa palabra, que Whisper
+ * devuelve junto con el texto. Un segundo de demora en enterarse no mueve el
+ * corte ni un cuadro, y en una clase de tres horas eso es la diferencia entre
+ * unas notas que sirven para cortar y unas que hay que volver a mirar.
+ *
+ * **Sin estado y sin DOM**: todo lo de acá se prueba solo (`tests/notas-vivo.test.js`).
+ * Los números que deciden —cuántos segundos de silencio confirman un "Pausa",
+ * cuánto tienen que parecerse dos arranques, cuándo dos claquetas son la misma—
+ * salen de medir clases reales con `tools/simular-grabacion.js`, no de estimarlos.
+ */
+
+const { norm } = require('./texto');
+
+/**
+ * Las dos fuentes que graba el Rodecaster, en el orden en que las numera.
+ *
+ * Son índices y no nombres porque es lo que el resto de la cadena maneja: el
+ * plan de cortes elige la cámara por número (`cameraIndex`), el XML le pone a
+ * cada fuente la etiqueta de color que le toca por posición (`CLIP_LABELS` en
+ * `fcp-xml.js`) y el reproductor monta un `<video>` por índice. El orden es
+ * estable clase a clase porque el aparato numera siempre igual.
+ */
+const CAMARA = 0;
+const PANTALLA = 1;
+
+/**
+ * Los colores con los que la app dice de qué fuente es algo.
+ *
+ * Son los de `.cam-0` y `.cam-1` en `src/css/visor.css`, que a su vez son las dos
+ * primeras etiquetas de clip del XML (`CLIP_LABELS` en `fcp-xml.js`): la cámara
+ * llega a Premiere en Cerulean y el grabador de pantalla en Rose. La tira del
+ * reproductor, los bloques del guion y ahora las tomas de esta pantalla usan los
+ * mismos dos, porque son la misma pregunta en tres sitios.
+ *
+ * Escritos acá además de en la hoja de estilo porque el CSS no se puede leer
+ * desde el motor y esta lista es la que la pantalla consulta;
+ * `tests/colores.test.js` falla si los dos lados se separan.
+ */
+const CERULEO = '#3f7fb5';
+const ROSA = '#b1567c';
+
+/**
+ * Las vistas que se pueden elegir: con qué se ve cada una y de qué color va.
+ *
+ * **Cada vista tiene DOS colores y son dos cosas distintas a propósito.** Si esto
+ * parece un error y da ganas de dejar uno solo, es lo que hay que leer antes:
+ *
+ * - `colorDeMarcador` es el entero nativo de Premiere (`pproColor`) y es lo que
+ *   se escribe en el XML. Sale de un XML de verdad del director de contenido, no
+ *   de elegirlo: si acá se escribiera otro, el mismo tipo de toma llegaría a la
+ *   secuencia de un color distinto según quién tomó las notas. Quien lo escribe
+ *   es `notas-xml.js`.
+ *
+ * - `colorEnLaApp` es de qué color se ve la toma EN LA PANTALLA DE GRABAR. No es
+ *   una traducción del de arriba: son dos preguntas diferentes. El marcador
+ *   contesta "de qué color va a aparecer esto en Premiere"; la lista de tomas
+ *   contesta **qué vista eligió el director en esta toma**, que son cinco cosas
+ *   y no dos.
+ *
+ *   Con qué se ve cada vista es otra pregunta y tiene su propio campo acá al
+ *   lado (`fuente`). No se pueden mezclar: `R`, `S`, `MG` y `X2` se resuelven
+ *   todas con el grabador de pantalla —así se previsualizan— y aun así se pintan
+ *   distinto, porque quien está grabando necesita reconocer de un golpe de vista
+ *   cuál de las cinco puso en cada toma, que es lo que después va a tener que
+ *   revisar y lo que decide el color del marcador. De qué entrada salió la
+ *   imagen ya lo está viendo en el monitor.
+ *
+ * `PV` y `R` llevan además los colores de las dos fuentes —cerúleo y rosa— y eso
+ * también es a propósito: son las dos primeras etiquetas de clip del XML
+ * (`CLIP_LABELS` en `fcp-xml.js`) y los dos `.cam-N` de `src/css/visor.css`, así
+ * que en la tira del reproductor y en los bloques del guion esos dos colores ya
+ * están diciendo eso, y quien graba mirando esta lista es el mismo que después
+ * abre el reproductor. `R` es donde los dos campos chocan de frente: su marcador
+ * es naranja y así se queda, porque es el que el CD viene usando, pero en la app
+ * va rosa.
+ *
+ * Las otras tres coinciden con su marcador, y también por elección: no tienen un
+ * color propio en el reproductor con el que pelear, así que el de Premiere es el
+ * que más dice.
+ *
+ * Antes eran un solo campo, y no se notaba porque todas coincidían por
+ * casualidad. El único sitio que los mezclaba era la hoja de estilo, que sacaba
+ * su hexadecimal del entero del marcador; ahora saca cada uno de su campo y
+ * `tests/colores.test.js` fija cuáles coinciden a propósito y cuáles no.
+ *
+ * **La `fuente` vive acá y en ningún otro lado.** Antes estaba escrita dos veces
+ * y en desacuerdo: `cutplan.js` solo conocía `PV` y `R` —así que una toma en
+ * `MG` caía en la primera cámara con un aviso de "vista desconocida"— y la
+ * maqueta tenía su propia tabla donde sí sabía a dónde iban las otras cuatro. O
+ * sea que el diseño se miraba con un mapeo que la app no tenía.
+ */
+const VISTAS = [
+    { nombre: 'PV', titulo: 'Profesor', fuente: CAMARA, colorDeMarcador: 4281740498, colorEnLaApp: CERULEO },
+    { nombre: 'R', titulo: 'Pantalla', fuente: PANTALLA, colorDeMarcador: 4280578025, colorEnLaApp: ROSA },
+    { nombre: 'S', titulo: 'Slides', fuente: PANTALLA, colorDeMarcador: 4281828977, colorEnLaApp: '#718637' },
+    { nombre: 'MG', titulo: 'Multi', fuente: PANTALLA, colorDeMarcador: 4292277273, colorEnLaApp: '#19f4d6' },
+    { nombre: 'X2', titulo: 'Doble', fuente: PANTALLA, colorDeMarcador: 4289825711, colorEnLaApp: '#af8bb1' }
+];
+
+const VISTA_POR_DEFECTO = 'PV';
+
+/** Nombre de vista → con qué fuente se ve. Es el `viewMap` de todo el pipeline. */
+const MAPA_DE_VISTAS = Object.fromEntries(VISTAS.map(v => [v.nombre, v.fuente]));
+
+/**
+ * Nombres de vista que ya no se ofrecen pero que hay que seguir entendiendo.
+ *
+ * `SL` y `SR` eran las slides encuadradas a izquierda y a derecha, y llegaban a
+ * la secuencia del mismo verde porque son la misma fuente: la distinción era de
+ * encuadre y no de material, así que en el corte no cambiaba nada. Ahora son una
+ * sola, `S`.
+ *
+ * Dejar de ofrecerlas no es lo mismo que dejar de entenderlas, y hay dos sitios
+ * donde siguen llegando: las clases que ya se grabaron las tienen escritas en su
+ * sidecar y en su XML, y el XML que entra de afuera trae el nombre que el
+ * director de contenido le puso al marcador, que puede ser cualquiera de los que
+ * la herramienta ofrecía el día que tomó esas notas. Si no se tradujeran, esas
+ * tomas quedarían con una vista que no existe: el selector no marcaría ninguna,
+ * el color caería al de `PV` y el mapeo las mandaría a la cámara equivocada.
+ */
+const VISTAS_RENOMBRADAS = { SL: 'S', SR: 'S' };
+
+/**
+ * El nombre de hoy de una vista que se acaba de leer de un archivo.
+ *
+ * Se traduce al LEER y no se reescribe el disco al pasar: un camino de lectura
+ * que escribe es lo que vuelve irreproducible el próximo error, y además una
+ * clase se lista sin que nadie la haya pedido. Igual el archivo se cura solo, y
+ * en el primer gesto: cada cambio sobre una clase grabada reescribe el sidecar y
+ * el XML enteros desde el estado ya traducido (`editarGrabada` en
+ * `grabacion.js`), así que la primera vez que alguien la toca queda con `S`.
+ */
+function vistaLeida(nombre) {
+    const n = limpio(nombre);
+    return VISTAS_RENOMBRADAS[n] || n;
+}
+
+/**
+ * Un estado recién iniciado: la forma entera, declarada una vez.
+ *
+ * Todo lo que la sesión y `aplicarSenales` van a escribir está acá desde el
+ * principio, con su valor vacío. Antes `ultimaSenal` y `ultimaPalabraMs`
+ * aparecían en el primer uso, y quien leía cómo arranca una sesión no podía
+ * saber la forma completa sin leer también este archivo.
+ *
+ * @param {object} params { secuencia, curso, ceroMs, fps, idioma, dispositivo }
+ */
+function estadoNuevo(params) {
+    const p = params || {};
+    return {
+        secuencia: p.secuencia || null,
+        curso: p.curso || null,
+        // El momento de "Iniciar grabación", del que cuelgan los cuadros del XML.
+        ceroMs: p.ceroMs != null ? p.ceroMs : null,
+        // A cuántos cuadros va la secuencia del editor. Se congela al arrancar y
+        // viaja en el estado en vez de leerse de Ajustes al escribir el XML:
+        // cambiarlo a mitad de una clase de tres horas movería todos los
+        // marcadores que ya se habían escrito, y el editor ya sincronizó contra
+        // ellos. Cambiar el fps es empezar otra sesión.
+        fps: p.fps || 30,
+        idioma: p.idioma || 'es',
+        dispositivo: p.dispositivo || null,
+        /**
+         * Las claquetas, en orden y todas.
+         *
+         * Son una lista y no un campo porque en una clase en vivo se claquetea
+         * varias veces: el editor sincroniza a mano y correlaciona la primera
+         * para saber si hay uno o varios archivos en Premiere, y las demás le
+         * sirven de control cada vez que una cámara se cortó y volvió.
+         *
+         * Cada una: `{ n, ms, paredMs, frase, confirmada, origen }`. `n` es su
+         * número, que es con el que se la nombra en el XML y en la pantalla;
+         * `ms` es su hora en el reloj del audio y `paredMs` la del reloj de
+         * pared, que se guarda para poder emparejarla con la fecha de creación
+         * de un archivo de cámara.
+         */
+        claquetas: [],
+        proximaClaqueta: 0,
+        // Los archivos de audio que la sesión fue cerrando. Una sesión puede
+        // tener más de uno: si el dispositivo se cae y se reabre, el WAV nuevo
+        // entra como otro clip en su offset (`captura.laQueContiene`).
+        sesiones: [],
+        tomas: [],
+        proximaToma: 0,
+        // Hasta dónde se oyó y cuándo sonó la última señal de cada tipo: lo que
+        // deja pasar la ventana entera del ciclo, con su solape, sin repetir nada.
+        ultimaPalabraMs: 0,
+        ultimaSenal: {}
+    };
+}
+
+/**
+ * Las palabras con las que el profesor abre y cierra.
+ *
+ * El conteo no se busca con la expresión de `rodecaster-xml.COUNT_RUN` porque esa
+ * está anclada al principio de un comentario ya escrito; acá hay que encontrarlo
+ * en el medio de un río de palabras. Tampoco con `speech-edges.conteosEn`, que
+ * también busca conteos sueltos, porque en vivo hacen falta dos cosas que en post
+ * no: que la cuenta TERMINE en uno (ver `senales`) y tolerar los puntos
+ * suspensivos con que Whisper cierra un "1...". Lo que se busca es lo mismo: dos
+ * o más números seguidos hacia abajo, que es lo que nadie dice por casualidad.
+ *
+ * La puntuación de atrás no cuenta, y va con `*` y no con `?` porque Whisper
+ * escribe puntos suspensivos: en el curso salió "3, 2, 1..." y con un solo signo
+ * permitido el "1..." no era un número, el conteo se quedaba en "3, 2" y la toma
+ * no se abría. Lo encontró la simulación sobre el audio de verdad.
+ */
+const CUENTA = /^(?:3|2|1|tres|dos|uno)[.,…!?]*$/i;
+const RETOMAR = /^retomamos[.,…!?]*$/i;
+const PAUSA = /^pausa[.,…!?]*$/i;
+/** "Ok" delante del conteo es parte de la señal, no de la clase. */
+const OK = /^ok[.,…!?]*$/i;
+
+/**
+ * La claqueta, dicha.
+ *
+ * Es la tercera puerta por la que entra una claqueta, y existe porque el
+ * aplauso puede no llegar: el audio de una reunión de Zoom pasa por compresión,
+ * cancelación de eco y control automático de ganancia, y las tres cosas
+ * aplastan justo lo que `golpe.js` busca —un pico corto y muy por encima del
+ * fondo—. Con la clase en vivo entrando por un dispositivo virtual, confiar
+ * solo en el pico es confiar en que el procesamiento de otro programa deje
+ * pasar un transitorio.
+ *
+ * El pedazo del medio y no la palabra entera, con el mismo motivo que en la
+ * confirmación del golpe: Whisper no conoce la palabra y la escribió
+ * "Claqueta", "Claquetados", "Cacleta", "Klaqueta" y hasta "clasedos" pegando
+ * "clase dos". Se pide de cinco letras para arriba para que no la dispare
+ * cualquier sílaba suelta.
+ */
+const CLAQUETA = /claque|cacle|klaque/i;
+
+/** Cuántos números seguidos hacen una cuenta. Uno solo es habla. */
+const MINIMO_DE_CUENTA = 2;
+
+/** Cuánto vale cada palabra de la cuenta, para saber si va hacia abajo. */
+const VALOR = { 3: 3, tres: 3, 2: 2, dos: 2, 1: 1, uno: 1 };
+
+function valorDeCuenta(texto) {
+    const limpia = String(texto).toLowerCase().replace(/[.,…!?]+$/, '');
+    return VALOR[limpia];
+}
+
+/**
+ * Dos señales del mismo tipo más cerca que esto son la misma señal oída dos veces.
+ *
+ * El ciclo de señales escucha ventanas que se solapan, así que un conteo que caiga
+ * en el borde aparece en dos pasadas seguidas — eso es a propósito, es lo que
+ * evita perderlo partido. Lo que hace falta es no abrir dos tomas con él, y no se
+ * puede comparar el tiempo exacto porque Whisper no devuelve el mismo número en
+ * las dos pasadas (unas décimas de diferencia). Dos segundos separan de sobra dos
+ * conteos de verdad: entre uno y el siguiente hay una toma entera.
+ */
+const MISMA_SENAL_MS = 2000;
+
+/**
+ * Cuánto silencio tiene que seguir a "Pausa" para creerle.
+ *
+ * El profesor puede decir "pausa" hablando de otra cosa —"acá hacemos una pausa
+ * en el flujo"— y cerrar la toma ahí partiría la clase al medio. Lo que
+ * distingue la señal es que después no se dice nada: el profesor para. Un segundo
+ * alcanza y no obliga a esperar.
+ */
+const SILENCIO_TRAS_PAUSA_SEC = 1;
+
+function limpio(texto) {
+    return String(texto == null ? '' : texto).trim();
+}
+
+/** El texto de una palabra, sin signos, para comparar contra las señales. */
+function palabra(w) {
+    return limpio(w && w.texto).replace(/^[¿¡"'(]+/, '');
+}
+
+/**
+ * Las señales que hay en una tirada de palabras, en orden.
+ *
+ * Devuelve rangos de índices y no tiempos porque quien decide qué hacer con una
+ * señal necesita saber qué palabras la forman: el IN va DESPUÉS de la última
+ * palabra del conteo y el OUT ANTES de "Pausa", así que la señal misma nunca
+ * queda adentro de la toma. Es lo mismo que el motor hace en post
+ * (`speech-edges.trimChatter`), y por las mismas razones.
+ *
+ * @param {Array} palabras [{t, texto}] con `t` en hora del día (ms)
+ * @returns {Array} [{tipo:'abre'|'cierra'|'claqueta', desde:number, hasta:number}]
+ */
+function senales(palabras) {
+    const lista = palabras || [];
+    const salida = [];
+
+    for (let i = 0; i < lista.length; i++) {
+        const p = palabra(lista[i]);
+
+        // La claqueta dicha. No abre ni cierra nada —una claqueta no es una
+        // toma— así que no corta el recorrido: la misma palabra puede además
+        // ser parte de otra cosa, y las palabras de alrededor siguen entrando
+        // a la toma que esté abierta si la hay.
+        if (CLAQUETA.test(p)) {
+            salida.push({ tipo: 'claqueta', desde: i, hasta: i, por: 'voz' });
+            continue;
+        }
+
+        if (RETOMAR.test(p)) {
+            salida.push({ tipo: 'abre', desde: i, hasta: i, por: 'retomamos' });
+            continue;
+        }
+
+        if (PAUSA.test(p)) {
+            // Sin lo que sigue no se puede saber si es la señal o una palabra de
+            // la clase: se pide silencio detrás. La última palabra de la tirada
+            // se resuelve con el silencio que venga después, así que quien llama
+            // decide (ver `cierraDeVerdad`).
+            const siguiente = lista[i + 1];
+            const hueco = siguiente ? (siguiente.t - lista[i].t) / 1000 : Infinity;
+            if (hueco >= SILENCIO_TRAS_PAUSA_SEC) {
+                salida.push({ tipo: 'cierra', desde: i, hasta: i, por: 'pausa' });
+            }
+            continue;
+        }
+
+        // El conteo: se mira si desde acá arranca una tirada de números.
+        let j = i;
+        if (OK.test(p) && lista[i + 1] && CUENTA.test(palabra(lista[i + 1]))) j = i + 1;
+        // La tirada de números, cortada en el PRIMER uno: ahí termina la cuenta.
+        // Sin ese corte, una clase que arranca diciendo "uno de los problemas…"
+        // se comía su propia primera palabra, porque "uno" también es número.
+        let fin = j;
+        while (fin < lista.length && CUENTA.test(palabra(lista[fin]))) {
+            fin++;
+            if (valorDeCuenta(palabra(lista[fin - 1])) === 1) break;
+        }
+
+        // Y tiene que terminar en uno, no solo tener dos números: "tenemos uno,
+        // dos, tres opciones" es habla, y con la regla de "dos seguidos" abría una
+        // toma en medio de la clase. Se pide el final y no que baje monótona
+        // porque el falso arranque existe: en el curso real está escrito "3 2 3 2 1.".
+        const cierraEnUno = fin > j && valorDeCuenta(palabra(lista[fin - 1])) === 1;
+        if (fin - j >= MINIMO_DE_CUENTA && cierraEnUno) {
+            salida.push({ tipo: 'abre', desde: i, hasta: fin - 1, por: 'cuenta' });
+            i = fin - 1;
+        }
+    }
+
+    return salida;
+}
+
+/**
+ * El texto de una señal, tal como va al comentario del marcador.
+ *
+ * El parser de post busca el conteo justo detrás del separador para saber dónde
+ * termina la nota del editor y empieza lo que se dijo, así que el conteo tiene
+ * que llegar escrito. Con "Retomamos" no hay conteo y el parser cae en su
+ * convención vieja, que también funciona.
+ */
+function textoDe(palabras, desde, hasta) {
+    return (palabras || []).slice(desde, hasta + 1).map(w => limpio(w.texto)).join(' ').trim();
+}
+
+/** Cuántas palabras del arranque se citan en el comentario del IN. */
+const PALABRAS_DEL_CUE = 8;
+
+/**
+ * El cue de una toma: el conteo y las primeras palabras de lo que se dijo.
+ *
+ * El conteo se escribe con un punto y nada más al final. Viene como lo escribió
+ * Whisper, que a veces pone puntos suspensivos ("3, 2, 1..."), y el parser de post
+ * come el conteo pero no los signos de sobra: el cue quedaba empezando en ".. Uno,
+ * un PROM sirve…". Ese cue es lo que `align.js` busca en el Live-Mix para reanclar
+ * el borde, así que conviene que sean palabras y no basura.
+ */
+function cueDeEntrada(toma) {
+    const cuenta = limpio(toma.cuenta).replace(/[.,…!?]+$/, '.');
+    const primeras = textoDe(toma.palabras, 0, PALABRAS_DEL_CUE - 1);
+    return [cuenta, primeras].filter(Boolean).join(' ').trim();
+}
+
+/**
+ * El comentario del marcador de entrada: la nota, el separador y lo que se dijo.
+ *
+ * **El separador va con sus dos espacios y el resultado NO se recorta.** Parece
+ * detalle y no lo es: el parser de post busca literalmente " - " para saber dónde
+ * termina la nota del director y empieza el habla, y una toma sin nota deja el
+ * comentario empezando en " - 3, 2, 1…". Recortarlo lo dejaba en "- 3, 2, 1…",
+ * sin separador que encontrar, y de ahí en adelante el conteo pasaba a ser parte
+ * del cue: `hasCount` en falso y el motor de cortes sin saber dónde arranca la
+ * clase. Salió en la simulación —las once tomas de una clase entera con
+ * `conteo:false`— porque las pruebas de antes usaban una toma CON nota, que es el
+ * caso raro. La herramienta del director escribe " - " igual, con su espacio.
+ */
+function comentarioDeEntrada(toma) {
+    return `${limpio(toma.comentario)} - ${cueDeEntrada(toma)}`;
+}
+
+/** El cue de salida: las últimas palabras dichas, que es lo que el CD escribe. */
+function cueDeSalida(toma) {
+    const palabras = toma.palabras || [];
+    const desde = Math.max(0, palabras.length - PALABRAS_DEL_CUE);
+    return textoDe(palabras, desde, palabras.length - 1);
+}
+
+/**
+ * Las tomas que van al XML: las que se quedaron y tienen los dos bordes.
+ *
+ * Una toma descartada no se escribe, que es el sentido de descartarla. Una sin
+ * cerrar tampoco: el parser la aceptaría y avisaría `bloque_sin_out`, pero acá
+ * todavía se puede cerrar a mano, así que es mejor no escribirla que escribir un
+ * bloque que el editor va a tener que arreglar en post.
+ */
+function tomasQueQuedan(estado) {
+    return (estado.tomas || []).filter(t => !t.descartada && t.inMs != null && t.outMs != null);
+}
+
+function tomaAbierta(estado) {
+    return (estado.tomas || []).find(t => t.outMs == null) || null;
+}
+
+/**
+ * Dónde termina una toma que se cierra ahora: el FINAL de su última palabra.
+ *
+ * Es una función porque son tres los sitios que cierran —"Pausa", el botón y
+ * "Terminar"— y cuando cada uno hacía la cuenta a su manera, uno usaba el
+ * arranque de la palabra: la toma que el profesor olvidó cerrar perdía su última
+ * palabra en el XML. Si no dijo ninguna, termina donde diga quien llama.
+ */
+function finDeToma(toma, siNoDijoNada) {
+    const palabras = toma.palabras || [];
+    const ultima = palabras[palabras.length - 1];
+    return ultima ? (ultima.hasta || ultima.t) : siNoDijoNada;
+}
+
+/* ─── Las claquetas ──────────────────────────────────────────────────────
+ *
+ * En una clase en vivo se claquetea varias veces, así que acá no se elige UNA:
+ * se mantiene la lista. Lo único que hay que resolver es que la misma claqueta
+ * no entre dos veces, y eso pasa seguido porque llega por tres puertas a la vez:
+ * el aplauso que oye `golpe.js` en el PCM, la palabra "claqueta" que oye el
+ * ciclo de señales, y el editor que aprieta la tecla.
+ */
+
+/**
+ * Cuánto tienen que separarse dos claquetas para ser dos y no la misma.
+ *
+ * Cinco segundos. Por abajo, las tres puertas llegan dentro de ese margen: el
+ * editor aprieta la tecla mientras la escucha, el aplauso suena mientras se dice
+ * "claqueta 3", y el ciclo de señales confirma el golpe leyendo cuatro segundos
+ * a cada lado (`MARGEN_CLAQUETA_MS` en `grabacion.js`). Por arriba, dos
+ * claquetas de verdad nunca están tan cerca: entre una y la siguiente hay una
+ * toma, o por lo menos el tiempo de reacomodar una cámara.
+ */
+const MISMA_CLAQUETA_MS = 5000;
+
+/**
+ * Cuál de dos orígenes manda para cada cosa.
+ *
+ * No es "gana uno entero", porque cada puerta sabe algo distinto y ninguna sabe
+ * todo:
+ *
+ * - **El `ms` lo pone el golpe.** Es un pico en la onda, medido sobre la
+ *   posición en el WAV: cae exactamente donde suena. Lo que diga el editor está
+ *   a su tiempo de reacción, y lo que diga la voz está al arranque de una
+ *   palabra que se dijo antes o después del aplauso.
+ * - **La frase la pone la voz.** El golpe no sabe qué se dijo; el número de la
+ *   claqueta ("claqueta 3, clase 3") solo aparece en el texto, y es lo que deja
+ *   emparejarla con lo que el editor escribió en la pizarra.
+ * - **`confirmada` es un o-lógico.** Cada puerta confirma por su cuenta: el
+ *   editor por haber estado mirando, la voz por haber dicho la palabra, el golpe
+ *   por las dos cosas juntas. Que una no confirme no desconfirma a la otra.
+ */
+function fundir(vieja, nueva) {
+    const deGolpe = nueva.origen === 'golpe' ? nueva : (vieja.origen === 'golpe' ? vieja : null);
+    return {
+        ...vieja,
+        ms: deGolpe ? deGolpe.ms : Math.min(vieja.ms, nueva.ms),
+        paredMs: deGolpe ? deGolpe.paredMs : (vieja.paredMs || nueva.paredMs),
+        frase: limpio(nueva.frase) || limpio(vieja.frase),
+        confirmada: Boolean(vieja.confirmada || nueva.confirmada),
+        // Los dos, separados por coma, porque saberlo cambia cuánto se le cree:
+        // una claqueta que solo vio el editor no tiene aplauso con el que
+        // alinear la onda, y una que solo oyó la voz tampoco.
+        origen: vieja.origen === nueva.origen
+            ? vieja.origen
+            : [...new Set(vieja.origen.split(',').concat(nueva.origen))].sort().join(',')
+    };
+}
+
+/**
+ * Anota una claqueta, fundiéndola con la que ya esté a menos de cinco segundos.
+ *
+ * Devuelve la que quedó en la lista y si fue nueva, que es lo que quien llama
+ * necesita para no avisar dos veces de la misma (`grabacion.js`).
+ *
+ * La lista se mantiene ORDENADA por `ms` y se renumera después de cada cambio:
+ * `n` es el número con el que la claqueta se nombra en el XML y en la pantalla,
+ * y tiene que decir el orden en que sonaron, no el orden en que la app se enteró.
+ * Un golpe cuyo texto tarda tres segundos en leerse puede entrar después de uno
+ * posterior.
+ *
+ * @param {object} estado el de la sesión, se muta
+ * @param {object} claqueta { ms, paredMs, frase, confirmada, origen }
+ * @returns {{claqueta: object, nueva: boolean}}
+ */
+function anotarClaqueta(estado, claqueta) {
+    const lista = estado.claquetas || (estado.claquetas = []);
+    const entra = {
+        ms: Number(claqueta.ms),
+        paredMs: claqueta.paredMs != null ? Number(claqueta.paredMs) : null,
+        frase: limpio(claqueta.frase),
+        confirmada: Boolean(claqueta.confirmada),
+        origen: claqueta.origen || 'editor'
+    };
+
+    const cerca = lista.find(c => Math.abs(c.ms - entra.ms) < MISMA_CLAQUETA_MS);
+    if (cerca) {
+        Object.assign(cerca, fundir(cerca, entra));
+        renumerar(estado);
+        return { claqueta: cerca, nueva: false };
+    }
+
+    entra.n = ++estado.proximaClaqueta;
+    lista.push(entra);
+    renumerar(estado);
+    return { claqueta: entra, nueva: true };
+}
+
+/** Las claquetas por orden de reloj, con su número puesto de nuevo. */
+function renumerar(estado) {
+    const lista = estado.claquetas || [];
+    lista.sort((a, b) => a.ms - b.ms);
+    lista.forEach((c, i) => { c.n = i + 1; });
+    estado.proximaClaqueta = lista.length;
+    return lista;
+}
+
+/**
+ * La claqueta de referencia: la primera, que es contra la que el editor
+ * correlaciona los archivos de Premiere.
+ *
+ * Es una función y no un campo guardado porque puede cambiar: un golpe que se
+ * lee tarde y cae antes que todas pasa a ser la referencia, y un campo escrito
+ * al arrancar diría lo de antes.
+ */
+function claquetaDeReferencia(estado) {
+    return (estado.claquetas || [])[0] || null;
+}
+
+function quitarClaqueta(estado, n) {
+    estado.claquetas = (estado.claquetas || []).filter(c => c.n !== n);
+    renumerar(estado);
+    return estado.claquetas;
+}
+
+/**
+ * Mete palabras nuevas y abre o cierra tomas según lo que se dijo.
+ *
+ * Las palabras llegan del ciclo de señales, que es rápido y de calidad mediana:
+ * lo único que se le cree es que una señal SONÓ y a qué hora. El texto de la
+ * toma no se arma con esto — se rehace entero al cerrar, con el modelo grande
+ * (`oir.escuchar`) — así que acá las palabras se guardan para poder mostrar algo
+ * mientras se habla y se reemplazan después.
+ *
+ * **Se le pasa la ventana ENTERA, con lo que ya se había oído.** Antes quien
+ * llamaba recortaba las palabras viejas antes de entrar, y eso deshacía el solape
+ * justo cuando servía: un conteo a caballo entre dos pasadas llegaba completo en
+ * la segunda, el recorte le sacaba el "3" y el "2" por viejos, quedaba "uno"
+ * suelto y la toma no se abría. En el audio del curso eso perdió dos tomas del
+ * primer minuto. Ahora los duplicados se descartan acá, donde se sabe qué es una
+ * palabra repetida y qué es una señal repetida.
+ *
+ * @param {object} estado el de la sesión (de `estadoNuevo`), se muta
+ * @param {Array} palabras [{t, texto}] la ventana entera, en orden
+ * @returns {Array} qué pasó, para poder contarlo en la pantalla y en el registro
+ */
+function aplicarSenales(estado, palabras) {
+    const nuevas = (palabras || []).filter(w => w && w.t != null);
+    if (!nuevas.length) return [];
+
+    const yaVista = marca => {
+        const previa = estado.ultimaSenal[marca.tipo];
+        return previa != null && Math.abs(nuevas[marca.hasta].t - previa) < MISMA_SENAL_MS;
+    };
+
+    const marcas = senales(nuevas).filter(m => !yaVista(m));
+    const desdePalabra = estado.ultimaPalabraMs;
+    const eventos = [];
+    let cursor = 0;
+
+    const guardar = (hasta) => {
+        const toma = tomaAbierta(estado);
+        if (!toma) { cursor = hasta; return; }
+        for (let i = cursor; i < hasta; i++) {
+            if (nuevas[i].t > desdePalabra) toma.palabras.push(nuevas[i]);
+        }
+        cursor = hasta;
+    };
+
+    for (const marca of marcas) {
+        estado.ultimaSenal[marca.tipo] = nuevas[marca.hasta].t;
+
+        if (marca.tipo === 'claqueta') {
+            // Las palabras de la claqueta se guardan como cualquier otra: si hay
+            // una toma abierta, "claqueta 4" se dijo adentro de ella y sacarlo
+            // del transcript sería mentir sobre lo que se oye en el audio. La
+            // relectura con el modelo grande lo vuelve a escribir igual.
+            guardar(marca.hasta + 1);
+            // La frase entera de alrededor y no la palabra sola: es de donde
+            // sale el número ("claqueta 4, clase 4"), que es lo que el editor
+            // busca para emparejarla con la pizarra.
+            const anotada = anotarClaqueta(estado, {
+                ms: nuevas[marca.desde].t,
+                paredMs: Date.now(),
+                frase: textoDe(nuevas, Math.max(0, marca.desde - 2), marca.hasta + 3),
+                confirmada: true,
+                origen: 'voz'
+            });
+            if (anotada.nueva) {
+                eventos.push({ tipo: 'claqueta', claqueta: anotada.claqueta.n, por: marca.por });
+            }
+            continue;
+        }
+
+        guardar(marca.desde);
+
+        if (marca.tipo === 'abre') {
+            // Con una toma abierta, la cuenta no es señal: es clase. Nunca hay
+            // dos notas abiertas a la vez, y lo que cierra es "Pausa" o el botón.
+            //
+            // Antes esto cerraba la toma y abría otra, y el día que el profesor
+            // contó "3, 2, 1" mientras EXPLICABA la cuenta ("…porque dije 3, 2,
+            // 1") le partió la toma en dos: una huérfana de tres segundos y la
+            // buena al lado. Del lado de adentro de una toma no se puede saber
+            // si la cuenta es una señal o alguien diciendo unos números, y entre
+            // partir una toma buena y dejar correr una que ya estaba corriendo,
+            // lo segundo se arregla mirando y lo primero no.
+            //
+            // El cursor se queda donde está a propósito: los números vuelven a
+            // ser palabras y el próximo `guardar` los mete en la toma, que es
+            // donde el profesor los dijo.
+            if (tomaAbierta(estado)) continue;
+            const toma = {
+                id: (estado.proximaToma = estado.proximaToma + 1),
+                vista: VISTA_POR_DEFECTO,
+                comentario: '',
+                cuenta: textoDe(nuevas, marca.desde, marca.hasta),
+                // El IN cae en la palabra que sigue a la señal, no en la señal:
+                // el conteo no es clase. Si la señal fue lo último que llegó,
+                // queda en su final y la primera palabra que venga lo corrige.
+                inMs: nuevas[marca.hasta + 1] ? nuevas[marca.hasta + 1].t : nuevas[marca.hasta].t,
+                outMs: null,
+                descartada: false,
+                cerradaSola: false,
+                palabras: [],
+                comentarios: []
+            };
+            estado.tomas.push(toma);
+            eventos.push({ tipo: 'abierta', toma: toma.id, por: marca.por });
+            cursor = marca.hasta + 1;
+            continue;
+        }
+
+        // Cierra. El OUT va ANTES de "Pausa": la señal tampoco es clase.
+        const toma = tomaAbierta(estado);
+        if (toma) {
+            toma.outMs = finDeToma(toma, nuevas[marca.desde].t);
+            eventos.push({ tipo: 'cerrada', toma: toma.id });
+        }
+        cursor = marca.hasta + 1;
+    }
+
+    guardar(nuevas.length);
+    // Hasta acá se oyó, haya o no toma abierta: una palabra que se dijo entre dos
+    // tomas no es de nadie, pero tampoco puede volver a aparecer en la siguiente
+    // ventana como si fuera nueva.
+    estado.ultimaPalabraMs = Math.max(desdePalabra, nuevas[nuevas.length - 1].t);
+    return eventos;
+}
+
+/** Cuántas palabras del arranque se comparan para ver si una toma repite otra. */
+const PALABRAS_DEL_ARRANQUE = 8;
+
+/**
+ * Cuánto tienen que compartir dos arranques para decir que uno repite al otro.
+ *
+ * **No se comparan iguales, se comparan parecidos**, y eso lo decidió el material
+ * real. Los tres intentos del mismo arranque en la clase 2 salieron así:
+ *
+ *   "1. Quiero que hagas un ejercicio mental. Piensa en el…"
+ *   "que hagas un ejercicio piensa en el prom que utilizaste…"
+ *   "Uno, quiero que hagas un ejercicio. Piensa en el PROM que…"
+ *
+ * Son el mismo arranque y ninguno empieza igual que otro: el conteo le deja
+ * pegado un "1." o un "Uno," al primero, y a veces se come la primera palabra.
+ * Comparando prefijos exactos no se reconocía ninguno.
+ *
+ * Con seis de ocho palabras compartidas los tres se reconocen entre sí, y el
+ * arranque de otro tema del mismo profesor ("Peor aún, qué sucede si algún
+ * desarrollador…") comparte una sola.
+ */
+const PARECIDO_MINIMO = 0.6;
+
+/**
+ * Qué tomas repiten el arranque de otra anterior.
+ *
+ * No descarta nada — descartar es del editor y es explícito, porque a veces se
+ * retoma para AGREGAR y no para repetir. Esto solo lo deja dicho.
+ *
+ * Hace falta por lo que se ve en el material real: en la clase 2 del curso el
+ * profesor empezó "Quiero que hagas un ejercicio…" SIETE veces seguidas, y el
+ * director de contenido se quedó con una. Sin esta marca, decidir eso obliga a
+ * leer once transcripciones parecidas para descubrir que diez dicen lo mismo; con
+ * ella es mirar una línea.
+ *
+ * Se comparan las primeras palabras y no todo el texto porque un ensayo se corta
+ * a la mitad: lo que dos intentos del mismo arranque tienen en común es
+ * justamente el arranque.
+ *
+ * Devuelve el resultado en vez de escribirlo sobre las tomas: se recalcula cada
+ * vez que se mira el estado, porque el texto de una toma cambia cuando se la
+ * relee o se le mueve un borde, y un camino de lectura que escribe es lo que
+ * vuelve irreproducible el próximo error.
+ *
+ * @returns {Map<number, number>} id de la toma → id de la que repite
+ */
+function repeticiones(tomas) {
+    const repite = new Map();
+    const vistos = [];
+
+    for (const toma of tomas || []) {
+        const arranque = new Set((toma.palabras || [])
+            .slice(0, PALABRAS_DEL_ARRANQUE)
+            .map(w => norm(w.texto))
+            .filter(Boolean));
+
+        // Con dos o tres palabras cualquier cosa se parece a cualquier cosa, y
+        // decir "repite" donde no se sabe es peor que no decir nada.
+        if (arranque.size < 5) continue;
+
+        // Al primero que se le parezca, no al último: si el tercer intento
+        // apuntara al segundo, habría que seguir el hilo para llegar al original.
+        const previo = vistos.find(v => parecido(arranque, v.arranque) >= PARECIDO_MINIMO);
+        if (previo) repite.set(toma.id, previo.id);
+        else vistos.push({ id: toma.id, arranque });
+    }
+    return repite;
+}
+
+/** Qué parte de las palabras de un arranque están también en el otro. */
+function parecido(a, b) {
+    let juntas = 0;
+    for (const palabra of a) if (b.has(palabra)) juntas++;
+    return juntas / Math.max(a.size, b.size);
+}
+
+/**
+ * Una lectura con orillas, repartida por los bordes de la toma.
+ *
+ * Lo que se lee al cerrar una toma es un poco más ancho que la toma: unos segundos
+ * de cada lado, para que el editor pueda mover un borde viendo la frase que quedó
+ * afuera (ver `ORILLA_MS` en `grabacion.js`). Acá se decide qué es de la toma y qué
+ * es orilla, que es la misma frontera que mueve `moverBorde` y por eso vive al lado.
+ *
+ * El OUT es exclusivo, como en todo lo demás: una palabra que empieza justo en el
+ * OUT ya no es de la toma. Lo que queda en `palabras` es exactamente lo que había
+ * antes de que existieran las orillas —lo que va al XML y lo que se compara para
+ * ver si una toma repite a otra—, así que nada de lo que se escribe cambia.
+ */
+function repartir(palabras, toma) {
+    const lista = palabras || [];
+    return {
+        antes: lista.filter(w => w.t < toma.inMs),
+        palabras: lista.filter(w => w.t >= toma.inMs && w.t < toma.outMs),
+        despues: lista.filter(w => w.t >= toma.outMs)
+    };
+}
+
+/**
+ * Mueve un borde a la hora de una palabra.
+ *
+ * Son las dos líneas del texto —la azul del IN y la roja del OUT— arrastradas
+ * hasta el hueco entre dos palabras, y el clic derecho ("cortar el OUT acá") para
+ * los saltos largos. Hace falta porque se retoma muchas veces con lo último que se
+ * dijo, así que el final bueno es una palabra concreta y no el momento en que
+ * alguien dijo "Pausa".
+ *
+ * @returns {boolean} si se pudo mover
+ */
+function moverBorde(toma, cual, paredMs) {
+    if (!toma || paredMs == null) return false;
+    if (cual === 'in') {
+        if (toma.outMs != null && paredMs >= toma.outMs) return false;
+        toma.inMs = paredMs;
+        return true;
+    }
+    if (toma.inMs != null && paredMs <= toma.inMs) return false;
+    toma.outMs = paredMs;
+    return true;
+}
+
+/* ─── Los cambios que se resuelven con lo que ya está escrito ────────────
+ *
+ * Acá y no en `grabacion.js` porque estos cambios se hacen sobre la clase que se
+ * está grabando y también sobre una que ya terminó, y las dos tienen que
+ * escribir exactamente lo mismo: si divergieran, el mismo gesto daría un XML
+ * distinto según cuándo se hizo.
+ */
+
+/** @param {object} c { desdeMs, hastaMs, texto, comentario } */
+function comentar(toma, c) {
+    toma.comentarios = (toma.comentarios || []).concat([{
+        desdeMs: Number(c.desdeMs),
+        hastaMs: Number(c.hastaMs),
+        texto: String(c.texto || ''),
+        comentario: String(c.comentario || '')
+    }]);
+}
+
+function descomentar(toma, indice) {
+    toma.comentarios = (toma.comentarios || []).filter((_x, i) => i !== indice);
+}
+
+/**
+ * Un borde corrido sin volver a oír: se reparten otra vez las palabras que hay.
+ *
+ * **Mover un borde no necesita el audio, y esa es la razón de que las orillas
+ * existan.** Al cerrar una toma se lee un tramo MÁS ANCHO que ella y lo que
+ * sobra de cada lado se guarda al lado del XML (`repartir` acá, `sidecar` en
+ * `notas-xml.js`). O sea que el texto de un rango más ancho que la toma ya está
+ * en el disco: correr el borde dentro de ese rango es unir las tres listas,
+ * mover la frontera y volver a repartir. Sale al instante y da exactamente lo
+ * mismo que daría releer, porque son las mismas palabras.
+ *
+ * Fuera de ese rango no hay texto que respalde el borde. Escribirlo igual sería
+ * peor que no dejarlo: el transcript y el cue de salida seguirían diciendo lo de
+ * antes mientras el marcador dice otra cosa, y ese cue es lo que `align.js` busca
+ * en el Live-Mix para reanclar el bloque. Así que se planta, y el camino para ir
+ * más lejos es "Regenerar": relee cada toma con orillas nuevas alrededor de los
+ * bordes de ahora, y el borde vuelve a tener doce segundos por delante.
+ *
+ * Un borde que cruza al otro no es un error de quien llama sino un arrastre que
+ * se pasó, así que no explota: no se mueve y la línea vuelve a su sitio sola al
+ * repintar, igual que en la clase en curso.
+ */
+function moverBordeGuardado(toma, cual, paredMs) {
+    const guardadas = (toma.antes || []).concat(toma.palabras || [], toma.despues || []);
+    const ultima = guardadas[guardadas.length - 1];
+    if (!guardadas.length || !Number.isFinite(paredMs) ||
+        paredMs < guardadas[0].t || paredMs > ultima.t) {
+        throw new Error('Ese borde cae fuera del texto que quedó guardado. ' +
+            'Corrilo hasta donde llega el gris y usá "Regenerar": relee la toma ' +
+            'del audio y deja otros segundos de contexto para seguir.');
+    }
+    if (!moverBorde(toma, cual, paredMs)) return;
+    Object.assign(toma, repartir(guardadas, toma));
+}
+
+/**
+ * Aplica un cambio que se resuelve con lo que ya está escrito, sin volver a oír.
+ *
+ * **Esta función es la línea que separa lo que se puede hacer sobre una clase ya
+ * terminada de lo que no**, y por eso es una sola: si hubiera dos listas de tipos
+ * en dos archivos, el mismo gesto daría un XML distinto según cuándo se hizo.
+ *
+ * Antes contestaba un booleano y quien llamaba inventaba el mensaje, porque el
+ * motivo era siempre el mismo: "eso necesita el audio". Dejó de serlo. Mover un
+ * borde entró —las orillas están guardadas, así que es repartir de nuevo lo
+ * mismo—, y lo que queda afuera queda afuera por motivos distintos entre sí:
+ * `reabrir` no tiene sentido sin el ciclo de señales, un borde puede caer donde
+ * no hay texto, y un tipo que no existe es un error de programa. Así que lo que
+ * contesta es una excepción con el motivo, que vive donde vive la regla.
+ *
+ * @throws si el cambio no se puede hacer sin volver a oír el audio
+ */
+function aplicar(toma, cambio) {
+    const c = cambio || {};
+    switch (c.tipo) {
+        case 'vista':
+            toma.vista = c.vista;
+            return;
+        case 'nota':
+            toma.comentario = String(c.texto || '');
+            return;
+        case 'descartar':
+            toma.descartada = Boolean(c.descartada);
+            return;
+        case 'comentar':
+            comentar(toma, c);
+            return;
+        case 'borrar-comentario':
+            descomentar(toma, c.indice);
+            return;
+        case 'borde':
+            moverBordeGuardado(toma, c.borde, Number(c.paredMs));
+            return;
+        case 'reabrir':
+            // Reabrir es dejar la toma sin OUT para que el ciclo de señales le
+            // siga metiendo palabras. Con la clase cerrada no hay ciclo, y una
+            // toma sin OUT no se escribe (`tomasQueQuedan`): el gesto la haría
+            // desaparecer del XML, que es lo último que espera quien lo pide.
+            // Lo que quiere decir es "que la toma siga un poco más", y eso ahora
+            // es correr el OUT.
+            throw new Error('Reabrir es de la clase que se está grabando. Con la ' +
+                'clase cerrada, una toma sin OUT no llega al XML: para que termine ' +
+                'más adelante, arrastrá la línea roja.');
+        default:
+            throw new Error(`Cambio sin definir: ${c.tipo}`);
+    }
+}
+
+module.exports = {
+    CAMARA,
+    PANTALLA,
+    VISTAS,
+    VISTA_POR_DEFECTO,
+    MAPA_DE_VISTAS,
+    vistaLeida,
+    aplicar,
+    estadoNuevo,
+    senales,
+    aplicarSenales,
+    repeticiones,
+    tomaAbierta,
+    finDeToma,
+    anotarClaqueta,
+    renumerar,
+    quitarClaqueta,
+    claquetaDeReferencia,
+    fundir,
+    MISMA_CLAQUETA_MS,
+    CLAQUETA,
+    repartir,
+    moverBorde,
+    tomasQueQuedan,
+    limpio,
+    comentarioDeEntrada,
+    cueDeSalida
+};

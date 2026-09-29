@@ -1,0 +1,13 @@
+node_modules/
+dist/
+# Los binarios y los modelos de Whisper se arman con tools/bundle-binaries.sh:
+# son varios GB y no son código.
+bin/
+*.log
+.DS_Store
+tests/tmp/
+# Lo que escriben los arneses de desarrollo: la maqueta con datos falsos y las
+# capturas que se sacan para mirar el diseño. Se regeneran solas y pesan megas;
+# lo que hay que revisar es la pantalla, no el PNG.
+.maqueta/
+.nt-*/

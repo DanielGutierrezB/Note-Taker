@@ -1,0 +1,1264 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Note Taker — el CSS de la app.
+
+   TRES TRABAJOS, TRES VOCES. La app hace tres cosas y hay que poder
+   distinguirlas de un vistazo: DECIDIR (empezar una sesión, elegir la vista de
+   una toma), ESCANEAR (la lista de tomas y claquetas mientras la clase corre) y
+   CONFIRMAR (estados, timecodes, contadores).
+
+   El sistema es el de HyperPremiere v1.6.0, que se construyó midiendo y no
+   eligiendo: TRES niveles de voz hechos con PESO y COLOR, con el tamaño casi
+   quieto (13 / 12 / 11 px). El tamaño no puede ser el canal de jerarquía en
+   listas densas: el rango útil entre el techo legible y el piso son tres pasos
+   de 1 px, y un paso de 1 px no se lee como jerarquía. Es el mismo modelo que
+   usa Apple en el escritorio, donde Body y Headline miden LOS DOS 13 pt y solo
+   cambian de peso.
+
+   LO QUE CAMBIA RESPECTO DE HYPERPREMIERE es que allá el panel mide 400 px de
+   ancho y acá la ventana mide 1180. Eso habilita DOS elementos grandes y no más
+   (NN/g: «Limit how many elements are big to a maximum of 2»), y acá son los
+   dos que se miran de lejos mientras se toma nota con el profesor hablando: el
+   TIMECODE de la sesión y el ESTADO de la toma abierta. Todo lo demás se queda
+   en 13/12/11.
+
+   LA GRAMÁTICA, que es lo que hace la interfaz autoexplicativa:
+
+     estado    = guarda de color a la izquierda de la fila + LA PALABRA en una
+                 pastilla (radio 999, sin borde). Nunca solo color: WCAG 1.4.1.
+     acción    = rectángulo con borde. Pastilla es información, rectángulo es
+                 clic, y no hay una sola excepción en toda la app.
+     acento    = «acá va tu atención AHORA», y nada más: el foco del teclado, la
+                 acción principal de la pantalla (una por pantalla) y lo que
+                 está corriendo. El hover es una capa, no un cambio de color.
+
+   FUENTES (cada regla cita la suya donde hace falta):
+   · WCAG 2.2 — SC 1.4.3 Contrast (Minimum), 1.4.11 Non-text Contrast,
+     1.4.1 Use of Color, 2.5.8 Target Size (Minimum).
+   · Nielsen Norman Group — «Visual Hierarchy in UX: Definition» (Gordon, 2021).
+   · Apple HIG — macOS built-in text styles.
+   · Material Design — «Applying density», «Spacing methods», «State layers».
+   · IBM Carbon — spacing scale, productive type sets, data-table row sizes.
+
+   Los números se verifican con `node tools/auditar.js`, `tools/medir-botones.js`
+   y `tools/contrastes.js` sobre la maqueta. Antes de "limpiar" un valor de este
+   archivo, volvé a medir con ésas.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   0. LA FUENTE
+
+   Empaquetada y no traída de Google: la app graba una clase en vivo y no puede
+   depender de que haya internet en el aula. Son 94 KB en dos archivos (latin y
+   latin-ext), variables en el eje de peso, así que los tres pesos que usa el
+   sistema salen de ahí sin bajar tres archivos.
+   ────────────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: block;
+  src: url('../fonts/DMSans-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: block;
+  src: url('../fonts/DMSans-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   1. LOS TOKENS
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Superficies: CUATRO, y se leen como niveles ───────────────────────
+     En oscuro la separación por tono es un canal pobre, así que el ramal se
+     abre lo que aguanta (surface/base = 1.157, overlay/base = 1.325) y el
+     agrupamiento se apoya en espacio y hairlines, que es lo que Material llama
+     «explicit grouping: outlines, dividers and shadows». */
+  --bg-base: #0f1115;          /* el lienzo y todo el cromo fijo */
+  --bg-surface: #1c2027;       /* filas, tarjetas, chips */
+  --bg-surface-hover: #22272f;
+  --bg-inset: #090a0d;         /* campos de texto, el transcript, la barra */
+  --bg-overlay: #252b33;       /* Ajustes, Diagnóstico, los menús */
+
+  /* ── Texto: TRES niveles, y el tercero es el piso ──────────────────────
+     NN/g: «Use no more than 3 contrast variations for complex designs. If
+     everything is contrasted, then nothing stands out.» Los tres, medidos
+     contra las cuatro superficies (peor caso) con `tools/contrastes.js`:
+       primary 12.13:1 · secondary 6.71:1 · muted 4.83:1
+     No hay un cuarto nivel, y `--text-muted` NO es "el que casi no se ve": es
+     el tercer nivel y pasa AA. */
+  --text-primary: #e9edf2;
+  --text-secondary: #a8b3c1;
+  --text-muted: #8e97a3;
+
+  /* ── Estados: tres tonos, y el cuarto canal es la FORMA ────────────────
+     Verde «listo», ámbar «atención», rojo «error». Los tres pasan 4.5:1 sobre
+     las cuatro superficies.
+
+     Y NO hay un cuarto tono, a propósito: cuatro matices en el arco 0°–150° no
+     se distinguen de forma confiable a 11-13 px —y menos con deuteranopía,
+     donde rojo, naranja y ámbar colapsan—. WCAG 1.4.1 pide justamente no
+     depender del color solo. Así que la separación real la hace la FORMA: los
+     estados son pastillas de texto, las acciones son botones con borde. */
+  --ok: #3ed890;
+  --warn: #f5b43c;
+  --error: #ff8a8a;
+
+  /* ── El acento, con UN significado ─────────────────────────────────────
+     «Acá va tu atención ahora». Tres usos y ni uno más: el foco del teclado, la
+     acción principal de la pantalla y lo que está corriendo (la toma abierta,
+     la relectura en vuelo). El hover es una capa de superficie, no un cambio
+     de color: pintar de acento cada cosa por la que pasa el mouse convierte
+     cualquier movimiento del puntero en un semáforo. */
+  --accent: #7ab4ff;
+  --accent-8: rgba(122, 180, 255, 0.08);
+  --accent-14: rgba(122, 180, 255, 0.14);
+
+  /* Las capas de estado, de Material («State layers»: hover +8 %, press +12 %). */
+  --layer-hover: rgba(255, 255, 255, 0.08);
+  --layer-press: rgba(255, 255, 255, 0.12);
+
+  /* Las tintas que van ENCIMA de un relleno de color. Son cuatro y no una
+     porque cada una se calcula contra su propio fondo: un mismo gris oscuro
+     daría 4:1 sobre uno y 9:1 sobre otro. */
+  --on-accent: #0a1220;
+  --on-ok: #06180f;
+  --on-warn: #2a1e00;
+  --on-error: #330909;
+
+  /* ── Líneas: dos, y una sola pide 3:1 ──────────────────────────────────
+     WCAG 1.4.11 pide 3:1 para «visual information required to identify user
+     interface components and states», y el propio documento aclara que un
+     botón CON etiqueta no necesita borde para identificarse. Un campo de texto
+     vacío, en cambio, no tiene nada más que su borde. Entonces:
+     `--border-field` (campos, desplegables, anillo de foco, seleccionado) a
+     3.37:1 medido; `--hairline` (divisores, bordes de tarjeta y de botón)
+     decorativa, a 1.44:1. Poner TODO a 3:1 haría que la retícula compitiera
+     con el contenido. */
+  --hairline: #2b3138;
+  --border-field: #737c86;
+
+  /* ── Retícula de 4 px ──────────────────────────────────────────────────
+     Material: «Padding… is measured in increments of 8dp or 4dp». Carbon:
+     «multiples of two, four, and eight». Seis valores, y lo que se escriba de
+     acá en adelante sale de la lista. */
+  --sp-1: 2px;
+  --sp-2: 4px;
+  --sp-3: 8px;
+  --sp-4: 12px;
+  --sp-5: 16px;
+  --sp-6: 24px;
+
+  /* ── Alto de fila ──────────────────────────────────────────────────────
+     32 px, y tiene DOS derivaciones independientes que dan el mismo número:
+     · es el `sm` de la escala de filas de Carbon (xs 24 / sm 32 / md 40), la
+       que usan sus tablas de datos;
+     · es la fila más chica que puede contener un control que cumpla WCAG 2.2
+       SC 2.5.8 (24×24 px) con 4 px de aire arriba y abajo.
+     Es el alto de una fila de toma plegada y de una fila de claqueta, que son
+     las dos que se repiten veinte veces en una clase. */
+  --row: 32px;
+  --row-xs: 24px;
+  --target-min: 24px;          /* SC 2.5.8, AA */
+
+  /* ── Radios: tres, por función ─────────────────────────────────────────
+     4 px para controles (un radio de 6 en un botón de 24 px de alto es el 25 %
+     de su altura y se lee blando), 6 px para contenedores, y 999 px para las
+     pastillas de estado, que es la forma que las distingue de las acciones. */
+  --radius: 6px;               /* contenedores */
+  --radius-sm: 4px;            /* controles */
+
+  --ease: 120ms ease-out;      /* Doherty: por debajo de 400 ms la UI no espera */
+
+  /* En oscuro, una sombra negra sobre una superficie casi negra es puro costo.
+     Queda la fuerte, y solo donde de verdad separa algo: los paneles flotantes. */
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(0, 0, 0, 0.5);
+
+  /* ── Los colores de las cinco vistas ───────────────────────────────────
+     NO son los `colorDeMarcador` que van al XML: son los de la PANTALLA, y son
+     dos preguntas distintas (el porqué está en `VISTAS`, en
+     `engine/notas-vivo.js`). Estos están corridos de los de Class Cut para que
+     la etiqueta pase 4.5:1 sobre `--bg-surface`, medido con
+     `tools/contrastes.js`; el entero que viaja al XML no cambió. */
+  --vista-pv: #7fb2e8;
+  --vista-r: #e88bb0;
+  --vista-s: #b5cf6b;
+  --vista-mg: #5fd9c8;
+  --vista-x2: #c7a9e0;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* `[hidden]` gana siempre. Sin esto, cualquier regla con `display` lo pisa —los
+   botones son `inline-flex`— y un elemento escondido se sigue viendo. Es un
+   error que no da ningún síntoma al escribirlo: la propiedad se pone bien y el
+   elemento queda ahí. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   2. TIPOGRAFÍA — tres tamaños, tres pesos
+
+   La escala es 13 / 12 / 11 px y NO es una escala modular: en listas densas el
+   rango útil da tres pasos de 1 px y un paso de 1 px no se lee. Los tres son
+   además los tres del escritorio de Apple —Body 13/16, Callout 12/15,
+   Subheadline 11/14— y el 12 es el `label-01` de Carbon.
+
+   NADA POR DEBAJO DE 11: la densidad se consigue recortando padding y no texto
+   («Higher density is typically applied by decreasing the top and bottom
+   padding»; «Text size shouldn't change as the container size scales»).
+
+   Pesos: 400 / 500 / 600. Sin 300 (los trazos finos se adelgazan todavía más
+   sobre fondo oscuro) y sin 700.
+   ────────────────────────────────────────────────────────────────────────── */
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Los tres niveles de voz ──────────────────────────────────────────────
+   Nivel 1 — IDENTIDAD DE FILA: lo que buscás cuando escaneás. 13 / 600 /
+     --text-primary. Uno solo por fila.
+   Nivel 2 — ESTADO Y DATO: lo que te dice qué pasó. 12 / 500 / color semántico
+     o --text-secondary. Uno por fila, siempre en la misma columna.
+   Nivel 3 — METADATO: lo que confirmás después. 11 / 400 / --text-muted. */
+
+.v1 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.v2 {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.v3 {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* Los DOS elementos grandes de toda la app, y no hay un tercero.
+   El timecode se mira de lejos mientras se toma nota; el estado de la toma
+   abierta es lo único que hay que poder confirmar sin apartar la vista del
+   profesor. */
+.grande-tc {
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.grande-estado {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+/* Números tabulares en todo lo que se lee en columna. Material,
+   «Similarity»: los elementos que representan lo mismo se alinean igual. Sin
+   esto el ancho de cada dígito cambia y la columna baila mientras el
+   cronómetro corre. */
+.tc,
+.num,
+.fila-toma time,
+.fila-claqueta time,
+.ses-dato {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.tc {
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+}
+
+/* Sin tracking. Un 0.1em en un rótulo de 11 px es tracking de display aplicado
+   a un caption: ensancha la palabra 1 px por letra. El HIG lo dice al revés y
+   bien: la fuente del sistema ajusta el tracking dinámicamente en cada tamaño. */
+button,
+input,
+select,
+textarea,
+label,
+.rotulo {
+  letter-spacing: 0;
+  font-family: inherit;
+}
+
+/* Cero MAYÚSCULAS. Un rótulo en versalitas es más lento de leer y no agrega
+   jerarquía que el peso no dé. */
+.rotulo {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: none;
+}
+
+strong,
+b {
+  font-weight: 600;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   3. EL ARMAZÓN: cromo fijo y contenido
+
+   La barra de arriba mide 48 px y es lo único fijo en Sesiones y en Cierre. En
+   En vivo hay una barra más —la de la sesión, 64 px— y ese es el techo: 112 px
+   de 840 son el 13 %, por debajo del 20 % que el criterio de aceptación pone.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: 48px;
+  flex: 0 0 48px;
+  /* 96 px a la izquierda es donde terminan los semáforos de macOS con
+     `titleBarStyle: hiddenInset`. */
+  padding: 0 var(--sp-5) 0 96px;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--hairline);
+  -webkit-app-region: drag;
+}
+
+.topbar button,
+.topbar select,
+.topbar input {
+  -webkit-app-region: no-drag;
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.marca .hp-ico {
+  color: var(--accent);
+}
+
+.crece {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.vista {
+  display: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.vista.es-activa {
+  display: flex;
+}
+
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--sp-5);
+}
+
+.columnas {
+  display: flex;
+  gap: var(--sp-5);
+  align-items: flex-start;
+}
+
+.columnas > .principal {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* El costado: claquetas, lo que se está oyendo y la cámara. A menos de 1000 px
+   baja debajo en vez de apretar la lista de tomas, que es lo que se escanea. */
+.columnas > .costado {
+  flex: 0 0 300px;
+  min-width: 0;
+}
+
+@media (max-width: 1000px) {
+  .columnas {
+    flex-direction: column;
+  }
+
+  .columnas > .costado {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   4. ACCIONES — el rectángulo con borde, y una sola primaria por pantalla
+   ────────────────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: var(--row-xs);
+  min-width: var(--target-min);
+  /* Un botón NUNCA se encoge. Es el orden de prioridad de toda la app escrito
+     en una línea: cuando el ancho aprieta, lo que cede es el nombre y la nota
+     —que recortan con puntos suspensivos y se siguen entendiendo— y no el
+     control, que encogido pinta su etiqueta afuera de su caja y se ve igual
+     que uno sano. Medido con `tools/medir-botones.js` a 900 px. */
+  flex: 0 0 auto;
+  padding: var(--sp-2) var(--sp-4);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--ease), border-color var(--ease);
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--bg-surface-hover);
+}
+
+.btn:active:not(:disabled) {
+  background: var(--layer-press);
+}
+
+.btn:disabled {
+  opacity: 0.38;              /* Material, disabled state */
+  cursor: not-allowed;
+}
+
+/* La acción principal de la pantalla. UNA por pantalla: es uno de los tres
+   usos del acento, y con dos ninguna de las dos dice «acá». */
+.btn-primario {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.btn-primario:hover:not(:disabled) {
+  background: #8ec0ff;
+  border-color: #8ec0ff;
+}
+
+/* Sin relleno ni borde, para lo que acompaña. Sigue siendo un rectángulo: lo
+   que lo separa de una pastilla es que no tiene radio de píldora. */
+.btn-tenue {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-tenue:hover:not(:disabled) {
+  background: var(--layer-hover);
+  color: var(--text-primary);
+}
+
+/* Destructiva: borra archivos del disco. El rojo va en el TEXTO y el borde, no
+   en el relleno: un botón rojo lleno al lado del primario pelea por la
+   atención, y esto no es la acción principal de ninguna pantalla. */
+.btn-peligro {
+  color: var(--error);
+  border-color: rgba(255, 138, 138, 0.35);
+}
+
+.btn-peligro:hover:not(:disabled) {
+  background: rgba(255, 138, 138, 0.1);
+}
+
+/* El de icono solo, en una lista, se queda quieto hasta que lo tocan.
+   Con diez sesiones eran diez recuadros rojos: la lista entera se leía como
+   una advertencia, que es lo contrario de lo que es —el rojo tiene que decir
+   «esto borra» cuando la mano va para ahí, no «acá hay un problema» mientras
+   se escanea—. El color aparece con el puntero y con el foco del teclado, así
+   que se descubre por los dos caminos. */
+.btn-peligro.btn-ico {
+  color: var(--text-muted);
+  border-color: transparent;
+}
+
+.btn-peligro.btn-ico:hover:not(:disabled),
+.btn-peligro.btn-ico:focus-visible {
+  color: var(--error);
+  border-color: rgba(255, 138, 138, 0.35);
+  background: rgba(255, 138, 138, 0.1);
+}
+
+.btn-ico {
+  padding: var(--sp-2);
+  min-width: var(--row-xs);
+}
+
+.hp-ico {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+.hp-ico svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.hp-ico svg .solido {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* El foco del teclado, que es el tercer uso del acento. Va con `:focus-visible`
+   y no con `:focus` para que un clic con el mouse no deje el anillo puesto. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   5. ESTADO — la guarda y la pastilla
+
+   Un canal, un significado, y la palabra siempre. `data-estado` es lo que
+   pinta las dos cosas, así que un estado nuevo se agrega en un solo sitio.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.pastilla {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 18px;
+  /* Tampoco cede: es la palabra del estado, y media palabra no dice el estado. */
+  flex: 0 0 auto;
+  padding: 0 var(--sp-3);
+  border-radius: 999px;
+  border: 0;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: rgba(168, 179, 193, 0.14);
+  color: var(--text-secondary);
+}
+
+.pastilla[data-estado='corriendo'],
+.pastilla[data-estado='abierta'],
+.pastilla[data-estado='releyendo'],
+.pastilla[data-estado='escuchando'] {
+  background: var(--accent-14);
+  color: var(--accent);
+}
+
+.pastilla[data-estado='lista'],
+.pastilla[data-estado='terminada'],
+.pastilla[data-estado='confirmada'],
+.pastilla[data-estado='entra'],
+.pastilla[data-estado='listo'] {
+  background: rgba(62, 216, 144, 0.14);
+  color: var(--ok);
+}
+
+.pastilla[data-estado='sin releer'],
+.pastilla[data-estado='por confirmar'],
+.pastilla[data-estado='sin cerrar'],
+.pastilla[data-estado='en silencio'],
+.pastilla[data-estado='modelo liviano'] {
+  background: rgba(245, 180, 60, 0.14);
+  color: var(--warn);
+}
+
+.pastilla[data-estado='sin audio'],
+.pastilla[data-estado='dispositivo perdido'],
+.pastilla[data-estado='falta'] {
+  background: rgba(255, 138, 138, 0.14);
+  color: var(--error);
+}
+
+.pastilla[data-estado='descartada'] {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+/* La guarda: el mismo significado que la pastilla, en el borde izquierdo de la
+   fila. Son dos canales para lo mismo a propósito — la guarda se barre con la
+   vista en una lista de veinte filas, la palabra se lee cuando hace falta. */
+.guarda {
+  border-left: 3px solid transparent;
+}
+
+.guarda[data-estado='corriendo'],
+.guarda[data-estado='abierta'],
+.guarda[data-estado='releyendo'] {
+  border-left-color: var(--accent);
+}
+
+.guarda[data-estado='lista'],
+.guarda[data-estado='terminada'],
+.guarda[data-estado='confirmada'] {
+  border-left-color: var(--ok);
+}
+
+.guarda[data-estado='sin releer'],
+.guarda[data-estado='por confirmar'],
+.guarda[data-estado='sin cerrar'] {
+  border-left-color: var(--warn);
+}
+
+.guarda[data-estado='sin audio'] {
+  border-left-color: var(--error);
+}
+
+.guarda[data-estado='descartada'] {
+  border-left-color: var(--hairline);
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   6. TARJETAS, FILAS Y LISTAS
+   ────────────────────────────────────────────────────────────────────────── */
+
+.tarjeta {
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.tarjeta + .tarjeta {
+  margin-top: var(--sp-3);
+}
+
+.tarjeta-cabeza {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.tarjeta-cuerpo {
+  padding: 0 var(--sp-4) var(--sp-4);
+}
+
+.seccion + .seccion {
+  margin-top: var(--sp-6);
+}
+
+.seccion-titulo {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+/* La fila plegada: 32 px, que es el criterio de aceptación de la lista de
+   tomas y el de la de claquetas. */
+.fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--row);
+  padding: 0 var(--sp-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--ease);
+}
+
+.fila:hover {
+  background: var(--bg-surface-hover);
+}
+
+/* Elegida: recuadro encendido a `--border-field`, que es el 3.37:1 con el que
+   WCAG 1.4.11 se cumple para «whether a component is selected or focused». La
+   guarda no se usa para esto: ahí dice el ESTADO, y un canal es un significado. */
+.fila.es-elegida {
+  border-color: var(--border-field);
+}
+
+.fila-nombre {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fila time,
+.fila-dato {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.fila-nota {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* El chevron de un acordeón. Gira, que es la evidencia más directa de que la
+   fila está abierta. */
+.chevron {
+  color: var(--text-muted);
+  transition: transform var(--ease);
+}
+
+.es-abierta > .fila .chevron,
+.fila.es-abierta .chevron {
+  transform: rotate(90deg);
+}
+
+/* La fila de una claqueta, en el costado de 300 px: dos renglones, porque en
+   uno lo primero que se recorta es el número, que es justo con lo que el
+   editor la busca (ver `filaClaqueta`). Sigue midiendo lo mismo que una fila
+   de toma por renglón. */
+.fila-claqueta {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: var(--sp-1) var(--sp-3) var(--sp-2);
+  cursor: default;
+}
+
+.claqueta-arriba,
+.claqueta-abajo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--row-xs);
+  min-width: 0;
+}
+
+.claqueta-abajo {
+  min-height: 0;
+  flex-wrap: wrap;
+}
+
+.etiqueta-vista {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 18px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.etiqueta-vista[data-vista='PV'] { color: var(--vista-pv); }
+.etiqueta-vista[data-vista='R']  { color: var(--vista-r); }
+.etiqueta-vista[data-vista='S']  { color: var(--vista-s); }
+.etiqueta-vista[data-vista='MG'] { color: var(--vista-mg); }
+.etiqueta-vista[data-vista='X2'] { color: var(--vista-x2); }
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   7. CAMPOS
+
+   El borde es lo único que dice que ahí se escribe, así que va a
+   `--border-field` (3.37:1) y no a la hairline decorativa: WCAG 1.4.11.
+   ────────────────────────────────────────────────────────────────────────── */
+
+input[type='text'],
+input[type='number'],
+select,
+textarea {
+  width: 100%;
+  min-height: var(--row);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-field);
+  border-radius: var(--radius-sm);
+}
+
+textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+select {
+  appearance: none;
+  padding-right: var(--sp-6);
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%),
+    linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%);
+  background-position: right 14px center, right 9px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.campo-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   8. LA LISTA DE VERIFICACIÓN DE «PREPARAR»
+
+   Cada renglón dice qué falta y ofrece el arreglo EN EL MISMO SITIO. Es lo que
+   hace la pantalla autoexplicativa: un checklist que dice «falta el
+   dispositivo» y te manda a buscarlo a otra pantalla es un checklist que hay
+   que aprender.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.check + .check {
+  margin-top: var(--sp-2);
+}
+
+.check-marca {
+  flex: 0 0 16px;
+  margin-top: 2px;
+}
+
+.check[data-listo='si'] .check-marca { color: var(--ok); }
+.check[data-listo='no'] .check-marca { color: var(--warn); }
+.check[data-listo='mal'] .check-marca { color: var(--error); }
+
+.check-texto {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.check-titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.check-dice {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.check-arreglo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+/* El medidor de nivel. Es la única cosa de la app que se mueve sola y no dice
+   una palabra, y está bien: lo que dice es «entra sonido», que es lo que el
+   renglón de al lado escribe con palabras. */
+.nivel {
+  position: relative;
+  height: 6px;
+  /* Ancho acotado: es un indicador, no un gráfico. Sin techo, en la barra de
+     la sesión se estiraba de punta a punta y se leía como una barra de
+     progreso —o sea, como si la clase tuviera un final conocido—. */
+  flex: 0 1 120px;
+  min-width: 80px;
+  max-width: 160px;
+  background: var(--bg-inset);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.nivel-barra {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--ok);
+  border-radius: 999px;
+  transition: width 80ms linear;
+}
+
+.nivel[data-pico='alto'] .nivel-barra { background: var(--warn); }
+.nivel[data-pico='clip'] .nivel-barra { background: var(--error); }
+
+/* Lo último que Whisper oyó, tal cual. Es el renglón que deja darse cuenta de
+   que está entrando el micrófono de la Mac en vez del audio del Zoom antes de
+   haber grabado media clase. Monoespaciado y en inset: se lee como una cita de
+   la máquina y no como texto de la app. */
+.oyendo {
+  padding: var(--sp-3);
+  background: var(--bg-inset);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  min-height: 46px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   9. LA BARRA DE LA SESIÓN (En vivo)
+
+   Es el cromo que se mira sin apartar la vista del profesor, así que lleva los
+   dos elementos grandes de la app y nada más que lo que se consulta con la
+   clase corriendo: el timecode, el estado, cuántas tomas, cuántas claquetas.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.barra-sesion {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  flex: 0 0 auto;
+  padding: var(--sp-3) var(--sp-5);
+  background: var(--bg-inset);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.barra-bloque {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.contadores {
+  display: flex;
+  gap: var(--sp-5);
+}
+
+.contador {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.contador-num {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+/* El pie con las teclas. Están escritas y a la vista en vez de estar en una
+   ayuda: son cinco, se usan con el profesor hablando, y una tecla que hay que
+   recordar es una tecla que no se usa. */
+.pie-teclas {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  flex: 0 0 auto;
+  padding: var(--sp-2) var(--sp-5);
+  background: var(--bg-base);
+  border-top: 1px solid var(--hairline);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+}
+
+.tecla {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+}
+
+/* La ruta del XML es lo último que cede en el pie: las teclas hay que poder
+   leerlas, la ruta se puede recortar y sigue diciendo de qué carpeta es. */
+#vivo-donde {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 11 px y no 10: el piso vale también para la tecla dibujada, que es texto que
+   hay que poder leer de reojo con el profesor hablando. La densidad se
+   consigue recortando el padding, no el texto. */
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--sp-2);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   10. EL TRANSCRIPT DE UNA TOMA
+   ────────────────────────────────────────────────────────────────────────── */
+
+.transcript {
+  padding: var(--sp-3);
+  background: var(--bg-inset);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  user-select: text;
+  -webkit-user-select: text;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* Lo que quedó fuera de los bordes: está para poder mover el IN o el OUT
+   MIRANDO la frase que quedó afuera, que es la que dice si el corte está bien
+   puesto. Va en el tercer nivel de texto: es contexto, no contenido. */
+.transcript .orilla {
+  color: var(--text-muted);
+}
+
+.transcript .palabra {
+  cursor: text;
+}
+
+.transcript .palabra:hover {
+  background: var(--layer-hover);
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   11. PANELES FLOTANTES (Ajustes, Diagnóstico)
+   ────────────────────────────────────────────────────────────────────────── */
+
+.telon {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6);
+  z-index: 40;
+}
+
+.telon.es-activa {
+  display: flex;
+}
+
+.panel {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--bg-overlay);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+}
+
+.panel-cabeza {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.panel-cuerpo {
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.panel-pie {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-top: 1px solid var(--hairline);
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   12. VACÍOS Y AVISOS
+
+   Un vacío dice qué hacer, no que no hay nada. Es la pantalla que más se ve la
+   primera vez que alguien abre la app.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-6);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.vacio .hp-ico {
+  width: 28px;
+  height: 28px;
+  color: var(--text-muted);
+}
+
+.vacio-titulo {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+  background: rgba(245, 180, 60, 0.1);
+  color: var(--warn);
+}
+
+.aviso[data-tono='error'] {
+  background: rgba(255, 138, 138, 0.1);
+  color: var(--error);
+}
+
+.aviso[data-tono='ok'] {
+  background: rgba(62, 216, 144, 0.1);
+  color: var(--ok);
+}
+
+/* El aviso que aparece y se va. Va abajo a la derecha y no arriba al centro:
+   arriba está el cromo que se consulta, y un cartel encima del timecode tapa
+   justo lo que hay que poder mirar de reojo. */
+.tostada {
+  position: fixed;
+  right: var(--sp-5);
+  bottom: var(--sp-5);
+  max-width: 420px;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-overlay);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  font-size: 12px;
+  color: var(--text-primary);
+  z-index: 60;
+}
+
+/* Barras de desplazamiento discretas: la de macOS sobre `--bg-inset` es casi
+   invisible y la que el sistema dibuja siempre roba 15 px de ancho. */
+.scroll::-webkit-scrollbar,
+.transcript::-webkit-scrollbar,
+.panel::-webkit-scrollbar {
+  width: 10px;
+}
+
+.scroll::-webkit-scrollbar-thumb,
+.transcript::-webkit-scrollbar-thumb,
+.panel::-webkit-scrollbar-thumb {
+  background: #333a44;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}

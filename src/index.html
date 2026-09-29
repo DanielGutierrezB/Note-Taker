@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <!-- Sin `unsafe-inline` en `script-src`: la ventana carga módulos de su
+       propia carpeta y nada más. Los estilos sí lo llevan porque el medidor de
+       nivel escribe su ancho en el `style` del elemento, que es la manera de
+       moverlo doce veces por segundo sin tocar el CSS. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'">
+  <title>Note Taker</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <span class="marca" id="marca"></span>
+    <button id="btn-volver" class="btn btn-tenue" type="button" hidden>Sesiones</button>
+    <span class="crece"></span>
+    <span id="topbar-extra"></span>
+    <button id="btn-diagnostico" class="btn btn-tenue btn-ico" type="button"
+            title="Qué herramientas encontró la app y dónde"></button>
+    <button id="btn-ajustes" class="btn btn-tenue btn-ico" type="button"
+            title="Carpeta, cuadros por segundo e idioma"></button>
+  </header>
+
+  <!-- ── 1 · Sesiones ─────────────────────────────────────────────────
+       La primera pantalla. Dice qué carpeta está en uso y qué hay adentro, y
+       su acción principal es empezar una clase. -->
+  <section class="vista es-activa" id="vista-sesiones">
+    <div class="scroll">
+      <div class="seccion">
+        <div class="seccion-titulo">
+          <span>Carpeta del curso</span>
+        </div>
+        <div class="tarjeta">
+          <div class="tarjeta-cabeza">
+            <span id="carpeta-ruta" class="fila-nombre">Todavía no elegiste ninguna</span>
+            <span class="crece"></span>
+            <button id="btn-abrir-carpeta" class="btn" type="button" hidden>Mostrar en Finder</button>
+            <button id="btn-elegir-carpeta" class="btn" type="button">Elegir carpeta…</button>
+          </div>
+        </div>
+        <p class="v3" style="margin-top:8px">
+          Adentro se crean <code>xml/</code> con el archivo que importás en Premiere,
+          <code>xml/Audio/</code> con el WAV y <code>xml/Datos/</code> con lo que la app
+          se guarda para sí misma.
+        </p>
+      </div>
+
+      <div class="seccion">
+        <div class="seccion-titulo">
+          <span>Sesiones</span>
+          <span id="sesiones-cuantas" class="v3"></span>
+          <span class="crece"></span>
+          <button id="btn-nueva" class="btn btn-primario" type="button">Nueva sesión</button>
+        </div>
+        <div id="lista-sesiones" class="lista"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 2 · Preparar ─────────────────────────────────────────────────
+       Una lista de verificación. El botón de Iniciar se enciende cuando lo
+       esencial está en verde, y cada renglón ofrece su arreglo ahí mismo. -->
+  <section class="vista" id="vista-preparar">
+    <div class="scroll">
+      <div class="seccion">
+        <div class="seccion-titulo">
+          <span>Antes de empezar</span>
+          <span class="crece"></span>
+          <button id="btn-iniciar" class="btn btn-primario" type="button" disabled>
+            Iniciar grabación
+          </button>
+        </div>
+        <div id="checklist"></div>
+      </div>
+
+      <div class="seccion">
+        <div class="seccion-titulo"><span>Lo que se está oyendo</span></div>
+        <div id="oyendo-preparar" class="oyendo">
+          Elegí una entrada y hablá: acá aparece lo que Whisper entiende. Es la
+          manera de saber que entra la voz correcta antes de empezar.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 3 · En vivo ──────────────────────────────────────────────────
+       La barra con los dos elementos grandes, la tarjeta de lo que está
+       pasando ahora, y la lista de todo lo que ya pasó. -->
+  <section class="vista" id="vista-vivo">
+    <div class="barra-sesion">
+      <div class="barra-bloque">
+        <span class="rotulo">Timecode</span>
+        <span id="vivo-tc" class="grande-tc">00:00:00:00</span>
+      </div>
+      <div class="barra-bloque">
+        <span class="rotulo">Sesión</span>
+        <span id="vivo-estado" class="grande-estado">escuchando</span>
+      </div>
+      <div class="contadores">
+        <div class="contador">
+          <span id="vivo-tomas" class="contador-num">0</span>
+          <span class="rotulo">tomas</span>
+        </div>
+        <div class="contador">
+          <span id="vivo-claquetas" class="contador-num">0</span>
+          <span class="rotulo">claquetas</span>
+        </div>
+      </div>
+      <span class="crece"></span>
+      <div class="nivel" id="vivo-nivel"><div class="nivel-barra"></div></div>
+      <button id="btn-deshacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
+      <button id="btn-rehacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
+      <button id="btn-terminar" class="btn" type="button">Terminar</button>
+    </div>
+
+    <div class="scroll">
+      <div class="columnas">
+        <div class="principal">
+          <div class="seccion">
+            <div class="seccion-titulo"><span>Ahora</span></div>
+            <div id="ahora"></div>
+          </div>
+          <div class="seccion">
+            <div class="seccion-titulo">
+              <span>Tomas y claquetas</span>
+              <span id="vivo-cuantas" class="v3"></span>
+            </div>
+            <div id="lista-vivo" class="lista"></div>
+          </div>
+        </div>
+
+        <aside class="costado">
+          <div class="seccion">
+            <div class="seccion-titulo"><span>Claquetas</span></div>
+            <div id="lista-claquetas" class="lista"></div>
+          </div>
+          <div class="seccion">
+            <div class="seccion-titulo"><span>Oyendo</span></div>
+            <div id="oyendo-vivo" class="oyendo"></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <footer class="pie-teclas">
+      <span class="tecla"><kbd>K</kbd> claqueta</span>
+      <span class="tecla"><kbd>Enter</kbd> cerrar toma</span>
+      <span class="tecla"><kbd>P</kbd><kbd>R</kbd><kbd>S</kbd><kbd>M</kbd><kbd>X</kbd> vista</span>
+      <span class="tecla"><kbd>⌘Z</kbd> deshacer</span>
+      <span class="crece"></span>
+      <span id="vivo-donde"></span>
+    </footer>
+  </section>
+
+  <!-- ── 4 · Cierre ───────────────────────────────────────────────────
+       Qué quedó y dónde. Es la pantalla que se mira cuando la clase terminó y
+       hay que pasarle algo al editor. -->
+  <section class="vista" id="vista-cierre">
+    <div class="scroll">
+      <div class="seccion">
+        <div class="seccion-titulo"><span>La sesión terminó</span></div>
+        <div id="cierre-resumen"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ── Ajustes ────────────────────────────────────────────────────────
+     Lo que no cambia durante una clase. El fps está acá y no en Preparar
+     porque es del proyecto del editor y no de la sesión. -->
+<div class="telon" id="telon-ajustes">
+  <div class="panel">
+    <div class="panel-cabeza">
+      <span class="v1">Ajustes</span>
+      <span class="crece"></span>
+      <button class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-ajustes"></button>
+    </div>
+    <div class="panel-cuerpo">
+      <label class="campo">
+        <span class="rotulo">Cuadros por segundo de la secuencia</span>
+        <select id="aj-fps"></select>
+        <span class="v3">Es el del timeline del editor, no el del audio. Con él se
+          calculan todos los marcadores del XML, así que cambiarlo a mitad de una
+          clase movería los que ya se escribieron: se aplica a la sesión siguiente.</span>
+      </label>
+      <label class="campo">
+        <span class="rotulo">Idioma de la clase</span>
+        <select id="aj-idioma">
+          <option value="es">Español</option>
+          <option value="en">Inglés</option>
+          <option value="pt">Portugués</option>
+        </select>
+        <span class="v3">Se le pasa fijo a Whisper en vez de dejar que lo detecte:
+          detectar cuesta una pasada y el idioma no cambia a la mitad.</span>
+      </label>
+      <label class="campo">
+        <span class="rotulo">Nombre del curso</span>
+        <input id="aj-curso" type="text" placeholder="Curso de React">
+        <span class="v3">Es la primera mitad del nombre del XML.</span>
+      </label>
+      <div class="campo">
+        <span class="rotulo">Actualizaciones</span>
+        <div class="campo-fila">
+          <button id="btn-buscar-update" class="btn" type="button">Buscar una versión nueva</button>
+          <span id="update-dice" class="v3"></span>
+        </div>
+      </div>
+    </div>
+    <div class="panel-pie">
+      <button id="btn-log" class="btn btn-tenue" type="button">Guardar el registro</button>
+      <button class="btn" type="button" data-cerrar="telon-ajustes">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Diagnóstico ────────────────────────────────────────────────────
+     Qué encontró la app y dónde, en palabras. Existe porque «no se pudo leer
+     el audio» sin decir que falta ffmpeg manda a buscar la culpa al lugar
+     equivocado. -->
+<div class="telon" id="telon-diagnostico">
+  <div class="panel">
+    <div class="panel-cabeza">
+      <span class="v1">Diagnóstico</span>
+      <span class="crece"></span>
+      <button class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-diagnostico"></button>
+    </div>
+    <div class="panel-cuerpo" id="diagnostico-cuerpo"></div>
+    <div class="panel-pie">
+      <button class="btn" type="button" data-cerrar="telon-diagnostico">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

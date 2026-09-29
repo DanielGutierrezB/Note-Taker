@@ -1,0 +1,74 @@
+{
+  "name": "note-taker",
+  "productName": "Note Taker",
+  "version": "0.1.0",
+  "description": "Toma las notas de rodaje mientras la clase se graba en vivo y escribe el XML con el audio para Premiere Pro",
+  "main": "main.js",
+  "author": "Daniel Gutiérrez",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node tests/run.js",
+    "maqueta": "node tools/maqueta/abrir.js",
+    "auditar": "node tools/auditar.js",
+    "contrastes": "node tools/contrastes.js",
+    "build": "bash tools/build-pkg.sh",
+    "publish": "bash tools/publish-release.sh"
+  },
+  "build": {
+    "appId": "com.codigo.notetaker",
+    "productName": "Note Taker",
+    "files": [
+      "main.js",
+      "preload.js",
+      "dev-shot.js",
+      "package.json",
+      "version.json",
+      "engine/**/*",
+      "ipc/**/*",
+      "src/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "hardenedRuntime": true,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Note Taker escucha la entrada de audio de la clase para medir el nivel y para reconocer el conteo y la pausa mientras se toman las notas.",
+        "NSCameraUsageDescription": "Note Taker muestra en pantalla lo que está entrando por una cámara, para ver qué se está filmando mientras se toman las notas. Ese video no se graba ni se guarda."
+      },
+      "target": [
+        {
+          "target": "pkg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "bin/mac",
+          "to": "bin",
+          "filter": [
+            "**/*",
+            "!models/**"
+          ]
+        }
+      ]
+    },
+    "pkg": {
+      "artifactName": "NoteTaker-${version}-arm64.${ext}",
+      "installLocation": "/Applications",
+      "allowAnywhere": false,
+      "allowCurrentUserHome": false
+    }
+  },
+  "devDependencies": {
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
+    "puppeteer-core": "^25.12.0"
+  },
+  "allowScripts": {
+    "electron@43.7.5": true
+  }
+}
