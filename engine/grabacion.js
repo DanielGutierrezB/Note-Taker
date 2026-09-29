@@ -102,7 +102,6 @@ const MARGEN_CLAQUETA_MS = 4000;
  * portazo cerca de alguien hablando quedaba confirmado.
  */
 const DICE_CLAQUETA = vivo.CLAQUETA;
-const DICE_CLASE_N = /\bclase\s*(\d{1,3})\b/i;
 
 let sesion = null;
 /** La promesa de `terminar`, mientras dura. */
@@ -252,6 +251,9 @@ function pcm(buffer) {
 
     const visto = golpe.mirar(sesion.golpes, buffer, Math.round(desdeMs));
     if (visto.golpe) {
+        // Un aplauso solo no es una claqueta: se recuerda para emparejarlo con
+        // la palabra (la que oiga el ciclo en vivo, o la que se lea alrededor).
+        vivo.recordarAplauso(sesion.estado, visto.ms);
         sesion.candidatas.push(visto.ms);
         sesion.avisar({ tipo: 'golpe', ms: visto.ms });
     }
@@ -388,7 +390,7 @@ function vigilarDeriva() {
  * Lee qué se dijo alrededor de cada golpe pendiente y decide si es una claqueta.
  *
  * El pico solo no alcanza —una puerta o un golpe en la mesa miden igual— así que
- * se transcribe alrededor y se busca "claqueta" o "clase N".
+ * se transcribe alrededor y se busca "claqueta".
  *
  * **Se lee después, no cuando el golpe suena.** En ese momento el audio que viene
  * DETRÁS todavía no existe —se está grabando— y ahí está la mitad de la frase:
@@ -399,11 +401,11 @@ function vigilarDeriva() {
  * Las candidatas son una cola y no un solo lugar porque dos golpes pueden venir
  * más cerca de lo que tarda en leerse el primero.
  *
- * **Un golpe sin frase se anota igual, sin confirmar.** Es la diferencia con
- * Class Cut, donde solo había una claqueta y una sin confirmar era ruido que
- * tapaba a la buena. Acá una claqueta de más se borra con un clic, y una de
- * menos es un punto de sincronía que el editor no tiene: la pantalla la muestra
- * como `por confirmar` y quien está mirando decide.
+ * **Un golpe sin la palabra no se anota.** Una claqueta es la palabra Y el
+ * aplauso. Anotar los golpes solos «por confirmar» llenaba la lista de
+ * claquetas que nadie hizo: cualquier golpe en la mesa o ruido de la llamada.
+ * Si el aplauso no se oyó (Zoom lo puede apagar), la palabra sola se avisa en
+ * pantalla y la claqueta se pone con la tecla K.
  */
 async function leerCandidatas(s, vive) {
     while (vive() && s.candidatas.length) {
@@ -415,6 +417,9 @@ async function leerCandidatas(s, vive) {
 
         const leida = await leerClaqueta(ms, s);
         if (!vive()) return;
+        // Sin la palabra alrededor, no es una claqueta: un golpe en la mesa, una
+        // puerta, un ruido de la llamada. Antes se anotaba «por confirmar».
+        if (!leida.confirmada) continue;
         const anotada = vivo.anotarClaqueta(s.estado, leida);
         if (anotada.nueva) {
             s.avisar({ tipo: 'claqueta', claqueta: anotada.claqueta.n, por: 'golpe' });
@@ -439,8 +444,10 @@ async function leerClaqueta(ms, s) {
         // XML: los cuadros salen de `ms`, que es el reloj del audio.
         paredMs: Date.now(),
         frase,
-        confirmada: DICE_CLAQUETA.test(frase) || DICE_CLASE_N.test(frase),
-        origen: 'golpe'
+        // La palabra y nada más. «Clase 4» solo confirmaba cualquier ruido
+        // cerca de alguien diciendo «en la clase 2 vimos…».
+        confirmada: DICE_CLAQUETA.test(frase),
+        origen: 'golpe,voz'
     };
 }
 

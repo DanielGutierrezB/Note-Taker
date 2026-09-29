@@ -801,6 +801,49 @@ function olvidarQuitada(estado, c) {
     estado.claquetasQuitadas = estado.claquetasQuitadas.filter(ms => Math.abs(ms - c.ms) >= MISMA_CLAQUETA_MS);
 }
 
+/**
+ * Cuánto pueden separarse la palabra «claqueta» y el aplauso para ser la misma
+ * claqueta. El director dice «Claqueta 4, clase 4» y aplaude: el aplauso llega
+ * uno a tres segundos después de la palabra, y a veces antes si la dice
+ * aplaudiendo.
+ */
+const PALABRA_Y_APLAUSO_MS = 6000;
+
+/** Los aplausos oídos que se recuerdan para emparejar con la palabra. */
+const APLAUSOS_RECORDADOS = 200;
+
+/** Un aplauso que oyó `golpe.js`. Solo, no es una claqueta: espera su palabra. */
+function recordarAplauso(estado, ms) {
+    estado.aplausos = (estado.aplausos || []).concat([ms]).slice(-APLAUSOS_RECORDADOS);
+}
+
+/**
+ * La palabra «claqueta» dicha a la hora `ms`: si hubo un aplauso cerca, ESA es
+ * la claqueta, y va en el aplauso —que es el punto de sincronía, el cuadro que
+ * el editor busca en la onda—. Sin aplauso cerca, no es una claqueta.
+ *
+ * **Una claqueta es la palabra Y el aplauso.** Antes bastaba cualquiera de los
+ * dos: un golpe en la mesa, una puerta o un ruido de Zoom se anotaban «por
+ * confirmar», y la palabra sola (o algo que Whisper escribió parecido, o «clase
+ * 2» cerca de un ruido) se anotaba confirmada. En las pruebas aparecían
+ * claquetas donde nadie había claqueteado.
+ *
+ * @returns {{claqueta:object|null, nueva:boolean, sinAplauso?:boolean}}
+ */
+function claquetaDicha(estado, ms, frase) {
+    const cerca = (estado.aplausos || [])
+        .filter(a => Math.abs(a - ms) <= PALABRA_Y_APLAUSO_MS)
+        .sort((a, b) => Math.abs(a - ms) - Math.abs(b - ms))[0];
+    if (cerca == null) return { claqueta: null, nueva: false, sinAplauso: true };
+    return anotarClaqueta(estado, {
+        ms: cerca,
+        paredMs: Date.now(),
+        frase,
+        confirmada: true,
+        origen: 'golpe,voz'
+    });
+}
+
 /** La claqueta con la que se fundiría una nueva en `ms`, si hay. */
 function claquetaCerca(estado, ms) {
     return (estado.claquetas || []).find(c => Math.abs(c.ms - ms) < MISMA_CLAQUETA_MS) || null;
@@ -957,15 +1000,14 @@ function aplicarSenales(estado, palabras, opciones) {
             // La frase entera de alrededor y no la palabra sola: es de donde
             // sale el número ("claqueta 4, clase 4"), que es lo que el editor
             // busca para emparejarla con la pizarra.
-            const anotada = anotarClaqueta(estado, {
-                ms: nuevas[marca.desde].t,
-                paredMs: Date.now(),
-                frase: textoDe(nuevas, Math.max(0, marca.desde - 2), marca.hasta + 3),
-                confirmada: true,
-                origen: 'voz'
-            });
+            // Solo con un aplauso cerca (`claquetaDicha`). La palabra sola se
+            // cuenta, para que quien mira pueda poner la K si sí hubo aplauso.
+            const anotada = claquetaDicha(estado, nuevas[marca.desde].t,
+                textoDe(nuevas, Math.max(0, marca.desde - 2), marca.hasta + 3));
             if (anotada.nueva) {
-                eventos.push({ tipo: 'claqueta', claqueta: anotada.claqueta.n, por: marca.por });
+                eventos.push({ tipo: 'claqueta', claqueta: anotada.claqueta.n, por: 'golpe,voz' });
+            } else if (anotada.sinAplauso) {
+                eventos.push({ tipo: 'claqueta-sin-aplauso', ms: nuevas[marca.desde].t });
             }
             continue;
         }
@@ -1311,6 +1353,9 @@ module.exports = {
     recordarQuitada,
     olvidarQuitada,
     claquetaCerca,
+    claquetaDicha,
+    recordarAplauso,
+    PALABRA_Y_APLAUSO_MS,
     moverBorde,
     tomasQueQuedan,
     limpio,

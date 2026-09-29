@@ -206,7 +206,12 @@ function contar(ev) {
         vista.elegida = ev.toma;
     }
     if (ev.tipo === 'cerrada') avisar(`Toma ${ev.toma} cerrada.`);
-    if (ev.tipo === 'claqueta') avisar(`Claqueta ${ev.claqueta} anotada (se dijo).`);
+    if (ev.tipo === 'claqueta') avisar(`Claqueta ${ev.claqueta} anotada: se dijo y se oyó el aplauso.`);
+    // Una claqueta es la palabra Y el aplauso. La palabra sola no se anota, pero
+    // se dice: por Zoom el aplauso puede no llegar, y ahí la pone quien mira.
+    if (ev.tipo === 'claqueta-sin-aplauso') {
+        avisar('Se dijo «claqueta» pero no se oyó el aplauso. Si lo hubo, apretá K.', 'error');
+    }
 }
 
 /* ─── Dibujar ─────────────────────────────────────────────────────────── */

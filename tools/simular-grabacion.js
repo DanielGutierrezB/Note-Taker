@@ -30,6 +30,7 @@ const { spawnSync } = require('child_process');
 
 const paths = require('../engine/paths');
 const grabacion = require('../engine/grabacion');
+const residente = require('../engine/oido-residente');
 const rodecaster = require('../engine/rodecaster-xml');
 const { arg, horaDelDia: hhmmss, mmss } = require('./lib/cli');
 
@@ -159,7 +160,15 @@ async function main() {
     // De a pedazos, empujando el ciclo de señales cada vez que hay bastante audio
     // nuevo: es lo que el reloj haría en vivo cada tres segundos.
     const bytesPorPedazo = MUESTRAS_POR_PEDAZO * 2;
-    const pedazosPorCiclo = Math.round(grabacion.CICLO_MS / 1000 * TASA / MUESTRAS_POR_PEDAZO);
+    // `--cada=<s>` pasa el ciclo cada tantos segundos de audio en vez de cada
+    // `CICLO_MS`: para simular una clase larga en pocos minutos.
+    const cadaSec = Number(arg('cada', String(grabacion.CICLO_MS / 1000)));
+    const pedazosPorCiclo = Math.max(1, Math.round(cadaSec * TASA / MUESTRAS_POR_PEDAZO));
+    // El texto en vivo por el servidor con el modelo cargado, como en la app.
+    if (!process.argv.includes('--sin-servidor')) {
+        const listo = await residente.arrancar({ idioma: arg('idioma', 'es') });
+        console.log(`whisper-server: ${listo ? residente.modelo() : 'no arrancó, se oye por whisper-cli'}\n`);
+    }
     let pedazos = 0;
     const arranque = Date.now();
 

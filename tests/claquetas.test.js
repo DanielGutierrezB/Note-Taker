@@ -32,20 +32,44 @@ module.exports = function (t) {
         t.eq(r.claqueta.n, 1);
     });
 
-    t.test('la palabra "claqueta" dicha anota una', () => {
+    t.test('la palabra "claqueta" con un aplauso cerca anota una, en el aplauso', () => {
         const e = nuevo();
+        vivo.recordarAplauso(e, T0 + 7200);
         const ev = vivo.aplicarSenales(e, palabras([
             [5000, 'Claqueta'], [5400, '3,'], [5800, 'clase'], [6200, '3.']
         ]));
         t.eq(e.claquetas.length, 1);
+        t.eq(e.claquetas[0].ms, T0 + 7200, 'el cuadro es el del aplauso, no el de la palabra');
         t.eq(ev[0].tipo, 'claqueta');
-        t.eq(ev[0].por, 'voz');
+    });
+
+    t.test('la palabra sola NO es una claqueta: se avisa para poner la K', () => {
+        // Lo que se veía en las pruebas: claquetas donde nadie aplaudió.
+        const e = nuevo();
+        const ev = vivo.aplicarSenales(e, palabras([[5000, 'Claqueta'], [5400, 'cuatro']]));
+        t.eq(e.claquetas.length, 0);
+        t.eq(ev[0].tipo, 'claqueta-sin-aplauso');
+    });
+
+    t.test('un aplauso solo NO es una claqueta', () => {
+        const e = nuevo();
+        vivo.recordarAplauso(e, T0 + 5000);
+        vivo.aplicarSenales(e, palabras([[4000, 'bueno'], [4400, 'seguimos']]));
+        t.eq(e.claquetas.length, 0);
+    });
+
+    t.test('un aplauso lejos de la palabra no la confirma', () => {
+        const e = nuevo();
+        vivo.recordarAplauso(e, T0 + 5000 + vivo.PALABRA_Y_APLAUSO_MS + 1000);
+        vivo.aplicarSenales(e, palabras([[5000, 'Claqueta']]));
+        t.eq(e.claquetas.length, 0);
     });
 
     t.test('Whisper escribe la palabra mal y se la reconoce igual', () => {
         // "Cacleta", "Klaqueta" y "Claquetados" son escrituras reales.
         for (const como of ['Cacleta', 'Klaqueta', 'Claquetados']) {
             const e = nuevo();
+            vivo.recordarAplauso(e, T0 + 2000);
             vivo.aplicarSenales(e, palabras([[1000, como], [1400, 'dos']]));
             t.eq(e.claquetas.length, 1, `${como} cuenta como claqueta`);
         }

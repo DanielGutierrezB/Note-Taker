@@ -125,14 +125,11 @@ async function rehacer(sesion, id) {
         // claqueta que se pierde es una marca de sincronía menos para el
         // editor. Entran por `anotarClaqueta`, así que la que ya esté anotada
         // a menos de cinco segundos se funde en vez de duplicarse.
+        // Igual que en vivo: solo con un aplauso cerca (`claquetaDicha`).
         for (const s of vivo.senales(toma.palabras).filter(x => x.tipo === 'claqueta')) {
-            vivo.anotarClaqueta(sesion.estado, {
-                ms: toma.palabras[s.desde].t,
-                frase: (toma.palabras.slice(Math.max(0, s.desde - 2), s.desde + 4) || [])
-                    .map(w => w.texto).join(' ').trim(),
-                confirmada: true,
-                origen: 'voz'
-            });
+            vivo.claquetaDicha(sesion.estado, toma.palabras[s.desde].t,
+                (toma.palabras.slice(Math.max(0, s.desde - 2), s.desde + 4) || [])
+                    .map(w => w.texto).join(' ').trim());
         }
 
         espejo.fijar(sesion);
