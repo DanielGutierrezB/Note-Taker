@@ -59,6 +59,12 @@ npx electron-builder --mac --dir
 APP="$OUT/mac-arm64/${APP_NAME}.app"
 [ -d "$APP" ] || { echo "No quedó el .app en $APP"; exit 1; }
 
+# Los modelos no viajan dentro de la app. En desarrollo `bin/mac/models` suele
+# ser un enlace a la carpeta de otra app, y adentro del .app llegaba colgado a la
+# Mac donde se instala; peor, en ESTA Mac apuntaba a modelos de verdad, y una app
+# instalada acá nunca mostraba el aviso de que faltan.
+rm -rf "$APP/Contents/Resources/bin/models"
+
 # Sin certificado de Apple la firma es ad-hoc. Alcanza para que macOS la deje
 # correr después del primer "Abrir igual", y es lo que hay hasta que exista un
 # Developer ID.

@@ -312,7 +312,11 @@ async function instalar(clave, alProgreso) {
                 const destino = path.join(CARPETA_USUARIO, 'bin', d.herramienta);
                 fs.mkdirSync(path.dirname(destino), { recursive: true });
                 const sdk = '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk';
-                const args = ['-O', '-target', 'arm64-apple-macos14.2', '-o', destino, fuenteSwift(d.compilar)];
+                // En la app instalada la fuente vive adentro de `app.asar`, que
+                // Node lee pero swiftc no: se copia afuera antes de compilar.
+                const fuente = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'nt-swift-')), d.compilar);
+                fs.writeFileSync(fuente, fs.readFileSync(fuenteSwift(d.compilar)));
+                const args = ['-O', '-target', 'arm64-apple-macos14.2', '-o', destino, fuente];
                 if (fs.existsSync(sdk)) args.unshift('-sdk', sdk);
                 avance({ texto: 'Compilando…' });
                 const r = await correr(swiftc(), args, avance);
