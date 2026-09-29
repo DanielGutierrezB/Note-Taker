@@ -29,7 +29,7 @@ import { $, esc, avisar, verVista } from './chrome.js';
 import { icono } from './iconos.js';
 import * as fmt from './formato.js';
 import * as estados from './estados.js';
-import * as oido from './grabar/oido.js';
+import * as fuente from './grabar/fuente.js';
 import { mostrador } from './grabar/turnos.js';
 
 let app = null;
@@ -486,14 +486,16 @@ async function terminar() {
 
     $('#btn-terminar').disabled = true;
     $('#vivo-estado').textContent = 'terminando';
-    oido.dejarDeMandar();
+    // Primero se deja de mandar y después se termina: un pedazo que llegara
+    // entre las dos cosas iría a una sesión que ya está cerrando su audio.
+    await fuente.dejarDeMandar();
     const salida = await window.nt.grabarTerminar();
-    await oido.cerrar();
+    await fuente.cerrar();
     $('#btn-terminar').disabled = false;
     app.irACierre(salida);
 }
 
-/** El nivel de audio lo sigue midiendo `oido`, y la barra lo dibuja acá. */
+/** El nivel lo sigue midiendo la fuente (`grabar/fuente.js`), y la barra lo dibuja acá. */
 export function alNivel(pico) {
     if (!audio) return;
     audio.pico = Math.max(pico, (audio.pico || 0) * 0.85);

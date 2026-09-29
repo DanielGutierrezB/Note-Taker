@@ -18,15 +18,24 @@
 
 import { $, esc, avisar, verVista } from './chrome.js';
 import { icono } from './iconos.js';
-import * as oido from './grabar/oido.js';
+import * as fuente from './grabar/fuente.js';
 import * as estados from './estados.js';
 
 let app = null;
 let doctor = null;
 let entradas = [];
+let zoom = { soportado: false };
 let reanudar = null;
 
-const audio = { abierto: false, caido: false, pico: 0, dispositivo: null };
+/**
+ * Lo que se sabe de la entrada elegida. `clase` es qué tipo de entrada es
+ * (`estados.claseDeEntrada`), `aceptado` que alguien eligió usar un micrófono
+ * a sabiendas, y `error` el motivo cuando no se pudo abrir.
+ */
+const audio = {
+    abierto: false, caido: false, pico: 0, dispositivo: null,
+    clase: null, aceptado: false, error: null
+};
 
 /** El pico decae solo: sin esto, un golpe deja el medidor arriba para siempre. */
 let ultimoPico = 0;
@@ -47,28 +56,36 @@ export function conectar(contexto) {
 export async function ver(opciones) {
     reanudar = (opciones && opciones.reanudar) || null;
     verVista('vista-preparar');
-    $('#oyendo-preparar').textContent = reanudar
-        ? 'Elegí la entrada y probá que llegue el audio: la sesión sigue en el mismo XML.'
-        : 'Elegí una entrada y hablá: acá aparece lo que Whisper entiende.';
-
     doctor = await window.nt.doctor();
-    const r = await oido.entradas();
-    entradas = r.lista || [];
-    if (!r.ok) avisar(r.error, 'error');
+    await releerEntradas();
 
-    // Si el dispositivo de la última vez sigue enchufado, se abre solo. Se
-    // guarda por NOMBRE y no por id: el id que da el navegador cambia entre
-    // arranques, así que guardarlo sería guardar algo que mañana no apunta a
-    // nada; el nombre ("BlackHole 2ch") sobrevive a desenchufar y enchufar.
-    const previo = entradas.find(d => d.nombre === app.ajustes.dispositivo);
-    if (previo && !audio.abierto) await abrirEntrada(previo.id);
+    // Si la entrada de la última vez sigue ahí, se abre sola. Se guarda por
+    // NOMBRE y no por id: el id que da el navegador cambia entre arranques, así
+    // que guardarlo sería guardar algo que mañana no apunta a nada; el nombre
+    // ("BlackHole 2ch", "Audio de Zoom") sobrevive a desenchufar y enchufar.
+    //
+    // Sin ninguna guardada y con Zoom abierto, se elige Zoom: en el escenario
+    // de esta app es la respuesta correcta, y la que alguien que la abre por
+    // primera vez no sabría encontrar entre seis micrófonos.
+    if (!audio.abierto) {
+        const previo = entradas.find(d => d.nombre === app.ajustes.dispositivo);
+        const porDefecto = previo || (zoom.abierta ? fuente.ZOOM : null);
+        if (porDefecto) await abrirEntrada(porDefecto.id);
+    }
 
     pintar();
 }
 
+async function releerEntradas() {
+    const r = await fuente.entradas();
+    entradas = r.lista || [];
+    zoom = r.zoom || { soportado: false };
+    if (!r.ok) avisar(r.error, 'error');
+}
+
 export async function salir() {
-    await oido.cerrar();
-    Object.assign(audio, { abierto: false, caido: false, pico: 0 });
+    await fuente.cerrar();
+    Object.assign(audio, { abierto: false, caido: false, pico: 0, error: null });
 }
 
 function pintar() {
@@ -89,18 +106,20 @@ function pintar() {
             listo: a.listo,
             titulo: 'Entrada de audio',
             estado: a,
-            dice: 'Por acá entra la clase. Si viene de un Zoom, elegí el dispositivo ' +
-                'virtual que recibe el sonido de la reunión (BlackHole, Loopback o un ' +
-                'dispositivo agregado); si viene de una interfaz, su línea.',
+            dice: queDice(),
             arreglo: `
-              <select data-campo="dispositivo" style="max-width:280px">
+              <select data-campo="dispositivo" style="max-width:300px">
                 <option value="">Elegí una entrada…</option>
-                ${entradas.map(d => `<option value="${esc(d.id)}"
-                  ${d.nombre === audio.dispositivo ? 'selected' : ''}>${esc(d.nombre)}</option>`).join('')}
+                ${opciones()}
               </select>
               <div class="nivel" id="prep-nivel"><div class="nivel-barra"></div></div>
               <button class="btn btn-tenue" type="button" data-hace="releer-entradas">
-                Buscar de nuevo</button>`
+                Buscar de nuevo</button>
+              ${(audio.clase === 'microfono' || audio.clase === 'bluetooth') && !audio.aceptado
+                ? `<button class="btn" type="button" data-hace="usar-igual"
+                     title="Para una clase presencial, donde el profesor está en la sala">
+                     Es una clase presencial: usar el micrófono</button>`
+                : ''}`
         }),
         check({
             listo: w.listo,
@@ -136,6 +155,39 @@ function pintar() {
         }),
         reanudar ? avisoReanudar() : ''
     ].join('');
+}
+
+/**
+ * La lista de entradas, en dos grupos: la llamada y todo lo demás.
+ *
+ * Los grupos dicen en palabras la diferencia que importa, que no se ve en los
+ * nombres: la primera trae la voz de quien habla en Zoom, las otras graban
+ * lo que suena en la sala.
+ */
+function opciones() {
+    const opcion = d => `<option value="${esc(d.id)}"
+        ${d.nombre === audio.dispositivo ? 'selected' : ''}>${esc(d.nombre)}</option>`;
+    const llamada = entradas.filter(d => d.tipo === 'app');
+    const resto = entradas.filter(d => d.tipo !== 'app');
+    return (llamada.length ? `<optgroup label="La llamada">${llamada.map(opcion).join('')}</optgroup>` : '') +
+        `<optgroup label="Micrófonos y dispositivos (graban la sala)">${resto.map(opcion).join('')}</optgroup>`;
+}
+
+/** Qué es este renglón, dicho según lo que hay y lo que se eligió. */
+function queDice() {
+    if (!zoom.soportado) {
+        return 'Por acá entra la clase. Si viene de un Zoom, elegí un dispositivo virtual ' +
+            'que reciba el sonido de la reunión (BlackHole o Loopback); si viene de una ' +
+            'interfaz, su línea.' + (zoom.error ? ` ${esc(zoom.error)}` : '');
+    }
+    if (!zoom.abierta && audio.clase !== 'llamada') {
+        return 'Por acá entra la clase. Si viene de un Zoom, abrí la reunión y tocá ' +
+            '«Buscar de nuevo»: aparece como «Audio de Zoom (la llamada)» y se escucha ' +
+            'directo, sin cambiar nada en Zoom y sin dejar de oírla en tus auriculares.';
+    }
+    return 'Por acá entra la clase. «Audio de Zoom» escucha la reunión directo: seguís ' +
+        'oyéndola en tus auriculares y no se mezcla nada más de la Mac. Un micrófono graba ' +
+        'la sala, que sirve solo si la clase es presencial.';
 }
 
 function idiomaDicho(codigo) {
@@ -181,24 +233,41 @@ async function alClic(e) {
     if (!boton) return;
     switch (boton.dataset.hace) {
         case 'releer-entradas': {
-            const r = await oido.entradas();
-            entradas = r.lista || [];
+            await releerEntradas();
+            // Si se estaba buscando a Zoom y ahora está, se abre sin pedir
+            // otro clic: es lo que quien apretó «Buscar de nuevo» quería.
+            if (zoom.abierta && (!audio.abierto || audio.clase === 'llamada')) {
+                await abrirEntrada(fuente.ZOOM.id);
+            }
             pintar();
             break;
         }
+        case 'usar-igual':
+            audio.aceptado = true;
+            ultimoListo = null;
+            pintar();
+            break;
         case 'diagnostico': app.verDiagnostico(); break;
         case 'ajustes': app.verAjustes(); break;
         case 'volver': app.irASesiones(); break;
     }
 }
 
-async function abrirEntrada(deviceId) {
-    if (!deviceId) {
-        await oido.cerrar();
-        Object.assign(audio, { abierto: false, pico: 0, dispositivo: null });
+async function abrirEntrada(id) {
+    const entrada = entradas.find(d => d.id === id) || (id === fuente.ZOOM.id ? fuente.ZOOM : null);
+    if (!entrada) {
+        await fuente.cerrar();
+        Object.assign(audio, { abierto: false, pico: 0, dispositivo: null, clase: null, error: null });
         return;
     }
-    const r = await oido.abrir(deviceId, {
+    // Cada entrada nueva vuelve a preguntar: haber aceptado usar un micrófono
+    // no vale para el siguiente que se elija.
+    Object.assign(audio, {
+        clase: estados.claseDeEntrada(entrada), aceptado: false, error: null, caido: false, pico: 0
+    });
+    ultimoPico = 0;
+    ultimoListo = null;
+    const r = await fuente.abrir(entrada, {
         alNivel: pico => {
             ultimoPico = Math.max(pico, ultimoPico * 0.85);
             audio.pico = ultimoPico;
@@ -220,17 +289,18 @@ async function abrirEntrada(deviceId) {
         alCaerse: () => { audio.caido = true; pintar(); }
     });
     if (!r.ok) {
-        avisar(r.error, 'error');
-        Object.assign(audio, { abierto: false, dispositivo: null });
+        // El motivo va al renglón y no a un aviso que se va: es lo que hay que
+        // leer para arreglarlo, y en cuatro segundos no se lee.
+        Object.assign(audio, { abierto: false, dispositivo: entrada.nombre, error: r.error });
         return;
     }
-    const nombre = (entradas.find(d => d.id === deviceId) || {}).nombre || null;
+    const nombre = entrada.nombre;
     Object.assign(audio, { abierto: true, caido: false, dispositivo: nombre });
     app.ajustes = (await window.nt.ajustesGuardar({ dispositivo: nombre })).ajustes;
 }
 
 async function iniciar() {
-    const como = oido.comoSuena();
+    const como = fuente.comoSuena();
     const payload = {
         dir: app.ajustes.carpeta,
         curso: app.ajustes.curso || nombreDeLaCarpeta(app.ajustes.carpeta),
@@ -248,7 +318,7 @@ async function iniciar() {
 
     // El audio empieza a viajar DESPUÉS de que el motor dijo que sí: mandar
     // antes sería escribir pedazos en una sesión que no arrancó.
-    oido.empezarAMandar();
+    await fuente.empezarAMandar();
     app.irAVivo(r.estado, audio);
 }
 

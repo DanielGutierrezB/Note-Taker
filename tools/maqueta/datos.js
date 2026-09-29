@@ -138,14 +138,18 @@ export const AJUSTES = {
     curso: 'Curso de automatizaciones',
     fps: 29.97,
     idioma: 'es',
-    dispositivo: 'BlackHole 2ch',
+    dispositivo: 'Audio de Zoom (la llamada)',
     camara: false
 };
 
+// Los nombres son los de verdad de una Mac con Zoom instalado: es la lista
+// que confundía, y la maqueta tiene que mostrarla tal cual.
 export const ENTRADAS = [
-    { id: 'blackhole', nombre: 'BlackHole 2ch' },
-    { id: 'mac', nombre: 'Micrófono del MacBook Pro' },
-    { id: 'scarlett', nombre: 'Scarlett 2i2 USB' }
+    { id: 'default', nombre: 'Default - AirPods (Bluetooth)' },
+    { id: 'airpods', nombre: 'AirPods (Bluetooth)' },
+    { id: 'mac', nombre: 'MacBook Pro Microphone (Built-in)' },
+    { id: 'iphone', nombre: 'iPhone de Daniel Microphone' },
+    { id: 'zoomdev', nombre: 'ZoomAudioDevice (Virtual)' }
 ];
 
 export const DOCTOR = {

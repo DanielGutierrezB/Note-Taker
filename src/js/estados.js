@@ -108,35 +108,123 @@ export function deSesionGuardada(resumen) {
 }
 
 /**
+ * Qué clase de entrada es, leyendo su nombre.
+ *
+ * Existe por un error fácil de cometer y caro de descubrir: en una clase que
+ * llega por Zoom y se escucha con auriculares, elegir un micrófono graba la
+ * sala —o sea, nada—, y el medidor igual se mueve con cualquier ruido, así que
+ * la pantalla se ponía en verde. Se descubría después de la clase.
+ *
+ * Es por nombre porque es lo único que el navegador dice de un dispositivo, y
+ * alcanza: macOS los nombra de forma bastante estable ("MacBook Pro
+ * Microphone", "AirPods (Bluetooth)", "ZoomAudioDevice (Virtual)").
+ *
+ *   llamada      el audio de Zoom, capturado directo. Lo que sirve.
+ *   zoom-falso   ZoomAudioDevice. Parece la llamada y no lo es.
+ *   virtual      BlackHole, Loopback, un dispositivo agregado. Sirve si Zoom
+ *                manda su sonido ahí, y eso lo tuvo que armar alguien a mano.
+ *   bluetooth    el micrófono de unos auriculares Bluetooth.
+ *   microfono    cualquier otro micrófono.
+ *   otra         una interfaz o algo que no se reconoce: se juzga por el nivel.
+ */
+export function claseDeEntrada(entrada) {
+    if (!entrada) return null;
+    if (entrada.tipo === 'app') return 'llamada';
+    const n = String(entrada.nombre || '').toLowerCase();
+    if (/zoomaudiodevice/.test(n)) return 'zoom-falso';
+    if (/blackhole|loopback|soundflower|agregad|aggregate|multi-output|salida m[uú]ltiple/.test(n)) return 'virtual';
+    if (/airpods|bluetooth|beats|buds|headset|auricular/.test(n)) return 'bluetooth';
+    if (/microphone|micr[oó]fono|built-in|integrad|iphone|webcam|c[aá]mara|camera/.test(n)) return 'microfono';
+    return 'otra';
+}
+
+/**
  * Cómo viene entrando el audio.
  *
  * `pico` es el nivel de los últimos pedazos. El umbral es bajo a propósito: lo
  * que se está preguntando no es «suena fuerte» sino «hay algo del otro lado»,
  * y una clase donde nadie habla todavía tiene ruido de sala muy por encima del
  * silencio digital.
+ *
+ * **Lo primero que se mira es QUÉ se eligió, y después cuánto suena.** Un
+ * micrófono en una clase por Zoom suena —la sala tiene ruido— y aun así no va
+ * a oír a nadie. Con el nivel como única pregunta, esa elección salía en verde.
  */
 export function deAudio(audio) {
+    if (audio && audio.error) {
+        return { clave: 'falta', palabra: 'no se pudo abrir', listo: 'mal', porque: audio.error };
+    }
     if (!audio || !audio.abierto) {
         return { clave: 'falta', palabra: 'sin elegir', listo: 'no' };
     }
     if (audio.caido) {
         return {
             clave: 'dispositivo perdido',
-            palabra: 'dispositivo perdido',
+            palabra: audio.clase === 'llamada' ? 'Zoom se cerró' : 'dispositivo perdido',
             listo: 'mal',
-            porque: 'La entrada dejó de existir: se desenchufó, o el programa que la ' +
-                'creaba se cerró. Elegí otra y la grabación sigue en el mismo XML.'
+            porque: audio.clase === 'llamada'
+                ? 'Se dejó de oír a Zoom: la app se cerró o salió de la reunión. Volvé a ' +
+                  'abrirla y elegí «Audio de Zoom» otra vez; la grabación sigue en el mismo XML.'
+                : 'La entrada dejó de existir: se desenchufó, o el programa que la creaba se ' +
+                  'cerró. Elegí otra y la grabación sigue en el mismo XML.'
         };
     }
+
+    if (audio.clase === 'zoom-falso') {
+        return {
+            clave: 'falta',
+            palabra: 'no es la llamada',
+            listo: 'mal',
+            porque: 'ZoomAudioDevice es lo que Zoom usa para mandar el sonido de tu Mac cuando ' +
+                'compartís pantalla. No trae la voz de la reunión. Elegí «Audio de Zoom (la llamada)».'
+        };
+    }
+
+    // Un micrófono no bloquea para siempre: una clase presencial se graba así,
+    // y para eso está «Usar el micrófono igual». Lo que no hace es ponerse en
+    // verde solo, que es lo que dejaba grabar una llamada en silencio.
+    if ((audio.clase === 'microfono' || audio.clase === 'bluetooth') && !audio.aceptado) {
+        return {
+            clave: 'en silencio',
+            palabra: 'graba la sala',
+            listo: 'no',
+            porque: 'Esto es un micrófono: graba lo que suena en tu sala, no la llamada. Si la ' +
+                'clase llega por Zoom y la escuchás con auriculares, no va a oír a nadie. Elegí ' +
+                '«Audio de Zoom (la llamada)».' +
+                (audio.clase === 'bluetooth'
+                    ? ' Además, abrir el micrófono de unos auriculares Bluetooth los pasa a modo ' +
+                      'llamada y el sonido en tus oídos empeora.'
+                    : '')
+        };
+    }
+
     if (!(audio.pico > 0.002)) {
+        // Con Zoom, el silencio no bloquea: antes de que la clase empiece no
+        // habla nadie, o el que habla está muteado, y eso es normal. Pero se
+        // dice en ámbar, porque también es lo que se ve si macOS no le dio
+        // permiso a la app (el sonido llega en ceros y no hay forma de
+        // preguntarlo de otra manera).
+        if (audio.clase === 'llamada') {
+            return {
+                clave: 'en silencio',
+                palabra: 'sin sonido todavía',
+                listo: 'si',
+                porque: 'Zoom está conectado pero no suena nada. Es normal si nadie está ' +
+                    'hablando. Si alguien habla y el medidor no se mueve, macOS no le dio ' +
+                    'permiso a Note Taker: Ajustes del Sistema → Privacidad y seguridad → ' +
+                    'Grabación de audio del sistema.'
+            };
+        }
         return {
             clave: 'en silencio',
             palabra: 'en silencio',
             listo: 'no',
-            porque: 'La entrada está abierta pero no llega nada. Si el audio viene de un ' +
-                'Zoom, revisá que la reunión esté enviando a este dispositivo.'
+            porque: 'La entrada está abierta pero no llega nada. Si es un dispositivo virtual, ' +
+                'revisá que Zoom esté mandando su sonido ahí.'
         };
     }
+
+    if (audio.clase === 'llamada') return { clave: 'entra', palabra: 'entra la llamada', listo: 'si' };
     return { clave: 'entra', palabra: 'entra audio', listo: 'si' };
 }
 

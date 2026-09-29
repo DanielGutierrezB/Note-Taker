@@ -219,17 +219,52 @@ corte.
 
 ## El audio del Zoom
 
-La app no habla con Zoom: escucha una **entrada de audio del sistema**. Para que
-el sonido de una reunión llegue ahí hace falta un dispositivo virtual.
+En el escenario de esta app la clase llega por una llamada de Zoom y quien toma
+notas la escucha con auriculares, así que **ningún micrófono la oye**. Por eso la
+primera entrada de la lista es **Audio de Zoom (la llamada)**: la app escucha el
+sonido de Zoom directo, sin drivers y sin tocar la configuración de Zoom.
 
-1. Instalar [BlackHole 2ch](https://existential.audio/blackhole/) (o Loopback).
-2. En Zoom → Configuración → Audio → **Altavoz**, elegir `BlackHole 2ch`.
-   Para además escucharlo, armar un *dispositivo agregado* en Configuración de
-   Audio MIDI con BlackHole y los auriculares, y elegir ese.
-3. En Note Taker, pantalla **Preparar**, elegir `BlackHole 2ch` como entrada.
-4. Mirar el medidor y el renglón **"Lo que se está oyendo"**: ahí aparece lo que
-   Whisper entiende. Es la manera de saber que entra la voz correcta antes de
-   empezar, y no después de haber grabado media clase.
+1. Abrir Zoom y entrar a la reunión.
+2. En Note Taker, pantalla **Preparar**: si Zoom está abierto, «Audio de Zoom»
+   ya viene elegido. Si no, «Buscar de nuevo» lo encuentra.
+3. La primera vez, macOS pide permiso para **grabar el audio del sistema**. Hay
+   que darlo: sin él, el sonido llega en silencio y no hay forma de preguntarlo
+   de otra manera. Se revisa en Ajustes del Sistema → Privacidad y seguridad →
+   Grabación de audio del sistema.
+4. Apenas empieza la grabación, «Oyendo» en la pantalla de En vivo muestra lo
+   que Whisper entiende. Si ahí no aparece lo que dice el profesor, se termina y
+   se elige otra entrada.
+
+Seguís oyendo la llamada en tus auriculares como siempre, y no se graba nada más
+de la Mac: ni notificaciones, ni otra app que suene.
+
+**Cómo funciona.** macOS 14.2 trae los *process taps*: se le pide a Core Audio
+una copia del sonido que produce una app, y lo entrega sin cambiar a dónde va.
+Eso lo hace un ayudante nativo chico (`nativo/escuchar-app.swift`, compilado por
+`tools/bundle-binaries.sh`) que Node lanza y lee. Lo que entrega es exactamente lo
+mismo que manda la ventana cuando graba un micrófono —PCM mono de 16 bits en
+pedazos de 4096 muestras—, así que el resto del motor no distingue de dónde vino.
+El tamaño del pedazo importa: `golpe.js` mide el pico y el promedio de cada uno
+para reconocer el aplauso, y sus umbrales se midieron con ese tamaño.
+
+**Lo que la lista no deja elegir en verde.** Los nombres de la lista confunden, y
+el error se descubría después de la clase:
+
+| entrada | qué pasa |
+|---|---|
+| Audio de Zoom (la llamada) | la voz de la reunión. En verde |
+| **ZoomAudioDevice (Virtual)** | parece la llamada y **no lo es**: es lo que Zoom usa para *mandar* el sonido de la Mac al compartir pantalla. En rojo |
+| un micrófono (el de la Mac, el del iPhone, los AirPods) | graba la sala. En ámbar, con «Es una clase presencial: usar el micrófono» para cuando sí es eso |
+| BlackHole, Loopback, un dispositivo agregado | sirve si Zoom manda su sonido ahí |
+
+Con los auriculares Bluetooth hay además otro motivo para no elegir su
+micrófono: abrirlo los pasa a modo llamada y el sonido en los oídos empeora.
+
+Sin el ayudante —una Mac con macOS anterior a 14.2, o una copia sin
+`bundle-binaries.sh`— queda el camino de siempre: instalar
+[BlackHole](https://existential.audio/blackhole/), armar un dispositivo de salida
+múltiple con BlackHole y los auriculares, ponerlo como altavoz en Zoom y elegir
+BlackHole en Note Taker.
 
 Si la fuente es una interfaz o una grabadora, se elige su línea y listo. La app
 abre la entrada **sin** cancelación de eco, sin supresión de ruido y sin control
@@ -361,7 +396,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 221 pruebas, sin red y sin abrir nada
+npm test           # 237 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```

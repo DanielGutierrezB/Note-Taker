@@ -1,0 +1,4 @@
+{
+  "//": "Los módulos de la ventana son ES modules. El navegador lo sabe por el <script type=\"module\">; esto es para Node, que los importa en las pruebas (tests/formato.test.js, tests/audio-app.test.js) y sin esto tiene que adivinarlo y avisa. Va acá y no en el package.json de la raíz porque allá todo el motor es CommonJS.",
+  "type": "module"
+}

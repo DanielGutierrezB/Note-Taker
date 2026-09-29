@@ -21,6 +21,7 @@ const FILES = [
     'turnos.test.js',
     'golpe.test.js',
     'captura.test.js',
+    'audio-app.test.js',
     'insistir.test.js',
     'notas-vivo.test.js',
     'claquetas.test.js',

@@ -24,6 +24,12 @@ const hay = nombre => escenarios.has(nombre);
 const avisos = [];
 let ajustes = { ...AJUSTES };
 if (hay('sin-carpeta')) ajustes = { ...ajustes, carpeta: null, carpetas: [], curso: '' };
+if (hay('preparar-microfono')) ajustes = { ...ajustes, dispositivo: 'MacBook Pro Microphone (Built-in)' };
+if (hay('preparar-zoom-falso')) ajustes = { ...ajustes, dispositivo: 'ZoomAudioDevice (Virtual)' };
+if (hay('preparar-sin-audio') || hay('sin-zoom')) ajustes = { ...ajustes, dispositivo: null };
+
+/** El oyente del sonido de Zoom, para poder mandarle nivel desde `conAudio`. */
+let oyenteZoom = null;
 
 const doctor = hay('sin-whisper')
     ? {
@@ -65,6 +71,16 @@ window.nt = {
     confirmar: async () => true,
     reveal: async ruta => { console.log('reveal', ruta); return true; },
     openPath: async () => '',
+
+    // El sonido de Zoom. `?e=sin-zoom` es Zoom cerrado.
+    audioAppEstado: async () => ({ soportado: true, abierta: !hay('sin-zoom'), sonando: true }),
+    audioAppAbrir: async () => (hay('sin-zoom')
+        ? { ok: false, codigo: 'sin-app',
+            error: 'No encontré ninguna app que empiece con us.zoom entre las que usan audio. Si es Zoom, abrila y entrá a la reunión.' }
+        : { ok: true, sampleRate: 48000, canales: 1 }),
+    audioAppMandar: async () => true,
+    audioAppCerrar: async () => true,
+    onAudioApp: cb => { oyenteZoom = cb; },
 
     grabarIniciar: async () => ({ ok: true, estado: estadoEnVivo() }),
     grabarReanudar: async () => ({ ok: true, estado: estadoEnVivo() }),
@@ -156,7 +172,8 @@ async function aplicar() {
 
     if (hay('iconos')) return verIconos();
 
-    if (hay('preparar') || hay('preparar-sin-audio') || hay('sin-whisper')) {
+    if (hay('preparar') || hay('preparar-sin-audio') || hay('sin-whisper') ||
+        hay('preparar-microfono') || hay('preparar-zoom-falso') || hay('sin-zoom')) {
         await app.irAPreparar();
         // El nivel entrando, que es lo que dice «hay algo del otro lado».
         if (!hay('preparar-sin-audio')) await conAudio();
@@ -199,10 +216,10 @@ function estadoDeLaClase() {
  * puerto por el que los manda el worklet (ver `capturador`).
  */
 async function conAudio() {
-    const oyendo = document.getElementById('oyendo-preparar');
-    if (oyendo) oyendo.textContent = OYENDO;
-
     for (let i = 0; i < 600; i++) {
+        // Por las dos puertas: el nivel de Zoom llega por `onAudioApp`, el de
+        // un micrófono por el worklet. Cada fuente escucha solo la suya.
+        if (oyenteZoom) oyenteZoom({ tipo: 'nivel', pico: 0.25 + Math.abs(Math.sin(i / 7)) * 0.4 });
         if (capturador && capturador.port.onmessage) {
             const pico = 0.25 + Math.abs(Math.sin(i / 7)) * 0.4;
             const muestras = new Int16Array(512);

@@ -114,6 +114,7 @@ function resolveTool(name) {
 const ffprobe = () => resolveTool('ffprobe');
 const ffmpeg = () => resolveTool('ffmpeg');
 const whisper = () => resolveTool('whisper-cli');
+const escucharApp = () => resolveTool('escuchar-app');
 
 
 // ─── Modelos ──────────────────────────────────────────────────────────
@@ -366,6 +367,14 @@ function doctor() {
         { key: 'whisper-cli', required: true, info: whisper() },
         { key: 'modelo de Whisper', required: true, info: whisperModel() },
         {
+            key: 'escucha de Zoom (escuchar-app)',
+            required: false,
+            nota: 'Sin él no aparece «Audio de Zoom» en la lista de entradas, y la única ' +
+                'forma de grabar una clase por Zoom es un dispositivo virtual como BlackHole. ' +
+                'Se arma con tools/bundle-binaries.sh.',
+            info: escucharApp()
+        },
+        {
             key: 'modelo liviano (notas en vivo)',
             required: false,
             nota: 'Sin él, la toma de notas en vivo escucha las señales del profesor ' +
@@ -409,7 +418,7 @@ function doctor() {
 function clearCache() { cache.clear(); }
 
 module.exports = {
-    resolveTool, ffprobe, ffmpeg, whisper,
+    resolveTool, ffprobe, ffmpeg, whisper, escucharApp,
     whisperModel, vadModel, modeloLiviano, modelDirs, MODEL_PREFERENCE,
     // El escalón de abajo, que es lo que la política de reintento le pregunta
     // cuando el sistema se lleva a whisper-cli (`engine/insistir.js`).

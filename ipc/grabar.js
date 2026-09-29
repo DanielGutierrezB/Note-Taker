@@ -14,6 +14,7 @@
 
 const grabacion = require('../engine/grabacion');
 const vivo = require('../engine/notas-vivo');
+const audioApp = require('../engine/audio-app');
 
 /**
  * @param {object} deps { ipcMain, app, send, anotar } de `main.js`
@@ -68,6 +69,33 @@ function registrar({ ipcMain, app, send, anotar }) {
             anotar('grabar.pcm-falla', { error: err.message });
         }
     });
+
+    /**
+     * La otra fuente: el sonido de Zoom, que no pasa por la ventana.
+     *
+     * Lo abre Node (`engine/audio-app.js`) y los pedazos van directo a
+     * `grabacion.pcm`, por el mismo camino que los del micrófono. La ventana
+     * pide y recibe el nivel por `audio-app`, y nada más: mandar el audio
+     * hasta allá para que lo devuelva sería hacerlo cruzar el puente dos veces
+     * para llegar al mismo sitio.
+     */
+    ipcMain.handle('audio-app-estado', () => audioApp.estado());
+
+    ipcMain.handle('audio-app-abrir', async () => {
+        const r = await audioApp.abrir({
+            alPcm: chunk => grabacion.pcm(chunk),
+            avisar: aviso => send('audio-app', aviso)
+        });
+        anotar('audio-app.abrir', { ok: r.ok, codigo: r.codigo || null, sampleRate: r.sampleRate || null });
+        return r;
+    });
+
+    ipcMain.handle('audio-app-mandar', (event, si) => {
+        if (si) audioApp.empezarAMandar(); else audioApp.dejarDeMandar();
+        return true;
+    });
+
+    ipcMain.handle('audio-app-cerrar', () => { audioApp.cerrar(); return true; });
 
     /**
      * "Claqueta ahora": la puso el editor, así que queda confirmada.
@@ -217,6 +245,9 @@ function registrar({ ipcMain, app, send, anotar }) {
     // La sesión NO queda marcada como terminada, así que se puede reanudar:
     // cerrar la app en medio de un rodaje no puede costar la clase.
     app.on('before-quit', () => {
+        // El ayudante primero: si siguiera mandando mientras se cierra la
+        // sesión, el último pedazo podría llegar a una sesión que ya no está.
+        try { audioApp.cerrar(); } catch (e) { /* ya estaba cerrado */ }
         try { grabacion.apagar(); } catch (e) { /* ya estaba cerrado */ }
     });
 }

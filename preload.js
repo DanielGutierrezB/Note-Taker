@@ -33,6 +33,15 @@ contextBridge.exposeInMainWorld('nt', {
     grabarIniciar: payload => ipcRenderer.invoke('grabar-iniciar', payload),
     grabarReanudar: (json, payload) => ipcRenderer.invoke('grabar-reanudar', json, payload),
     grabarPcm: chunk => ipcRenderer.send('grabar-pcm', chunk),
+
+    // El sonido de Zoom, que abre Node y no la ventana (`engine/audio-app.js`).
+    audioAppEstado: () => ipcRenderer.invoke('audio-app-estado'),
+    audioAppAbrir: () => ipcRenderer.invoke('audio-app-abrir'),
+    audioAppMandar: si => ipcRenderer.invoke('audio-app-mandar', si),
+    audioAppCerrar: () => ipcRenderer.invoke('audio-app-cerrar'),
+    onAudioApp: callback => {
+        ipcRenderer.on('audio-app', (_event, payload) => callback(payload));
+    },
     grabarClaqueta: () => ipcRenderer.invoke('grabar-claqueta'),
     grabarQuitarClaqueta: n => ipcRenderer.invoke('grabar-quitar-claqueta', n),
     grabarEditar: cambio => ipcRenderer.invoke('grabar-editar', cambio),

@@ -39,6 +39,7 @@ function arg(nombre, def) {
 
 const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
     'sin-carpeta', 'sesiones', 'preparar', 'preparar-sin-audio', 'sin-whisper',
+    'preparar-microfono', 'preparar-zoom-falso', 'sin-zoom',
     'en-vivo', 'toma-abierta', 'terminada', 'ajustes', 'diagnostico'
 ];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];

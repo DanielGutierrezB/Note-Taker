@@ -234,6 +234,28 @@ build_whisper() {
 
 # Reparar el enlazado de un bundle ya armado no necesita volver a compilar
 # whisper.cpp, que son varios minutos.
+# El ayudante que escucha a Zoom (`nativo/escuchar-app.swift`).
+#
+# Se compila con el `swiftc` de las Command Line Tools y no con `xcrun`, que
+# pasa por la licencia de Xcode y se niega a arrancar si nadie la aceptó —que
+# es el estado normal de una Mac donde Xcode vino instalado y nunca se abrió—.
+# Apunta a macOS 14.2, que es donde aparecieron los "process taps": en una Mac
+# más vieja el binario ni arranca, y la app ofrece la lista de micrófonos.
+build_escuchar_app() {
+    local swiftc="/Library/Developer/CommandLineTools/usr/bin/swiftc"
+    local sdk="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+    [ -x "$swiftc" ] || swiftc="$(command -v swiftc || true)"
+    if [ -z "$swiftc" ]; then
+        echo "✗ falta swiftc para compilar el ayudante de Zoom. Instalá las Command Line Tools: xcode-select --install" >&2
+        return 1
+    fi
+    log "escuchar-app ← nativo/escuchar-app.swift"
+    "$swiftc" -O -sdk "$sdk" -target arm64-apple-macos14.2 \
+        -o "$DEST/escuchar-app" nativo/escuchar-app.swift ||
+        { echo "✗ falló la compilación de escuchar-app" >&2; return 1; }
+    resign "$DEST/escuchar-app"
+}
+
 if [ "${1:-}" = "--sanear" ]; then
     echo "Solo saneando el enlazado de $DEST"
 else
@@ -241,6 +263,7 @@ else
     bundle_tool ffmpeg
     bundle_tool ffprobe
     build_whisper
+    build_escuchar_app
 fi
 
 echo

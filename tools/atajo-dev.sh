@@ -96,10 +96,11 @@ chmod +x "$APP/Contents/MacOS/note-taker-dev"
 
 # ── La ficha ─────────────────────────────────────────────────────────
 #
-# Los dos usos de micrófono y cámara van acá además de en `package.json`:
-# corriendo así, la app que macOS ve es ESTE bundle, y sin los dos textos el
-# sistema niega el permiso sin preguntar y el medidor de nivel se queda en cero
-# sin decir por qué.
+# Los usos de micrófono, cámara y audio del sistema van acá además de en
+# `package.json`: corriendo así, la app que macOS ve es ESTE bundle —también
+# para el ayudante que escucha a Zoom, que es su hijo—, y sin los textos el
+# sistema niega el permiso sin preguntar y el medidor se queda en cero sin
+# decir por qué.
 #
 # El identificador lleva `.dev` a propósito: con el mismo que la app
 # empaquetada, los permisos y las preferencias de las dos se pisarían.
@@ -121,6 +122,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <string>Note Taker escucha la entrada de audio de la clase para medir el nivel y para reconocer el conteo y la pausa mientras se toman las notas.</string>
     <key>NSCameraUsageDescription</key>
     <string>Note Taker muestra en pantalla lo que está entrando por una cámara, para ver qué se está filmando mientras se toman las notas. Ese video no se graba ni se guarda.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Note Taker escucha el sonido de Zoom para grabar la clase que llega por la llamada y reconocer el conteo y la pausa. Solo escucha a Zoom: no graba nada más de la Mac.</string>
 </dict>
 </plist>
 PLIST
