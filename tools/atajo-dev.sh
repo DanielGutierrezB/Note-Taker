@@ -26,7 +26,21 @@ if [ "${1:-}" = "--donde" ]; then DONDE="${2:?falta la carpeta}"; fi
 
 NOMBRE="Note Taker (Dev)"
 APP="$DONDE/$NOMBRE.app"
-ELECTRON="$RAIZ/node_modules/.bin/electron"
+
+# El binario de Electron, y NO `node_modules/.bin/electron`.
+#
+# Ese otro es un script de Node (`#!/usr/bin/env node`) que busca el binario y
+# lo lanza, así que necesita `node` en el PATH. Desde una terminal está; con
+# doble clic en el Finder, no: el PATH que macOS le da a una app son los cuatro
+# directorios del sistema, y Node vive en /opt/homebrew/bin. El síntoma era un
+# cartel con el código 127 («comando no encontrado») y un `env: node: No such
+# file or directory` en el registro.
+#
+# El binario de verdad trae su propio Node adentro —es el que corre el motor—,
+# así que llamándolo directo el atajo no depende de nada instalado aparte. La
+# ruta relativa sale de `path.txt`, que es de donde la lee el propio script.
+RELATIVO="node_modules/electron/dist/$(cat node_modules/electron/path.txt 2>/dev/null)"
+ELECTRON="$RAIZ/$RELATIVO"
 
 if [ ! -x "$ELECTRON" ]; then
     echo "No está Electron en node_modules. Corré: npm install"
@@ -49,17 +63,22 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cat > "$APP/Contents/MacOS/note-taker-dev" <<LANZADOR
 #!/bin/bash
 RAIZ="$RAIZ"
+ELECTRON="\$RAIZ/$RELATIVO"
 LOG="\$HOME/Library/Logs/note-taker-dev.log"
+ICONO="\$(cd "\$(dirname "\$0")/../Resources" && pwd)/icon.icns"
 mkdir -p "\$(dirname "\$LOG")"
 
+# Con \`display dialog\` y no \`display alert\` porque es el único de los dos que
+# acepta un icono: con el otro, el cartel salía con una carpeta genérica y no
+# se sabía de qué app era.
 aviso() {
-    /usr/bin/osascript -e "display alert \"Note Taker (Dev)\" message \"\$1\" buttons {\"Ver el registro\", \"Cerrar\"} default button \"Cerrar\"" \\
+    /usr/bin/osascript -e "display dialog \"\$1\" with title \"Note Taker (Dev)\" with icon POSIX file \"\$ICONO\" buttons {\"Ver el registro\", \"Cerrar\"} default button \"Cerrar\"" 2>/dev/null \\
         | grep -q "Ver el registro" && /usr/bin/open -a Console "\$LOG"
     exit 1
 }
 
 [ -d "\$RAIZ" ] || aviso "La carpeta del proyecto ya no está en \$RAIZ. Volvé a correr tools/atajo-dev.sh desde donde esté ahora."
-[ -x "\$RAIZ/node_modules/.bin/electron" ] || aviso "Falta Electron en node_modules. Corré npm install en \$RAIZ."
+[ -x "\$ELECTRON" ] || aviso "Falta Electron en node_modules. Corré npm install en \$RAIZ y después npm run atajo."
 
 cd "\$RAIZ"
 {
@@ -67,7 +86,7 @@ cd "\$RAIZ"
     echo "── \$(date '+%Y-%m-%d %H:%M:%S') ──"
 } >> "\$LOG"
 
-"\$RAIZ/node_modules/.bin/electron" . --dev >> "\$LOG" 2>&1
+"\$ELECTRON" . --dev >> "\$LOG" 2>&1
 CODIGO=\$?
 # 0 es cerrar la ventana y 143 es un SIGTERM (macOS al apagar). Los dos son
 # salidas normales y no tienen por qué avisar nada.
