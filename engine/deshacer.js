@@ -174,11 +174,21 @@ function mismaFoto(a, b) {
  */
 function anotar(historia, paso) {
     if (mismaFoto(paso.antes, paso.despues)) return;
+    // Qué campos cambió el gesto, para reponer esos y nada más (ver `poner`).
+    if (paso.id != null && paso.antes && paso.despues) paso.campos = camposQueCambian(paso.antes, paso.despues);
     historia.atras.push(paso);
     if (historia.atras.length > TOPE) historia.atras.shift();
     // Rehacer solo tiene sentido sobre lo que se deshizo: si después de deshacer
     // se edita otra cosa, ese futuro dejó de existir. Igual que en el visor.
     historia.adelante.length = 0;
+}
+
+/**
+ * Los campos en que dos fotos de la misma toma no coinciden.
+ */
+function camposQueCambian(a, b) {
+    const claves = new Set([...Object.keys(a), ...Object.keys(b)]);
+    return [...claves].filter(k => !mismaFoto({ v: a[k] }, { v: b[k] }));
 }
 
 /**
@@ -209,14 +219,47 @@ function dondeEntra(tomas, id) {
  * Mutando la lista que le pasan y no armando otra, por lo mismo que
  * `copiarEncima`: la sesión reparte esa lista por todas partes.
  */
-function poner(tomas, id, cual) {
+function poner(tomas, id, cual, campos) {
     const donde = tomas.findIndex(t => t.id === id);
     if (!cual) {
         if (donde >= 0) tomas.splice(donde, 1);
         return;
     }
-    if (donde >= 0) copiarEncima(tomas[donde], cual);
-    else tomas.splice(dondeEntra(tomas, id), 0, { ...cual });
+    if (donde < 0) {
+        tomas.splice(dondeEntra(tomas, id), 0, { ...cual });
+        return;
+    }
+    // **Solo los campos que el gesto cambió.** Copiar la foto entera encima
+    // repone también lo que pasó DESPUÉS sin que nadie lo tocara: deshacer un
+    // cambio de vista hecho con la toma abierta la volvía a abrir aunque
+    // «Pausa» ya la hubiera cerrado, y le devolvía el texto descartable del
+    // ciclo en vivo en lugar de la relectura. Medido en la revisión: el «3, 2,
+    // 1» siguiente quedaba adentro de la toma reabierta.
+    if (Array.isArray(campos)) {
+        const destino = tomas[donde];
+        for (const k of campos) {
+            if (!(k in cual)) delete destino[k];
+            else destino[k] = Array.isArray(cual[k]) ? cual[k].slice() : cual[k];
+        }
+        return;
+    }
+    copiarEncima(tomas[donde], cual);
+}
+
+/**
+ * Un paso de una lista de la sesión (las claquetas): saca un elemento y pone
+ * otro, identificados por su `ms`.
+ *
+ * Antes la foto era de la lista entera, y la lista NO cambia solo a mano: los
+ * aplausos y la voz le agregan claquetas mientras tanto. Deshacer una claqueta
+ * puesta a mano se llevaba todas las que se habían detectado después.
+ */
+function ponerEnLista(lista, quitar, poner) {
+    if (quitar) {
+        const i = lista.findIndex(x => x.ms === quitar.ms);
+        if (i >= 0) lista.splice(i, 1);
+    }
+    if (poner) lista.push({ ...poner });
 }
 
 /**
@@ -251,8 +294,12 @@ function ponerCampo(estado, campo, cual) {
  * sesión en silencio. Lo demás —descartar, comentar, la vista, un borde, incluso
  * eliminar— no depende de nada que haya pasado después, y se deshace siempre.
  */
-function dejariaDosAbiertas(tomas, id, cual) {
+function dejariaDosAbiertas(tomas, id, cual, campos) {
     if (!cual || cual.outMs != null) return false;
+    if (Array.isArray(campos) && !campos.includes('outMs')) {
+        // No repone el OUT: si la toma está abierta ahora, lo estaba igual.
+        return false;
+    }
     return tomas.some(t => t.id !== id && t.outMs == null);
 }
 
@@ -285,7 +332,10 @@ function sacar(historia, hacia) {
         que: paso.que,
         id: paso.id,
         campo: paso.campo,
-        foto: hacia === 'adelante' ? paso.despues : paso.antes
+        campos: paso.campos,
+        foto: hacia === 'adelante' ? paso.despues : paso.antes,
+        // Lo que está ahora, que es lo que hay que sacar en un paso de lista.
+        quitar: hacia === 'adelante' ? paso.antes : paso.despues
     };
 }
 
@@ -303,6 +353,8 @@ module.exports = {
     anotar,
     poner,
     ponerCampo,
+    ponerEnLista,
+    camposQueCambian,
     dondeEntra,
     dejariaDosAbiertas,
     proximo,

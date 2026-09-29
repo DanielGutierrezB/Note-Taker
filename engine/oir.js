@@ -71,6 +71,7 @@ async function delResidente(archivo, idioma) {
     try {
         return await residente.transcribir(archivo, idioma);
     } catch (e) {
+        residente.fallo();
         return null;
     }
 }
@@ -121,6 +122,13 @@ async function escuchar(params) {
         const nivel = sonido.niveles(recortado.archivo);
         if (!sonido.algoSuena(nivel)) return { palabras: [], colapsadas: 0, mudas: 0 };
 
+        // Con tope: un whisper-cli colgado dejaba el ciclo esperando para
+        // siempre —ni una señal más en toda la clase— y a «Terminar» también.
+        // En vivo, una pasada de seis segundos tarda uno; una toma se da el
+        // doble de su duración más un minuto.
+        opciones.tiempoMaxMs = p.liviano
+            ? 20000
+            : 60000 + 2 * Math.max(0, p.hastaMs - p.desdeMs);
         const salida = (p.liviano && await delResidente(recortado.archivo, opciones.language))
             || await transcribe.runWhisper(recortado.archivo, opciones);
 

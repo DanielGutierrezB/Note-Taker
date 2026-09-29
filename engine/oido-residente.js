@@ -38,6 +38,18 @@ const PASADA_MAX_MS = 15000;
 
 let servidor = null;
 
+/**
+ * Cuántas pasadas seguidas pueden fallar antes de tirar el servidor y volver a
+ * levantarlo, y cuánto se espera entre dos arranques. Un servidor trabado hacía
+ * esperar los quince segundos de `PASADA_MAX_MS` en CADA pasada, y uno que se
+ * caía no se volvía a levantar en toda la clase.
+ */
+const FALLAS_PARA_REINICIAR = 3;
+const ENTRE_ARRANQUES_MS = 20000;
+let fallas = 0;
+let ultimoArranque = 0;
+let ultimasOpciones = null;
+
 function puertoLibre() {
     return new Promise((resolve, reject) => {
         const s = net.createServer();
@@ -61,6 +73,9 @@ const espera = ms => new Promise(r => setTimeout(r, ms));
 function arrancar(opciones) {
     if (servidor) return servidor.cargando;
     const o = opciones || {};
+    ultimasOpciones = o;
+    ultimoArranque = Date.now();
+    fallas = 0;
     const bin = o.bin || paths.whisperServer().path;
     const modelo = o.modelo || paths.whisperModel();
     if (!bin || !modelo || !modelo.path) return Promise.resolve(false);
@@ -116,6 +131,17 @@ function arrancar(opciones) {
 function dtw(modelo) {
     const preset = transcribe.DTW_POR_MODELO[modelo.name];
     return preset ? ['-nfa', '-dtw', preset] : [];
+}
+
+/**
+ * Que haya un servidor, si alguna vez se pidió uno: si se cayó, se vuelve a
+ * levantar, sin más de un intento cada `ENTRE_ARRANQUES_MS`. Lo llama cada
+ * pasada del ciclo; mientras tanto se oye por whisper-cli.
+ */
+function asegurar(opciones) {
+    if (servidor || !ultimasOpciones) return;
+    if (Date.now() - ultimoArranque < ENTRE_ARRANQUES_MS) return;
+    arrancar({ ...ultimasOpciones, ...(opciones || {}) });
 }
 
 function listo() {
@@ -178,10 +204,28 @@ async function transcribir(wavPath, idioma) {
         method: 'POST', body: form, signal: AbortSignal.timeout(PASADA_MAX_MS)
     });
     if (!r.ok) throw new Error(`whisper-server contestó ${r.status}`);
-    return { words: palabrasDe(await r.json()), model: este.modelo.name };
+    const salida = { words: palabrasDe(await r.json()), model: este.modelo.name };
+    fallas = 0;
+    return salida;
 }
 
+/** Una pasada que falló. A la tercera seguida, el servidor se tira y se rearma. */
+function fallo() {
+    fallas++;
+    if (fallas < FALLAS_PARA_REINICIAR || !servidor) return;
+    const opciones = ultimasOpciones;
+    apagarServidor();
+    ultimasOpciones = opciones;
+    ultimoArranque = 0;
+}
+
+/** Al terminar la sesión: se apaga y no se vuelve a levantar solo. */
 function apagar() {
+    ultimasOpciones = null;
+    apagarServidor();
+}
+
+function apagarServidor() {
     const este = servidor;
     servidor = null;
     if (este && este.hijo) {
@@ -189,4 +233,4 @@ function apagar() {
     }
 }
 
-module.exports = { arrancar, listo, modelo, transcribir, apagar, palabrasDe };
+module.exports = { arrancar, asegurar, listo, modelo, transcribir, fallo, apagar, palabrasDe };

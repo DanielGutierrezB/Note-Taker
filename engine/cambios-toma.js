@@ -164,14 +164,14 @@ function comoSeLlama(c) {
  * @param {'claquetas'} campo qué campo de `sesion.estado` se tocó
  * @param {object|null} antes de `historial.fotoDeCampo`, sacada antes del cambio
  */
-function anotarDeLaSesion(sesion, campo, antes, cambio) {
+function anotarDeLaSesion(sesion, campo, antes, cambio, despues) {
     if (!sesion) return;
     historial.anotar(sesion.historia, {
         que: comoSeLlama(cambio || {}),
         tipo: (cambio || {}).tipo,
         campo,
         antes,
-        despues: historial.fotoDeCampo(sesion.estado[campo])
+        despues: despues !== undefined ? despues : historial.fotoDeCampo(sesion.estado[campo])
     });
 }
 
@@ -251,7 +251,7 @@ function volver(sesion, hacia) {
     // sesión no repone ninguna, así que no puede dejar dos abiertas. Preguntarle
     // igual lo plantaría siempre, porque su `id` es undefined y entonces
     // cualquier toma abierta contaría como "la otra".
-    if (!paso.campo && historial.dejariaDosAbiertas(sesion.estado.tomas, paso.id, foto)) {
+    if (!paso.campo && historial.dejariaDosAbiertas(sesion.estado.tomas, paso.id, foto, paso.campos)) {
         return {
             ok: false,
             error: `No puedo ${hacia === 'adelante' ? 'rehacer' : 'deshacer'} «${paso.que}»: ` +
@@ -261,9 +261,19 @@ function volver(sesion, hacia) {
         };
     }
 
-    historial.sacar(sesion.historia, hacia);
-    if (paso.campo) historial.ponerCampo(sesion.estado, paso.campo, foto);
-    else historial.poner(sesion.estado.tomas, paso.id, foto);
+    const dado = historial.sacar(sesion.historia, hacia);
+    if (paso.campo === 'claquetas') {
+        historial.ponerEnLista(sesion.estado.claquetas || (sesion.estado.claquetas = []), dado.quitar, dado.foto);
+        // Una claqueta que vuelve deja de estar entre las quitadas a mano, y una
+        // que se va a mano entra: las mismas reglas que el gesto original.
+        vivo.olvidarQuitada(sesion.estado, dado.foto);
+        if (dado.quitar && !dado.foto) vivo.recordarQuitada(sesion.estado, dado.quitar);
+        vivo.renumerar(sesion.estado);
+    } else if (paso.campo) {
+        historial.ponerCampo(sesion.estado, paso.campo, foto);
+    } else {
+        historial.poner(sesion.estado.tomas, paso.id, foto, dado.campos);
+    }
     // Un borde repuesto pide el mismo texto que pidió el gesto original: acá el
     // reparto de palabras lo hace la relectura, no el borde (ver `editar`).
     if (paso.tipo === 'borde' || paso.tipo === 'cerrar') relecturas.encolar(sesion, paso.id);
@@ -331,7 +341,10 @@ function cerrarToma(sesion, opciones) {
     if (Number.isFinite(o.ms)) {
         if (!vivo.cerrarEn(sesion.estado, toma, o.ms)) return espejo.resumen(sesion);
     } else {
-        toma.outMs = vivo.finDeToma(toma, espejo.grabadoHastaMs(sesion));
+        // El botón es «cerrá acá», y acá es donde llegó el audio: la última
+        // palabra que el ciclo oyó va unos segundos atrás, y cerrar en ella
+        // cortaba lo último dicho. La relectura lo acerca a la palabra.
+        vivo.cerrarProvisional(toma, espejo.grabadoHastaMs(sesion));
     }
     relecturas.encolar(sesion, toma.id);
     historial.anotar(sesion.historia, {

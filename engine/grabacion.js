@@ -259,10 +259,20 @@ function pcm(buffer) {
 }
 
 /** Un tramo de esta sesión, transcripto (`oir-toma.js` no sabe de sesiones). */
-function oirTramo(desdeMs, hastaMs, liviano) {
+function oirTramo(desdeMs, hastaMs, liviano, s) {
+    const de = s || sesion;
     return oirToma.tramo(
-        espejo.archivosDeLaSesion(sesion), desdeMs, hastaMs, liviano, sesion.estado.idioma);
+        espejo.archivosDeLaSesion(de), desdeMs, hastaMs, liviano, de.estado.idioma);
 }
+
+/**
+ * Lo más largo que se le pasa a Whisper en una pasada del ciclo. Si Whisper
+ * falla varias veces seguidas, `escuchadoHastaMs` no avanzaba y la ventana
+ * crecía una pasada por vez: a los dos minutos de errores eran 120 s de audio
+ * por pasada, cortados con un ffmpeg sincrónico en el proceso principal, y de
+ * ahí no se salía más.
+ */
+const VENTANA_MAX_MS = 15000;
 
 /**
  * El ciclo de señales: escucha lo último y abre o cierra tomas.
@@ -272,52 +282,59 @@ function oirTramo(desdeMs, hastaMs, liviano) {
  * lecturas del mismo audio duplicaría las palabras y con ellas las señales.
  */
 async function buscarSenales() {
-    if (!sesion || sesion.buscando || !sesion.captura) return;
-    const hasta = espejo.grabadoHastaMs(sesion);
-    if (hasta - sesion.escuchadoHastaMs < NUEVO_MIN_MS) return;
-    const desde = Math.max(sesion.captura.desdeMs,
-        Math.min(sesion.escuchadoHastaMs - SOLAPE_MS, hasta - CONTEXTO_MS));
+    // La sesión de ESTA pasada. Todo lo de abajo espera a Whisper, y mientras
+    // tanto la sesión puede terminar, o terminar y arrancar otra: mirando la
+    // variable del módulo, una pasada de la sesión A escribía en la B y su
+    // `finally` le soltaba el `buscando` a la B.
+    const s = sesion;
+    if (!s || s.buscando || !s.captura || s.terminando) return;
+    const vive = () => sesion === s && s.viva && !s.terminando;
+    const hasta = espejo.grabadoHastaMs(s);
+    if (hasta - s.escuchadoHastaMs < NUEVO_MIN_MS) return;
+    const desde = Math.max(s.captura.desdeMs, hasta - VENTANA_MAX_MS,
+        Math.min(s.escuchadoHastaMs - SOLAPE_MS, hasta - CONTEXTO_MS));
 
-    sesion.buscando = true;
+    s.buscando = true;
+    let listo;
+    s.pasada = new Promise(r => { listo = r; });
     try {
         // Primero los golpes que quedaron por leer: una claqueta es lo que ancla
         // la sincronía en post y una toma puede esperar tres segundos más.
-        await leerCandidatas();
-        if (!sesion) return;
+        await leerCandidatas(s, vive);
+        if (!vive()) return;
 
-        const oido = await oirTramo(desde, hasta, true);
-        if (!sesion) return;
+        residente.asegurar({ idioma: s.estado.idioma || 'es' });
+        const oido = await oirTramo(desde, hasta, true, s);
+        if (!vive()) return;
 
         let eventos = [];
         if (oido && oido.palabras.length) {
             // La ventana entera, incluido el solape: quitar acá lo ya oído deshacía
             // el solape justo cuando servía (ver `aplicarSenales`).
-            eventos = vivo.aplicarSenales(sesion.estado, oido.palabras, { firmeHastaMs: hasta - COLA_MS });
+            eventos = vivo.aplicarSenales(s.estado, oido.palabras, { firmeHastaMs: hasta - COLA_MS, finMs: hasta });
             for (const ev of eventos) {
-                if (ev.tipo === 'cerrada') relecturas.encolar(sesion, ev.toma);
+                if (ev.tipo === 'cerrada') relecturas.encolar(s, ev.toma);
             }
-            if (eventos.length) espejo.escribir(sesion);
+            if (eventos.length) espejo.escribir(s);
         }
-        relecturas.releerOrillas(sesion);
+        relecturas.releerOrillas(s);
         // El estado va en cada pasada y no solo cuando hay una señal: así las
         // palabras de la toma abierta van apareciendo en pantalla, que es lo que
         // dice "esto está oyendo bien" sin tener que esperar a que la toma cierre.
-        //
-        // `oyendo` es lo que se acaba de oír, tal cual, incluida la charla que no
-        // es de ninguna toma. Es el único sitio donde eso se ve, y es lo que
-        // permite darse cuenta de que está entrando el micrófono de la Mac en vez
-        // del audio del Zoom antes de haber grabado media clase.
-        sesion.avisar({
+        s.avisar({
             tipo: 'estado',
-            estado: espejo.resumen(sesion),
+            estado: espejo.resumen(s),
             eventos,
             oyendo: (oido ? oido.palabras : []).map(w => w.texto).join(' ')
         });
-        sesion.escuchadoHastaMs = hasta - COLA_MS;
     } catch (err) {
-        if (sesion) sesion.avisar({ tipo: 'error', mensaje: err.message });
+        if (vive()) s.avisar({ tipo: 'error', mensaje: err.message });
     } finally {
-        if (sesion) sesion.buscando = false;
+        // Avanza aunque haya fallado: repetir la misma ventana cada vez más
+        // larga no la arregla (ver `VENTANA_MAX_MS`).
+        s.escuchadoHastaMs = Math.max(s.escuchadoHastaMs, hasta - COLA_MS);
+        s.buscando = false;
+        listo();
     }
 }
 
@@ -388,28 +405,28 @@ function vigilarDeriva() {
  * menos es un punto de sincronía que el editor no tiene: la pantalla la muestra
  * como `por confirmar` y quien está mirando decide.
  */
-async function leerCandidatas() {
-    while (sesion && sesion.candidatas.length) {
-        const ms = sesion.candidatas[0];
+async function leerCandidatas(s, vive) {
+    while (vive() && s.candidatas.length) {
+        const ms = s.candidatas[0];
         // Todavía no hay audio detrás de este golpe; los que siguen son
         // posteriores, así que tampoco.
-        if (espejo.grabadoHastaMs(sesion) < ms + MARGEN_CLAQUETA_MS) return;
-        sesion.candidatas.shift();
+        if (espejo.grabadoHastaMs(s) < ms + MARGEN_CLAQUETA_MS) return;
+        s.candidatas.shift();
 
-        const leida = await leerClaqueta(ms);
-        if (!sesion) return;
-        const anotada = vivo.anotarClaqueta(sesion.estado, leida);
+        const leida = await leerClaqueta(ms, s);
+        if (!vive()) return;
+        const anotada = vivo.anotarClaqueta(s.estado, leida);
         if (anotada.nueva) {
-            sesion.avisar({ tipo: 'claqueta', claqueta: anotada.claqueta.n, por: 'golpe' });
+            s.avisar({ tipo: 'claqueta', claqueta: anotada.claqueta.n, por: 'golpe' });
         }
-        espejo.fijar(sesion);
+        espejo.fijar(s);
     }
 }
 
-async function leerClaqueta(ms) {
+async function leerClaqueta(ms, s) {
     let frase = '';
     try {
-        const oido = await oirTramo(ms - MARGEN_CLAQUETA_MS, ms + MARGEN_CLAQUETA_MS, false);
+        const oido = await oirTramo(ms - MARGEN_CLAQUETA_MS, ms + MARGEN_CLAQUETA_MS, false, s);
         frase = (oido ? oido.palabras : []).map(w => w.texto).join(' ').trim();
     } catch (err) {
         // El golpe se oyó igual: queda anotado sin frase, y se avisa.
@@ -445,17 +462,23 @@ async function leerClaqueta(ms) {
  * anotar puede fundir dos y renumerar las de atrás (ver `anotarClaqueta`).
  */
 function claqueta() {
-    if (!sesion) return null;
-    const antes = historial.fotoDeCampo(sesion.estado.claquetas);
+    if (!sesion || !sesion.captura) return null;
+    const ms = espejo.grabadoHastaMs(sesion);
+    // El paso es de UNA claqueta: la que había ahí (si se funde) y la que quedó.
+    // Una foto de la lista entera se llevaba al deshacer las que el aplauso o
+    // la voz anotaron después (ver `ponerEnLista` en `deshacer.js`).
+    const cerca = vivo.claquetaCerca(sesion.estado, ms);
+    const antes = cerca ? { ...cerca } : null;
     const anotada = vivo.anotarClaqueta(sesion.estado, {
-        ms: espejo.grabadoHastaMs(sesion) || Date.now(),
+        ms,
         paredMs: Date.now(),
         frase: '',
         confirmada: true,
         origen: 'editor'
     });
+    vivo.olvidarQuitada(sesion.estado, anotada.claqueta);
     cambiosToma.anotarDeLaSesion(sesion, 'claquetas', antes,
-        { tipo: 'claquetas', n: anotada.claqueta.n });
+        { tipo: 'claquetas', n: anotada.claqueta.n }, { ...anotada.claqueta });
     espejo.escribir(sesion);
     return espejo.resumen(sesion);
 }
@@ -463,9 +486,11 @@ function claqueta() {
 /** Saca una claqueta de la lista: se marcó de más, o el portazo no era. */
 function quitarClaqueta(n) {
     if (!sesion) return null;
-    const antes = historial.fotoDeCampo(sesion.estado.claquetas);
+    const quitada = (sesion.estado.claquetas || []).find(c => c.n === Number(n));
+    if (!quitada) return espejo.resumen(sesion);
+    const antes = { ...quitada };
     vivo.quitarClaqueta(sesion.estado, Number(n));
-    cambiosToma.anotarDeLaSesion(sesion, 'claquetas', antes, { tipo: 'claquetas', n: null });
+    cambiosToma.anotarDeLaSesion(sesion, 'claquetas', antes, { tipo: 'claquetas', n: null }, null);
     espejo.escribir(sesion);
     return espejo.resumen(sesion);
 }
@@ -497,6 +522,14 @@ function terminar() {
 }
 
 async function cerrarSesion() {
+    // Primero que no arranque ninguna pasada más, y que la que está en vuelo
+    // termine: si no, una pasada que volvía de Whisper después de cerrar la
+    // toma le escribía palabras y hasta abría una toma nueva que quedaba sin
+    // OUT en una sesión ya marcada como terminada.
+    const s = sesion;
+    s.terminando = true;
+    if (s.pasada) await s.pasada;
+    if (sesion !== s) return null;
     const pendiente = cerrarLoAbierto();
     if (pendiente != null) relecturas.encolar(sesion, pendiente);
     if (sesion.rehaciendo) await sesion.rehaciendo;
@@ -529,7 +562,11 @@ function cerrarLoAbierto() {
 
     const abierta = vivo.tomaAbierta(sesion.estado);
     if (abierta) {
-        abierta.outMs = vivo.finDeToma(abierta, espejo.grabadoHastaMs(sesion));
+        // Donde llegó el audio, y no en la última palabra oída: el ciclo va
+        // unos segundos atrás, y cerrar en su última palabra cortaba lo que el
+        // profesor dijo en ese tramo. La relectura lo acerca a la última
+        // palabra de verdad (`outProvisional` en `relecturas.js`).
+        vivo.cerrarProvisional(abierta, espejo.grabadoHastaMs(sesion));
         abierta.cerradaSola = true;
     }
     if (sesion.captura) {

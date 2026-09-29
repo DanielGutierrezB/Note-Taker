@@ -31,6 +31,7 @@ const FILES = [
     'formato.test.js',
     'sesiones-grabadas.test.js',
     'sesion.test.js',
+    'revision-motor.test.js',
     'puente-grabar.test.js'
 ];
 

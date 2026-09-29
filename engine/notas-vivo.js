@@ -274,7 +274,7 @@ function palabra(w) {
  * @param {Array} palabras [{t, texto}] con `t` en hora del día (ms)
  * @returns {Array} [{tipo:'abre'|'cierra'|'claqueta', desde:number, hasta:number}]
  */
-function senales(palabras) {
+function senales(palabras, finMs) {
     const lista = palabras || [];
     const salida = [];
 
@@ -300,8 +300,14 @@ function senales(palabras) {
             // la clase: se pide silencio detrás. La última palabra de la tirada
             // se resuelve con el silencio que venga después, así que quien llama
             // decide (ver `cierraDeVerdad`).
+            // Desde que TERMINA «pausa», y sin palabra detrás, hasta donde llega
+            // lo oído: antes una «pausa» al final de la ventana contaba como
+            // silencio infinito, y con medio segundo oído detrás ya cerraba.
             const siguiente = lista[i + 1];
-            const hueco = siguiente ? (siguiente.t - lista[i].t) / 1000 : Infinity;
+            const finPausa = lista[i].hasta != null ? lista[i].hasta : lista[i].t;
+            const hueco = siguiente
+                ? (siguiente.t - finPausa) / 1000
+                : (finMs != null ? (finMs - finPausa) / 1000 : Infinity);
             if (hueco >= SILENCIO_TRAS_PAUSA_SEC) {
                 salida.push({ tipo: 'cierra', desde: i, hasta: i, por: 'pausa' });
             }
@@ -635,7 +641,24 @@ function cerrarEn(estado, toma, ms) {
 function finDeToma(toma, siNoDijoNada) {
     const palabras = toma.palabras || [];
     const ultima = palabras[palabras.length - 1];
-    return ultima ? (ultima.hasta || ultima.t) : siNoDijoNada;
+    const fin = ultima ? (ultima.hasta || ultima.t) : siNoDijoNada;
+    // Nunca antes del IN: una toma abierta a mano durante el atraso del ciclo
+    // podía tener palabras de antes de su IN y cerrar con el OUT más atrás
+    // que el IN, que igual llegaba al XML.
+    return toma.inMs != null ? Math.max(fin, toma.inMs + DURACION_MINIMA_MS) : fin;
+}
+
+/** Lo más corto que puede durar una toma, para que el OUT no caiga sobre el IN. */
+const DURACION_MINIMA_MS = 100;
+
+/**
+ * Cierra en `ms` —donde llegó el audio— y deja anotado que es provisional: la
+ * relectura, que oye la toma entera con el modelo grande, lo acerca a la última
+ * palabra (ver `relecturas.js`).
+ */
+function cerrarProvisional(toma, ms) {
+    toma.outMs = Math.max(Number(ms) || 0, finDeToma(toma, ms));
+    toma.outProvisional = true;
 }
 
 /* ─── Las claquetas ──────────────────────────────────────────────────────
@@ -711,6 +734,13 @@ function fundir(vieja, nueva) {
  */
 function anotarClaqueta(estado, claqueta) {
     const lista = estado.claquetas || (estado.claquetas = []);
+    // Una que el editor quitó a mano no vuelve sola: la relectura la volvía a
+    // encontrar doce segundos después (`releerOrillas`) y renumeraba las de
+    // atrás. Solo la puede volver a poner él (o su Cmd-Z).
+    if ((claqueta.origen || 'editor') !== 'editor' &&
+        (estado.claquetasQuitadas || []).some(ms => Math.abs(ms - Number(claqueta.ms)) < MISMA_CLAQUETA_MS)) {
+        return { claqueta: null, nueva: false, quitada: true };
+    }
     const entra = {
         ms: Number(claqueta.ms),
         paredMs: claqueta.paredMs != null ? Number(claqueta.paredMs) : null,
@@ -754,9 +784,26 @@ function claquetaDeReferencia(estado) {
 }
 
 function quitarClaqueta(estado, n) {
+    const quitada = (estado.claquetas || []).find(c => c.n === n);
+    if (quitada) recordarQuitada(estado, quitada);
     estado.claquetas = (estado.claquetas || []).filter(c => c.n !== n);
     renumerar(estado);
     return estado.claquetas;
+}
+
+function recordarQuitada(estado, c) {
+    if (!c) return;
+    estado.claquetasQuitadas = (estado.claquetasQuitadas || []).concat([c.ms]);
+}
+
+function olvidarQuitada(estado, c) {
+    if (!c || !estado.claquetasQuitadas) return;
+    estado.claquetasQuitadas = estado.claquetasQuitadas.filter(ms => Math.abs(ms - c.ms) >= MISMA_CLAQUETA_MS);
+}
+
+/** La claqueta con la que se fundiría una nueva en `ms`, si hay. */
+function claquetaCerca(estado, ms) {
+    return (estado.claquetas || []).find(c => Math.abs(c.ms - ms) < MISMA_CLAQUETA_MS) || null;
 }
 
 /** Cuántas de las últimas palabras oídas se recuerdan para encontrarlas en la pasada siguiente. */
@@ -849,6 +896,8 @@ function dondeSigue(estado, nuevas) {
  * @returns {Array} qué pasó, para poder contarlo en la pantalla y en el registro
  */
 function aplicarSenales(estado, palabras, opciones) {
+    if (!Array.isArray(estado.sueltas)) estado.sueltas = [];
+    if (!estado.ultimaSenal) estado.ultimaSenal = {};
     const todas = (palabras || []).filter(w => w && w.t != null);
     if (!todas.length) return [];
     const firme = opciones && Number.isFinite(opciones.firmeHastaMs) ? opciones.firmeHastaMs : Infinity;
@@ -858,12 +907,15 @@ function aplicarSenales(estado, palabras, opciones) {
     while (cuantasFirmes < todas.length && esFirme(todas[cuantasFirmes])) cuantasFirmes++;
     const nuevas = todas;
 
-    const yaVista = marca => {
-        const previa = estado.ultimaSenal[marca.tipo];
-        return previa != null && Math.abs(nuevas[marca.hasta].t - previa) < MISMA_SENAL_MS;
-    };
+    // Las señales ya vistas, varias por tipo: con una sola por tipo, dos conteos
+    // en la misma ventana de seis segundos se turnaban y los dos se volvían a
+    // disparar en cada pasada.
+    if (!estado.senalesVistas) estado.senalesVistas = {};
+    const yaVista = marca => (estado.senalesVistas[marca.tipo] || [])
+        .some(t => Math.abs(nuevas[marca.hasta].t - t) < MISMA_SENAL_MS);
+    const finMs = opciones && Number.isFinite(opciones.finMs) ? opciones.finMs : undefined;
 
-    const marcas = senales(nuevas).filter(m => m.hasta < cuantasFirmes && !yaVista(m));
+    const marcas = senales(nuevas, finMs).filter(m => m.hasta < cuantasFirmes && !yaVista(m));
     // Dónde empieza lo que no se había oído: por el TEXTO y no por la hora (ver
     // `dondeSigue`).
     const inicioNuevo = dondeSigue(estado, nuevas);
@@ -874,17 +926,27 @@ function aplicarSenales(estado, palabras, opciones) {
         const toma = tomaAbierta(estado);
         const tope = Math.min(hasta, cuantasFirmes);
         for (let i = Math.max(cursor, inicioNuevo); i < tope; i++) {
-            // Con una toma abierta la palabra es suya; sin ninguna, queda en el
-            // colchón por si alguien abre a mano en los próximos segundos (ver
-            // `sueltas` en `estadoNuevo` y `abrirToma`).
-            if (toma) toma.palabras.push(nuevas[i]);
-            else estado.sueltas.push(nuevas[i]);
+            const w = nuevas[i];
+            // El IN que puso el conteo sobre su propio «1», porque no se había
+            // oído nada detrás: la primera palabra que llega es donde empieza.
+            if (toma && toma.inProvisional) {
+                toma.inMs = Math.max(toma.inMs, w.t);
+                delete toma.inProvisional;
+            }
+            // Con una toma abierta la palabra es suya —salvo que se haya dicho
+            // antes de su IN, que pasa al abrir a mano durante el atraso del
+            // ciclo—; sin ninguna, queda en el colchón por si alguien abre a mano
+            // en los próximos segundos (ver `sueltas` y `abrirToma`).
+            if (toma && w.t >= toma.inMs) toma.palabras.push(w);
+            else estado.sueltas.push(w);
         }
         cursor = hasta;
     };
 
     for (const marca of marcas) {
         estado.ultimaSenal[marca.tipo] = nuevas[marca.hasta].t;
+        estado.senalesVistas[marca.tipo] = (estado.senalesVistas[marca.tipo] || [])
+            .concat([nuevas[marca.hasta].t]).slice(-8);
 
         if (marca.tipo === 'claqueta') {
             // Las palabras de la claqueta se guardan como cualquier otra: si hay
@@ -929,10 +991,17 @@ function aplicarSenales(estado, palabras, opciones) {
             // El IN cae en la palabra que sigue a la señal, no en la señal: el
             // conteo no es clase. Si la señal fue lo último que llegó, queda en
             // su final y la primera palabra que venga lo corrige.
+            // Si el «1» fue lo último oído, el IN va al FINAL del «1» y queda
+            // provisional: la primera palabra que llegue lo corrige (`guardar`).
+            // Antes caía al principio del «1» y nadie lo corregía: el «Uno.»
+            // quedaba adentro de la toma.
+            const sigue = nuevas[marca.hasta + 1];
+            const uno = nuevas[marca.hasta];
             const toma = nuevaToma(
                 estado,
-                nuevas[marca.hasta + 1] ? nuevas[marca.hasta + 1].t : nuevas[marca.hasta].t,
+                sigue ? sigue.t : (uno.hasta != null ? uno.hasta : uno.t),
                 textoDe(nuevas, marca.desde, marca.hasta));
+            if (!sigue) toma.inProvisional = true;
             // El conteo abrió la toma, así que lo que se dijo antes es de otra
             // cosa: el colchón se vacía para que un "abrir a mano" posterior no
             // retroceda hasta una tirada que ya quedó del lado de afuera.
@@ -1237,6 +1306,11 @@ module.exports = {
     MISMA_CLAQUETA_MS,
     CLAQUETA,
     repartir,
+    renumerar,
+    cerrarProvisional,
+    recordarQuitada,
+    olvidarQuitada,
+    claquetaCerca,
     moverBorde,
     tomasQueQuedan,
     limpio,

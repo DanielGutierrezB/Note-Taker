@@ -37,6 +37,9 @@ const vivo = require('./notas-vivo');
  * toma cerrada, en cambio, puede esperar: nadie va a mirar su texto en los
  * próximos segundos.
  */
+/** Aire después de la última palabra cuando el OUT se acerca a ella. */
+const CIERRE_TRAS_PALABRA_MS = 200;
+
 function encolar(sesion, id) {
     if (!sesion || !sesion.viva) return;
     // Una toma que ya espera no se encola dos veces: arrastrar un borde tres
@@ -68,8 +71,24 @@ async function rehacer(sesion, id) {
         const leido = await oirToma.leer(espejo.archivosDeLaSesion(sesion), toma,
             { idioma: sesion.estado.idioma });
         if (!sesion.viva || !leido) return;
+        // Mientras se leía, la toma pudo irse (descartada) o reabrirse: sin OUT,
+        // `repartir` mandaba todo el texto a `despues` y la toma quedaba vacía.
+        if (!sesion.estado.tomas.includes(toma) || toma.outMs == null) return;
 
         Object.assign(toma, leido);
+        // El OUT que puso el botón o Terminar es donde llegó el audio, con el
+        // silencio del atraso incluido: se acerca a la última palabra de verdad,
+        // que ahora sí se conoce entera.
+        if (toma.outProvisional && leido.palabras && leido.palabras.length) {
+            const ultima = leido.palabras[leido.palabras.length - 1];
+            const fin = (ultima.hasta != null ? ultima.hasta : ultima.t) + CIERRE_TRAS_PALABRA_MS;
+            if (fin < toma.outMs && fin > toma.inMs) {
+                toma.outMs = fin;
+                const todas = (toma.antes || []).concat(toma.palabras || [], toma.despues || []);
+                Object.assign(toma, vivo.repartir(todas, toma));
+            }
+        }
+        delete toma.outProvisional;
         // La orilla de la derecha son segundos que, en el momento de cerrar la
         // toma, todavía se están grabando: nace vacía por fuerza. Queda anotado
         // para volver a buscarla cuando el audio la alcance (`releerOrillas`).

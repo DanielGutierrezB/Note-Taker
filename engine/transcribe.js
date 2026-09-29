@@ -462,6 +462,11 @@ function runWhisper(wavPath, options) {
         let stdout = '';
         let lastPercent = -1;
         let killedByUser = false;
+        let porTiempo = false;
+        const reloj = opts.tiempoMaxMs ? setTimeout(() => {
+            porTiempo = true;
+            try { child.kill('SIGKILL'); } catch (e) { /* ya se fue */ }
+        }, opts.tiempoMaxMs) : null;
 
         const onAbort = () => {
             killedByUser = true;
@@ -492,7 +497,16 @@ function runWhisper(wavPath, options) {
         });
 
         child.on('close', (code, signal) => {
+            if (reloj) clearTimeout(reloj);
             if (opts.signal) opts.signal.removeEventListener('abort', onAbort);
+            // Colgado: se lo mató por tiempo. Para la política de reintento es
+            // lo mismo que si el sistema se lo hubiera llevado (`insistir.js`).
+            if (porTiempo) {
+                const err = new TranscribeError(
+                    `whisper-cli no terminó en ${Math.round(opts.tiempoMaxMs / 1000)} s y se cortó.`, 'tiempo');
+                err.muerte = comoMurio(null, 'SIGKILL');
+                return reject(err);
+            }
             if (killedByUser) {
                 return reject(new TranscribeError('Transcripción cancelada.', 'cancelado'));
             }

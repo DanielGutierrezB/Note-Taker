@@ -279,7 +279,15 @@ function paraReanudar(json, enCurso) {
         dir: sitio.base,
         ceroMs: Number(estado.ceroMs),
         estado: {
+            // Primero un estado nuevo entero y encima lo del sidecar: el sidecar
+            // no guarda lo que vive solo en memoria (las palabras sueltas, lo
+            // último oído), y sin esto una sesión reanudada tenía `sueltas`
+            // indefinido y el ciclo de señales tiraba en cada pasada: nunca más
+            // abría una toma, y la ventana que oía crecía sin techo.
+            ...vivo.estadoNuevo({}),
             ...estado,
+            sueltas: [],
+            recientes: [],
             sesiones,
             // Los contadores siguen desde donde estaban: una toma nueva no puede
             // reusar el id de una vieja, y una claqueta nueva no puede llamarse
