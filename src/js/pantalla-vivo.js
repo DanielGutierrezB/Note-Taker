@@ -8,7 +8,11 @@
  *   Son los dos que hay que poder leer sin acercarse. Todo lo demás vive en la
  *   escala de 13/12/11.
  * - **La tarjeta "Ahora" arriba del todo**, con la toma abierta y su nota en
- *   edición. Es donde está la mano del editor el 90 % del tiempo.
+ *   edición. Es donde está la mano del editor el 90 % del tiempo, y ahí vive
+ *   el único botón primario de la pantalla: **Abrir toma** cuando no hay
+ *   ninguna, **Cerrar toma** cuando la hay. Son la misma acción con el signo
+ *   cambiado —poner el borde acá— y nunca se ven las dos a la vez, así que la
+ *   pantalla siempre tiene exactamente una cosa que gritar.
  * - **La lista debajo, en filas de 32 px y en acordeón**: abrir una cierra las
  *   demás. Con veinte tomas desplegadas hay que scrollear para encontrar la que
  *   se busca, y el nombre y el timecode alcanzan para elegir.
@@ -158,11 +162,18 @@ function botonHistoria(boton, hay, que, verbo) {
 function ahora(fps) {
     const abierta = estado.tomas.find(t => t.id === estado.abierta);
     if (!abierta) {
+        // Sin toma abierta, la acción principal de la pantalla es abrirla: es
+        // lo que hay que poder hacer rápido si el profesor arrancó sin decir el
+        // conteo, que es como se pierden las tomas.
         return `<div class="tarjeta"><div class="tarjeta-cabeza">
             <span class="hp-ico" style="color:var(--text-muted)">${icono('oido')}</span>
             <span class="v1">Esperando el «3, 2, 1»</span>
             <span class="pastilla" data-estado="escuchando">escuchando</span>
             <span class="crece"></span>
+            <button class="btn btn-primario" type="button" data-hace="abrir"
+                    title="Abre una toma acá. Si el profesor ya venía hablando, el IN
+retrocede solo hasta donde empezó la frase. Tecla: Enter">
+              ${icono('abrirToma')} Abrir toma</button>
             <button class="btn" type="button" data-hace="claqueta">
               ${icono('claqueta')} Claqueta</button>
           </div></div>`;
@@ -176,7 +187,8 @@ function ahora(fps) {
         <time class="fila-dato tc">${fmt.timecodeDe(abierta.inMs, estado.ceroMs, fps)}</time>
         <span class="crece"></span>
         ${vistas(abierta)}
-        <button class="btn" type="button" data-hace="cerrar">
+        <button class="btn btn-primario" type="button" data-hace="cerrar"
+                title="Cierra la toma en la última palabra dicha. Tecla: Enter">
           ${icono('cerrarToma')} Cerrar toma</button>
         <button class="btn" type="button" data-hace="claqueta">
           ${icono('claqueta')} Claqueta</button>
@@ -302,6 +314,7 @@ async function alClic(e) {
             pintar();
             break;
         case 'claqueta': await pedir(() => window.nt.grabarClaqueta()); break;
+        case 'abrir': await abrir(); break;
         case 'cerrar': await pedir(() => window.nt.grabarCerrarToma()); break;
         case 'vista':
             await editar({ tipo: 'vista', toma, vista: boton.dataset.vista });
@@ -337,6 +350,46 @@ async function moverBorde(palabra) {
             'querías era mover el OUT: para eso, hacé clic en la última palabra que quede adentro.'
     });
     await editar({ tipo: 'borde', toma, borde: ok ? 'in' : 'out', paredMs });
+}
+
+/**
+ * Abrir una toma a mano, y decir cuánto retrocedió.
+ *
+ * El aviso no es cosmético: el motor pone el IN al principio de la frase que
+ * el profesor venía diciendo, o sea ANTES de donde se apretó. Sin decirlo, el
+ * borde aparece en un sitio que nadie pidió y parece un error; dicho, es lo
+ * que uno quería y no tuvo que hacer.
+ */
+async function abrir() {
+    const nuevo = await window.nt.grabarAbrirToma();
+    if (!nuevo) return;
+    estado = nuevo;
+    pintar();
+    if (nuevo.retrocedioSec > 0.5) {
+        avisar(`Toma ${nuevo.abierta} abierta ${nuevo.retrocedioSec} s atrás, ` +
+            'desde donde arrancó la frase.');
+    } else if (nuevo.abierta != null) {
+        avisar(`Toma ${nuevo.abierta} abierta.`);
+    }
+}
+
+/**
+ * El borde de una toma, con una sola tecla.
+ *
+ * Enter abre si no hay ninguna abierta y cierra si la hay, y es a propósito
+ * que sea la misma: lo que se aprieta no es «abrir» ni «cerrar» sino «acá va
+ * el borde». Con dos teclas habría que acordarse de cuál toca, y se aprieta
+ * mirando al profesor y no a la pantalla — que es exactamente cuando uno no
+ * puede acordarse de nada.
+ *
+ * Apretarla de más abre una toma de un segundo o cierra una que no había que
+ * cerrar, y las dos cosas se arreglan con Cmd-Z.
+ */
+async function bordeDeToma() {
+    if (estado && estado.abierta != null) {
+        return pedir(() => window.nt.grabarCerrarToma());
+    }
+    return abrir();
 }
 
 async function editar(cambio) {
@@ -406,7 +459,7 @@ async function alTeclado(e) {
     }
     if (e.key === 'Enter') {
         e.preventDefault();
-        return pedir(() => window.nt.grabarCerrarToma());
+        return bordeDeToma();
     }
 
     const v = (estado.vistas || []).find(x => x.nombre[0].toLowerCase() === tecla);

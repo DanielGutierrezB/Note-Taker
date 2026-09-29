@@ -145,6 +145,124 @@ module.exports = function (t) {
         t.deep(e.tomas[0].palabras.map(w => w.texto), ['Hola', 'mundo']);
     });
 
+    t.group('notas-vivo · abrir a mano');
+
+    t.test('abre una toma donde se apretó, con el profesor callado', () => {
+        const e = nuevo();
+        const r = vivo.abrirToma(e, T0 + 5000);
+        t.eq(e.tomas.length, 1);
+        t.eq(r.toma.inMs, T0 + 5000);
+        t.eq(r.retrocedioSec, 0);
+    });
+
+    t.test('sin conteo, las palabras quedan sueltas en vez de perderse', () => {
+        // Es la mitad del arreglo: antes se descartaban, así que abrir a mano
+        // no tenía con qué retroceder.
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'Bueno'], [400, 'entonces'], [800, 'vamos']]));
+        t.eq(e.tomas.length, 0, 'no se abrió ninguna toma');
+        t.deep(e.sueltas.map(w => w.texto), ['Bueno', 'entonces', 'vamos']);
+    });
+
+    t.test('abrir tarde retrocede hasta donde arrancó la frase', () => {
+        // El caso que hace perder tomas: el profesor arranca sin decir el
+        // conteo y quien toma notas se da cuenta unos segundos después.
+        //
+        // Los 4 s del clic contra el último `hasta` oído (1,9 s) son 2,1 s de
+        // atraso, que es menos de lo que el ciclo de señales tarda en traer
+        // una palabra: el profesor no paró de hablar (ver `FRESCURA_MAX_SEC`).
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([
+            [0, 'Bueno'], [400, 'entonces'], [800, 'lo'], [1200, 'que'], [1600, 'hacemos']
+        ]));
+        const r = vivo.abrirToma(e, T0 + 4000);
+        t.eq(r.toma.inMs, T0, 'el IN va al arranque de la tirada, no al clic');
+        t.eq(r.retrocedioSec, 4);
+        t.deep(r.toma.palabras.map(w => w.texto),
+            ['Bueno', 'entonces', 'lo', 'que', 'hacemos'], 'y se lleva lo que ya se dijo');
+        t.eq(e.sueltas.length, 0, 'que dejan de estar sueltas');
+    });
+
+    t.test('no retrocede sobre un silencio largo', () => {
+        // Lo que se dijo antes de una pausa de verdad es de otra cosa: el IN
+        // arranca en la tirada de ahora y no se lleva la de antes.
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([
+            [0, 'Algo'], [400, 'viejo'],
+            [9000, 'Ahora'], [9400, 'sí'], [9800, 'arranco']
+        ]));
+        const r = vivo.abrirToma(e, T0 + 10500);
+        t.eq(r.toma.inMs, T0 + 9000, 'arranca en la tirada de ahora');
+        t.deep(r.toma.palabras.map(w => w.texto), ['Ahora', 'sí', 'arranco']);
+    });
+
+    t.test('con el profesor callado hace rato no retrocede nada', () => {
+        // Abrir con silencio delante es adelantarse a propósito, y ahí el
+        // borde que uno quiere es justo donde apretó.
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'algo'], [400, 'viejo']]));
+        const r = vivo.abrirToma(e, T0 + 20000);
+        t.eq(r.retrocedioSec, 0);
+        t.eq(r.toma.palabras.length, 0);
+    });
+
+    t.test('el atraso del ciclo de señales no cuenta como silencio', () => {
+        // La regresión que esto fija: con el umbral en el hueco entre palabras
+        // (1,5 s), el retroceso no se disparaba NUNCA. Lo que la app tiene
+        // oído va siempre unos segundos atrás —el ciclo corre cada tres y
+        // Whisper tarda más de uno—, así que el profesor puede estar hablando
+        // sin parar y la última palabra en memoria ser de hace cuatro.
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'Vamos'], [400, 'a'], [800, 'empezar']]));
+        const r = vivo.abrirToma(e, T0 + 1100 + vivo.HUECO_DE_TIRADA_SEC * 1000 + 2000);
+        t.ok(r.retrocedioSec > 0, `retrocedió ${r.retrocedioSec} s`);
+        t.eq(r.toma.palabras.length, 3);
+    });
+
+    t.test('el retroceso tiene tope', () => {
+        // Un monólogo de dos minutos sin un solo hueco no manda el IN al
+        // principio del monólogo: eso habría que descubrirlo mirando.
+        const e = nuevo();
+        const largo = [];
+        for (let i = 0; i < 300; i++) largo.push([i * 400, `p${i}`]);
+        vivo.aplicarSenales(e, palabras(largo));
+        const r = vivo.abrirToma(e, T0 + 300 * 400);
+        t.ok(r.retrocedioSec <= vivo.RETROCESO_MAX_SEC + 0.5, `${r.retrocedioSec} s`);
+    });
+
+    t.test('con una toma ya abierta no abre otra', () => {
+        // Dos abiertas a la vez rompen el ciclo de señales.
+        const e = nuevo();
+        vivo.abrirToma(e, T0 + 1000);
+        t.eq(vivo.abrirToma(e, T0 + 2000), null);
+        t.eq(e.tomas.length, 1);
+    });
+
+    t.test('una toma abierta a mano se cierra con "Pausa" como cualquier otra', () => {
+        const e = nuevo();
+        vivo.abrirToma(e, T0 + 1000);
+        vivo.aplicarSenales(e, palabras([[2000, 'Hola'], [6000, 'Pausa.'], [9000, 'Che']]));
+        t.ok(e.tomas[0].outMs != null);
+    });
+
+    t.test('el conteo vacía el colchón: lo de antes es de otra cosa', () => {
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'charla'], [400, 'suelta']]));
+        vivo.aplicarSenales(e, palabras([
+            [1000, '3,'], [1400, '2,'], [1800, '1.'], [2400, 'Hola']
+        ]));
+        t.eq(e.sueltas.length, 0);
+    });
+
+    t.test('el colchón no crece toda la clase', () => {
+        const e = nuevo();
+        const muchas = [];
+        for (let i = 0; i < 2000; i++) muchas.push([i * 400, `p${i}`]);
+        vivo.aplicarSenales(e, palabras(muchas));
+        const abarca = (e.sueltas[e.sueltas.length - 1].t - e.sueltas[0].t) / 1000;
+        t.ok(abarca <= 31, `el colchón abarca ${abarca} s`);
+    });
+
     t.group('notas-vivo · el final de una toma');
 
     t.test('finDeToma usa el final de la última palabra', () => {

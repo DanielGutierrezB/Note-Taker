@@ -191,6 +191,86 @@ module.exports = function (t) {
         }
     });
 
+    t.group('sesión · abrir y cerrar a mano');
+
+    t.test('abrir deja una toma abierta, con el reloj del audio', () => {
+        const dir = carpeta();
+        try {
+            const inicial = grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            let r;
+            for (let i = 0; i < 20; i++) r = grabacion.pcm(pedazo());
+            const estado = grabacion.abrirToma();
+            t.ok(estado.abierta != null, 'quedó una abierta');
+            const toma = estado.tomas.find(x => x.id === estado.abierta);
+            t.near(toma.inMs - inicial.ceroMs, r.segundos * 1000, 50);
+            t.eq(toma.cuenta, '', 'sin conteo: no se dijo ninguno');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('la que se abrió a mano se cierra a mano', () => {
+        const dir = carpeta();
+        try {
+            grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 20; i++) grabacion.pcm(pedazo());
+            grabacion.abrirToma();
+            for (let i = 0; i < 20; i++) grabacion.pcm(pedazo());
+            const estado = grabacion.cerrarToma();
+            t.eq(estado.abierta, null);
+            t.ok(estado.tomas[0].outMs != null);
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('abrir dos veces seguidas no deja dos abiertas', () => {
+        // Llega solo: entre que la pantalla dibuja el botón y el clic, el
+        // ciclo de señales pudo haber oído un conteo.
+        const dir = carpeta();
+        try {
+            grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 20; i++) grabacion.pcm(pedazo());
+            grabacion.abrirToma();
+            const estado = grabacion.abrirToma();
+            t.eq(estado.tomas.length, 1);
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('se deshace, y la toma se va de la sesión', () => {
+        const dir = carpeta();
+        try {
+            grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 20; i++) grabacion.pcm(pedazo());
+            grabacion.abrirToma();
+            const r = grabacion.deshacer();
+            t.ok(r.ok, r.error);
+            t.eq(r.estado.tomas.length, 0);
+            t.eq(r.estado.abierta, null);
+            t.ok(r.que.includes('abrir'), r.que);
+            const rehecho = grabacion.rehacer();
+            t.eq(rehecho.estado.tomas.length, 1, 'y se rehace');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('una toma abierta a mano llega al XML al terminar', async () => {
+        const dir = carpeta();
+        const inicial = grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+        for (let i = 0; i < 20; i++) grabacion.pcm(pedazo());
+        grabacion.abrirToma();
+        for (let i = 0; i < 40; i++) grabacion.pcm(pedazo());
+        // La cierra `terminar`, como la toma que el profesor olvidó cerrar.
+        const salida = await grabacion.terminar();
+        t.eq(salida.tomas.length, 1);
+        t.ok(salida.tomas[0].cerradaSola, 'la cerró el cierre de la sesión');
+        const xml = fs.readFileSync(inicial.archivos.xml, 'utf8');
+        t.ok(xml.includes('<name>PV</name>'), 'y está en el XML');
+    });
+
     t.group('sesión · reanudar');
 
     t.test('sigue en el mismo XML, con el mismo cero y otro WAV', async () => {

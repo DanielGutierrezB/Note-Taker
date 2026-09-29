@@ -73,6 +73,7 @@ window.nt = {
     grabarQuitarClaqueta: async () => estadoEnVivo(),
     grabarEditar: async () => estadoEnVivo(),
     grabarEditarGrabada: async () => ({ ok: true }),
+    grabarAbrirToma: async () => ({ ...estadoEnVivo(), abierta: 7, retrocedioSec: 4.2 }),
     grabarCerrarToma: async () => estadoEnVivo(),
     grabarDeshacer: async () => ({ ok: true, que: 'poner la toma 4 en S', estado: estadoEnVivo() }),
     grabarRehacer: async () => ({ ok: false, estado: estadoEnVivo() }),

@@ -203,6 +203,22 @@ function estadoNuevo(params) {
         sesiones: [],
         tomas: [],
         proximaToma: 0,
+        /**
+         * Lo que se oyó SIN una toma abierta, de los últimos treinta segundos.
+         *
+         * Antes esto se tiraba: una palabra dicha entre dos tomas no es de
+         * nadie, y para el XML sigue sin serlo. Existe por un caso concreto y
+         * es el que más tomas hace perder: el profesor arranca sin decir
+         * "3, 2, 1" y quien toma notas se da cuenta cinco o diez segundos
+         * después. Abrir la toma en ese momento la abriría a mitad de la
+         * primera frase.
+         *
+         * Con estas palabras guardadas, abrir a mano puede retroceder hasta
+         * donde ESA tirada empezó (ver `abrirToma`), que es donde el conteo la
+         * habría abierto. Son unas cien palabras en memoria y no van al XML ni
+         * al sidecar.
+         */
+        sueltas: [],
         // Hasta dónde se oyó y cuándo sonó la última señal de cada tipo: lo que
         // deja pasar la ventana entera del ciclo, con su solape, sin repetir nada.
         ultimaPalabraMs: 0,
@@ -436,6 +452,158 @@ function tomaAbierta(estado) {
 }
 
 /**
+ * Una toma nueva, con la forma entera declarada en un solo sitio.
+ *
+ * La arman los dos caminos que abren —el conteo hablado y el botón— y por eso
+ * está acá: con la forma escrita dos veces, un campo que se agregue de un lado
+ * deja tomas a las que les falta del otro, y eso no se ve hasta que algo lee el
+ * campo que no está.
+ */
+function nuevaToma(estado, inMs, cuenta) {
+    return {
+        id: (estado.proximaToma = estado.proximaToma + 1),
+        vista: VISTA_POR_DEFECTO,
+        comentario: '',
+        cuenta: cuenta || '',
+        inMs,
+        outMs: null,
+        descartada: false,
+        cerradaSola: false,
+        palabras: [],
+        comentarios: []
+    };
+}
+
+/**
+ * Cuánto silencio separa dos tiradas de habla.
+ *
+ * Es el hueco que convierte "sigue hablando" en "empezó otra cosa", y con él se
+ * decide hasta dónde retrocede una toma abierta a mano. Segundo y medio: por
+ * debajo, una coma respirada partiría la frase y el IN quedaría a mitad de
+ * camino; por encima, dos frases separadas por una pausa normal se leerían como
+ * una sola y el IN se iría demasiado atrás.
+ */
+const HUECO_DE_TIRADA_SEC = 1.5;
+
+/**
+ * Hasta dónde puede retroceder una toma abierta a mano.
+ *
+ * Veinte segundos, que es de sobra para el caso real —darse cuenta de que el
+ * profesor arrancó sin decir el conteo lleva unos pocos— y poco para el caso
+ * malo: si alguien abre a mano después de un monólogo de dos minutos, el IN no
+ * se va al principio del monólogo. Ante la duda, el borde se corrige después
+ * arrastrándolo sobre el texto, que es una cosa que se hace mirando; un IN que
+ * se fue solo dos minutos atrás hay que descubrirlo primero.
+ */
+const RETROCESO_MAX_SEC = 20;
+
+/**
+ * Cuánto se guarda en el colchón de palabras sueltas.
+ *
+ * Treinta segundos: el tope de retroceso más un margen, que es todo lo que
+ * `abrirToma` puede llegar a mirar. Guardar más sería guardar para nada.
+ */
+const VENTANA_DE_SUELTAS_SEC = 30;
+
+/**
+ * Cuán vieja puede ser la última palabra oída para que cuente como "el
+ * profesor está hablando ahora".
+ *
+ * **Seis segundos, y no es un número generoso: es el que hace falta.** Lo que
+ * la app tiene oído va SIEMPRE atrasado, y se sabe cuánto: el ciclo de señales
+ * corre cada tres segundos (`CICLO_MS`) y Whisper tarda algo más de uno en
+ * contestar, así que en el peor caso la última palabra que hay en memoria se
+ * dijo cuatro segundos y pico antes del clic aunque el profesor no haya parado
+ * de hablar ni un instante. Con el umbral en el hueco entre palabras (1,5 s),
+ * abrir a mano no retrocedía nunca: el arreglo no servía justo en el único
+ * caso para el que existe.
+ *
+ * Los cuatro y pico del atraso más un par de segundos de reacción humana dan
+ * seis. Más allá de eso se asume lo otro —que el profesor está callado y que
+ * quien abre se está adelantando—, y entonces la toma empieza donde se apretó,
+ * que es lo correcto para ese caso.
+ */
+const FRESCURA_MAX_SEC = 6;
+
+/**
+ * Dónde empieza la tirada de habla que está corriendo ahora.
+ *
+ * Se camina hacia atrás desde la última palabra oída, y se para en el primer
+ * hueco de `HUECO_DE_TIRADA_SEC` o al llegar al tope de retroceso. Lo que
+ * devuelve es el índice de la primera palabra de esa tirada, o -1 si no hay
+ * ninguna palabra reciente.
+ *
+ * @param {Array} sueltas palabras con hora del día, en orden
+ * @param {number} hastaMs el momento desde el que se mira para atrás
+ */
+function arranqueDeLaTirada(sueltas, hastaMs) {
+    const lista = sueltas || [];
+    let i = lista.length - 1;
+    while (i >= 0 && lista[i].t > hastaMs) i--;
+    if (i < 0) return -1;
+
+    // La última palabra tiene que ser RECIENTE. Si lo último que se oyó fue
+    // hace medio minuto, no hay ninguna tirada corriendo: el profesor está
+    // callado y la toma empieza donde se apretó el botón. El umbral es el del
+    // atraso del ciclo y no el del hueco entre palabras (ver `FRESCURA_MAX_SEC`).
+    const fin = lista[i].hasta || lista[i].t;
+    if ((hastaMs - fin) / 1000 > FRESCURA_MAX_SEC) return -1;
+
+    const piso = hastaMs - RETROCESO_MAX_SEC * 1000;
+    while (i > 0) {
+        const previa = lista[i - 1];
+        if (previa.t < piso) break;
+        const hueco = (lista[i].t - (previa.hasta || previa.t)) / 1000;
+        if (hueco >= HUECO_DE_TIRADA_SEC) break;
+        i--;
+    }
+    return i;
+}
+
+/**
+ * Abre una toma a mano: el botón y la tecla, no la señal.
+ *
+ * Existe porque el conteo no siempre se dice. El profesor arranca directo, o se
+ * lo come, o dice "bueno, vamos" — y entonces la toma no se abre sola y lo que
+ * sigue se pierde para el XML. Es la pérdida más cara de esta app, porque no se
+ * descubre hasta la mesa de edición.
+ *
+ * **Retrocede hasta donde empezó la frase, y ahí está la gracia.** Abrir en el
+ * momento del clic sería abrir a mitad de lo que el profesor ya venía diciendo:
+ * quien toma notas se da cuenta unos segundos tarde, siempre. Con las palabras
+ * sueltas guardadas (ver `sueltas`), el IN se puede poner donde el conteo lo
+ * habría puesto — al principio de la tirada— y esas palabras entran a la toma
+ * en vez de quedar afuera.
+ *
+ * Si el profesor está callado, no hay nada que retroceder y la toma empieza
+ * donde se apretó. Eso también es correcto: es el caso de abrir ANTES de que
+ * alguien hable, que es como se usa cuando uno se adelanta.
+ *
+ * @param {object} estado el de la sesión, se muta
+ * @param {number} ms la hora del día del gesto, en el reloj del audio
+ * @returns {{toma: object, retrocedioSec: number}|null} null si ya hay una abierta
+ */
+function abrirToma(estado, ms) {
+    if (tomaAbierta(estado)) return null;
+
+    const sueltas = estado.sueltas || [];
+    const desde = arranqueDeLaTirada(sueltas, ms);
+    const inMs = desde === -1 ? ms : sueltas[desde].t;
+
+    const toma = nuevaToma(estado, inMs, '');
+    if (desde !== -1) {
+        // Las palabras de la tirada dejan de ser de nadie y pasan a ser de la
+        // toma. Se sacan del colchón: dejarlas ahí las mostraría dos veces
+        // —adentro de la toma y como sueltas— y la toma siguiente podría
+        // volver a absorberlas.
+        toma.palabras = sueltas.slice(desde);
+        estado.sueltas = sueltas.slice(0, desde);
+    }
+    estado.tomas.push(toma);
+    return { toma, retrocedioSec: Math.round((ms - inMs) / 100) / 10 };
+}
+
+/**
  * Dónde termina una toma que se cierra ahora: el FINAL de su última palabra.
  *
  * Es una función porque son tres los sitios que cierran —"Pausa", el botón y
@@ -607,9 +775,13 @@ function aplicarSenales(estado, palabras) {
 
     const guardar = (hasta) => {
         const toma = tomaAbierta(estado);
-        if (!toma) { cursor = hasta; return; }
         for (let i = cursor; i < hasta; i++) {
-            if (nuevas[i].t > desdePalabra) toma.palabras.push(nuevas[i]);
+            if (nuevas[i].t <= desdePalabra) continue;
+            // Con una toma abierta la palabra es suya; sin ninguna, queda en el
+            // colchón por si alguien abre a mano en los próximos segundos (ver
+            // `sueltas` en `estadoNuevo` y `abrirToma`).
+            if (toma) toma.palabras.push(nuevas[i]);
+            else estado.sueltas.push(nuevas[i]);
         }
         cursor = hasta;
     };
@@ -657,21 +829,17 @@ function aplicarSenales(estado, palabras) {
             // ser palabras y el próximo `guardar` los mete en la toma, que es
             // donde el profesor los dijo.
             if (tomaAbierta(estado)) continue;
-            const toma = {
-                id: (estado.proximaToma = estado.proximaToma + 1),
-                vista: VISTA_POR_DEFECTO,
-                comentario: '',
-                cuenta: textoDe(nuevas, marca.desde, marca.hasta),
-                // El IN cae en la palabra que sigue a la señal, no en la señal:
-                // el conteo no es clase. Si la señal fue lo último que llegó,
-                // queda en su final y la primera palabra que venga lo corrige.
-                inMs: nuevas[marca.hasta + 1] ? nuevas[marca.hasta + 1].t : nuevas[marca.hasta].t,
-                outMs: null,
-                descartada: false,
-                cerradaSola: false,
-                palabras: [],
-                comentarios: []
-            };
+            // El IN cae en la palabra que sigue a la señal, no en la señal: el
+            // conteo no es clase. Si la señal fue lo último que llegó, queda en
+            // su final y la primera palabra que venga lo corrige.
+            const toma = nuevaToma(
+                estado,
+                nuevas[marca.hasta + 1] ? nuevas[marca.hasta + 1].t : nuevas[marca.hasta].t,
+                textoDe(nuevas, marca.desde, marca.hasta));
+            // El conteo abrió la toma, así que lo que se dijo antes es de otra
+            // cosa: el colchón se vacía para que un "abrir a mano" posterior no
+            // retroceda hasta una tirada que ya quedó del lado de afuera.
+            estado.sueltas = [];
             estado.tomas.push(toma);
             eventos.push({ tipo: 'abierta', toma: toma.id, por: marca.por });
             cursor = marca.hasta + 1;
@@ -692,6 +860,15 @@ function aplicarSenales(estado, palabras) {
     // tomas no es de nadie, pero tampoco puede volver a aparecer en la siguiente
     // ventana como si fuera nueva.
     estado.ultimaPalabraMs = Math.max(desdePalabra, nuevas[nuevas.length - 1].t);
+
+    // El colchón se recorta a su ventana. Sin esto, una clase de tres horas
+    // donde nadie abre ninguna toma acumula en memoria todas sus palabras, y
+    // `abrirToma` tendría que caminar hacia atrás sobre una lista que crece
+    // toda la clase para contestar lo mismo.
+    const piso = estado.ultimaPalabraMs - VENTANA_DE_SUELTAS_SEC * 1000;
+    if (estado.sueltas.length && estado.sueltas[0].t < piso) {
+        estado.sueltas = estado.sueltas.filter(w => w.t >= piso);
+    }
     return eventos;
 }
 
@@ -939,6 +1116,11 @@ module.exports = {
     aplicarSenales,
     repeticiones,
     tomaAbierta,
+    abrirToma,
+    arranqueDeLaTirada,
+    HUECO_DE_TIRADA_SEC,
+    RETROCESO_MAX_SEC,
+    FRESCURA_MAX_SEC,
     finDeToma,
     anotarClaqueta,
     renumerar,

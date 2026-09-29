@@ -92,6 +92,23 @@ function registrar({ ipcMain, app, send, anotar }) {
         return grabacion.editar(cambio);
     });
 
+    /**
+     * Abrir y cerrar una toma a mano, para cuando el conteo no se dijo.
+     *
+     * No llevan la hora, igual que la claqueta: la pone el motor con el reloj
+     * del audio. Y `grabar-abrir-toma` devuelve además cuánto retrocedió el
+     * IN, que es lo único que la ventana no puede saber sola y lo que le deja
+     * decir «abierta 4 s atrás, desde donde arrancó la frase».
+     */
+    ipcMain.handle('grabar-abrir-toma', () => {
+        const estado = grabacion.abrirToma();
+        anotar('grabar.abrir-toma', {
+            toma: estado && estado.abierta,
+            retrocedioSec: estado && estado.retrocedioSec
+        });
+        return estado;
+    });
+
     ipcMain.handle('grabar-cerrar-toma', () => grabacion.cerrarToma());
 
     /**

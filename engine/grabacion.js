@@ -512,6 +512,10 @@ function editar(cambio) {
     return cambiosToma.editar(sesion, cambio);
 }
 
+function abrirToma() {
+    return cambiosToma.abrirToma(sesion);
+}
+
 function cerrarToma() {
     return cambiosToma.cerrarToma(sesion);
 }
@@ -568,6 +572,7 @@ module.exports = {
     editarGrabada: sesionesGrabadas.editarGrabada,
     deshacer,
     rehacer,
+    abrirToma,
     cerrarToma,
     terminar,
     apagar,

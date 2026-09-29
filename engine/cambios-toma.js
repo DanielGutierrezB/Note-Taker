@@ -119,6 +119,7 @@ function comoSeLlama(c) {
         case 'borde': return `mover el ${c.borde === 'in' ? 'IN' : 'OUT'} de ${cual}`;
         case 'reabrir': return `reabrir ${cual}`;
         case 'eliminar': return `eliminar ${cual}`;
+        case 'abrir': return `abrir ${cual}`;
         case 'cerrar': return `cerrar ${cual}`;
         // Las que no son de ninguna toma, así que no la nombran. Están acá y
         // no donde se hacen por lo mismo que los otros: si cada gesto redactara
@@ -259,6 +260,39 @@ function volver(sesion, hacia) {
 }
 
 /**
+ * Abre una toma a mano. Es el botón y la tecla, no la señal.
+ *
+ * El conteo no siempre se dice: el profesor arranca directo, se lo come, o dice
+ * "bueno, vamos". Sin esto, lo que sigue no queda en ninguna toma y se pierde
+ * para el XML — la pérdida más cara de esta app, porque no se descubre hasta la
+ * mesa de edición.
+ *
+ * El IN lo decide `vivo.abrirToma`, que retrocede hasta donde empezó la frase
+ * que el profesor está diciendo: quien toma notas se da cuenta unos segundos
+ * tarde, siempre, y abrir en el momento del clic dejaría el arranque afuera.
+ *
+ * Va al historial como todo lo demás, y ahí la foto de antes es `null` porque
+ * la toma no existía: deshacer la saca de la sesión, igual que eliminarla.
+ */
+function abrirToma(sesion) {
+    if (!sesion) return null;
+    const abierto = vivo.abrirToma(sesion.estado, espejo.grabadoHastaMs(sesion));
+    // Ya había una abierta. Llega solo: entre que la pantalla dibujó el botón y
+    // el clic, el ciclo de señales pudo haber oído un conteo —tres segundos—.
+    if (!abierto) return espejo.resumen(sesion);
+
+    historial.anotar(sesion.historia, {
+        que: comoSeLlama({ tipo: 'abrir', toma: abierto.toma.id }),
+        tipo: 'abrir',
+        id: abierto.toma.id,
+        antes: null,
+        despues: historial.foto(abierto.toma)
+    });
+    espejo.escribir(sesion);
+    return { ...espejo.resumen(sesion), retrocedioSec: abierto.retrocedioSec };
+}
+
+/**
  * Cierra a mano la toma que esté abierta. Es el botón, no la señal.
  *
  * Se aprieta apurado y en medio de una interrupción —alguien quiere decirle algo
@@ -284,4 +318,4 @@ function cerrarToma(sesion) {
     return espejo.resumen(sesion);
 }
 
-module.exports = { editar, comoSeLlama, anotarDeLaSesion, volver, cerrarToma };
+module.exports = { editar, comoSeLlama, anotarDeLaSesion, volver, abrirToma, cerrarToma };

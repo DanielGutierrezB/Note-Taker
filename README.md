@@ -60,8 +60,18 @@ porque la pregunta que contestan aparece en cualquier momento.
 | **"Pausa"** + un segundo de silencio | se cierra, en la última palabra dicha |
 | **"Claqueta"** | se anota una claqueta |
 | un **aplauso** | lo mismo, y se confirma leyendo lo que se dijo alrededor |
-| la tecla **K** | una claqueta a mano |
-| **Enter** | cerrar la toma |
+
+Y lo que se hace a mano, para cuando nada de eso se dijo:
+
+| tecla | qué pasa |
+|---|---|
+| **Enter** | abre la toma si no hay ninguna abierta, y la cierra si la hay |
+| **K** | una claqueta acá |
+| **P R S M X** | la vista de la toma |
+| **⌘Z** · **⇧⌘Z** | deshacer · rehacer |
+
+El botón primario de la pantalla es siempre el borde que toca: **Abrir toma**
+cuando no hay ninguna, **Cerrar toma** cuando la hay.
 
 **El conteo tiene que terminar en uno y llevar por lo menos dos números.** "Uno
 de los problemas más comunes" abre clases de verdad, y "tenemos uno, dos, tres
@@ -78,6 +88,33 @@ señal es que después no se dice nada.
 lado. Desde adentro de una toma no se puede saber si la cuenta es una señal o
 alguien diciendo unos números, y entre partir una toma buena y dejar correr una
 que ya estaba corriendo, lo segundo se arregla mirando y lo primero no.
+
+### Abrir a mano, sin perder el arranque
+
+El conteo no siempre se dice: el profesor arranca directo, se lo come, o dice
+"bueno, vamos". Sin nada más, lo que sigue no queda en ninguna toma y se pierde
+para el XML — la pérdida más cara de esta app, porque no se descubre hasta la
+mesa de edición.
+
+**Enter abre la toma, y el IN retrocede solo hasta donde arrancó la frase.**
+Quien toma notas se da cuenta unos segundos tarde, siempre; abrir en el momento
+del clic dejaría la primera oración afuera. La app se guarda los últimos treinta
+segundos de lo que oyó sin ninguna toma abierta, y al abrir camina para atrás
+hasta el primer silencio de segundo y medio: ahí pone el IN y se lleva esas
+palabras adentro de la toma. El aviso dice cuánto retrocedió, para que el borde
+no aparezca en un sitio que nadie pidió.
+
+Si el profesor está callado, no hay nada que retroceder y la toma empieza donde
+se apretó. Eso también es correcto: es el caso de abrir **antes** de que alguien
+hable, que es como se usa cuando uno se adelanta.
+
+Un detalle que costó descubrir: **el umbral de "todavía está hablando" no puede
+ser el mismo que el hueco entre dos palabras.** Lo que la app tiene oído va
+siempre atrasado, y se sabe cuánto —el ciclo corre cada tres segundos y Whisper
+tarda algo más de uno—, así que la última palabra en memoria puede ser de hace
+cuatro segundos con el profesor hablando sin parar. Con el umbral en 1,5 s el
+retroceso no se disparaba nunca, o sea que el arreglo no servía justo en el
+único caso para el que existe.
 
 ## Un solo reloj
 
@@ -324,7 +361,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 205 pruebas, sin red y sin abrir nada
+npm test           # 221 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 ```
 

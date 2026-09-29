@@ -40,7 +40,8 @@ module.exports = function (t) {
         const { canales, escuchas } = armar();
         const esperados = [
             'grabar-iniciar', 'grabar-reanudar', 'grabar-claqueta', 'grabar-quitar-claqueta',
-            'grabar-editar', 'grabar-editar-grabada', 'grabar-cerrar-toma',
+            'grabar-editar', 'grabar-editar-grabada',
+            'grabar-abrir-toma', 'grabar-cerrar-toma',
             'grabar-deshacer', 'grabar-rehacer', 'grabar-estado', 'grabar-vistas',
             'grabar-listar', 'grabar-renombrar', 'grabar-borrar', 'grabar-regenerar',
             'grabar-terminar'

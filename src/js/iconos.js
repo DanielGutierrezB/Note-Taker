@@ -77,8 +77,16 @@ const DIBUJOS = {
     terminar:
         '<rect class="solido" x="7" y="7" width="10" height="10" rx="2.2"/>',
 
-    // Cerrar la toma: la raya que baja y corta. No es una tijera: cortar es de
-    // post, y acá lo que se hace es poner el OUT donde se está.
+    // Abrir y cerrar una toma: la misma raya con la flecha para el otro lado.
+    //
+    // Es la única pareja de la caja que comparte dibujo a propósito, y es
+    // porque son la misma acción con el signo cambiado: poner el borde de una
+    // toma donde uno está. La flecha que baja abre, la que sube cierra, y en
+    // la pantalla nunca se ven las dos a la vez —hay una toma abierta o no la
+    // hay—, así que no hay nada que confundir.
+    abrirToma:
+        '<path d="M12 3.6v16.8"/><path d="M7.4 15.8 12 20.4l4.6-4.6"/>' +
+        '<path d="M4 12h3.4M16.6 12H20"/>',
     cerrarToma:
         '<path d="M12 3.6v16.8"/><path d="M7.4 8.2 12 3.6l4.6 4.6"/>' +
         '<path d="M4 12h3.4M16.6 12H20"/>',
