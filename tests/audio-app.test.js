@@ -70,50 +70,71 @@ module.exports = async function (t) {
         t.ok(niveles.length && niveles[0] > 0.4, `el medidor sí: ${niveles[0]}`);
     });
 
-    t.group('audio-app · la tasa de verdad');
+    t.group('audio-app · el WAV va a la par del reloj');
 
     /**
-     * Le pasa `segundos` de audio a `tasa` muestras por segundo, de a 10 ms,
-     * con un reloj que avanza a mano. `rafaga` junta de a tantos pedazos, como
-     * un pipe que se atrasa y entrega de golpe.
+     * Un ayudante de mentira a 48 kHz, de a 10 ms, con un reloj que avanza a
+     * mano. `huecos` son [desde s, dura s, llega-tarde]: el tiempo en que no se
+     * entrega nada; si llega tarde, lo que faltaba viene de golpe al final.
      */
-    function alimentar(tasa, segundos, declarada, rafaga) {
-        const pedazos = [];
+    function simular(segundos, huecos) {
         const avisos = [];
+        let enviadas = 0;
         let ahora = 1000;
+        audioApp._fingirHijo(true);
         audioApp._conectar({
-            alPcm: p => pedazos.push(p), avisar: a => avisos.push(a), mandando: true,
-            tasa: declarada, reloj: () => ahora
+            alPcm: () => {}, avisar: a => avisos.push(a), mandando: true,
+            tasa: 48000, reloj: () => ahora
         });
-        const porPedazo = tasa / 100;
-        const junta = rafaga || 1;
-        for (let i = 0; i < segundos * 100; i += junta) {
-            ahora += 10 * junta;
-            audioApp.recibir(Buffer.alloc(porPedazo * 2 * junta));
+        let debe = 0;
+        for (let ms = 0; ms < segundos * 1000; ms += 10) {
+            ahora += 10;
+            const h = (huecos || []).find(([d, dur]) => ms >= d * 1000 && ms < (d + dur) * 1000);
+            if (h) {
+                if (h[2]) debe += 480;
+            } else {
+                const n = 480 + debe;
+                debe = 0;
+                audioApp.recibir(Buffer.alloc(n * 2));
+                enviadas += n;
+            }
+            if (ms % 250 === 0) audioApp._revisar();
         }
-        const muestras = pedazos.length * audioApp.MUESTRAS_POR_PEDAZO;
-        return { muestras, avisos: avisos.filter(a => a.tipo === 'tasa') };
+        const rellenado = avisos.filter(a => a.tipo === 'relleno').reduce((x, a) => x + a.segundos, 0);
+        audioApp._fingirHijo(false);
+        return { avisos, enviadas, rellenado };
     }
 
-    t.test('audio a 24 kHz declarado a 48 se corrige y se avisa', () => {
-        // El error real: AirPods en modo llamada, 84,3 s de clase y 42,1 de WAV.
-        const r = alimentar(24000, 20, 48000);
-        t.eq(r.avisos.length, 1, 'un aviso');
-        t.eq(r.avisos[0].real, 24000);
-        // Los primeros segundos se miden antes de saber: lo que importa es que
-        // desde ahí el WAV reciba 48.000 muestras por segundo.
-        t.ok(r.muestras > 20 * 48000 * 0.75, `llegaron ${r.muestras} muestras, a 48 kHz`);
+    t.test('una pausa de 3 s se rellena con silencio y no estira nada', () => {
+        // Lo que rompía el vigilante de antes: una pausa lo hacía creer que el
+        // audio venía a 24 kHz y estiraba al doble lo bueno que llegaba después.
+        const r = simular(20, [[5, 3]]);
+        t.near(r.rellenado, 3, 0.4, `rellenó ${r.rellenado} s`);
+        t.near(audioApp._mandadas() / 48000, 20, 0.4, 'y el WAV dura lo que el reloj');
+        t.ok(!r.avisos.some(a => a.tipo === 'tasa'), 'sin inventar otra tasa');
     });
 
-    t.test('audio a la tasa declarada pasa tal cual y no avisa nada', () => {
-        const r = alimentar(48000, 20, 48000);
-        t.eq(r.avisos.length, 0);
-        t.near(r.muestras, 20 * 48000, audioApp.MUESTRAS_POR_PEDAZO);
+    t.test('lo que faltaba y llega tarde se descuenta del relleno', () => {
+        // El pipe se trabó: el audio no se perdió, llegó de golpe después.
+        const r = simular(20, [[5, 3, true]]);
+        const avisosRelleno = r.avisos.filter(a => a.tipo === 'relleno');
+        t.ok(avisosRelleno.length >= 1, 'rellenó mientras no llegaba');
+        // Mandado al WAV: lo que llegó + lo rellenado − lo devuelto. Tiene que
+        // dar el reloj, 20 s, y no 23.
+        const aWav = audioApp._mandadas();
+        t.near(aWav / 48000, 20, 0.4, `el WAV tiene ${(aWav / 48000).toFixed(2)} s`);
     });
 
-    t.test('un pipe que entrega a ráfagas no es otra tasa', () => {
-        const r = alimentar(48000, 20, 48000, 50);
-        t.eq(r.avisos.length, 0);
+    t.test('sin pausas no se rellena nada', () => {
+        const r = simular(20);
+        t.eq(r.rellenado, 0);
+        t.near(audioApp._mandadas() / 48000, 20, 0.1);
+    });
+
+    t.test('sin datos un segundo y medio, avisa; cuando vuelven, también', () => {
+        const r = simular(10, [[3, 2]]);
+        const tipos = r.avisos.map(a => a.tipo).filter(x => x === 'caido' || x === 'vuelve');
+        t.deep(tipos, ['caido', 'vuelve']);
     });
 
     t.group('audio-app · el ayudante');
@@ -133,6 +154,28 @@ module.exports = async function (t) {
         t.eq(r.ok, false);
         t.eq(r.codigo, 'sin-app');
         t.ok(r.error.includes('us.zoom'), r.error);
+    }));
+
+    t.test('si la salida de audio cambia, se rearma solo y sigue mandando', conFalso('salida', async () => {
+        // Los AirPods al estuche en medio de la clase: antes la escucha quedaba
+        // callada con el proceso vivo y nadie se enteraba.
+        const contador = require('path').join(require('os').tmpdir(), `nt-falso-${process.pid}-${Date.now()}`);
+        process.env.FALSO_CONTADOR = contador;
+        try {
+            const avisos = [];
+            const pedazos = [];
+            const r = await audioApp.abrir({ avisar: a => avisos.push(a), alPcm: p => pedazos.push(p) });
+            t.ok(r.ok);
+            audioApp.empezarAMandar();
+            await espera(700);
+            t.ok(avisos.some(a => a.tipo === 'rearmada'), 'se rearmó');
+            t.ok(!avisos.some(a => a.tipo === 'caido' && a.codigo !== 'sin-datos'), 'sin darla por caída');
+            t.ok(pedazos.length > 0, 'y el audio siguió llegando a la grabación');
+            t.ok(audioApp.abierto());
+        } finally {
+            delete process.env.FALSO_CONTADOR;
+            try { require('fs').rmSync(contador); } catch (e) { /* no quedó */ }
+        }
     }));
 
     t.test('si el ayudante se va solo, avisa que se cayó', conFalso('muere', async () => {

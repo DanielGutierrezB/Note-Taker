@@ -88,7 +88,11 @@ export async function abrir(deviceId, avisos) {
         return { ok: false, error: 'No se pudo abrir esa entrada: ' + e.message };
     }
 
-    const contexto = new AudioContext();
+    // A 48 kHz fijos, como el audio de Zoom. Sin decirlo, el contexto toma la
+    // tasa de la salida del sistema en ese momento: con unos AirPods en modo
+    // llamada, 16 o 24 kHz, y los pedazos de 4096 muestras pasaban a durar el
+    // doble o el triple, que es con lo que `golpe.js` mide si hubo un aplauso.
+    const contexto = new AudioContext({ sampleRate: 48000 });
     try {
         await contexto.audioWorklet.addModule('js/grabar/pcm-worklet.js');
     } catch (e) {

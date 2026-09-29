@@ -286,7 +286,9 @@ async function abrirEntrada(id) {
             const ahora = estados.deAudio(audio).listo;
             if (ahora !== ultimoListo) { ultimoListo = ahora; pintar(); }
         },
-        alCaerse: () => { audio.caido = true; pintar(); }
+        alCaerse: () => { audio.caido = true; pintar(); },
+        // La escucha de Zoom vuelve sola de una traba o de un rearme.
+        alVolver: () => { audio.caido = false; pintar(); }
     });
     if (!r.ok) {
         // El motivo va al renglón y no a un aviso que se va: es lo que hay que

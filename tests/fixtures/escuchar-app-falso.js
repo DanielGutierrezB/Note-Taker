@@ -11,6 +11,9 @@
  *   ok       dice que está listo y manda 9000 muestras en pedazos de 480
  *   sin-app  contesta el error de "Zoom no está abierto" y sale con 1
  *   muere    dice que está listo, manda un poco y se va solo
+ *   salida   la primera vez que se lanza (según `FALSO_CONTADOR`), manda un
+ *            poco y se va con «salida-cambio», como cuando los AirPods se van;
+ *            la segunda anda normal
  */
 
 const modo = process.env.FALSO_MODO || 'ok';
@@ -29,7 +32,21 @@ if (modo === 'sin-app') {
     process.exit(1);
 }
 
+let primera = false;
+if (modo === 'salida' && process.env.FALSO_CONTADOR) {
+    const fs = require('fs');
+    primera = !fs.existsSync(process.env.FALSO_CONTADOR);
+    fs.writeFileSync(process.env.FALSO_CONTADOR, 'x');
+}
+
 process.stderr.write(JSON.stringify({ listo: true, sampleRate: 48000, canales: 1, procesos: ['us.zoom.xos'] }) + '\n');
+
+if (primera) {
+    setTimeout(() => {
+        process.stderr.write(JSON.stringify({ error: 'Cambió la salida', codigo: 'salida-cambio' }) + '\n');
+        process.exit(3);
+    }, 30);
+}
 
 // Pedazos de 480 muestras, que es lo que suele entregar Core Audio a 48 kHz:
 // a propósito de otro tamaño que el de la ventana, para que se vea el
@@ -47,5 +64,9 @@ const tic = setInterval(() => {
         if (modo === 'muere') process.exit(3);
     }
 }, 2);
+
+// El de verdad no se va hasta que lo paran: en el modo `salida`, la segunda vez
+// se queda como él, para que irse no se lea como una caída.
+if (modo === 'salida' && !primera) setInterval(() => {}, 1000);
 
 process.on('SIGTERM', () => process.exit(0));

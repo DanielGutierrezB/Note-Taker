@@ -22,7 +22,7 @@ export const ZOOM = { id: 'app:zoom', nombre: 'Audio de Zoom (la llamada)', tipo
 
 let tipo = null;
 let info = { dispositivo: null, sampleRate: 48000, canales: 1 };
-let avisos = { alNivel: () => {}, alCaerse: () => {} };
+let avisos = { alNivel: () => {}, alCaerse: () => {}, alVolver: () => {} };
 let escuchandoZoom = false;
 
 // El canal de Zoom se escucha una sola vez: `onAudioApp` agrega un oyente cada
@@ -35,9 +35,14 @@ function engancharZoom() {
         if (!escuchandoZoom || !aviso) return;
         if (aviso.tipo === 'nivel') avisos.alNivel(aviso.pico);
         if (aviso.tipo === 'caido') avisos.alCaerse();
-        // El motor ya lo corrigió (`medirTasa` en `engine/audio-app.js`): se
-        // dice para que quede a la vista, no para que alguien haga algo.
-        if (aviso.tipo === 'tasa') avisar(aviso.mensaje, 'error');
+        if (aviso.tipo === 'vuelve') avisos.alVolver();
+        // Los dos los resuelve el motor solo (`engine/audio-app.js`): se dicen
+        // para que queden a la vista, no para que alguien haga algo.
+        if (aviso.tipo === 'rearmada') avisar(aviso.mensaje);
+        if (aviso.tipo === 'relleno') {
+            avisar(`No llegó audio de Zoom por ${aviso.segundos} s: se completó con silencio ` +
+                'para que el WAV no se atrase contra la cámara.', 'error');
+        }
     });
 }
 
@@ -66,7 +71,7 @@ export async function entradas() {
  */
 export async function abrir(entrada, losAvisos) {
     await cerrar();
-    avisos = { alNivel: () => {}, alCaerse: () => {}, ...(losAvisos || {}) };
+    avisos = { alNivel: () => {}, alCaerse: () => {}, alVolver: () => {}, ...(losAvisos || {}) };
 
     if (entrada && entrada.tipo === 'app') {
         engancharZoom();

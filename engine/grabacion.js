@@ -43,6 +43,7 @@
  */
 
 const captura = require('./captura');
+const registro = require('./registro');
 const golpe = require('./golpe');
 const vivo = require('./notas-vivo');
 const historial = require('./deshacer');
@@ -201,7 +202,7 @@ function iniciar(params) {
     // cada pedazo: con el reloj andando las dos pasadas se pisarían y la que
     // llegara segunda no vería nada.
     if (!p.sinReloj) {
-        sesion.timer = setInterval(() => { buscarSenales(); }, CICLO_MS);
+        sesion.timer = setInterval(() => { buscarSenales(); vigilarDeriva(); }, CICLO_MS);
         // El modelo grande cargado para el texto en vivo. No se espera: mientras
         // carga, el ciclo oye por whisper-cli como siempre (`oir.escuchar`).
         residente.arrancar({ idioma: sesion.estado.idioma || 'es' });
@@ -318,6 +319,42 @@ async function buscarSenales() {
     } finally {
         if (sesion) sesion.buscando = false;
     }
+}
+
+/**
+ * Cuánto se puede atrasar el audio grabado contra el reloj antes de avisar, y de
+ * a cuánto se vuelve a avisar si sigue creciendo.
+ */
+const DERIVA_AVISO_MS = 2000;
+
+/**
+ * ¿Lo grabado va a la par del reloj?
+ *
+ * Es la pregunta que habría encontrado en el primer minuto el error del audio
+ * de Zoom al doble de velocidad (84,3 s de clase, 42,1 s de WAV), y que
+ * encuentra cualquier otro de la misma familia, venga por donde venga —una tasa
+ * mal declarada, muestras perdidas, una escucha que se calló—, por Zoom o por
+ * micrófono. Lo normal es menos de un tercio de segundo: lo que tarda el audio
+ * en llegar. Si se pasa, se avisa en pantalla y queda en el registro, y se
+ * vuelve a avisar cada dos segundos más: un atraso que crece es una tasa mal
+ * puesta, uno que salta y se queda es un hueco.
+ */
+function vigilarDeriva() {
+    if (!sesion || !sesion.captura) return;
+    const deriva = (Date.now() - sesion.captura.desdeMs) - sesion.captura.segundos * 1000;
+    const escalon = Math.floor(deriva / DERIVA_AVISO_MS);
+    if (escalon < 1 || escalon <= (sesion.derivaAvisada || 0)) return;
+    sesion.derivaAvisada = escalon;
+    registro.anotar('main', 'grabacion.deriva', {
+        derivaMs: Math.round(deriva),
+        segundos: sesion.captura.segundos,
+        sampleRate: sesion.captura.sampleRate || null
+    });
+    sesion.avisar({
+        tipo: 'error',
+        mensaje: `El audio grabado va ${(deriva / 1000).toFixed(1)} s atrás del reloj. ` +
+            'Los marcadores pueden quedar corridos: revisá la entrada en Preparar.'
+    });
 }
 
 /* ─── Las claquetas ───────────────────────────────────────────────────────
@@ -616,6 +653,7 @@ module.exports = {
     // Para poder empujar el ciclo desde una prueba o desde el arnés, sin esperar
     // el segundo del reloj.
     buscarSenales,
+    vigilarDeriva,
     // Para las pruebas que necesitan poner palabras a mano en una toma, que es
     // lo que en vivo hace el ciclo de señales con Whisper.
     _sesion: () => sesion

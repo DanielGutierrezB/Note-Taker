@@ -325,10 +325,27 @@ pruebas del 29/09, 84,3 s de clase y 42,1 s de audio). Whisper oía la clase
 acelerada —de ahí el texto peor y los «Gracias» inventados— y los marcadores
 caían a la mitad de donde van. Ahora el ayudante lee la tasa del agregado,
 escucha cuando cambia a mitad de la clase, toma solo los canales del tap (antes
-promediaba también el micrófono de los AirPods) y entrega siempre 48 kHz. Y Node
-mide cuántas muestras llegan de verdad por segundo (`medirTasa` en
-`engine/audio-app.js`): si alguna vez no coincide con lo declarado, lo corrige y
-lo avisa en pantalla y en el registro.
+promediaba también el micrófono de los AirPods, y además lo dejaba abierto) y
+entrega siempre 48 kHz.
+
+**El WAV va atado al reloj**, porque de eso depende sincronizar con la cámara:
+- El hilo de audio del ayudante no escribe el pipe: deja las muestras en un
+  anillo de diez segundos y otro hilo las manda. Antes esperaba al pipe, y con
+  Node ocupado se perdían ciclos de audio.
+- Si la salida de audio cambia o desaparece (los AirPods al estuche), el
+  ayudante sale con un código y Node lo vuelve a lanzar solo, sobre la salida
+  nueva, sin cortar la grabación.
+- Si no llega audio (una traba, un rearme), Node rellena el hueco con silencio
+  para que el WAV no quede más corto que la clase; si lo que faltaba llega tarde,
+  se descuenta del relleno. Se avisa en pantalla y queda en el registro.
+- La sesión compara cada segundo lo grabado contra el reloj (`vigilarDeriva`).
+  Si se atrasa más de dos segundos, lo avisa. Es la pregunta que habría
+  encontrado el error del doble de velocidad en el primer minuto.
+
+La primera versión de esta red medía la tasa por el reloj y remuestreaba si no
+coincidía. Una revisión mostró que no distinguía "no llegó nada un rato" de
+"llega a otra tasa": una pausa de tres segundos la hacía creer 24 kHz y
+estiraba el audio bueno al doble. Se sacó.
 
 **Sobre el silencio no se escribe.** Zoom manda ceros exactos cuando nadie habla,
 y sobre eso Whisper escribe lo que aprendió de los subtítulos: «Gracias.»,

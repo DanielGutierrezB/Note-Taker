@@ -39,35 +39,49 @@ const NIVEL_CADA_MS = 80;
 const ZOOM = 'us.zoom';
 
 /**
- * Cuánto se mira para saber a qué ritmo llegan las muestras, cuánto se espera
- * antes de la primera medición, y cuánto tiene que apartarse de lo declarado
- * para creerle a la medición y no a la declaración.
+ * Sin nada del ayudante por más que esto, la escucha está trabada: se avisa
+ * como una caída aunque el proceso siga vivo (la salida del sistema se fue y el
+ * dispositivo agregado dejó de dar la hora).
  */
-const VENTANA_DE_TASA_MS = 6000;
-const PRIMERA_MEDICION_MS = 4000;
-const TOLERANCIA_DE_TASA = 0.05;
-const TASAS = [8000, 11025, 16000, 22050, 24000, 32000, 44100, 48000, 88200, 96000];
+const TRABADO_MS = 1500;
+
+/**
+ * Cuánto tiene que faltar, contra el reloj, para rellenar con silencio, y cuánto
+ * atraso normal se deja sin rellenar: lo que tarda el audio en cruzar el pipe.
+ */
+const HUECO_MIN_MS = 1000;
+const ATRASO_NORMAL_MS = 250;
+
+/** Sin un «listo» en este tiempo, el ayudante no va a arrancar. */
+const ARRANQUE_MAX_MS = 10000;
 
 let hijo = null;
 let mandando = false;
-/** La tasa que dijo el ayudante (la del WAV) y la que de verdad trae el audio. */
-let tasaDeclarada = 0;
-let tasaReal = 0;
-/** [ms, muestras acumuladas]: lo último que llegó, para medir la tasa. */
-let marcas = [];
-let muestrasTotales = 0;
-let candidata = 0;
-/** El estado del remuestreo, entre pedazos seguidos (ver `remuestrear`). */
-let fase = 0;
-let previa = 0;
-let reloj = () => Date.now();
 let resto = Buffer.alloc(0);
 let alPcm = () => {};
 let avisar = () => {};
 let ultimoNivel = 0;
 let pico = 0;
-/** Lo que se cerró a propósito no es una caída: no se avisa como tal. */
-let cerrando = false;
+let prefijoAbierto = null;
+/** La tasa que dijo el ayudante: la del WAV. */
+let tasa = 0;
+
+/**
+ * El WAV atado al reloj. Desde que se empieza a mandar, lo mandado tiene que
+ * ir a la par de lo que pasó en el reloj: si el ayudante deja de entregar —la
+ * salida de audio se fue, el sistema lo trabó, se rearma—, el hueco se rellena
+ * con silencio, porque un WAV más corto que la clase corre todos los marcadores
+ * que vienen después y el editor ya no puede sincronizar contra la cámara. Y si
+ * el audio que faltaba llega tarde (estaba en el pipe), se descuenta del
+ * relleno en vez de sumarse: `relleno` es lo que todavía se puede devolver.
+ */
+let desdeMs = 0;
+let mandadas = 0;
+let relleno = 0;
+let ultimoDatoMs = 0;
+let trabado = false;
+let vigilante = null;
+let reloj = () => Number(process.hrtime.bigint() / 1000000n);
 
 /**
  * El ayudante. `NOTETAKER_ESCUCHAR_APP` lo reemplaza, y existe para las
@@ -139,21 +153,50 @@ function abrir(p) {
     alPcm = typeof o.alPcm === 'function' ? o.alPcm : () => {};
     avisar = typeof o.avisar === 'function' ? o.avisar : () => {};
     resto = Buffer.alloc(0);
-    reiniciarTasa(0);
     mandando = false;
-    cerrando = false;
     pico = 0;
     // El primer nivel sale en el primer pedazo, sin esperar la ventana de 80
     // ms de la entrada anterior: el medidor tiene que moverse apenas se elige.
     ultimoNivel = 0;
+    prefijoAbierto = o.prefijo || ZOOM;
+    return lanzar(bin.path, false);
+}
 
+/**
+ * El proceso del ayudante. `rearme` es volver a lanzarlo en medio de la clase,
+ * cuando la salida de audio cambió: se sigue mandando a la misma grabación, y
+ * el hueco lo rellena `vigilar`.
+ *
+ * Cada proceso lleva su propio «lo cerré yo»: con uno solo para el módulo, el
+ * `exit` de un ayudante viejo llegaba después de abrir el nuevo y lo daba por
+ * caído.
+ */
+function lanzar(ruta, rearme) {
     return new Promise(listo => {
         let contestado = false;
         let errBuf = '';
-        const contestar = r => { if (!contestado) { contestado = true; listo(r); } };
+        let codigoAlSalir = null;
+        const contestar = r => {
+            if (contestado) return;
+            contestado = true;
+            clearTimeout(espera);
+            listo(r);
+        };
 
-        const proc = spawn(bin.path, ['--app', o.prefijo || ZOOM], { stdio: ['ignore', 'pipe', 'pipe'] });
+        const proc = spawn(ruta, ['--app', prefijoAbierto], { stdio: ['ignore', 'pipe', 'pipe'] });
+        proc.cerrando = false;
         hijo = proc;
+
+        // `kAudioAggregateDeviceTapAutoStartKey` hace esperar al arranque hasta
+        // que la app suene: con Zoom abierto fuera de una reunión, sin esto
+        // Preparar se quedaba esperando para siempre.
+        const espera = setTimeout(() => {
+            if (contestado) return;
+            proc.cerrando = true;
+            try { proc.kill('SIGTERM'); } catch (e) { /* ya se fue */ }
+            contestar({ ok: false, codigo: 'sin-respuesta',
+                error: 'Zoom está abierto pero no entrega sonido. Entrá a la reunión y volvé a intentar.' });
+        }, ARRANQUE_MAX_MS);
 
         proc.stderr.setEncoding('utf8');
         proc.stderr.on('data', texto => {
@@ -165,25 +208,46 @@ function abrir(p) {
                 let j = null;
                 try { j = JSON.parse(linea); } catch (e) { continue; }
                 if (j.listo) {
-                    tasaDeclarada = tasaReal = Math.round(j.sampleRate);
-                    contestar({ ok: true, sampleRate: tasaDeclarada, canales: 1, procesos: j.procesos,
+                    tasa = Math.round(j.sampleRate);
+                    contestar({ ok: true, sampleRate: tasa, canales: 1, procesos: j.procesos,
                         tasaDelDispositivo: j.tasaDelDispositivo || null });
+                    if (rearme) avisar({ tipo: 'rearmada', mensaje: 'Cambió la salida de audio: la escucha de Zoom se rearmó sola.' });
+                    vigilar();
                 } else if (j.error) {
+                    codigoAlSalir = j.codigo || null;
                     contestar({ ok: false, error: j.error, codigo: j.codigo });
+                } else {
+                    // Lo que el ayudante cuenta en medio de la escucha: una tasa
+                    // que cambió, muestras que no cupieron, el micrófono apagado.
+                    avisar({ tipo: 'ayudante', ...j });
                 }
             }
         });
 
-        proc.stdout.on('data', recibir);
+        proc.stdout.on('data', datos => { if (hijo === proc) recibir(datos); });
 
         proc.on('error', err => contestar({ ok: false, codigo: 'spawn', error: err.message }));
-        proc.on('exit', (codigo, senal) => {
-            if (hijo === proc) hijo = null;
+        // `close` y no `exit`: `exit` puede llegar antes de que se lea la última
+        // línea de stderr, y esa es la que dice si se fue por la salida de audio
+        // (y hay que rearmar) o por otra cosa (y es una caída).
+        proc.on('close', (codigo, senal) => {
             contestar({ ok: false, codigo: 'salio', error: `El ayudante salió (${codigo ?? senal}).` });
+            if (hijo !== proc) return;
+            hijo = null;
+            if (proc.cerrando) return;
+            // La salida de audio cambió: se vuelve a lanzar sobre la nueva, y la
+            // grabación sigue. Solo si ya estaba andando: en el primer arranque
+            // eso es un error y se contesta como tal.
+            if (codigoAlSalir === 'salida-cambio' && tasa) {
+                lanzar(ruta, true).then(r => {
+                    if (!r.ok) avisar({ tipo: 'caido', codigo: r.codigo || 'rearme', senal: null });
+                });
+                return;
+            }
             // Si se fue solo, en medio de una clase, eso es una caída y hay
             // que decirlo: la pantalla se pone en rojo igual que cuando se
             // desenchufa un micrófono, y lo escrito queda en el disco.
-            if (!cerrando) avisar({ tipo: 'caido', codigo, senal: senal || null });
+            avisar({ tipo: 'caido', codigo, senal: senal || null });
         });
     });
 }
@@ -195,8 +259,40 @@ function abrir(p) {
  * dispositivo de salida— y se re-empaqueta en 4096 (ver arriba).
  */
 function recibir(datos) {
-    medirTasa(datos.length / 2);
-    if (tasaReal && tasaDeclarada && tasaReal !== tasaDeclarada) datos = remuestrear(datos);
+    const antes = ultimoDatoMs;
+    ultimoDatoMs = reloj();
+    const trasHueco = ultimoDatoMs - antes > ATRASO_NORMAL_MS * 2;
+    if (trabado) {
+        trabado = false;
+        avisar({ tipo: 'vuelve' });
+    }
+    // Lo que llega tarde después de haber rellenado: ya está puesto como
+    // silencio, así que se descuenta del relleno en vez de correr el reloj.
+    if (relleno > 0 && mandando && tasa) {
+        const sobra = mandadas + resto.length / 2 + datos.length / 2 - esperadas() - tasa * ATRASO_NORMAL_MS / 1000;
+        const devolver = Math.min(relleno, Math.floor(sobra), Math.floor(datos.length / 2));
+        if (devolver > 0) {
+            datos = datos.subarray(devolver * 2);
+            relleno -= devolver;
+        }
+    }
+    empaquetar(datos);
+    // Al volver de un hueco, lo que todavía falta se completa ya: `revisar`
+    // rellena de a pedazos mientras no llega nada, y el último pedazo del hueco
+    // quedaba sin poner. Si lo que vuelve es el atraso del pipe y sigue
+    // llegando, se descuenta de este relleno arriba, en la vuelta siguiente.
+    if (trasHueco && mandando && tasa) {
+        const falta = esperadas() - mandadas - resto.length / 2 - tasa * ATRASO_NORMAL_MS / 1000;
+        if (falta > tasa * 0.1) {
+            const poner = Math.floor(falta);
+            relleno += poner;
+            avisar({ tipo: 'relleno', segundos: Math.round(poner / tasa * 10) / 10 });
+            empaquetar(Buffer.alloc(poner * 2));
+        }
+    }
+}
+
+function empaquetar(datos) {
     resto = resto.length ? Buffer.concat([resto, datos]) : datos;
     const bytes = MUESTRAS_POR_PEDAZO * 2;
     while (resto.length >= bytes) {
@@ -207,6 +303,7 @@ function recibir(datos) {
         // excepción, el audio ya salió, y lo que se está grabando no se puede
         // repetir.
         if (mandando) {
+            mandadas += MUESTRAS_POR_PEDAZO;
             try { alPcm(pedazo); } catch (e) { avisar({ tipo: 'error', mensaje: e.message }); }
         }
 
@@ -223,90 +320,60 @@ function recibir(datos) {
     }
 }
 
-/**
- * La red de abajo del ayudante: cuántas muestras llegan de verdad por segundo.
- *
- * Existe por un error que costó dos sesiones de prueba: con unos AirPods en
- * modo llamada la salida del sistema baja a 24 kHz y el ayudante declaraba los
- * 48 del tap. El WAV quedaba al doble de velocidad y con la mitad de la
- * duración —84,3 s de clase, 42,1 s de audio—, Whisper oía la clase acelerada
- * y los marcadores caían a la mitad de donde van. El ayudante ya lee la tasa
- * correcta y remuestrea (`nativo/escuchar-app.swift`), pero lo que no se mide
- * no se sabe: si alguna vez vuelve a declarar una cosa y entregar otra, esto
- * lo ve en cuatro segundos, remuestrea a la tasa declarada, que es la del WAV,
- * y lo avisa.
- *
- * Se cree a la medición solo si cae cerca de una tasa de verdad y dos veces
- * seguidas: un pipe que se atrasa y entrega de golpe no es un audio a otra tasa.
- */
-function medirTasa(muestras) {
-    if (!tasaDeclarada) return;
-    const ahora = reloj();
-    muestrasTotales += muestras;
-    marcas.push([ahora, muestrasTotales]);
-    while (marcas.length > 2 && ahora - marcas[0][0] > VENTANA_DE_TASA_MS) marcas.shift();
-    const [t0, m0] = marcas[0];
-    if (ahora - t0 < PRIMERA_MEDICION_MS) return;
-    // Las muestras del primer registro ya estaban cuando se tomó su hora.
-    const medida = (muestrasTotales - m0) / ((ahora - t0) / 1000);
-    const cercana = TASAS.reduce((a, b) => (Math.abs(b - medida) < Math.abs(a - medida) ? b : a));
-    if (Math.abs(medida / cercana - 1) > TOLERANCIA_DE_TASA) { candidata = 0; return; }
-    if (cercana === tasaReal) { candidata = 0; return; }
-    if (candidata !== cercana) { candidata = cercana; return; }
-    const antes = tasaReal;
-    tasaReal = cercana;
-    candidata = 0;
-    fase = 0;
-    avisar({ tipo: 'tasa', declarada: tasaDeclarada, real: tasaReal, antes,
-        mensaje: `El audio de Zoom llega a ${tasaReal / 1000} kHz y no a ${tasaDeclarada / 1000}: ` +
-            'se corrige solo, pero conviene avisarlo.' });
+/** Cuántas muestras tendría que haber mandado a esta altura, por el reloj. */
+function esperadas() {
+    return (reloj() - desdeMs) / 1000 * tasa;
 }
 
 /**
- * De la tasa real a la declarada, interpolando. Es el mismo remuestreo que el
- * ayudante (`remuestrear` en `escuchar-app.swift`), con su estado entre pedazos.
+ * Cada cuarto de segundo: ¿sigue llegando audio? Si no, se dice (una vez) y,
+ * si ya se está grabando, se rellena el hueco para que el WAV no se atrase
+ * contra el reloj.
  */
-function remuestrear(datos) {
-    const n = Math.floor(datos.length / 2);
-    if (!n) return Buffer.alloc(0);
-    const paso = tasaReal / tasaDeclarada;
-    const salida = [];
-    let p = fase;
-    const x = i => (i < 0 ? previa : datos.readInt16LE(i * 2));
-    while (p < n - 1) {
-        const i = Math.floor(p);
-        const f = p - i;
-        const a = x(i);
-        salida.push(Math.round(a + (x(i + 1) - a) * f));
-        p += paso;
+function revisar() {
+    if (!hijo || !tasa) return;
+    const ahora = reloj();
+    const callado = ahora - ultimoDatoMs;
+    if (callado > TRABADO_MS && !trabado) {
+        trabado = true;
+        avisar({ tipo: 'caido', codigo: 'sin-datos', senal: null });
     }
-    fase = p - n;
-    previa = x(n - 1);
-    const buf = Buffer.alloc(salida.length * 2);
-    for (let k = 0; k < salida.length; k++) buf.writeInt16LE(Math.max(-32768, Math.min(32767, salida[k])), k * 2);
-    return buf;
+    if (!mandando || callado < ATRASO_NORMAL_MS * 2) return;
+    const falta = esperadas() - mandadas - resto.length / 2;
+    if (falta < tasa * HUECO_MIN_MS / 1000) return;
+    const poner = Math.floor(falta - tasa * ATRASO_NORMAL_MS / 1000);
+    if (poner <= 0) return;
+    relleno += poner;
+    avisar({ tipo: 'relleno', segundos: Math.round(poner / tasa * 10) / 10 });
+    empaquetar(Buffer.alloc(poner * 2));
+}
+
+function vigilar() {
+    ultimoDatoMs = reloj();
+    if (vigilante) return;
+    vigilante = setInterval(revisar, 250);
+    if (vigilante.unref) vigilante.unref();
 }
 
 /** Desde acá los pedazos van a la grabación. Antes solo se medían. */
-function empezarAMandar() { mandando = true; }
+function empezarAMandar() {
+    mandando = true;
+    // El reloj arranca con lo primero que se manda, que es lo primero del WAV.
+    desdeMs = reloj() - (resto.length / 2) / Math.max(1, tasa) * 1000;
+    mandadas = 0;
+    relleno = 0;
+}
 function dejarDeMandar() { mandando = false; }
 
 function abierto() { return Boolean(hijo); }
 
-function reiniciarTasa(declarada) {
-    tasaDeclarada = tasaReal = declarada;
-    marcas = [];
-    muestrasTotales = 0;
-    candidata = 0;
-    fase = 0;
-    previa = 0;
-    reloj = () => Date.now();
-}
-
 function cerrar() {
     mandando = false;
+    if (vigilante) { clearInterval(vigilante); vigilante = null; }
+    trabado = false;
+    tasa = 0;
     if (!hijo) return;
-    cerrando = true;
+    hijo.cerrando = true;
     try { hijo.kill('SIGTERM'); } catch (e) { /* ya se había ido */ }
     hijo = null;
 }
@@ -321,15 +388,22 @@ module.exports = {
     dejarDeMandar,
     abierto,
     cerrar,
-    // Para las pruebas, que reemplazan el ayudante por uno de mentira.
+    // Para las pruebas, que reemplazan el ayudante por uno de mentira y el reloj
+    // por uno que avanza a mano.
     _conectar(p) {
         alPcm = p.alPcm || alPcm;
         avisar = p.avisar || avisar;
-        mandando = Boolean(p.mandando);
         resto = Buffer.alloc(0);
         ultimoNivel = 0;
         pico = 0;
-        reiniciarTasa(p.tasa || 0);
+        tasa = p.tasa || 48000;
         if (p.reloj) reloj = p.reloj;
-    }
+        mandando = false;
+        if (p.mandando) empezarAMandar();
+        ultimoDatoMs = reloj();
+        trabado = false;
+    },
+    _revisar: revisar,
+    _mandadas: () => mandadas,
+    _fingirHijo(si) { hijo = si ? { cerrando: false } : null; }
 };

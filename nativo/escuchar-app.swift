@@ -28,6 +28,7 @@
 // así que quien llama se entera por el nivel, que no se mueve.
 
 import AudioToolbox
+import os
 import CoreAudio
 import Foundation
 
@@ -77,6 +78,15 @@ func fallar(_ mensaje: String, _ codigo: String) -> Never {
         FileHandle.standardError.write((linea + "\n").data(using: .utf8)!)
     }
     exit(1)
+}
+
+/// Una línea JSON por stderr en medio de la escucha: una tasa que cambió,
+/// muestras perdidas. Quien lanzó esto la anota en el registro.
+func avisar(_ campos: [String: Any]) {
+    if let datos = try? JSONSerialization.data(withJSONObject: campos),
+       let linea = String(data: datos, encoding: .utf8) {
+        FileHandle.standardError.write((linea + "\n").data(using: .utf8)!)
+    }
 }
 
 func avisarListo(_ campos: [String: Any]) {
@@ -129,8 +139,10 @@ func listar() -> Never {
 /// puede cambiar a mitad de una clase aunque cambie la del dispositivo.
 let TASA_DE_SALIDA: Double = 48000
 
-/// La tasa a la que llegan las muestras ahora. La cambia el aviso de Core Audio
-/// desde la misma cola que las lee, así que no hay carrera.
+/// La tasa a la que llegan las muestras ahora. La escribe el aviso de Core
+/// Audio y la lee el hilo de audio: es un Double alineado, que en arm64 se lee
+/// y se escribe de una vez, y un pedazo leído con la tasa vieja son unos
+/// milisegundos mal remuestreados en el instante del cambio.
 var tasaEntrada: Double = 48000
 
 /// Dónde cae la próxima muestra de salida, medido en muestras de entrada desde
@@ -138,30 +150,108 @@ var tasaEntrada: Double = 48000
 var fase: Double = 0
 var previa: Float = 0
 
-/// Interpolación lineal entre buffers seguidos. Para voz alcanza, y en el caso
-/// que existe esto —de 24 a 48 kHz— solo agrega muestras: no hay nada que
-/// filtrar para no mezclar agudos.
-func remuestrear(_ x: [Float]) -> [Int16] {
-    let n = x.count
-    guard n > 0 else { return [] }
+/// Interpolación lineal entre buffers seguidos, sin reservar memoria: corre en
+/// el hilo de audio. Para voz alcanza, y en el caso que existe esto —de 24 a
+/// 48 kHz— solo agrega muestras: no hay nada que filtrar.
+///
+/// - Returns: cuántas muestras escribió en `salida`
+func remuestrear(_ x: UnsafePointer<Float>, _ n: Int,
+                 _ salida: UnsafeMutablePointer<Int16>, _ capacidad: Int) -> Int {
+    guard n > 0 else { return 0 }
     let paso = tasaEntrada / TASA_DE_SALIDA
-    var salida: [Int16] = []
-    salida.reserveCapacity(Int(Double(n) / paso) + 2)
+    var escritas = 0
     var p = fase
     // Estrictamente antes de la última: esa es la `previa` del buffer que viene,
     // y leer `x[i + 1]` con `i == n - 1` sería salirse.
-    while p < Double(n - 1) {
+    while p < Double(n - 1) && escritas < capacidad {
         let i = Int(p.rounded(.down))
         let f = Float(p - Double(i))
         let a = i < 0 ? previa : x[i]
         let b = x[i + 1]
         let v = max(-1, min(1, a + (b - a) * f))
-        salida.append(Int16(v * 32767))
+        salida[escritas] = Int16(v * 32767)
+        escritas += 1
         p += paso
     }
     fase = p - Double(n)
     previa = x[n - 1]
-    return salida
+    return escritas
+}
+
+// ─── El anillo entre el hilo de audio y el pipe ───────────────────────────
+
+/// El hilo de audio no escribe el pipe: deja las muestras acá y sigue.
+///
+/// Antes escribía desde una cola serie creyendo que así no bloqueaba, pero los
+/// bloques de E/S de Core Audio se despachan SINCRÓNICAMENTE (lo dice el header
+/// de `AudioDeviceCreateIOProcIDWithBlock`): el hilo de tiempo real esperaba al
+/// pipe, y con el proceso de Node ocupado unos cientos de milisegundos el pipe
+/// se llenaba y se perdían ciclos de audio para siempre. Ahora un hilo aparte
+/// vacía el anillo; si Node se atrasa, lo que espera es ese hilo, y el anillo
+/// aguanta diez segundos.
+let CAPACIDAD_ANILLO = 48000 * 10
+let anillo = UnsafeMutablePointer<Int16>.allocate(capacity: CAPACIDAD_ANILLO)
+var anilloEscrito = 0   // muestras totales que entraron
+var anilloLeido = 0     // muestras totales que salieron al pipe
+var anilloPerdidas = 0  // las que no cupieron
+let candado: UnsafeMutablePointer<os_unfair_lock> = {
+    let c = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
+    c.initialize(to: os_unfair_lock())
+    return c
+}()
+
+/// Lo del hilo de audio, que no reserva memoria: los dos buffers de trabajo se
+/// reservan una vez.
+let CAPACIDAD_TRABAJO = 16384
+let trabajoMono = UnsafeMutablePointer<Float>.allocate(capacity: CAPACIDAD_TRABAJO)
+let trabajoSalida = UnsafeMutablePointer<Int16>.allocate(capacity: CAPACIDAD_TRABAJO * 8)
+
+func alAnillo(_ datos: UnsafePointer<Int16>, _ n: Int) {
+    os_unfair_lock_lock(candado)
+    let libres = CAPACIDAD_ANILLO - (anilloEscrito - anilloLeido)
+    let entran = min(n, libres)
+    for k in 0..<entran { anillo[(anilloEscrito + k) % CAPACIDAD_ANILLO] = datos[k] }
+    anilloEscrito += entran
+    anilloPerdidas += n - entran
+    os_unfair_lock_unlock(candado)
+}
+
+/// El hilo que vacía el anillo en stdout. Si quien leía se fue (EPIPE), no hay
+/// a quién mandarle nada: se suelta todo y se sale.
+func arrancarEscritor() {
+    let hilo = Thread {
+        let local = UnsafeMutablePointer<Int16>.allocate(capacity: CAPACIDAD_ANILLO)
+        var perdidasAvisadas = 0
+        while true {
+            usleep(10_000)
+            os_unfair_lock_lock(candado)
+            let hay = anilloEscrito - anilloLeido
+            for k in 0..<hay { local[k] = anillo[(anilloLeido + k) % CAPACIDAD_ANILLO] }
+            anilloLeido += hay
+            let perdidas = anilloPerdidas
+            os_unfair_lock_unlock(candado)
+
+            var bytes = UnsafeRawPointer(local)
+            var quedan = hay * 2
+            while quedan > 0 {
+                let r = write(1, bytes, quedan)
+                if r < 0 {
+                    if errno == EINTR { continue }
+                    soltar(); exit(0)
+                }
+                bytes += r
+                quedan -= r
+            }
+            // Se dice, no se esconde: son muestras que el WAV no tiene, y quien
+            // lanza esto rellena el hueco con silencio para no correr el reloj.
+            if perdidas > perdidasAvisadas {
+                avisar(["perdidas": perdidas - perdidasAvisadas])
+                perdidasAvisadas = perdidas
+            }
+        }
+    }
+    hilo.qualityOfService = .userInitiated
+    hilo.start()
 }
 
 var tapID = AudioObjectID(kAudioObjectUnknown)
@@ -178,6 +268,50 @@ func soltar() {
     }
     if agregadoID != kAudioObjectUnknown { AudioHardwareDestroyAggregateDevice(agregadoID) }
     if tapID != kAudioObjectUnknown { AudioHardwareDestroyProcessTap(tapID) }
+}
+
+/// Cuántos streams de entrada tiene un dispositivo.
+func streamsDeEntrada(_ dispositivo: AudioObjectID) -> Int {
+    var dir = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreams,
+                                         mScope: kAudioObjectPropertyScopeInput,
+                                         mElement: kAudioObjectPropertyElementMain)
+    var tamano: UInt32 = 0
+    guard AudioObjectGetPropertyDataSize(dispositivo, &dir, 0, nil, &tamano) == noErr else { return -1 }
+    return Int(tamano) / MemoryLayout<AudioStreamID>.size
+}
+
+/// Deja prendido solo el stream del tap.
+///
+/// El agregado trae las entradas de su dispositivo de salida, y un stream de
+/// entrada prendido es un micrófono abierto: con unos AirPods, eso solo ya
+/// podía pasarlos a modo llamada —24 kHz, peor sonido en los oídos de quien
+/// escucha y el indicador del micrófono encendido— aunque Zoom no los usara.
+///
+/// Solo se toca si la cuenta cierra: los del dispositivo de salida más UNO, que
+/// es el del tap. Si no cierra, no se sabe cuál es cuál, y apagar el del tap
+/// sería grabar silencio: se deja todo como estaba.
+func apagarEntradasAjenas(_ agregado: AudioObjectID, _ proc: AudioDeviceIOProcID, salida: AudioObjectID) {
+    var dir = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyIOProcStreamUsage,
+                                         mScope: kAudioObjectPropertyScopeInput,
+                                         mElement: kAudioObjectPropertyElementMain)
+    var tamano: UInt32 = 0
+    guard AudioObjectGetPropertyDataSize(agregado, &dir, 0, nil, &tamano) == noErr,
+          tamano >= UInt32(MemoryLayout<AudioHardwareIOProcStreamUsage>.size) else { return }
+    let crudo = UnsafeMutableRawPointer.allocate(byteCount: Int(tamano), alignment: 16)
+    defer { crudo.deallocate() }
+    crudo.initializeMemory(as: UInt8.self, repeating: 0, count: Int(tamano))
+    let uso = crudo.bindMemory(to: AudioHardwareIOProcStreamUsage.self, capacity: 1)
+    uso.pointee.mIOProc = unsafeBitCast(proc, to: UnsafeMutableRawPointer.self)
+    guard AudioObjectGetPropertyData(agregado, &dir, 0, nil, &tamano, crudo) == noErr else { return }
+    let total = Int(uso.pointee.mNumberStreams)
+    let ajenos = streamsDeEntrada(salida)
+    guard total > 1, ajenos >= 0, ajenos == total - 1,
+          let offset = MemoryLayout<AudioHardwareIOProcStreamUsage>.offset(of: \.mStreamIsOn) else { return }
+    let prendidos = (crudo + offset).bindMemory(to: UInt32.self, capacity: total)
+    for i in 0..<total { prendidos[i] = i == total - 1 ? 1 : 0 }
+    if AudioObjectSetPropertyData(agregado, &dir, 0, nil, tamano, crudo) == noErr {
+        avisar(["entradasApagadas": ajenos])
+    }
 }
 
 func escuchar(prefijo: String) -> Never {
@@ -243,11 +377,8 @@ func escuchar(prefijo: String) -> Never {
         fallar("El sonido llega en un formato que no es coma flotante de 32 bits.", "formato-raro")
     }
 
-    // Se escribe desde una cola serie y no desde el hilo de audio: escribir un
-    // pipe puede bloquear si quien lee se atrasa, y bloquear el hilo de audio
-    // es perder muestras. Con la cola, el que espera es este proceso.
+    // Los avisos de Core Audio (la tasa cambió, la salida se fue) llegan acá.
     let cola = DispatchQueue(label: "notetaker.escucha")
-    let salidaPCM = FileHandle.standardOutput
 
     // **La tasa es la del dispositivo agregado, no la del tap.** El tap dice
     // 48 kHz, pero las muestras llegan al ritmo del reloj del agregado, que es
@@ -264,9 +395,33 @@ func escuchar(prefijo: String) -> Never {
     if tasaEntrada <= 0 { tasaEntrada = formato.mSampleRate }
     var dirTasa = direccion(kAudioDevicePropertyNominalSampleRate)
     AudioObjectAddPropertyListenerBlock(agregadoID, &dirTasa, cola) { _, _ in
-        if let t = leerNumero(agregadoID, kAudioDevicePropertyNominalSampleRate, Float64(0)), t > 0 {
+        if let t = leerNumero(agregadoID, kAudioDevicePropertyNominalSampleRate, Float64(0)), t > 0,
+           t != tasaEntrada {
             tasaEntrada = t
+            avisar(["tasa": t])
         }
+    }
+
+    // **Si la salida del sistema cambia o desaparece, el reloj del agregado se
+    // va con ella** —los AirPods al estuche, sin batería, o que se pasan al
+    // teléfono— y la escucha se queda callada con el proceso vivo, sin que nadie
+    // se entere. Se sale con un código, y quien lanzó esto lo vuelve a abrir
+    // sobre la salida nueva (`engine/audio-app.js`).
+    let irse: () -> Void = {
+        soltar()
+        avisar(["error": "Cambió la salida de audio del sistema: la escucha se rearma sola.",
+                "codigo": "salida-cambio"])
+        exit(3)
+    }
+    var dirSalida = direccion(kAudioHardwarePropertyDefaultSystemOutputDevice)
+    AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &dirSalida, cola) { _, _ in
+        let nueva = leerNumero(AudioObjectID(kAudioObjectSystemObject),
+                               kAudioHardwarePropertyDefaultSystemOutputDevice, AudioObjectID(0)) ?? 0
+        if nueva != salida { irse() }
+    }
+    var dirViva = direccion(kAudioDevicePropertyDeviceIsAlive)
+    AudioObjectAddPropertyListenerBlock(salida, &dirViva, cola) { _, _ in
+        if (leerNumero(salida, kAudioDevicePropertyDeviceIsAlive, UInt32(1)) ?? 0) == 0 { irse() }
     }
 
     // Los canales del tap son los ÚLTIMOS del agregado. Delante van las
@@ -275,38 +430,46 @@ func escuchar(prefijo: String) -> Never {
     // de quien toma notas en la grabación de la clase.
     let canalesDelTap = max(1, Int(formato.mChannelsPerFrame))
 
-    estado = AudioDeviceCreateIOProcIDWithBlock(&procID, agregadoID, cola) { _, entrada, _, _, _ in
+    // Sin cola: el bloque corre en el hilo de audio y no espera a nadie. Todo lo
+    // que hace es sumar, remuestrear a memoria reservada y dejarlo en el anillo.
+    estado = AudioDeviceCreateIOProcIDWithBlock(&procID, agregadoID, nil) { _, entrada, _, _, _ in
         let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: entrada))
-        var delTap: [AudioBuffer] = []
         var juntados = 0
-        for b in buffers.reversed() where juntados < canalesDelTap && b.mNumberChannels > 0 {
-            delTap.insert(b, at: 0)
-            juntados += Int(b.mNumberChannels)
+        var desde = buffers.count
+        while desde > 0 && juntados < canalesDelTap {
+            desde -= 1
+            juntados += Int(buffers[desde].mNumberChannels)
         }
-        guard let primero = delTap.first else { return }
-        let cuadros = Int(primero.mDataByteSize) / (4 * Int(primero.mNumberChannels))
+        guard juntados > 0, desde < buffers.count else { return }
+        let primero = buffers[desde]
+        guard primero.mNumberChannels > 0 else { return }
+        let cuadros = min(CAPACIDAD_TRABAJO,
+                          Int(primero.mDataByteSize) / (4 * Int(primero.mNumberChannels)))
         guard cuadros > 0 else { return }
 
         // A mono: el promedio de los canales del tap. Sirve igual si el sonido
         // llega entrelazado (un buffer, dos canales) o separado (dos buffers,
         // uno cada uno), que son las dos formas en que Core Audio lo entrega.
-        var mono = [Float](repeating: 0, count: cuadros)
         for f in 0..<cuadros {
             var suma: Float = 0
-            for b in delTap {
+            for k in desde..<buffers.count {
+                let b = buffers[k]
                 guard let datos = b.mData?.assumingMemoryBound(to: Float.self) else { continue }
                 let nc = Int(b.mNumberChannels)
                 for c in 0..<nc { suma += datos[f * nc + c] }
             }
-            mono[f] = suma / Float(juntados)
+            trabajoMono[f] = suma / Float(juntados)
         }
-        let salida = remuestrear(mono)
-        if !salida.isEmpty { salida.withUnsafeBufferPointer { salidaPCM.write(Data(buffer: $0)) } }
+        let n = remuestrear(trabajoMono, cuadros, trabajoSalida, CAPACIDAD_TRABAJO * 8)
+        if n > 0 { alAnillo(trabajoSalida, n) }
     }
     guard estado == noErr, let proc = procID else {
         soltar()
         fallar("No se pudo enganchar la lectura del sonido (\(estado)).", "sin-lectura")
     }
+
+    apagarEntradasAjenas(agregadoID, proc, salida: salida)
+    arrancarEscritor()
 
     estado = AudioDeviceStart(agregadoID, proc)
     guard estado == noErr else {

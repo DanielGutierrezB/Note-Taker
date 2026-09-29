@@ -85,9 +85,12 @@ function registrar({ ipcMain, app, send, anotar }) {
         const r = await audioApp.abrir({
             alPcm: chunk => grabacion.pcm(chunk),
             avisar: aviso => {
-                // Que el audio llegue a otra tasa que la declarada es de lo poco
-                // que arruina una clase en silencio: va al registro siempre.
-                if (aviso && aviso.tipo === 'tasa') anotar('audio-app.tasa', aviso);
+                // Lo que le pasa a la escucha en medio de la clase va al
+                // registro siempre: es lo que explica un WAV con silencios
+                // puestos, una tasa que cambió o una escucha que se rearmó.
+                if (aviso && ['ayudante', 'relleno', 'rearmada', 'caido', 'vuelve'].includes(aviso.tipo)) {
+                    anotar(`audio-app.${aviso.tipo}`, aviso);
+                }
                 send('audio-app', aviso);
             }
         });

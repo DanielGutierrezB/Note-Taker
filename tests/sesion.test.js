@@ -111,6 +111,28 @@ module.exports = function (t) {
         t.ok((sidecar.sesiones || []).length > 0, 'pero con su audio anotado');
     });
 
+    t.test('si el audio grabado se atrasa contra el reloj, avisa (y no cada segundo)', () => {
+        // El error que se escapó: Zoom a 24 kHz rotulado 48, el WAV crecía a
+        // la mitad del reloj y nada lo decía.
+        const dir = carpeta();
+        const avisos = [];
+        try {
+            grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true, avisar: a => avisos.push(a) });
+            for (let i = 0; i < 12; i++) grabacion.pcm(pedazo());
+            grabacion.vigilarDeriva();
+            t.eq(avisos.filter(a => a.tipo === 'error').length, 0, 'a la par, nada');
+            // Como si hubieran pasado cinco segundos de reloj sin audio.
+            grabacion._sesion().captura.desdeMs -= 5000;
+            grabacion.vigilarDeriva();
+            grabacion.vigilarDeriva();
+            const errores = avisos.filter(a => a.tipo === 'error');
+            t.eq(errores.length, 1, 'un aviso, no uno por pasada');
+            t.ok(/atrás del reloj/.test(errores[0].mensaje), errores[0].mensaje);
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
     t.test('dos sesiones a la vez no', () => {
         const dir = carpeta();
         try {
