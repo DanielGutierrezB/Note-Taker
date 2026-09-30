@@ -491,12 +491,26 @@ async function leerClaqueta(ms, s) {
  * en una clase de tres horas eso son marcas que no coinciden con la onda. El
  * `paredMs` real se guarda igual, en el sidecar, para poder depurar.
  *
+ * **Y si hubo una palmada cerca, se estampa en la palmada.** Es lo que evita la
+ * claqueta doble: quien claquetea a mano lo hace mientras oye el aplauso, así
+ * que el botón y la palmada son el MISMO gesto, pero llegaban con dos horas
+ * distintas —la palmada con el pico de la onda, el botón con el tiempo de
+ * reacción del dedo— y la confirmación del golpe, que tarda seis segundos en
+ * volver de Whisper, entraba como una segunda claqueta si las dos horas se
+ * habían separado más que `MISMA_CLAQUETA_MS`. Puestas las dos en el pico, se
+ * funden siempre, y la que queda tiene el dato bueno: el de la onda.
+ *
+ * Al revés funciona igual y por lo mismo: si la confirmación ya llegó, el botón
+ * cae exactamente sobre la claqueta que hay y la funde en vez de agregar otra.
+ *
  * **Va al historial como todo lo demás**, y la foto es de la lista entera:
  * anotar puede fundir dos y renumerar las de atrás (ver `anotarClaqueta`).
  */
 function claqueta() {
     if (!sesion || !sesion.captura) return null;
-    const ms = espejo.grabadoHastaMs(sesion);
+    const ahora = espejo.grabadoHastaMs(sesion);
+    const palmada = vivo.aplausoCerca(sesion.estado, ahora);
+    const ms = palmada == null ? ahora : palmada;
     // El paso es de UNA claqueta: la que había ahí (si se funde) y la que quedó.
     // Una foto de la lista entera se llevaba al deshacer las que el aplauso o
     // la voz anotaron después (ver `ponerEnLista` en `deshacer.js`).

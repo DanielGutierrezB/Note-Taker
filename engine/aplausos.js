@@ -22,6 +22,11 @@
  * juntas sí, y con mucho aire entre el sí y el no. De ahí las cuatro
  * preguntas de `esAplauso`.
  *
+ * Después se sumaron las tres palmadas de `curso-jev_2026-09-30_09-08-36`, que
+ * son las que movieron `SOBRE_EL_PISO_DB`: en esa clase el profesor hablaba
+ * seguido y el piso que se persigue trepa hasta −56 dBFS, así que una palmada
+ * igual de fuerte se despega menos del ruido de su propio momento.
+ *
  * **Todo es relativo al piso de ESTA sesión.** Un umbral absoluto no sirve: en
  * este material el piso está en −65 y hay "silencio" a −55, y en el Live-Mix
  * del curso viejo el piso estaba en −74. Lo que no cambia es cuánto se despega
@@ -49,14 +54,29 @@ const MEMORIA_MS = 1000;
 /**
  * Cuánto tiene que despegarse del piso de la sala.
  *
- * Cincuenta decibelios. Las siete palmadas medidas dan de 58,7 a 61,5, y lo
- * más fuerte que no es una palmada —una vocal gritada contra el micrófono— da
- * 58,1 pero se cae en el ataque y en la caída. Lo que este número saca de
- * cuajo son los clics: el del ratón al apretar Iniciar da 39 dB sobre el piso,
- * y las teclas andan entre 30 y 45. Son cortos y agudos como una palmada; lo
- * único que no tienen es fuerza.
+ * Lo que este número saca de cuajo son los clics y los golpecitos: el del ratón
+ * al apretar Iniciar da 39 dB sobre el piso, y las teclas andan entre 30 y 45.
+ * Son cortos y agudos como una palmada; lo único que no tienen es fuerza.
+ *
+ * **Cuarenta y ocho, y está medido en el medio del hueco.** Bajando el corte de
+ * a poco sobre las cinco grabaciones que hay (2 h 29 por Zoom, y cuatro por
+ * micrófono), lo que aparece y en qué orden:
+ *
+ *   las diez palmadas de verdad     52,4 a 64,8 dB sobre el piso
+ *   lo primero que no lo es         45,0 · 44,8 · 44,0 · 42,3 · 42,2
+ *
+ * O sea que entre 45 y 52,4 no hay nada, y el corte va en la mitad: tres
+ * decibelios de aire contra el falso más fuerte y cuatro y medio contra la
+ * palmada más flojita. Estaba en 50 y en la clase del 30/09 a las 09:08 dos de
+ * las tres palmadas pasaron con 52,9 y 52,4, o sea con dos decibelios y medio:
+ * con los AirPods y alguien hablando seguido el piso que se persigue se sube
+ * hasta −56 dBFS y una palmada de verdad se acerca al corte. De 50 a 48 no
+ * cambia ni una detección en ninguna de las cinco grabaciones —se comprobó— y
+ * duplica el margen del lado que importa, porque perder la palmada de una
+ * claqueta cuesta más que anotar una de más: la de más se ve y se saca con la
+ * lista, y la que falta hay que buscarla a oído en tres horas de clase.
  */
-const SOBRE_EL_PISO_DB = 50;
+const SOBRE_EL_PISO_DB = 48;
 
 /**
  * Cuánto tiene que despegarse de lo que sonaba justo antes.
@@ -144,6 +164,40 @@ const PISO_MAX_DB = -25;
 
 const TASA_POR_DEFECTO = 48000;
 
+/** Para no reservar nada cuando no entra nada. */
+const SIN_MUESTRAS = new Int16Array(0);
+
+/**
+ * El pedazo que llega, como muestras de 16 bits, venga como venga.
+ *
+ * **Esto no es defensa por si acaso: es el error que dejó la 0.1.2 sin
+ * claquetas.** La ventana manda un `Int16Array` —lo arma el worklet y lo
+ * transfiere por el puente (`src/js/grabar/pcm-worklet.js`)— y esta función
+ * pedía un `Buffer` de Node: `Buffer.isBuffer(pcm) ? pcm : Buffer.alloc(0)`.
+ * En la simulación, que lee el WAV con `fs` y pasa `Buffer`, andaba; en la app
+ * de verdad TODOS los pedazos se tiraban en silencio y no se encontró una sola
+ * palmada en la clase del 30/09 a las 09:08. `captura.escribir` ya convertía
+ * («`Buffer.from(pcm.buffer || pcm)`»), y por eso el WAV salía completo: el
+ * audio estaba bien y el buscador miraba un pedazo vacío.
+ *
+ * Un `Buffer` de Node sale de una reserva compartida y puede empezar en un byte
+ * impar, y ahí no se puede hacer una vista de 16 bits: en ese caso se copia.
+ */
+function muestrasDe(pcm) {
+    if (!pcm) return SIN_MUESTRAS;
+    if (pcm instanceof Int16Array) return pcm;
+    const memoria = pcm instanceof ArrayBuffer ? pcm : pcm.buffer;
+    if (!(memoria instanceof ArrayBuffer)) return SIN_MUESTRAS;
+    const desde = pcm.byteOffset || 0;
+    const bytes = pcm.byteLength == null ? memoria.byteLength : pcm.byteLength;
+    const muestras = Math.floor(bytes / 2);
+    if (!muestras) return SIN_MUESTRAS;
+    if (desde % 2) {
+        return new Int16Array(new Uint8Array(memoria, desde, muestras * 2).slice().buffer);
+    }
+    return new Int16Array(memoria, desde, muestras);
+}
+
 /** El nivel de un puñado de muestras, en dBFS. */
 function enDb(sumaCuadrados, muestras) {
     if (!muestras) return -120;
@@ -201,7 +255,7 @@ function nuevo(params) {
         marcos: 0,
         pisoDb: PISO_INICIAL_DB,
         /** Las muestras sueltas del pedazo anterior, y la hora de la primera. */
-        resto: Buffer.alloc(0),
+        resto: SIN_MUESTRAS,
         restoMs: null,
         /** La última muestra del marco anterior, para que la diferencia no se corte. */
         ultima: 0,
@@ -303,24 +357,30 @@ function juzgar(b, p) {
  * toda velocidad y las palmadas caen donde sonaron.
  *
  * @param {object} b de `nuevo()`
- * @param {Buffer} pcm 16 bits mono
+ * @param {Int16Array|Buffer|ArrayBuffer} pcm 16 bits mono, como lo manda la
+ *   ventana o como lo lee del WAV la simulación (ver `muestrasDe`)
  * @param {number} ms la hora de la PRIMERA muestra de este pedazo
  * @returns {{aplausos: Array, pisoDb: number}}
  */
 function mirar(b, pcm, ms) {
     const aplausos = [];
-    const entra = Buffer.isBuffer(pcm) ? pcm : Buffer.alloc(0);
+    const entra = muestrasDe(pcm);
     if (b.resto.length === 0) b.restoMs = Number(ms);
-    const datos = b.resto.length ? Buffer.concat([b.resto, entra]) : entra;
-    const bytes = b.porMarco * 2;
+    let datos = entra;
+    if (b.resto.length) {
+        datos = new Int16Array(b.resto.length + entra.length);
+        datos.set(b.resto, 0);
+        datos.set(entra, b.resto.length);
+    }
 
+    // `off` va en MUESTRAS, no en bytes.
     let off = 0;
-    for (; off + bytes <= datos.length; off += bytes) {
+    for (; off + b.porMarco <= datos.length; off += b.porMarco) {
         let energia = 0;
         let diferencia = 0;
         let previa = b.ultima;
         for (let i = 0; i < b.porMarco; i++) {
-            const v = datos.readInt16LE(off + i * 2) / 32768;
+            const v = datos[off + i] / 32768;
             energia += v * v;
             const d = v - previa;
             diferencia += d * d;
@@ -336,7 +396,7 @@ function mirar(b, pcm, ms) {
         b.pisoDb = Math.min(PISO_MAX_DB, Math.max(PISO_MIN_DB,
             db > piso ? piso + PISO_SUBE_DB : piso - PISO_BAJA_DB));
 
-        guardar(b, db, centroHz(energia, diferencia, b.tasa), b.restoMs + off / 2 / b.tasa * 1000);
+        guardar(b, db, centroHz(energia, diferencia, b.tasa), b.restoMs + off / b.tasa * 1000);
 
         const listo = juzgar(b, b.marcos - 1 - Math.round(ESPERA_MS / MARCO_MS));
         if (listo) aplausos.push(listo);
@@ -344,8 +404,8 @@ function mirar(b, pcm, ms) {
 
     // Copia y no vista: el pedazo que entró es de quien lo mandó y puede
     // reusarlo en cuanto esta llamada vuelve.
-    b.resto = Buffer.from(datos.subarray(off));
-    b.restoMs = b.restoMs + off / 2 / b.tasa * 1000;
+    b.resto = datos.slice(off);
+    b.restoMs = b.restoMs + off / b.tasa * 1000;
     return { aplausos, pisoDb: b.pisoDb };
 }
 
@@ -364,6 +424,7 @@ module.exports = {
     PISO_MAX_DB,
     centroHz,
     esAplauso,
+    muestrasDe,
     nuevo,
     mirar
 };

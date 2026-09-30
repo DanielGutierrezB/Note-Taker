@@ -729,6 +729,21 @@ function cerrarProvisional(toma, ms) {
 const MISMA_CLAQUETA_MS = 5000;
 
 /**
+ * ¿Esta claqueta la vio la palmada?
+ *
+ * Se pregunta por el pedazo y no por el `origen` entero, y esa es la
+ * corrección: ninguna claqueta tiene `origen` «golpe» a secas —la que sale del
+ * PCM confirmada por el texto se anota «golpe,voz», y una fundida puede decir
+ * «editor,golpe,voz»—, así que comparar por igualdad nunca daba cierto y
+ * `fundir` terminaba tomando el `ms` más temprano de los dos. Al juntar la
+ * claqueta del botón con la que encontró la palmada, el más temprano suele ser
+ * el del botón, o sea el dedo: justo el dato que no se quiere.
+ */
+function porGolpe(c) {
+    return String((c && c.origen) || '').split(',').includes('golpe');
+}
+
+/**
  * Cuál de dos orígenes manda para cada cosa.
  *
  * No es "gana uno entero", porque cada puerta sabe algo distinto y ninguna sabe
@@ -746,7 +761,7 @@ const MISMA_CLAQUETA_MS = 5000;
  *   por las dos cosas juntas. Que una no confirme no desconfirma a la otra.
  */
 function fundir(vieja, nueva) {
-    const deGolpe = nueva.origen === 'golpe' ? nueva : (vieja.origen === 'golpe' ? vieja : null);
+    const deGolpe = porGolpe(nueva) ? nueva : (porGolpe(vieja) ? vieja : null);
     return {
         ...vieja,
         ms: deGolpe ? deGolpe.ms : Math.min(vieja.ms, nueva.ms),
@@ -864,6 +879,21 @@ function recordarAplauso(estado, ms) {
 }
 
 /**
+ * La palmada más cercana a `ms` dentro de la ventana de la regla, o null.
+ *
+ * Es el punto de sincronía de verdad: un pico medido sobre la onda. Lo usan las
+ * dos puertas que llegan con una hora peor —la palabra, que empieza antes o
+ * después del aplauso, y el botón, que llega al tiempo de reacción de una
+ * persona— para estampar la claqueta donde SUENA y no donde se enteraron.
+ */
+function aplausoCerca(estado, ms) {
+    const cerca = (estado.aplausos || [])
+        .filter(a => Math.abs(a - ms) <= PALABRA_Y_APLAUSO_MS)
+        .sort((a, b) => Math.abs(a - ms) - Math.abs(b - ms))[0];
+    return cerca == null ? null : cerca;
+}
+
+/**
  * La palabra «claqueta» dicha a la hora `ms`: si hubo un aplauso cerca, ESA es
  * la claqueta, y va en el aplauso —que es el punto de sincronía, el cuadro que
  * el editor busca en la onda—. Sin aplauso cerca, no es una claqueta.
@@ -877,9 +907,7 @@ function recordarAplauso(estado, ms) {
  * @returns {{claqueta:object|null, nueva:boolean, sinAplauso?:boolean}}
  */
 function claquetaDicha(estado, ms, frase) {
-    const cerca = (estado.aplausos || [])
-        .filter(a => Math.abs(a - ms) <= PALABRA_Y_APLAUSO_MS)
-        .sort((a, b) => Math.abs(a - ms) - Math.abs(b - ms))[0];
+    const cerca = aplausoCerca(estado, ms);
     if (cerca == null) return { claqueta: null, nueva: false, sinAplauso: true };
     return anotarClaqueta(estado, {
         ms: cerca,
@@ -1410,6 +1438,7 @@ module.exports = {
     claquetaCerca,
     claquetaDicha,
     recordarAplauso,
+    aplausoCerca,
     PALABRA_Y_APLAUSO_MS,
     moverBorde,
     tomasQueQuedan,

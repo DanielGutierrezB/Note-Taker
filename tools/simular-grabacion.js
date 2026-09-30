@@ -52,6 +52,21 @@ function aPcm(wav, segundos) {
 }
 
 /**
+ * El pedazo, como lo manda la VENTANA y no como lo lee un archivo.
+ *
+ * Un `Int16Array` transferido por el puente, que es lo que arma el worklet
+ * (`src/js/grabar/pcm-worklet.js`). Antes acá se le pasaba el `Buffer` de Node
+ * tal cual salía de `readFileSync`, y esa diferencia dejó a la 0.1.2 sin una
+ * sola claqueta: `aplausos.mirar` pedía un `Buffer`, en la app tiraba TODOS los
+ * pedazos en silencio, y acá no se veía porque acá llegaba justo lo que el
+ * código pedía. Una simulación que manda algo que la app no manda prueba otra
+ * app.
+ */
+function comoLaVentana(trozo) {
+    return new Int16Array(trozo.buffer.slice(trozo.byteOffset, trozo.byteOffset + trozo.byteLength));
+}
+
+/**
  * Los bloques del XML de referencia: la respuesta correcta.
  *
  * Se pasa con `--contra` y no se adivina desde la ruta del audio: acá el WAV
@@ -173,7 +188,7 @@ async function main() {
     const arranque = Date.now();
 
     for (let off = 0; off < pcm.byteLength; off += bytesPorPedazo) {
-        grabacion.pcm(pcm.subarray(off, Math.min(off + bytesPorPedazo, pcm.byteLength)));
+        grabacion.pcm(comoLaVentana(pcm.subarray(off, Math.min(off + bytesPorPedazo, pcm.byteLength))));
         pedazos++;
         if (pedazos % pedazosPorCiclo === 0) {
             await grabacion.buscarSenales();

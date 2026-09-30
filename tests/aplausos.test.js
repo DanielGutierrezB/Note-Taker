@@ -13,8 +13,13 @@
  * igual no hice el aplauso» —y la app le acababa de poner una claqueta—.
  */
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
 const golpe = require('../engine/golpe');
 const aplausos = require('../engine/aplausos');
+const grabacion = require('../engine/grabacion');
 const vivo = require('../engine/notas-vivo');
 
 const PISO_30 = -67.8;
@@ -174,6 +179,16 @@ function clic(picoDb) {
     return x;
 }
 
+/** Un pedazo de la pista, en muestras de 16 bits, como sale del worklet. */
+function muestras(x, off, cuantas) {
+    const m = new Int16Array(cuantas);
+    for (let i = 0; i < cuantas; i++) {
+        const v = Math.max(-1, Math.min(1, x[off + i]));
+        m[i] = Math.round(v * 32767);
+    }
+    return m;
+}
+
 /** Pasa la pista por los dos buscadores, en pedazos de 4096 como la app. */
 function correr(x) {
     const busc = aplausos.nuevo({ tasa: TASA });
@@ -181,11 +196,7 @@ function correr(x) {
     const palmadas = [];
     const golpes = [];
     for (let off = 0; off + MUESTRAS_POR_PEDAZO <= x.length; off += MUESTRAS_POR_PEDAZO) {
-        const pcm = Buffer.alloc(MUESTRAS_POR_PEDAZO * 2);
-        for (let i = 0; i < MUESTRAS_POR_PEDAZO; i++) {
-            const v = Math.max(-1, Math.min(1, x[off + i]));
-            pcm.writeInt16LE(Math.round(v * 32767), i * 2);
-        }
+        const pcm = Buffer.from(muestras(x, off, MUESTRAS_POR_PEDAZO).buffer);
         const ms = Math.round(off / TASA * 1000);
         for (const a of aplausos.mirar(busc, pcm, ms).aplausos) palmadas.push(a);
         const v = golpe.mirar(viejo, pcm, ms);
@@ -193,6 +204,29 @@ function correr(x) {
     }
     return { palmadas, golpes, piso: busc.pisoDb };
 }
+
+/**
+ * Y lo mismo pero mandando los pedazos como los manda la ventana de verdad:
+ * un `Int16Array` propio, no un `Buffer` de Node (`pcm-worklet.js`).
+ */
+function correrComoLaVentana(x, comoEmpaquetar) {
+    const busc = aplausos.nuevo({ tasa: TASA });
+    const palmadas = [];
+    for (let off = 0; off + MUESTRAS_POR_PEDAZO <= x.length; off += MUESTRAS_POR_PEDAZO) {
+        const m = muestras(x, off, MUESTRAS_POR_PEDAZO);
+        const pedazo = comoEmpaquetar ? comoEmpaquetar(m) : m;
+        const ms = Math.round(off / TASA * 1000);
+        for (const a of aplausos.mirar(busc, pedazo, ms).aplausos) palmadas.push(a);
+    }
+    return { palmadas, piso: busc.pisoDb };
+}
+
+/** Una pista de dos segundos con una palmada de verdad a los 1,3 s. */
+const PALMADA_EN_1300 = (() => {
+    const x = pista(2);
+    poner(x, 1.3, palmada(-8));
+    return x;
+})();
 
 module.exports = function (t) {
     t.group('aplausos · lo medido en el audio real');
@@ -407,5 +441,185 @@ module.exports = function (t) {
             t.eq(r.sinAplauso, true, `a los ${seg} s`);
         }
         t.eq(e.claquetas.length, 0);
+    });
+
+    t.group('aplausos · el corte de nivel va en el medio del hueco');
+
+    t.test('las diez palmadas de verdad lo pasan, y lo que más se le acerca no', () => {
+        // Lo que sale de bajar el corte de a poco sobre las cinco grabaciones:
+        // entre 45,0 y 52,4 dB sobre el piso no hay NADA. El corte va en el
+        // medio, y esta prueba es la que avisa si alguien lo vuelve a subir
+        // hasta donde estaba —en 50, dos palmadas del 30/09 pasaban con 2,4 dB
+        // de aire— o lo baja hasta donde empiezan los falsos.
+        const DE_VERDAD = [52.4, 52.9, 58.1, 59.2, 59.7, 60.8, 62.0, 62.5, 63.5, 64.8];
+        const LO_MAS_PARECIDO = [45.0, 44.8, 44.0, 42.3, 42.2];
+        for (const db of DE_VERDAD) {
+            t.ok(db > aplausos.SOBRE_EL_PISO_DB, `${db} dB es una palmada`);
+        }
+        for (const db of LO_MAS_PARECIDO) {
+            t.ok(db < aplausos.SOBRE_EL_PISO_DB, `${db} dB no llega`);
+        }
+        t.ok(aplausos.SOBRE_EL_PISO_DB - 45.0 >= 2, 'con aire contra el falso más fuerte');
+        t.ok(52.4 - aplausos.SOBRE_EL_PISO_DB >= 2, 'y contra la palmada más flojita');
+    });
+
+    t.group('aplausos · el pedazo que manda la ventana de verdad');
+
+    t.test('un Int16Array encuentra la misma palmada que un Buffer', () => {
+        // El error que dejó la 0.1.2 sin una sola claqueta. La ventana manda un
+        // `Int16Array` transferido por el puente y `mirar` exigía un `Buffer`
+        // de Node: tiraba TODOS los pedazos en silencio. Como la simulación lee
+        // el WAV con `fs` y pasa `Buffer`, la prueba de la clase entera pasaba
+        // y la app de verdad no oía nada. Por eso esta prueba manda lo que
+        // manda el worklet y no lo que es cómodo de escribir acá.
+        const conBuffer = correr(PALMADA_EN_1300).palmadas;
+        const comoLaVentana = correrComoLaVentana(PALMADA_EN_1300).palmadas;
+        t.eq(conBuffer.length, 1, 'con Buffer se encuentra');
+        t.eq(comoLaVentana.length, 1, 'y con Int16Array también');
+        t.eq(comoLaVentana[0].ms, conBuffer[0].ms, 'en el mismo milisegundo');
+        t.near(comoLaVentana[0].picoDb, conBuffer[0].picoDb, 0.01);
+    });
+
+    t.test('y también un Buffer que empieza en un byte impar', () => {
+        // Los `Buffer` chicos salen de una reserva compartida y pueden arrancar
+        // en cualquier byte; sobre uno impar no se puede hacer una vista de 16
+        // bits y hay que copiar.
+        const torcido = m => {
+            const bytes = Buffer.alloc(m.byteLength + 1);
+            Buffer.from(m.buffer, 0, m.byteLength).copy(bytes, 1);
+            return bytes.subarray(1);
+        };
+        const r = correrComoLaVentana(PALMADA_EN_1300, torcido).palmadas;
+        t.eq(r.length, 1);
+        t.eq(r[0].ms, correr(PALMADA_EN_1300).palmadas[0].ms);
+    });
+
+    t.test('lo que no es audio no rompe ni cuenta como audio', () => {
+        for (const nada of [null, undefined, {}, 'hola', 7, new Int16Array(0)]) {
+            t.eq(aplausos.muestrasDe(nada).length, 0, String(nada));
+        }
+        const b = aplausos.nuevo({ tasa: TASA });
+        t.eq(aplausos.mirar(b, null, 0).aplausos.length, 0);
+    });
+
+    t.group('aplausos · la claqueta a mano y la palmada son la misma');
+
+    t.test('a mano primero y la confirmación después: una sola, en la palmada', () => {
+        // El dedo llega tarde: la palmada suena a los 40 s y el botón se aprieta
+        // a los 41,2. La confirmación del golpe vuelve de Whisper seis segundos
+        // más tarde con la hora buena.
+        const T0 = Date.parse('2026-09-30T09:08:36');
+        const e = vivo.estadoNuevo({ secuencia: 'x', ceroMs: T0, fps: 30 });
+        vivo.recordarAplauso(e, T0 + 40000);
+
+        t.eq(vivo.aplausoCerca(e, T0 + 41200), T0 + 40000, 'el botón encuentra su palmada');
+        vivo.anotarClaqueta(e, {
+            ms: vivo.aplausoCerca(e, T0 + 41200), confirmada: true, origen: 'editor'
+        });
+        vivo.anotarClaqueta(e, {
+            ms: T0 + 40000, frase: 'Claqueta clase 1', confirmada: true, origen: 'golpe,voz'
+        });
+
+        t.eq(e.claquetas.length, 1, 'una sola claqueta');
+        t.eq(e.claquetas[0].ms, T0 + 40000, 'y en el pico de la onda');
+        t.eq(e.claquetas[0].origen, 'editor,golpe,voz', 'con las tres puertas anotadas');
+        t.eq(e.claquetas[0].frase, 'Claqueta clase 1');
+    });
+
+    t.test('y al revés, la confirmación primero y el botón después', () => {
+        const T0 = Date.parse('2026-09-30T09:08:36');
+        const e = vivo.estadoNuevo({ secuencia: 'x', ceroMs: T0, fps: 30 });
+        vivo.recordarAplauso(e, T0 + 40000);
+        vivo.anotarClaqueta(e, {
+            ms: T0 + 40000, frase: 'Claqueta clase 1', confirmada: true, origen: 'golpe,voz'
+        });
+        vivo.anotarClaqueta(e, {
+            ms: vivo.aplausoCerca(e, T0 + 41200), confirmada: true, origen: 'editor'
+        });
+        t.eq(e.claquetas.length, 1);
+        t.eq(e.claquetas[0].ms, T0 + 40000);
+    });
+
+    t.test('el `ms` lo pone la palmada aunque el origen venga compuesto', () => {
+        // Ninguna claqueta de la app tiene `origen` «golpe» a secas: la que sale
+        // del PCM se anota «golpe,voz». `fundir` comparaba por igualdad, así que
+        // nunca reconocía a la que medía la onda y se quedaba con el `ms` más
+        // temprano —el del dedo—.
+        const T0 = Date.parse('2026-09-30T09:08:36');
+        const e = vivo.estadoNuevo({ secuencia: 'x', ceroMs: T0, fps: 30 });
+        vivo.anotarClaqueta(e, { ms: T0 + 38000, confirmada: true, origen: 'editor' });
+        vivo.anotarClaqueta(e, { ms: T0 + 40000, confirmada: true, origen: 'golpe,voz' });
+        t.eq(e.claquetas[0].ms, T0 + 40000, 'gana la palmada, que es la que mide la onda');
+    });
+
+    t.test('sin palmada cerca, el botón sigue cayendo donde llega el audio', () => {
+        const T0 = Date.parse('2026-09-30T09:08:36');
+        const e = vivo.estadoNuevo({ secuencia: 'x', ceroMs: T0, fps: 30 });
+        vivo.recordarAplauso(e, T0 + 10000);
+        t.eq(vivo.aplausoCerca(e, T0 + 41200), null, 'una palmada de hace medio minuto no es esta');
+    });
+
+    t.group('aplausos · la sesión entera, con la palmada en el PCM');
+
+    t.test('una palmada de verdad se oye, y el botón se le pega encima', () => {
+        // La prueba de punta a punta del error de la 0.1.2: el PCM entra como lo
+        // manda la ventana, la sesión lo escribe, y la claqueta a mano tiene que
+        // quedar en el pico y no en el dedo.
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-palmada-'));
+        try {
+            const inicial = grabacion.iniciar({
+                dir, curso: 'prueba', fps: 30, sampleRate: TASA, sinReloj: true
+            });
+            const x = PALMADA_EN_1300;
+            let vistas;
+            for (let off = 0; off + MUESTRAS_POR_PEDAZO <= x.length; off += MUESTRAS_POR_PEDAZO) {
+                grabacion.pcm(muestras(x, off, MUESTRAS_POR_PEDAZO));
+            }
+            vistas = grabacion._sesion().estado.aplausos || [];
+            t.eq(vistas.length, 1, 'la sesión oyó la palmada');
+            t.near(vistas[0] - inicial.ceroMs, 1300, 40, 'y la puso donde suena');
+
+            // El dedo, casi medio segundo tarde.
+            const estado = grabacion.claqueta();
+            t.eq(estado.claquetas.length, 1);
+            t.eq(estado.claquetas[0].ms, vistas[0], 'el botón se estampa en la palmada');
+
+            // Y la confirmación que llega después no abre una segunda.
+            vivo.anotarClaqueta(grabacion._sesion().estado, {
+                ms: vistas[0], frase: 'Claqueta clase 1', confirmada: true, origen: 'golpe,voz'
+            });
+            t.eq(grabacion._sesion().estado.claquetas.length, 1, 'sigue siendo una');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('deshacer la claqueta a mano no se lleva nada más', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-palmada-'));
+        try {
+            grabacion.iniciar({
+                dir, curso: 'prueba', fps: 30, sampleRate: TASA, sinReloj: true
+            });
+            const x = PALMADA_EN_1300;
+            for (let off = 0; off + MUESTRAS_POR_PEDAZO <= x.length; off += MUESTRAS_POR_PEDAZO) {
+                grabacion.pcm(muestras(x, off, MUESTRAS_POR_PEDAZO));
+            }
+            const estado = grabacion._sesion().estado;
+            // Otra claqueta de la misma clase, lejos de esta: deshacer la del
+            // botón no la puede tocar ni renumerarla de más. Era el error de
+            // antes, cuando el paso guardaba una foto de la lista entera.
+            vivo.anotarClaqueta(estado, {
+                ms: estado.ceroMs + 20000, confirmada: true, origen: 'golpe,voz'
+            });
+            grabacion.claqueta();
+            t.eq(estado.claquetas.length, 2);
+            const r = grabacion.deshacer();
+            t.ok(r.ok, r.error);
+            t.eq(r.estado.claquetas.length, 1, 'se fue solo la del botón');
+            t.eq(r.estado.claquetas[0].origen, 'golpe,voz');
+            t.eq(r.estado.claquetas[0].n, 1, 'y la que quedó se renumeró');
+        } finally {
+            grabacion.apagar();
+        }
     });
 };

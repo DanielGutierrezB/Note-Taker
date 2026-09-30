@@ -280,10 +280,15 @@ En una clase en vivo se claquetea varias veces, así que la app las lleva
 
 - **La palmada**, que `aplausos.js` encuentra en el PCM y se confirma leyendo
   seis segundos a cada lado buscando "claqueta". No alcanza con que suene
-  fuerte: tiene que despegarse 50 dB del piso de ESA sala, subir en menos de
+  fuerte: tiene que despegarse 48 dB del piso de ESA sala, subir en menos de
   15 ms, apagarse en menos de 250 y tener el centro de su energía arriba de
   2,5 kHz. Con menos que eso entraba cualquier sílaba acentuada, y en una clase
-  del 29/09 se contaron 1822 "aplausos" en dos horas y media.
+  del 29/09 se contaron 1822 "aplausos" en dos horas y media. El corte está
+  medido en el medio del hueco: sobre las cinco grabaciones que hay, las diez
+  palmadas de verdad van de 52,4 a 64,8 dB sobre el piso y lo primero que no lo
+  es llega a 45,0, así que entre 45 y 52,4 no hay nada y 48 deja aire de los dos
+  lados. Estaba en 50, y con alguien hablando seguido el piso que se persigue
+  trepa hasta −56 dBFS y dos palmadas de verdad del 30/09 pasaron raspando.
 - **La palabra dicha**, que oye el ciclo de señales. Existe porque el aplauso
   puede no llegar: el audio de un Zoom pasa por compresión, cancelación de eco y
   control automático de ganancia, y las tres aplastan justo lo que el detector
@@ -296,9 +301,21 @@ exactamente donde suena), la frase la pone la voz (el aplauso no sabe qué se
 dijo, y el número —"claqueta 4, clase 4"— solo aparece en el texto), y
 `confirmada` es un o-lógico.
 
-**Un golpe sin frase se anota igual, sin confirmar.** Una claqueta de más se
-borra con un clic; una de menos es un punto de sincronía que el editor no tiene.
-La pantalla la muestra como `por confirmar` y quien está mirando decide.
+**Una claqueta es la palabra Y el aplauso.** Un golpe sin la frase alrededor no
+se anota: antes se anotaba «por confirmar» y la lista se llenaba de puertas,
+golpes en la mesa y ruidos de la llamada. Cuando el aplauso se oyó y la palabra
+no se leyó, la pantalla lo dice —es la pastilla de acá abajo— y la claqueta la
+pone quien está mirando.
+
+**Y el buscador tiene que recibir lo que la ventana manda.** En la 0.1.2 pedía
+un `Buffer` de Node y la ventana manda un `Int16Array` —lo arma el worklet y lo
+transfiere por el puente—, así que en la app de verdad tiraba TODOS los pedazos
+en silencio: la clase del 30/09 a las 09:08 tiene tres palmadas de manual y no
+encontró ninguna. El WAV salía completo porque `captura.escribir` sí convertía,
+y por eso el error no se veía en ninguna parte. En la simulación tampoco: como
+lee el WAV con `fs`, le pasaba justo el `Buffer` que el código pedía. Ahora
+`aplausos.js` acepta las dos formas, y `tools/simular-grabacion.js` manda lo
+mismo que manda la ventana — una simulación que manda otra cosa prueba otra app.
 
 ### Aplaudir se ve en el momento
 
@@ -868,6 +885,13 @@ una clase grabada, abre las siete tomas que se dijeron, encuentra tres claquetas
 —la primera confirmada por el texto, que Whisper escribió "Claquetados,
 clasedos"— y el bloque de referencia que el director había marcado a mano cae
 dentro del segundo (IN +0,6 s, OUT +0,9 s).
+
+Y contra la clase del 30/09 a las 09:08, que es la que destapó el error del
+`Int16Array`: pasada de nuevo mandando el PCM como lo manda la ventana, salen
+las tres palmadas de la clase —317,38 · 326,97 · 338,46 s— y las tres llegan a
+claqueta confirmada por el texto, que Whisper escribió "TLAQUETA CLASE 1",
+"Claqueta clase 1" y "Claqueta clase 2". Con el buscador recibiendo un pedazo
+vacío daban cero.
 
 Lo que falta es la vuelta que solo la da el uso: una clase entera de verdad, con
 el XML importado en Premiere y el corte hecho encima.
