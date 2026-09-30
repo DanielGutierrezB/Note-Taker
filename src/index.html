@@ -126,6 +126,11 @@
         </div>
         <span class="crece"></span>
         <div class="nivel" id="vivo-nivel"><div class="nivel-barra"></div></div>
+        <!-- La claqueta es global y vive acá, con los controles, y no en la fila
+             de la toma: al lado de «Cerrar toma» se apretaba por error. Lejos
+             de «Terminar» también a propósito, con los dos iconos en medio. -->
+        <button id="btn-claqueta" class="btn" type="button" data-hace="claqueta"
+                title="Anotar una claqueta acá, si se hizo y no se oyó. Tecla: K"></button>
         <button id="btn-deshacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
         <button id="btn-rehacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
         <button id="btn-terminar" class="btn" type="button">Terminar</button>

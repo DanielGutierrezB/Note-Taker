@@ -1155,10 +1155,14 @@ select {
   border-bottom: 1px solid var(--hairline);
 }
 
+/* A 12 px y no a 16: con el botón de Claqueta adentro, la fila pide 30 px más
+   de los que hay al ancho mínimo de la ventana (900 px), y lo que cedía era el
+   timecode —los 32 px se encogían y se pintaban encima del número de al lado—.
+   Medido con `tools/medir-botones.js`. */
 .barra-arriba {
   display: flex;
   align-items: center;
-  gap: var(--sp-5);
+  gap: var(--sp-4);
 }
 
 /* Un número que se consulta, no el que ancla la pantalla. El timecode es el
@@ -1172,11 +1176,15 @@ select {
   color: var(--text-primary);
 }
 
+/* Ninguno de los tres se encoge: son números y palabras cortas que no tienen
+   de dónde ceder, y encogidos partían «toma abierta» en dos renglones o
+   pintaban el timecode encima del de al lado. Lo que cede es el nivel, que es
+   un indicador y se sigue leyendo más angosto. */
 .barra-bloque {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  min-width: 0;
+  flex: 0 0 auto;
 }
 
 .contadores {

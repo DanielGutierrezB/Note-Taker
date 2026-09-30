@@ -108,10 +108,12 @@ export function conectar(contexto) {
     $('#btn-rehacer').addEventListener('click', () => volver('rehacer'));
     $('#btn-deshacer').innerHTML = icono('deshacer');
     $('#btn-rehacer').innerHTML = icono('rehacer');
+    $('#btn-claqueta').innerHTML = `${icono('claqueta')} Claqueta`;
 
     $('#ahora').addEventListener('click', alClic);
     $('#lista-vivo').addEventListener('click', alClic);
     $('#vivo-atajos').addEventListener('click', alClic);
+    $('.barra-arriba').addEventListener('click', alClic);
     $('#ahora').addEventListener('change', alCambiar);
     $('#lista-vivo').addEventListener('change', alCambiar);
     // Seleccionar un pedazo del texto de una toma abre el campo para comentarlo.
@@ -396,8 +398,6 @@ function ahora(fps) {
                     title="Abre una toma acá. Si el profesor ya venía hablando, el IN
 retrocede solo hasta donde empezó la frase. Tecla: Enter">
               ${icono('abrirToma')} Abrir toma</button>
-            <button class="btn" type="button" data-hace="claqueta">
-              ${icono('claqueta')} Claqueta</button>
           </div>
           <div class="tarjeta-cuerpo">
             <div data-texto="espera"></div>
@@ -419,8 +419,6 @@ retrocede solo hasta donde empezó la frase. Tecla: Enter">
         <button class="btn btn-primario" type="button" data-hace="cerrar"
                 title="Cierra la toma en la última palabra dicha. Tecla: Enter">
           ${icono('cerrarToma')} Cerrar toma</button>
-        <button class="btn" type="button" data-hace="claqueta">
-          ${icono('claqueta')} Claqueta</button>
       </div>
       <div class="tarjeta-cuerpo">
         <input type="text" data-campo="nota" data-toma="${abierta.id}"

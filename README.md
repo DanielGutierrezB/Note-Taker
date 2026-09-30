@@ -76,7 +76,10 @@ dice qué va a hacer —«abrir toma» o «cerrar toma»— en vez de las dos co
 de vista muestra encendida la de la toma sobre la que caen las teclas.
 
 El botón primario de la pantalla es siempre el borde que toca: **Abrir toma**
-cuando no hay ninguna, **Cerrar toma** cuando la hay.
+cuando no hay ninguna, **Cerrar toma** cuando la hay. Y es el único de la fila
+de la toma: **Claqueta** está arriba, en la barra, junto a los controles de la
+sesión. Ahí es global —se aprieta con toma abierta o sin ella— y deja de estar
+pegado a «Cerrar toma», que es cómo se anotaban claquetas sin querer.
 
 **Cada toma nueva arranca con la vista de la anterior.** Una clase se graba por
 tramos con la misma vista —varias de profesor seguidas, después varias de
