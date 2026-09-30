@@ -76,7 +76,10 @@ const TECHO_DB = -35;
  */
 const RECUERDO = 300;
 
-/** Con menos pasadas medidas todavía no hay de dónde sacar un piso; vale el de abajo. */
+/**
+ * De cuántas mediciones para arriba manda la mediana. Con menos que esto la
+ * sesión está calentando y manda el mínimo (ver `umbral`).
+ */
 const MINIMO = 3;
 
 /** Cuánto tiene que durar el sonido para ser una palabra y no un golpe (ver arriba). */
@@ -175,11 +178,26 @@ function aprender(s, n) {
  * De qué nivel para arriba se le cree a una palabra, con lo aprendido hasta
  * ahora. La mediana de las pasadas y no el promedio: media clase hablando
  * seguido no puede subir el piso.
+ *
+ * **Las dos primeras pasadas también van con el piso medido.** Antes esperaban
+ * a tener tres mediciones y mientras tanto valía `PISO_DB`, que es justo el
+ * número que no filtra nada con un micrófono de sala; era una rendija de dos
+ * segundos al principio de CADA clase, y por ahí entraba un «Gracias.» del
+ * arranque —pasó en la grabación de las 09:08 del 30/09—. No hace falta
+ * esperar: `oir.escuchar` mide antes de preguntar el umbral, así que en la
+ * primera pasada ya hay un piso, y en esa sesión valía −68,7, o sea bueno.
+ *
+ * Mientras calienta manda el MÍNIMO y no la mediana. El riesgo de fiarse de una
+ * o dos mediciones es que la clase arranque con alguien ya hablando: ahí el
+ * percentil de la pasada sale alto, el umbral quedaría estricto y se comería
+ * palabras dichas, que es el error caro. El mínimo es la estimación más
+ * permisiva de las que hay, así que es la que menos puede equivocarse hacia ese
+ * lado. A partir de `MINIMO` ya hay de dónde sacar una mediana.
  */
 function umbral(s) {
-    if (!s || s.vistos.length < MINIMO) return PISO_DB;
+    if (!s || !s.vistos.length) return PISO_DB;
     const orden = s.vistos.slice().sort((a, b) => a - b);
-    const piso = orden[Math.floor(orden.length / 2)];
+    const piso = s.vistos.length < MINIMO ? orden[0] : orden[Math.floor(orden.length / 2)];
     return Math.min(TECHO_DB, Math.max(PISO_DB, piso + MARGEN_DB));
 }
 

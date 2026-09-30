@@ -111,6 +111,34 @@ module.exports = function (t) {
         t.eq(sonido.conSonido([{ start: 2.0, end: 2.4, text: 'Hola' }], palabra, corte).words.length, 1);
     });
 
+    t.test('la primera pasada de una clase ya corre con el piso medido', () => {
+        // El «Gracias.» del arranque de la grabación de las 09:08 del 30/09: el
+        // piso esperaba a tener tres mediciones y hasta entonces valía −60, que
+        // es justo el corte que con un micrófono de sala no filtra nada. Eran
+        // dos segundos de rendija al principio de cada clase.
+        const ruido = Math.pow(10, -65 / 20) * Math.SQRT2;
+        const piso = sonido.seguidor();
+        sonido.aprender(piso, sonido.niveles(wav([[2, ruido]])));
+        const corte = sonido.umbral(piso);
+        t.ok(corte > -50 && corte < -35, `el corte de la primera pasada quedó en ${corte.toFixed(1)} dBFS`);
+
+        const n = sonido.niveles(wav([[3, ruido]]));
+        t.eq(sonido.algoSuena(n, corte), false);
+        t.eq(sonido.conSonido([{ start: 1, end: 1.4, text: 'Gracias.' }], n, corte).words.length, 0);
+    });
+
+    t.test('mientras calienta manda la pasada más callada y no la más ruidosa', () => {
+        // Una clase que arranca con alguien ya hablando mide un piso alto en la
+        // primera pasada. Con una sola medición no hay cómo saber si eso es la
+        // sala o es la voz, así que vale la más callada: perder una palabra
+        // dicha es peor que dejar pasar una inventada.
+        const piso = sonido.seguidor();
+        sonido.aprender(piso, sonido.niveles(wav([[2, Math.pow(10, -45 / 20) * Math.SQRT2]])));
+        sonido.aprender(piso, sonido.niveles(wav([[2, Math.pow(10, -65 / 20) * Math.SQRT2]])));
+        const corte = sonido.umbral(piso);
+        t.ok(corte > -45 && corte < -37, `manda el piso de −65: el corte quedó en ${corte.toFixed(1)} dBFS`);
+    });
+
     t.test('sin pasadas medidas el corte es el de abajo, que no se come nada', () => {
         t.eq(sonido.umbral(sonido.seguidor()), sonido.PISO_DB);
         t.eq(sonido.umbral(null), sonido.PISO_DB);
