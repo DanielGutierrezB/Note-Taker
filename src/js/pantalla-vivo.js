@@ -224,6 +224,25 @@ function alAviso(aviso) {
         avisar(`Claqueta ${aviso.claqueta} anotada (${aviso.por === 'golpe' ? 'aplauso' : 'voz'}).`);
         return;
     }
+    // El reloj del audio, que llega cada segundo y por su cuenta: el estado
+    // entero sale una vez por pasada del ciclo y esa pasada espera a Whisper, así
+    // que colgar el timecode de él lo dejaba quieto mientras alguien no hablaba.
+    // Solo toca los segundos, que es lo único que este aviso sabe; las tomas y
+    // las claquetas siguen llegando con el estado.
+    if (aviso.tipo === 'reloj') {
+        if (!estado) return;
+        // **Solo cuenta como señal de vida si el reloj AVANZÓ.** El aviso llega
+        // cada segundo aunque la entrada se haya caído, con los mismos segundos de
+        // antes; tomarlo como vida sin más dejaba la pantalla diciendo
+        // «escuchando» con el timecode clavado, que es justo lo que
+        // `MOTOR_CALLADO_MS` existe para no dejar pasar.
+        if (aviso.segundos > estado.segundos) ultimoAvisoMs = Date.now();
+        estado.segundos = aviso.segundos;
+        // Solo la barra: el resto de la pantalla no cambia porque pase un segundo,
+        // y repintarla entera le rompería la selección a quien está seleccionando.
+        if ($('#vista-vivo').classList.contains('es-activa')) pintarBarra();
+        return;
+    }
     if (aviso.tipo === 'golpe') {
         palmada = { ms: aviso.ms, sinConfirmar: false, dicho: false };
         pintarPalmada();

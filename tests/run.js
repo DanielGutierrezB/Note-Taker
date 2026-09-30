@@ -34,6 +34,7 @@ const FILES = [
     'sesiones-grabadas.test.js',
     'ajustar-corte.test.js',
     'sesion.test.js',
+    'reloj-del-audio.test.js',
     'revision-motor.test.js',
     'puente-grabar.test.js',
     'vivo-interfaz.test.js',

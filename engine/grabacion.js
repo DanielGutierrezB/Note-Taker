@@ -211,7 +211,7 @@ function iniciar(params) {
     // cada pedazo: con el reloj andando las dos pasadas se pisarían y la que
     // llegara segunda no vería nada.
     if (!p.sinReloj) {
-        sesion.timer = setInterval(() => { buscarSenales(); vigilarDeriva(); }, CICLO_MS);
+        sesion.timer = setInterval(() => { avisarReloj(); buscarSenales(); vigilarDeriva(); }, CICLO_MS);
         // El modelo grande cargado para el texto en vivo. No se espera: mientras
         // carga, el ciclo oye por whisper-cli como siempre (`oir.escuchar`).
         residente.arrancar({ idioma: sesion.estado.idioma || 'es' });
@@ -384,6 +384,40 @@ const DERIVA_AVISO_MS = 2000;
  * vuelve a avisar cada dos segundos más: un atraso que crece es una tasa mal
  * puesta, uno que salta y se queda es un hueco.
  */
+/**
+ * El reloj del audio grabado, a la ventana, cada segundo y por su cuenta.
+ *
+ * **Va aparte de `buscarSenales` porque el reloj no puede esperar a Whisper.**
+ * El estado completo sale una vez por pasada del ciclo, y una pasada tarda 800 ms
+ * medidos con el servidor cargado y se le permiten hasta 20 s (`tiempoMaxMs` en
+ * `engine/oir.js`); además no se solapa consigo misma. Así que el timecode de la
+ * pantalla —que es la duración de la clase— avanzaba a saltos del tamaño de la
+ * pasada, y con la máquina ocupada o sin whisper-server se quedaba quieto medio
+ * minuto. El editor lo reportó como «el timecode solo se mueve cuando hay
+ * transcript», que es exactamente lo que se ve cuando el reloj cuelga del que
+ * transcribe.
+ *
+ * **Y sigue siendo el audio grabado, no el reloj de pared.** Son los segundos que
+ * el WAV tiene escritos (`captura.segundos`). Si la entrada se atrasa, esto se
+ * queda quieto y eso es información: `vigilarDeriva` lo dice con palabras, y un
+ * temporizador en la ventana lo taparía inventando segundos que no se grabaron.
+ *
+ * Es un aviso flaco a propósito: `espejo.resumen` copia las palabras de todas las
+ * tomas de la clase y mandarlo cada segundo sería mover la clase entera por el
+ * puente para adelantar dos dígitos.
+ */
+function avisarReloj() {
+    if (!sesion || !sesion.captura || sesion.terminando) return;
+    sesion.avisar({
+        tipo: 'reloj',
+        segundos: sesion.captura.segundos,
+        // El mismo par que usa `espejo.grabadoHastaMs`, para que la ventana pueda
+        // sacar la hora del audio sin tener que pedir el estado entero.
+        ceroMs: sesion.estado.ceroMs,
+        grabadoHastaMs: espejo.grabadoHastaMs(sesion)
+    });
+}
+
 function vigilarDeriva() {
     if (!sesion || !sesion.captura) return;
     const deriva = (Date.now() - sesion.captura.desdeMs) - sesion.captura.segundos * 1000;
@@ -755,6 +789,7 @@ module.exports = {
     // el segundo del reloj.
     buscarSenales,
     vigilarDeriva,
+    avisarReloj,
     // Para las pruebas que necesitan poner palabras a mano en una toma, que es
     // lo que en vivo hace el ciclo de señales con Whisper.
     _sesion: () => sesion
