@@ -71,6 +71,21 @@ export function timecodeDe(paredMs, ceroMs, fps) {
     return timecode(Math.max(0, (Number(paredMs) - Number(ceroMs)) / 1000), fps);
 }
 
+/**
+ * `HH:MM:SS`, sin cuadros.
+ *
+ * Es lo que va en los dos números grandes de la barra de En vivo. Ahí los
+ * cuadros no se leen: son dos dígitos que cambian treinta veces por segundo al
+ * lado de los que uno quiere mirar, y quien graba lo que necesita saber es en
+ * qué minuto va la clase. Donde el cuadro importa —cada fila de toma, cada
+ * marcador del XML— sigue estando (`timecode`), y con la misma cuenta.
+ */
+export function relojCorto(segundos) {
+    const s = Math.max(0, Math.floor(Number(segundos) || 0));
+    const p = n => String(n).padStart(2, '0');
+    return `${p(Math.floor(s / 3600))}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}`;
+}
+
 /** Una duración en segundos, dicha como la diría una persona. */
 export function duracion(segundos) {
     const s = Math.max(0, Math.round(Number(segundos) || 0));

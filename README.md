@@ -70,8 +70,19 @@ Y lo que se hace a mano, para cuando nada de eso se dijo:
 | **P R S M X** | la vista de la toma |
 | **⌘Z** · **⇧⌘Z** | deshacer · rehacer |
 
+Los cinco están escritos debajo del timecode y **son botones**: lo mismo se hace
+con la tecla o con el mouse, sin tener que acordarse de cuál era. El de Enter
+dice qué va a hacer —«abrir toma» o «cerrar toma»— en vez de las dos cosas, y el
+de vista muestra encendida la de la toma sobre la que caen las teclas.
+
 El botón primario de la pantalla es siempre el borde que toca: **Abrir toma**
 cuando no hay ninguna, **Cerrar toma** cuando la hay.
+
+**Cada toma nueva arranca con la vista de la anterior.** Una clase se graba por
+tramos con la misma vista —varias de profesor seguidas, después varias de
+pantalla— así que heredarla acierta casi siempre, y cuando no, se corrige con
+una tecla. Con todas arrancando en `PV` había que elegir la vista en cada toma, y
+la que se olvidaba llegaba al XML del color equivocado.
 
 **El conteo tiene que terminar en uno y llevar por lo menos dos números.** "Uno
 de los problemas más comunes" abre clases de verdad, y "tenemos uno, dos, tres
@@ -82,6 +93,18 @@ cifra el conteo y en letra el número hablado.
 **"Pausa" pide silencio detrás.** El profesor puede decir "acá hacemos una
 pausa en el flujo" y cerrar ahí partiría la clase al medio. Lo que distingue la
 señal es que después no se dice nada.
+
+El hueco se mide **desde donde empieza «Pausa»** y no desde donde termina.
+Medirlo desde el final parece más exacto y no lo es: ese final lo pone el modelo
+o el DTW, que sobre una palabra suelta se corre varias décimas hacia adelante, y
+eso se le descontaba al hueco. En la clase del 29/09 el profesor decía «Pausa» y
+paraba, y la toma no cerraba: había que cerrarla a mano. Desde el comienzo, lo
+único que el hueco mide es cuánto tardó en llegar la palabra siguiente. Cuando
+«Pausa» es lo último que se oyó todavía se mide desde el final, porque ahí la
+pregunta es otra: si ya pasó el segundo de silencio. Una «Pausa» que no cierra
+queda anotada en el registro con su hueco (`senal.pausa-corta`), que es lo que
+deja saber al día siguiente si el umbral está mal puesto o si el profesor siguió
+hablando.
 
 **Un conteo adentro de una toma abierta no la parte.** Un profesor explicando
 "…porque dije 3, 2, 1" dejaba una toma huérfana de tres segundos y la buena al
@@ -252,18 +275,49 @@ Si el dispositivo se cayó y se reabrió —o si la sesión se reanudó— hay m
 WAV, y cada uno entra en **su** offset: entre uno y el siguiente hay un hueco
 real, y pegarlos uno detrás del otro correría todo lo que viene después.
 
-### Los marcadores, por duplicado
+### Los marcadores, por triplicado
 
-- **De secuencia**: viven en el timeline y son con los que se salta de toma en
+Cada juego se ve en un sitio distinto de Premiere, y ninguno reemplaza a otro:
+
+- **De secuencia**: en la regla de tiempo. Son con los que se salta de toma en
   toma.
-- **De clip**: viajan con el WAV. Si el editor lo arrastra a otra secuencia, lo
-  mete en un multicámara o lo sincroniza con las cámaras, las notas se van con
-  él.
+- **Del clip de A1**: dibujados encima del clip, en su pista.
+- **Del clip maestro**: los del archivo. Se ven al abrir el WAV en el monitor de
+  origen y **acompañan al audio** a otra secuencia o a un multicámara, que es lo
+  que hace falta cuando el editor sincroniza a mano y después corta siguiendo
+  las notas. Los del clipitem no viajan: son de esa instancia y nada más.
 
-Los dos dicen lo mismo y ninguno reemplaza al otro. Por toma van en pares: el de
-entrada dura diez segundos y lleva `nota - lo que se dijo`, el de salida no dura
-y lleva las últimas palabras. Cada claqueta lleva su número, su hora del día y
-la frase que se oyó, y la primera dice que es **la referencia de sincronía**.
+Los tres llevan lo mismo. Por toma van en pares: el de entrada dura diez
+segundos y lleva `nota - lo que se dijo`, el de salida no dura y lleva las
+últimas palabras.
+
+**El nombre del marcador lleva el número de la toma**: `Toma 1 · PV` el de
+entrada y `Toma 1 · OUT` el de salida. Así, en la línea de tiempo, se ve de un
+golpe si hay tomas intermedias —una que se desactivó deja su número sin usar— sin
+abrir cada comentario. La vista va detrás del separador, que es de donde la lee
+el parser al volver a entrar el XML; un marcador llamado solo `PV`, como los
+escribían las versiones anteriores y como los escribe Class Cut, se sigue
+leyendo igual.
+
+Cada claqueta lleva su número, su hora del día y la frase que se oyó, y la
+primera dice que es **la referencia de sincronía**.
+
+### Rehacer el XML de una clase ya grabada
+
+El XML se escribe mientras se graba, así que un arreglo del formato no le llega
+solo a las clases de antes. **Rehacer el XML** (en la lista de sesiones y en la
+pantalla de Cierre) lo reescribe desde el sidecar con el molde de hoy: tarda un
+segundo, no toca el audio y no cambia una palabra de las notas. Es lo que lleva
+a una clase vieja los marcadores del clip maestro o el nombre con el número de
+la toma.
+
+No es lo mismo que **Regenerar**, que está al lado: ese vuelve a pasarle cada
+toma a Whisper con el modelo grande —arregla el TEXTO de una toma que salió con
+el modelo chico— y necesita el WAV. Esto arregla el FORMATO.
+
+Se puede hacer siempre porque **el sidecar es la fuente y el XML la copia**: en
+el sidecar está la hora del día de cada palabra y de cada borde, y el XML son
+esos mismos datos en cuadros.
 
 ### Los cuadros
 
@@ -516,9 +570,17 @@ se construyó midiendo y no eligiendo. Lo que se mantiene:
   chica que puede contener un control de 24×24 (WCAG 2.5.8).
 
 Lo que cambia respecto de allá es que un panel mide 400 px y esta ventana 1180.
-Eso habilita **dos elementos grandes y no más**: el timecode y el estado de la
-sesión, que son los dos que hay que poder leer sin acercarse mientras el
-profesor habla.
+Eso habilita **un elemento grande y no más**: el timecode, que es el que hay que
+poder leer sin acercarse mientras el profesor habla. Va en `HH:MM:SS` y sin
+cuadros: son dos dígitos que cambian treinta veces por segundo al lado de los
+que uno quiere mirar, y quien graba lo que necesita saber es en qué minuto va la
+clase. El cuadro sigue donde importa —cada fila de toma, cada marcador del XML— y
+con la misma cuenta.
+
+Al lado, en el escalón de los números que se consultan (18 px), **la clase
+cortada**: la suma de las tomas que van al XML, o sea lo que el editor va a
+entregar. Sube mientras el profesor habla y se queda quieta entre tomas, que es
+exactamente la diferencia con el timecode de al lado.
 
 ### Medido, no opinado
 
@@ -643,6 +705,29 @@ npm run publish                      # el release en GitHub
 **El instalador que se publica no trae los modelos de Whisper.** Pesan más de
 dos gigas, que es el tope de un archivo en un release de GitHub. Tampoco hace
 falta: al abrir, la app ve qué le falta y lo ofrece instalar.
+
+### Subir una versión
+
+```bash
+bash tools/subir-version.sh 0.1.2 notas/0.1.2.md
+```
+
+Iguala `package.json` y `version.json`, arma el instalador y publica el release.
+Se planta si la versión no es posterior a la que hay, que es el error que deja a
+la app ofreciéndose a sí misma para siempre. El commit lo hace quien lo llama.
+
+Las apps instaladas lo ven al abrir y cada media hora: aparece **Versión x.y.z ·
+Actualizar** en la barra de arriba, que baja el `.pkg` mostrando el avance y
+después ofrece **Instalar y reabrir**. El aviso vive en la barra y no en un
+cartel a propósito: un cartel en medio de una clase es una interrupción, y uno
+que aparece al abrir se cierra sin leer. La versión que está corriendo se ve
+siempre ahí al lado, que es lo primero que hay que preguntarle a alguien que
+reporta algo raro.
+
+**Actualizar no borra nada de lo que la persona configuró.** El `.pkg` reemplaza
+`/Applications/Note Taker.app` y nada más; los ajustes, lo que se prefiere de la
+pantalla y los modelos de Whisper viven en
+`~/Library/Application Support/Note Taker`, que el instalador no toca.
 
 ### Lo que falta se instala desde la app
 

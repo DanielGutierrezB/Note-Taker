@@ -60,9 +60,11 @@ const VARA = {
      * Contar era más fácil de escribir y peor de leer: «6 tamaños» no dice
      * cuál sobra, y sobre todo no distingue un sexto tamaño legítimo de un
      * `kbd` que se quedó en 10 px. La lista es el sistema: 13/12/11 son las
-     * tres voces, y 32 y 18 son los DOS elementos grandes que la ventana de
-     * escritorio se permite —el timecode y el estado de la sesión— y ni uno
-     * más (NN/g: «Limit how many elements are big to a maximum of 2»).
+     * tres voces; 32 es el ÚNICO elemento grande de la app —el timecode, lo que
+     * se lee sin acercarse mientras el profesor habla— y 18 el escalón de los
+     * números que se consultan: el estado de la sesión, cuántas tomas, cuántas
+     * claquetas, cuánto dura la clase cortada (NN/g: «Limit how many elements
+     * are big to a maximum of 2»).
      */
     tamanos: [32, 18, 13, 12, 11],
     chicos: 0,

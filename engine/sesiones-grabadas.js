@@ -227,6 +227,42 @@ function editarGrabada(json, cambio) {
     return { archivos: { xml: sitio.xml, json: sitio.json } };
 }
 
+/**
+ * Reescribe el XML de una sesión desde su sidecar, sin releer nada.
+ *
+ * Es el otro botón, y la diferencia con «Regenerar» es la que hay entre el
+ * texto y el formato. Regenerar vuelve a pasarle el audio a Whisper: arregla
+ * una toma que salió con el modelo chico, tarda lo que tarda el modelo grande
+ * por cada toma y necesita el WAV. Esto solo vuelve a escribir el archivo con
+ * el molde de HOY: los marcadores en el clip maestro, el nombre con el número
+ * de la toma, cualquier arreglo del XML que traiga una versión nueva. Tarda un
+ * segundo, no toca el audio y no cambia una sola palabra de las notas.
+ *
+ * Existe porque el XML se escribe al grabar, y lo que se arregla después no
+ * llega solo a las clases ya grabadas: sin esto, el editor tendría que volver a
+ * grabarlas para ver el arreglo, que es imposible.
+ *
+ * **El sidecar es la fuente y el XML la copia**, y de ahí que esto siempre se
+ * pueda hacer: en el sidecar está la hora del día de cada palabra y de cada
+ * borde, y el XML son esos mismos datos en cuadros. Por eso reescribirlo no
+ * puede perder nada — y por eso el sidecar también se reescribe, para que la
+ * sesión quede entera con la forma de esta versión.
+ */
+function rehacerXml(json, enCurso) {
+    const estado = leerSidecar(json);
+    const sitio = workspace.sesionDelSidecar(json);
+    if (estado.secuencia && estado.secuencia === enCurso) {
+        throw new Error('Esa sesión se está grabando ahora: su XML se reescribe en cada cambio.');
+    }
+    workspace.writeAtomic(sitio.xml, notasXml.xmlDeNotas(estado));
+    workspace.writeJson(sitio.json, notasXml.sidecar(estado));
+    return {
+        tomas: vivo.tomasQueQuedan(estado).length,
+        claquetas: (estado.claquetas || []).length,
+        archivos: { xml: sitio.xml, json: sitio.json }
+    };
+}
+
 /* ─── Reanudar ────────────────────────────────────────────────────────────
  *
  * Una sesión que quedó abierta —la app se fue al piso, o se cerró con la clase
@@ -512,6 +548,7 @@ module.exports = {
     sidecaresDe,
     resumirParaLaLista,
     regenerar,
+    rehacerXml,
     dondeQuedoElWav,
     editarGrabada,
     paraReanudar,

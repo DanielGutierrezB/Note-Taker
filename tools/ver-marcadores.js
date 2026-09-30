@@ -134,7 +134,8 @@ function main() {
     }
 
     const destino = path.join(os.tmpdir(), `note-taker-marcadores-${estado.fps}.xml`);
-    fs.writeFileSync(destino, notasXml.xmlDeNotas(estado));
+    const xml = notasXml.xmlDeNotas(estado);
+    fs.writeFileSync(destino, xml);
 
     const marcas = notasXml.marcadores(estado);
     const clips = notasXml.clipsDeAudio(estado);
@@ -146,7 +147,9 @@ function main() {
     console.log(`  tomas       ${vivo.tomasQueQuedan(estado).length} en el XML` +
         `, ${(estado.tomas || []).filter(t => t.descartada).length} descartada(s) fuera`);
     console.log(`  claquetas   ${(estado.claquetas || []).length}`);
-    console.log(`  marcadores  ${marcas.length} en la secuencia · ${deClip} pegados al clip`);
+    const deMaestro = (xml.slice(0, xml.indexOf('<sequence')).match(/<marker>/g) || []).length;
+    console.log(`  marcadores  ${marcas.length} en la secuencia · ${deClip} en el clip de A1 · ` +
+        `${deMaestro} en el clip maestro`);
     console.log(`  audio       ${clips.length} clip(s) en A1`);
     if (!wav && !sidecar) {
         console.log('\n  El clip apunta a un archivo que no existe, así que Premiere lo va a');
@@ -154,10 +157,15 @@ function main() {
         console.log('  con --wav <archivo> la secuencia además suena.');
     }
     console.log('\nQué mirar en Premiere:');
-    console.log('  · los marcadores de la SECUENCIA, en la regla de tiempo');
-    console.log('  · los del CLIP: doble clic en el WAV de A1, o arrastralo a otra secuencia');
+    console.log('  · los de la SECUENCIA, en la regla de tiempo');
+    console.log('  · los del CLIP de A1, dibujados encima del clip en su pista');
+    console.log('  · los del CLIP MAESTRO: abrí el WAV del bin en el monitor de origen,');
+    console.log('    o arrastralo a otra secuencia (son los que viajan con el archivo)');
+    console.log('  · que el nombre diga «Toma N · PV» y «Toma N · OUT»');
     console.log('  · que cada vista llegue de su color y que las claquetas sean blancas');
     console.log('  · que el timecode del primer marcador diga lo mismo que la app');
+    console.log('  · y que NO haya marcadores repetidos en la regla de tiempo: si los');
+    console.log('    hubiera, Premiere está leyendo dos juegos como uno');
 }
 
 main();

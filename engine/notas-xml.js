@@ -141,6 +141,11 @@ function horaDelDia(ms) {
  * dura y el de salida no. Es lo que mira el parser de Class Cut para
  * clasificarlos, y escribirlo al revés partiría cada bloque en dos.
  */
+/** Cómo se llama una toma en el XML y en la pantalla: el mismo texto en los dos. */
+function nombreDeToma(toma) {
+    return `Toma ${toma.id}`;
+}
+
 function marcadores(estado) {
     const cero = estado.ceroMs;
     if (cero == null) return [];
@@ -166,15 +171,21 @@ function marcadores(estado) {
         const entra = seg(toma.inMs);
         const sale = seg(toma.outMs);
 
+        // **El nombre lleva el número de la toma.** En la línea de tiempo de
+        // Premiere el editor ve «Toma 1 · PV», «Toma 2 · PV», y con eso se da
+        // cuenta de un golpe de vista si hay tomas intermedias —una que se
+        // desactivó deja su número sin usar— sin tener que abrir cada
+        // comentario. La vista va detrás del separador, que es de donde la lee
+        // `vivo.vistaLeida` al volver a entrar el XML.
         salida.push({
-            name: vista,
+            name: `${nombreDeToma(toma)} · ${vista}`,
             comment: vivo.comentarioDeEntrada(toma),
             startSec: entra,
             endSec: entra + SEGUNDOS_DEL_MARCADOR_IN,
             color
         });
         salida.push({
-            name: vista,
+            name: `${nombreDeToma(toma)} · OUT`,
             comment: `OUT: ${vivo.cueDeSalida(toma)}`,
             startSec: sale,
             color,
@@ -240,21 +251,29 @@ function clipsDeAudio(estado) {
     const marcas = marcadores(estado);
     return (estado.sesiones || [])
         .filter(s => s && s.archivo && s.segundos > 0)
-        .map(wav => ({
-            source: {
-                path: wav.archivo,
-                name: wav.archivo.split('/').pop(),
-                durationSec: wav.segundos,
-                audioOnly: true,
-                channels: wav.canales || 1,
-                sampleRate: wav.sampleRate || 48000,
-                bits: 16
-            },
-            startSec: aSegundos(wav.desdeMs, estado.ceroMs),
-            endSec: aSegundos(wav.desdeMs, estado.ceroMs) + wav.segundos,
-            sourceInSec: 0,
-            marcadores: marcadoresDelClip(marcas, wav, estado.ceroMs)
-        }));
+        .map(wav => {
+            const suyos = marcadoresDelClip(marcas, wav, estado.ceroMs);
+            return {
+                source: {
+                    path: wav.archivo,
+                    name: wav.archivo.split('/').pop(),
+                    durationSec: wav.segundos,
+                    audioOnly: true,
+                    channels: wav.canales || 1,
+                    sampleRate: wav.sampleRate || 48000,
+                    bits: 16,
+                    // Los mismos marcadores, también en el clip maestro del bin:
+                    // ahí son marcadores DEL ARCHIVO y se ven al abrir el WAV en
+                    // el monitor de origen, y lo siguen con él a cualquier
+                    // secuencia (ver `binClipXml` en `fcp-xml.js`).
+                    marcadores: suyos
+                },
+                startSec: aSegundos(wav.desdeMs, estado.ceroMs),
+                endSec: aSegundos(wav.desdeMs, estado.ceroMs) + wav.segundos,
+                sourceInSec: 0,
+                marcadores: suyos
+            };
+        });
 }
 
 /**
@@ -386,6 +405,7 @@ function estadoLeido(estado) {
 }
 
 module.exports = {
+    nombreDeToma,
     BLANCO,
     FIRMA,
     SEGUNDOS_DEL_MARCADOR_IN,

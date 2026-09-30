@@ -28,6 +28,8 @@ if (hay('preparar-microfono')) ajustes = { ...ajustes, dispositivo: 'MacBook Pro
 if (hay('preparar-zoom-falso')) ajustes = { ...ajustes, dispositivo: 'ZoomAudioDevice (Virtual)' };
 if (hay('preparar-sin-audio') || hay('sin-zoom')) ajustes = { ...ajustes, dispositivo: null };
 
+const progresoUpdate = [];
+const listaUpdate = [];
 let oyenteDependencias = null;
 const DEPENDENCIAS = [
     ['modelo-grande', 'Modelo de Whisper (large-v3-turbo)', 'Relee cada toma cerrada y escribe el texto que va al XML. También es el que oye el texto en vivo.', true, 'Descargar (1,6 GB)'],
@@ -91,10 +93,21 @@ window.nt = {
     },
     dependenciasCancelar: async () => true,
     onDependenciasProgreso: cb => { oyenteDependencias = cb; },
-    updateCheck: async () => ({ hay: false, motivo: 'Estás al día.' }),
-    updateDownload: async () => ({ ok: true }),
+    // `?e=update` es la app con una versión nueva esperando.
+    updateCheck: async () => (hay('update')
+        ? { hay: true, version: '0.1.1', url: 'https://x/NoteTaker.pkg', nombre: 'NoteTaker-0.1.1-arm64.pkg',
+            notas: 'Pausa que cierra, Enter que abre, marcadores con el nombre de la toma.' }
+        : { hay: false, motivo: 'Estás al día.' }),
+    updateDownload: async () => {
+        for (let pct = 0; pct <= 100; pct += 20) {
+            for (const cb of progresoUpdate) cb({ percent: pct, bajado: pct * 1.4e6, total: 1.4e8 });
+            await espera(150);
+        }
+        for (const cb of listaUpdate) cb({ path: '/Users/x/Downloads/NoteTaker-0.1.1-arm64.pkg' });
+        return { ok: true, path: '/Users/x/Downloads/NoteTaker-0.1.1-arm64.pkg' };
+    },
     updateCancel: async () => ({ ok: true }),
-    updateInstall: async () => ({ ok: true }),
+    updateInstall: async () => ({ ok: true, cerrando: true }),
 
     pickFolder: async () => '/Volumes/Rodaje/Curso de automatizaciones',
     // La maqueta contesta que sí a todo: lo que se está mirando es cómo queda
@@ -130,13 +143,14 @@ window.nt = {
     grabarRenombrar: async () => ({ ok: true, secuencia: 'renombrada', movida: true, audios: 1 }),
     grabarBorrar: async () => ({ ok: true, secuencia: 'borrada', audios: 1 }),
     grabarRegenerar: async () => ({ ok: true, tomas: 6, sinAudio: 0, degradadas: 0, sinLeer: 0 }),
+    grabarRehacerXml: async () => ({ ok: true, tomas: 6, claquetas: 3 }),
     grabarTerminar: async () => estadoEnVivo(),
     onGrabarAviso: cb => avisos.push(cb),
 
     anotar: async () => true,
     registroDescargar: async () => ({ ok: true, archivo: '/tmp/log.md' }),
-    onUpdateProgress: () => {},
-    onUpdateReady: () => {}
+    onUpdateProgress: cb => progresoUpdate.push(cb),
+    onUpdateReady: cb => listaUpdate.push(cb)
 };
 
 /* ─── El micrófono ────────────────────────────────────────────────────── */

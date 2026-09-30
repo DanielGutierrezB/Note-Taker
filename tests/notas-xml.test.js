@@ -61,7 +61,10 @@ module.exports = function (t) {
     t.test('cada toma da un par IN/OUT', () => {
         const marcas = notasXml.marcadores(conUnaToma());
         t.eq(marcas.length, 2);
-        t.eq(marcas[0].name, 'PV');
+        // El nombre lleva el número de la toma: es lo que el editor ve en la
+        // línea de tiempo para saber si hay tomas intermedias.
+        t.eq(marcas[0].name, 'Toma 1 · PV');
+        t.eq(marcas[1].name, 'Toma 1 · OUT');
         t.eq(marcas[1].comment, 'OUT: Hola mundo');
     });
 
@@ -132,7 +135,7 @@ module.exports = function (t) {
             sampleRate: 48000, canales: 1
         }];
         const clip = notasXml.clipsDeAudio(e)[0];
-        const marcaIn = clip.marcadores.find(m => m.name === 'PV');
+        const marcaIn = clip.marcadores.find(m => m.name === 'Toma 1 · PV');
         // El IN de la toma está a 20 s del cero y el WAV arranca a los 10 s:
         // dentro del clip cae a los 10 s.
         t.eq(marcaIn.startSec, 10);
@@ -159,11 +162,26 @@ module.exports = function (t) {
         t.ok(rodecaster.parseXml(notasXml.xmlDeNotas(e)).deNotasEnVivo);
     });
 
-    t.test('los marcadores van dos veces: en la secuencia y en el clip', () => {
+    t.test('los marcadores van tres veces: secuencia, clip y clip maestro', () => {
+        // Cada juego se ve en un sitio distinto de Premiere: la regla de tiempo,
+        // el clip en su pista, y el archivo al abrirlo en el monitor de origen.
+        // El del maestro es el único que acompaña al WAV a otra secuencia.
         const xml = notasXml.xmlDeNotas(conUnaToma());
         const todos = xml.match(/<marker>/g) || [];
-        t.eq(todos.length, 4, 'dos de la toma, duplicados');
+        t.eq(todos.length, 6, 'el par de la toma, tres veces');
         t.ok(/<clipitem[\s\S]*?<marker>/.test(xml), 'hay marcadores adentro del clip');
+        const bin = xml.slice(0, xml.indexOf('<sequence'));
+        t.eq((bin.match(/<marker>/g) || []).length, 2, 'y en el clip maestro del bin');
+        t.ok(bin.includes('<ismasterclip>TRUE</ismasterclip>'), 'que se declara maestro');
+    });
+
+    t.test('los del clip maestro no se leen como bloques de la secuencia', () => {
+        // Viven fuera de `<sequence>`, así que el parser no los puede confundir.
+        // Si algún día entraran adentro, cada toma saldría dos veces y el
+        // resultado serían bloques solapados de punta a punta.
+        const leido = rodecaster.parseXml(notasXml.xmlDeNotas(conUnaToma()));
+        t.eq(leido.blocks.length, 1);
+        t.deep(leido.warnings.filter(w => w.code === 'bloques_solapados'), []);
     });
 
     t.test('a 29.97 el XML declara timebase 30 con ntsc', () => {
@@ -203,6 +221,17 @@ module.exports = function (t) {
         t.eq(leido.blocks[0].count, '3, 2, 1.');
         t.near(leido.blocks[0].startSec, 20, 0.05);
         t.near(leido.blocks[0].endSec, 80, 0.05);
+    });
+
+    t.test('un XML de antes, con el marcador llamado solo «PV», se sigue leyendo', () => {
+        // Los XML escritos antes de que el nombre llevara el número de la toma,
+        // y los de Class Cut. La vista es lo que va después del separador, y sin
+        // separador es el nombre entero.
+        const xml = notasXml.xmlDeNotas(conUnaToma())
+            .replace(/<name>Toma 1 · PV<\/name>/g, '<name>PV</name>');
+        const leido = rodecaster.parseXml(xml);
+        t.eq(leido.blocks.length, 1);
+        t.eq(leido.blocks[0].view, 'PV');
     });
 
     t.test('los marcadores del clip no se cuentan como bloques', () => {

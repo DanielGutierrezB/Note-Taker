@@ -89,6 +89,8 @@ function fila(s) {
         ? `<button class="btn" type="button" data-hace="reanudar">Reanudar</button>` : ''}
       <button class="btn btn-tenue btn-ico" type="button" data-hace="xml"
               title="Mostrar el XML en el Finder">${icono('finder')}</button>
+      <button class="btn btn-tenue btn-ico" type="button" data-hace="rehacer-xml"
+              title="Rehacer el XML con el formato de esta versión, sin releer el audio ni tocar las notas">${icono('xml')}</button>
       <button class="btn btn-tenue btn-ico" type="button" data-hace="regenerar"
               title="Volver a leer todas las tomas con el modelo grande">${icono('regenerar')}</button>
       <button class="btn btn-tenue btn-ico" type="button" data-hace="renombrar"
@@ -116,6 +118,9 @@ async function alClic(e) {
         case 'regenerar':
             await regenerar(json, boton);
             break;
+        case 'rehacer-xml':
+            await rehacerXml(json, boton);
+            break;
         case 'renombrar':
             await renombrar(sesion);
             break;
@@ -123,6 +128,24 @@ async function alClic(e) {
             await borrar(sesion);
             break;
     }
+}
+
+/**
+ * Rehacer el XML sin releer el audio.
+ *
+ * El otro botón —«Regenerar»— vuelve a pasar cada toma por Whisper y tarda lo
+ * que tarda el modelo grande. Este solo reescribe el archivo con el molde de
+ * hoy, en un segundo: es para llevarle a una clase ya grabada un arreglo del
+ * XML (un marcador que ahora dice el número de la toma, los marcadores del
+ * clip maestro) sin volver a tocar una sola palabra de las notas.
+ */
+async function rehacerXml(json, boton) {
+    boton.disabled = true;
+    const r = await window.nt.grabarRehacerXml(json);
+    boton.disabled = false;
+    if (!r.ok) { avisar(r.error, 'error'); return; }
+    avisar(`XML rehecho: ${r.tomas} toma${r.tomas === 1 ? '' : 's'} y ` +
+        `${r.claquetas} claqueta${r.claquetas === 1 ? '' : 's'}.`, 'ok');
 }
 
 async function regenerar(json, boton) {

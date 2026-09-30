@@ -18,7 +18,11 @@
     <span class="marca" id="marca"></span>
     <button id="btn-volver" class="btn btn-tenue" type="button" hidden>Sesiones</button>
     <span class="crece"></span>
-    <span id="topbar-extra"></span>
+    <!-- La versión, siempre a la vista: es lo primero que hay que preguntarle a
+         alguien que reporta algo raro. Y al lado, cuando hay una nueva, el
+         botón que la baja y la instala. -->
+    <span class="version" id="app-version"></span>
+    <button id="btn-update" class="btn btn-primario" type="button" hidden></button>
     <button id="btn-diagnostico" class="btn btn-tenue btn-ico" type="button"
             title="Qué herramientas encontró la app y dónde"></button>
     <button id="btn-ajustes" class="btn btn-tenue btn-ico" type="button"
@@ -97,29 +101,55 @@
        pasando ahora, y la lista de todo lo que ya pasó. -->
   <section class="vista" id="vista-vivo" tabindex="-1">
     <div class="barra-sesion">
-      <div class="barra-bloque">
-        <span class="rotulo">Timecode</span>
-        <span id="vivo-tc" class="grande-tc">00:00:00:00</span>
-      </div>
-      <div class="barra-bloque">
-        <span class="rotulo">Sesión</span>
-        <span id="vivo-estado" class="grande-estado">escuchando</span>
-      </div>
-      <div class="contadores">
-        <div class="contador">
-          <span id="vivo-tomas" class="contador-num">0</span>
-          <span class="rotulo">tomas</span>
+      <div class="barra-arriba">
+        <div class="barra-bloque">
+          <span class="rotulo">Timecode</span>
+          <span id="vivo-tc" class="grande-tc">00:00:00</span>
         </div>
-        <div class="contador">
-          <span id="vivo-claquetas" class="contador-num">0</span>
-          <span class="rotulo">claquetas</span>
+        <div class="barra-bloque">
+          <span class="rotulo">Clase cortada</span>
+          <span id="vivo-cortada" class="num-consulta tc">00:00:00</span>
         </div>
+        <div class="barra-bloque">
+          <span class="rotulo">Sesión</span>
+          <span id="vivo-estado" class="grande-estado">escuchando</span>
+        </div>
+        <div class="contadores">
+          <div class="contador">
+            <span id="vivo-tomas" class="contador-num">0</span>
+            <span class="rotulo">tomas</span>
+          </div>
+          <div class="contador">
+            <span id="vivo-claquetas" class="contador-num">0</span>
+            <span class="rotulo">claquetas</span>
+          </div>
+        </div>
+        <span class="crece"></span>
+        <div class="nivel" id="vivo-nivel"><div class="nivel-barra"></div></div>
+        <button id="btn-deshacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
+        <button id="btn-rehacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
+        <button id="btn-terminar" class="btn" type="button">Terminar</button>
       </div>
-      <span class="crece"></span>
-      <div class="nivel" id="vivo-nivel"><div class="nivel-barra"></div></div>
-      <button id="btn-deshacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
-      <button id="btn-rehacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
-      <button id="btn-terminar" class="btn" type="button">Terminar</button>
+
+      <!-- Los atajos, debajo del timecode y no en un pie: es donde se mira
+           mientras se graba. Y son botones de verdad, así que lo mismo se
+           hace con la tecla o con el mouse. La vista y el borde se pintan
+           según cómo esté la toma (`pintarAtajos`). -->
+      <div class="atajos" id="vivo-atajos">
+        <button class="atajo" type="button" data-hace="claqueta"
+                title="Anotar una claqueta acá, si se hizo y no se oyó. Tecla: K">
+          <kbd>K</kbd><span>claqueta</span>
+        </button>
+        <button class="atajo" type="button" data-hace="borde" id="atajo-borde">
+          <kbd>Enter</kbd><span id="atajo-borde-dice">abrir toma</span>
+        </button>
+        <span class="atajo-vistas" id="atajo-vistas"></span>
+        <button class="atajo" type="button" data-hace="deshacer" id="atajo-deshacer">
+          <kbd>⌘Z</kbd><span>deshacer</span>
+        </button>
+        <span class="crece"></span>
+        <span id="vivo-donde"></span>
+      </div>
     </div>
 
     <!-- Una sola columna: las claquetas van en la lista, en su orden, como una
@@ -145,16 +175,6 @@
       </div>
     </div>
 
-    <footer class="pie-teclas">
-      <span class="tecla"><kbd>K</kbd> claqueta</span>
-      <!-- Una sola tecla para el borde: abre si no hay toma abierta y cierra
-           si la hay. El rótulo lo dice en el orden en que pasan las cosas. -->
-      <span class="tecla"><kbd>Enter</kbd> abrir / cerrar toma</span>
-      <span class="tecla"><kbd>P</kbd><kbd>R</kbd><kbd>S</kbd><kbd>M</kbd><kbd>X</kbd> vista</span>
-      <span class="tecla"><kbd>⌘Z</kbd> deshacer</span>
-      <span class="crece"></span>
-      <span id="vivo-donde"></span>
-    </footer>
   </section>
 
   <!-- ── 4 · Cierre ───────────────────────────────────────────────────

@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('nt', {
     grabarRenombrar: (json, cambio) => ipcRenderer.invoke('grabar-renombrar', json, cambio),
     grabarBorrar: json => ipcRenderer.invoke('grabar-borrar', json),
     grabarRegenerar: json => ipcRenderer.invoke('grabar-regenerar', json),
+    grabarRehacerXml: json => ipcRenderer.invoke('grabar-rehacer-xml', json),
     grabarTerminar: () => ipcRenderer.invoke('grabar-terminar'),
     onGrabarAviso: callback => {
         ipcRenderer.on('grabar-aviso', (_event, payload) => callback(payload));

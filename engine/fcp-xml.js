@@ -194,7 +194,20 @@ class FileRegistry {
             `${timecodeXml(this.fps)}<media>${media}</media></file>`;
     }
 
-    /** El clip maestro del bin: define el archivo y le da nombre al conjunto. */
+    /**
+     * El clip maestro del bin: define el archivo y le da nombre al conjunto.
+     *
+     * Y lleva los marcadores del archivo, si se le pasan. **Son el tercer juego
+     * y el único que de verdad viaja con el WAV**: los del `<clipitem>` son de
+     * ESA instancia en la secuencia, así que arrastrar el audio a otra
+     * secuencia o meterlo en un multicámara lo deja sin nada. Los del maestro
+     * se ven al abrir el archivo en el monitor de origen y lo acompañan a donde
+     * vaya, que es lo que pide un editor que sincroniza a mano y después corta
+     * siguiendo las notas.
+     *
+     * Sus tiempos son los mismos que los del clipitem: segundos DESDE EL
+     * ARRANQUE DEL ARCHIVO (`marcadoresDelClip` en `notas-xml.js`).
+     */
     binClipXml(source) {
         const entry = this.register(source);
         const name = xmlSafe(source.name || source.path.split('/').pop());
@@ -221,10 +234,15 @@ class FileRegistry {
         }
         const audioTrack = `<audio>${pistasDeAudio.join('')}</audio>`;
 
+        const marcadores = (source.marcadores || [])
+            .map(m => `      ${markerXml(m, this.fps)}`).join('');
+
         return `        <clip id="masterclip-bin-${entry.id}">` +
             `<masterclipid>${entry.masterclip}</masterclipid>` +
             `<name>${name}</name><duration>${duration}</duration>${rateXml(this.fps)}` +
-            `${label}${fileXml}<media>${videoTrack}${audioTrack}</media></clip>\n`;
+            `<ismasterclip>TRUE</ismasterclip>` +
+            `${label}${fileXml}<media>${videoTrack}${audioTrack}</media>` +
+            `${marcadores ? `\n${marcadores}        ` : ''}</clip>\n`;
     }
 }
 
@@ -557,13 +575,16 @@ function clipItemXml(params) {
 
     // Los marcadores DEL CLIP, que no son los de la secuencia.
     //
-    // Los dos existen y dicen cosas distintas, y por eso Note Taker escribe los
-    // dos juegos. El de secuencia vive en el timeline: es con el que se salta de
-    // toma en toma y el que se ve en la regla de tiempo. El de clip **viaja con
-    // el archivo**: si el editor arrastra el WAV a otra secuencia, lo
-    // sincroniza con las cámaras o lo mete en un multicámara, los marcadores se
-    // van con él. Eso es justo lo que pide este escenario, donde el editor
-    // sincroniza a mano contra la claqueta y después corta siguiendo las notas.
+    // Note Taker escribe TRES juegos y cada uno se ve en un sitio distinto. El
+    // de secuencia vive en el timeline: es con el que se salta de toma en toma y
+    // el que se ve en la regla de tiempo. El de clip es de ESTA instancia del
+    // audio en la secuencia: se dibuja encima del clip, en su pista. Y el del
+    // clip maestro (`binClipXml`) es del archivo: se ve al abrir el WAV en el
+    // monitor de origen y lo acompaña a otra secuencia o a un multicámara.
+    //
+    // Los tres llevan lo mismo a propósito: el editor sincroniza a mano contra
+    // la claqueta y después corta siguiendo las notas, y no se sabe por cuál de
+    // los tres caminos va a entrar al material.
     //
     // Sus `in`/`out` son frames DEL ORIGEN y no del timeline —el mismo reloj que
     // `inFrame`/`outFrame` de acá arriba—, que es lo que hace que sigan

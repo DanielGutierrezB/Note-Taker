@@ -92,6 +92,7 @@ async function arrancar() {
     await revisarDependencias();
 
     const info = await window.nt.appInfo();
+    pintarVersion(info.version);
     window.nt.anotar('ventana.lista', { version: info.version });
 }
 
@@ -206,46 +207,142 @@ async function pintarDiagnostico() {
 
 /* ─── Actualizaciones ─────────────────────────────────────────────────── */
 
+/**
+ * La versión, y el botón que trae la que sigue.
+ *
+ * La app se va a repartir entre varias personas y cada una va a reportar cosas,
+ * así que subir una versión tiene que ser algo que le llegue a todos sin
+ * explicarles nada. Por eso el aviso vive en la barra de arriba, a la vista en
+ * las cuatro pantallas, y no en un cartel: un cartel en medio de una clase es
+ * una interrupción, y uno que aparece al abrir se cierra sin leer.
+ *
+ * El botón pasa por tres estados y cada uno dice qué va a hacer al apretarlo:
+ *
+ *   hay      «Versión 0.1.1 · Actualizar»   la baja
+ *   bajando  «Bajando… 42 %»                se puede seguir trabajando
+ *   lista    «Instalar y reabrir»           abre el instalador y se cierra
+ *
+ * **La instalación no borra nada de lo que la persona configuró.** El `.pkg`
+ * reemplaza `/Applications/Note Taker.app` y nada más; los ajustes, lo que se
+ * prefiere de la pantalla y los modelos de Whisper viven en
+ * `~/Library/Application Support/Note Taker`, que el instalador no toca.
+ */
+const update = { estado: 'al-dia', version: null, url: null, nombre: null, ruta: null, notas: '' };
+
 function conectarActualizaciones() {
     $('#btn-buscar-update').addEventListener('click', () => buscar(true));
+    $('#btn-update').addEventListener('click', alApretarUpdate);
+
     window.nt.onUpdateProgress(p => {
-        $('#update-dice').textContent = `Bajando… ${Math.round((p.hechos / p.total) * 100)} %`;
+        // `percent` es lo que manda el motor (`updates.download`). Antes acá se
+        // leía `p.hechos`, que no existe, y el renglón decía «Bajando… NaN %».
+        const pct = Number.isFinite(p.percent) ? p.percent : 0;
+        update.estado = 'bajando';
+        update.pct = pct;
+        pintarUpdate();
+        $('#update-dice').textContent = `Bajando… ${pct} %`;
     });
     window.nt.onUpdateReady(r => {
+        update.estado = 'lista';
+        update.ruta = r.path;
+        pintarUpdate();
         $('#update-dice').textContent = 'Lista para instalar.';
-        instalar(r.path);
+        avisar(`La versión ${update.version || 'nueva'} está lista: apretá «Instalar y reabrir».`, 'ok');
     });
-    // Al arrancar y cada seis horas, en silencio: solo se dice algo si hay una.
+
+    // Al arrancar y cada media hora, en silencio: el botón aparece solo si hay
+    // algo, y quien esté grabando lo ve pero no lo interrumpe nada.
     setTimeout(() => buscar(false), 4000);
-    setInterval(() => buscar(false), 6 * 60 * 60 * 1000);
+    setInterval(() => buscar(false), 30 * 60 * 1000);
+}
+
+function pintarVersion(version) {
+    $('#app-version').textContent = `v${version}`;
+    $('#app-version').title = `Note Taker ${version}. Se comprueba solo si hay una nueva.`;
+}
+
+function pintarUpdate() {
+    const boton = $('#btn-update');
+    if (update.estado === 'al-dia') {
+        boton.hidden = true;
+        return;
+    }
+    boton.hidden = false;
+    boton.disabled = update.estado === 'bajando';
+    if (update.estado === 'hay') {
+        boton.textContent = `Versión ${update.version} · Actualizar`;
+        boton.title = (update.notas || '').slice(0, 300) ||
+            'Baja el instalador de la versión nueva. Tus ajustes y los modelos se quedan como están.';
+    } else if (update.estado === 'bajando') {
+        boton.textContent = `Bajando… ${update.pct || 0} %`;
+        boton.title = 'Se está bajando el instalador a Descargas.';
+    } else {
+        boton.textContent = 'Instalar y reabrir';
+        boton.title = 'Abre el instalador y cierra Note Taker. Tus ajustes y los modelos se quedan como están.';
+    }
+}
+
+async function alApretarUpdate() {
+    if (update.estado === 'hay') {
+        update.estado = 'bajando';
+        update.pct = 0;
+        pintarUpdate();
+        const r = await window.nt.updateDownload({ url: update.url, nombre: update.nombre });
+        if (r && !r.ok) {
+            update.estado = 'hay';
+            pintarUpdate();
+            avisar(r.error || 'No se pudo bajar la versión nueva.', 'error');
+        }
+        return;
+    }
+    if (update.estado === 'lista') return instalar(update.ruta);
 }
 
 async function buscar(aMano) {
     if (aMano) $('#update-dice').textContent = 'Buscando…';
-    const r = await window.nt.updateCheck();
+    // Mientras se baja o espera para instalar, una comprobación nueva borraría
+    // lo que ya está en marcha.
+    if (update.estado === 'bajando' || update.estado === 'lista') {
+        if (aMano) $('#update-dice').textContent = update.estado === 'bajando' ? 'Bajando…' : 'Lista para instalar.';
+        return;
+    }
+
+    let r = null;
+    try {
+        r = await window.nt.updateCheck();
+    } catch (e) {
+        if (aMano) $('#update-dice').textContent = `No se pudo comprobar: ${e.message}`;
+        return;
+    }
     if (!r || !r.hay) {
+        update.estado = 'al-dia';
+        pintarUpdate();
         if (aMano) $('#update-dice').textContent = r && r.motivo ? r.motivo : 'Estás al día.';
         return;
     }
-    $('#update-dice').textContent = `Hay la ${r.version}.`;
-    // Nunca en medio de una clase: el aviso espera a que la pantalla de En vivo
-    // no esté puesta. Una actualización que interrumpe un rodaje es peor que
-    // una que llega mañana.
-    if ($('#vista-vivo').classList.contains('es-activa')) return;
-    const ok = await window.nt.confirmar({
-        titulo: `¿Bajar la versión ${r.version}?`,
-        ok: 'Bajar',
-        mensaje: (r.notas || '').slice(0, 400) || 'Se baja a Descargas y se abre el instalador.'
+
+    Object.assign(update, {
+        estado: 'hay', version: r.version, url: r.url, nombre: r.nombre, notas: r.notas || ''
     });
-    if (ok) window.nt.updateDownload({ url: r.url, nombre: r.nombre });
+    pintarUpdate();
+    $('#update-dice').textContent = `Hay la ${r.version}.`;
+    if (aMano) return;
+    // Una sola vez por versión se dice en voz alta; después queda el botón. Con
+    // una clase grabando no se dice nada: el botón está ahí y no molesta.
+    const dicho = pref.leer('update.avisada', '');
+    if (dicho !== r.version && !$('#vista-vivo').classList.contains('es-activa')) {
+        pref.guardar('update.avisada', r.version);
+        avisar(`Hay una versión nueva (${r.version}). Está arriba, en «Actualizar».`);
+    }
 }
 
 async function instalar(ruta) {
     const ok = await window.nt.confirmar({
         titulo: '¿Instalar y cerrar?',
         ok: 'Instalar',
-        mensaje: 'El instalador reemplaza la app, así que Note Taker se cierra. ' +
-            'Lo que hayas grabado ya está escrito en el disco.'
+        mensaje: 'El instalador reemplaza la app, así que Note Taker se cierra. Lo que ' +
+            'hayas grabado ya está escrito en el disco, y tus ajustes y los modelos ' +
+            'de Whisper se quedan como están.'
     });
     if (!ok) return;
     const r = await window.nt.updateInstall(ruta);

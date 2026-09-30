@@ -443,7 +443,7 @@ module.exports = function (t) {
         t.eq(salida.tomas.length, 1);
         t.ok(salida.tomas[0].cerradaSola, 'la cerró el cierre de la sesión');
         const xml = fs.readFileSync(inicial.archivos.xml, 'utf8');
-        t.ok(xml.includes('<name>PV</name>'), 'y está en el XML');
+        t.ok(xml.includes('<name>Toma 1 · PV</name>'), 'y está en el XML');
     });
 
     t.group('sesión · reanudar');

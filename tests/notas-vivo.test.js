@@ -101,6 +101,47 @@ module.exports = function (t) {
         t.eq(e.tomas[0].outMs, null, 'y sigue abierta');
     });
 
+    t.group('notas-vivo · la vista de la toma nueva');
+
+    t.test('la primera toma arranca en PV', () => {
+        const e = nuevo();
+        vivo.abrirToma(e, T0);
+        t.eq(e.tomas[0].vista, 'PV');
+    });
+
+    t.test('la toma nueva hereda la vista de la anterior', () => {
+        // Una clase se graba por tramos con la misma vista: heredarla acierta
+        // casi siempre, y poner PV en todas obligaba a elegir en cada toma.
+        const e = nuevo();
+        const { toma } = vivo.abrirToma(e, T0);
+        vivo.aplicar(toma, { tipo: 'vista', vista: 'S' });
+        toma.outMs = T0 + 1000;
+        vivo.abrirToma(e, T0 + 2000);
+        t.eq(e.tomas[1].vista, 'S');
+    });
+
+    t.test('una toma desactivada no decide la vista de la que viene', () => {
+        const e = nuevo();
+        const a = vivo.abrirToma(e, T0).toma;
+        vivo.aplicar(a, { tipo: 'vista', vista: 'S' });
+        a.outMs = T0 + 1000;
+        const b = vivo.abrirToma(e, T0 + 2000).toma;
+        vivo.aplicar(b, { tipo: 'vista', vista: 'X2' });
+        vivo.aplicar(b, { tipo: 'descartar', descartada: true });
+        b.outMs = T0 + 3000;
+        vivo.abrirToma(e, T0 + 4000);
+        t.eq(e.tomas[2].vista, 'S', 'la de la última que cuenta');
+    });
+
+    t.test('el conteo hablado también la hereda', () => {
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, '3,'], [400, '2,'], [800, '1.'], [1600, 'Hola']]));
+        vivo.aplicar(e.tomas[0], { tipo: 'vista', vista: 'MG' });
+        vivo.aplicarSenales(e, palabras([[5000, 'Pausa.'], [9000, 'Che']]));
+        vivo.aplicarSenales(e, palabras([[12000, '3,'], [12400, '2,'], [12800, '1.'], [13600, 'Otra']]));
+        t.eq(e.tomas[1].vista, 'MG');
+    });
+
     t.group('notas-vivo · la pausa cierra');
 
     t.test('"Pausa" con silencio detrás cierra la toma', () => {
@@ -109,6 +150,30 @@ module.exports = function (t) {
         const ev = vivo.aplicarSenales(e, palabras([[5000, 'Pausa.'], [9000, 'Che']]));
         t.eq(ev[0].tipo, 'cerrada');
         t.ok(e.tomas[0].outMs != null, 'quedó cerrada');
+    });
+
+    t.test('«Pausa» y el profesor para: cierra aunque la palabra dure', () => {
+        // Lo que se rompió el 29/09: el hueco se medía desde el FINAL de
+        // «Pausa», y ese final lo corre el DTW varias décimas hacia adelante.
+        // Con la palabra durando 600 ms y la siguiente a 1,1 s, el hueco medido
+        // daba 0,5 s y la toma no cerraba: había que cerrarla a mano.
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, '3,'], [400, '2,'], [800, '1.'], [1600, 'Hola']]));
+        const pausa = { t: T0 + 5000, texto: 'Pausa.', hasta: T0 + 5600 };
+        const despues = { t: T0 + 6100, texto: 'Listo', hasta: T0 + 6400 };
+        const ev = vivo.aplicarSenales(e, [pausa, despues]);
+        t.eq(ev[0].tipo, 'cerrada');
+        t.ok(e.tomas[0].outMs != null, 'quedó cerrada');
+    });
+
+    t.test('una «Pausa» que no cierra queda contada, con su hueco', () => {
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, '3,'], [400, '2,'], [800, '1.'], [1600, 'Hola']]));
+        const ev = vivo.aplicarSenales(e, palabras([[5000, 'pausa'], [5300, 'en'], [5600, 'el']]));
+        t.eq(e.tomas[0].outMs, null, 'sigue abierta');
+        const corta = ev.find(x => x.tipo === 'pausa-corta');
+        t.ok(corta, 'se cuenta');
+        t.eq(corta.huecoSec, 0.3, 'con el hueco que se midió');
     });
 
     t.test('"pausa" sin silencio detrás es habla', () => {

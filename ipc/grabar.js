@@ -249,6 +249,19 @@ function registrar({ ipcMain, app, send, anotar }) {
         }
     });
 
+    // Reescribir el XML con el molde de hoy, sin releer nada (`rehacerXml`).
+    ipcMain.handle('grabar-rehacer-xml', (event, json) => {
+        anotar('grabar.rehacer-xml', { json });
+        try {
+            const r = grabacion.rehacerXml(json);
+            anotar('grabar.xml-rehecho', { json, tomas: r.tomas });
+            return { ok: true, ...r };
+        } catch (err) {
+            anotar('grabar.rehacer-xml-falla', { json, error: err.message });
+            return { ok: false, error: err.message };
+        }
+    });
+
     // Si había una grabación en curso al cerrar la app, se cierra lo abierto: la
     // cabecera del WAV queda con el tamaño real y el XML con lo último que pasó.
     // La sesión NO queda marcada como terminada, así que se puede reanudar:

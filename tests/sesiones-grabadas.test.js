@@ -247,6 +247,45 @@ module.exports = function (t) {
         t.ok(error && error.includes('ya se está grabando'), error);
     });
 
+    t.group('sesiones-grabadas · rehacer el XML');
+
+    t.test('reescribe el XML con el formato de hoy sin tocar las notas', () => {
+        // Es para lo que existe: una clase grabada con una versión anterior
+        // tiene el XML de entonces, y sin esto habría que volver a grabarla
+        // para que el arreglo le llegue.
+        const dir = carpeta();
+        const s = sembrar(dir);
+        // Un XML de antes: el marcador se llamaba solo «PV» y no había
+        // marcadores en el clip maestro.
+        const viejo = fs.readFileSync(s.xml, 'utf8')
+            .replace(/<name>Toma 1 · PV<\/name>/g, '<name>PV</name>');
+        fs.writeFileSync(s.xml, viejo);
+        const antes = JSON.parse(fs.readFileSync(s.json, 'utf8'));
+
+        const r = sesiones.rehacerXml(s.json);
+        t.eq(r.tomas, 1);
+        const xml = fs.readFileSync(s.xml, 'utf8');
+        t.ok(xml.includes('<name>Toma 1 · PV</name>'), 'el marcador lleva el número de la toma');
+        t.ok(xml.slice(0, xml.indexOf('<sequence')).includes('<marker>'),
+            'y el clip maestro tiene sus marcadores');
+
+        const despues = JSON.parse(fs.readFileSync(s.json, 'utf8'));
+        t.deep(despues.tomas.map(x => x.comentario), antes.tomas.map(x => x.comentario),
+            'las notas quedaron igual');
+        t.deep(despues.tomas.map(x => (x.palabras || []).map(w => w.texto)),
+            antes.tomas.map(x => (x.palabras || []).map(w => w.texto)),
+            'y el texto también');
+    });
+
+    t.test('la sesión que se está grabando no se rehace', () => {
+        const dir = carpeta();
+        const s = sembrar(dir);
+        const suya = JSON.parse(fs.readFileSync(s.json, 'utf8')).secuencia;
+        let error = null;
+        try { sesiones.rehacerXml(s.json, suya); } catch (e) { error = e.message; }
+        t.ok(error && /grabando/.test(error), error);
+    });
+
     t.group('sesiones-grabadas · editar una ya cerrada');
 
     t.test('cambiar la vista reescribe el XML', () => {
@@ -254,7 +293,7 @@ module.exports = function (t) {
         const s = sembrar(dir);
         sesiones.editarGrabada(s.json, { tipo: 'vista', toma: 1, vista: 'R' });
         const xml = fs.readFileSync(s.xml, 'utf8');
-        t.ok(xml.includes('<name>R</name>'), 'el marcador cambió de vista');
+        t.ok(xml.includes('<name>Toma 1 · R</name>'), 'el marcador cambió de vista');
     });
 
     t.test('quitar una claqueta también', () => {

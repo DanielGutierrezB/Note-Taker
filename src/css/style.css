@@ -379,6 +379,15 @@ b {
   color: var(--text-primary);
 }
 
+/* La versión, en el tercer nivel de texto: está para poder decirla, no para
+   leerla. El botón de actualizar que aparece al lado es el que tiene que
+   llamar la atención. */
+.version {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .marca .hp-ico {
   color: var(--accent);
 }
@@ -1138,12 +1147,29 @@ select {
 
 .barra-sesion {
   display: flex;
-  align-items: center;
-  gap: var(--sp-5);
+  flex-direction: column;
+  gap: var(--sp-2);
   flex: 0 0 auto;
-  padding: var(--sp-3) var(--sp-5);
+  padding: var(--sp-3) var(--sp-5) var(--sp-2);
   background: var(--bg-inset);
   border-bottom: 1px solid var(--hairline);
+}
+
+.barra-arriba {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+}
+
+/* Un número que se consulta, no el que ancla la pantalla. El timecode es el
+   único de 32 px; este va en el mismo escalón que el estado y los contadores,
+   porque se mira cuando uno quiere saber cuánto dura la clase cortada y no
+   treinta veces por segundo. */
+.num-consulta {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-primary);
 }
 
 .barra-bloque {
@@ -1172,31 +1198,71 @@ select {
   color: var(--text-primary);
 }
 
-/* El pie con las teclas. Están escritas y a la vista en vez de estar en una
-   ayuda: son cinco, se usan con el profesor hablando, y una tecla que hay que
-   recordar es una tecla que no se usa. */
-.pie-teclas {
+/* Los atajos, debajo del timecode.
+   Están escritos y a la vista en vez de estar en una ayuda —son cinco y se usan
+   con el profesor hablando— y son botones: la misma cosa se hace con la tecla o
+   con el mouse, sin tener que acordarse de cuál era. Estaban en un pie, al otro
+   extremo de la pantalla, o sea lejos de donde se mira. */
+.atajos {
   display: flex;
   align-items: center;
-  gap: var(--sp-5);
-  flex: 0 0 auto;
-  padding: var(--sp-2) var(--sp-5);
-  background: var(--bg-base);
-  border-top: 1px solid var(--hairline);
+  gap: var(--sp-2);
   font-size: 11px;
   color: var(--text-muted);
   overflow: hidden;
 }
 
-.tecla {
+.atajo {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
   flex: 0 0 auto;
+  min-height: 24px;
+  padding: 0 var(--sp-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--ease);
 }
 
-/* La ruta del XML es lo último que cede en el pie: las teclas hay que poder
-   leerlas, la ruta se puede recortar y sigue diciendo de qué carpeta es. */
+.atajo:hover:not(:disabled) {
+  background: var(--layer-hover);
+  color: var(--text-secondary);
+}
+
+.atajo:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.atajo:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* La vista elegida, rellena de su color: es el mismo lenguaje que el selector
+   de la toma (`.btn-vista`), así que se lee sin aprender nada nuevo. */
+.atajo-vistas {
+  display: inline-flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.atajo-vistas .atajo {
+  box-shadow: inset 0 -2px 0 var(--vista);
+}
+
+.atajo-vistas .atajo.es-elegida {
+  background: var(--vista);
+  color: var(--vista-tinta);
+  box-shadow: none;
+}
+
+/* La ruta del XML es lo último que cede: los atajos hay que poder leerlos, la
+   ruta se puede recortar y sigue diciendo de qué carpeta es. */
 #vivo-donde {
   min-width: 0;
   overflow: hidden;

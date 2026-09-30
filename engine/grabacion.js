@@ -316,6 +316,17 @@ async function buscarSenales() {
             eventos = vivo.aplicarSenales(s.estado, oido.palabras, { firmeHastaMs: hasta - COLA_MS, finMs: hasta });
             for (const ev of eventos) {
                 if (ev.tipo === 'cerrada') relecturas.encolar(s, ev.toma);
+                // Una «Pausa» que se oyó y no cerró. Al registro y no a la
+                // pantalla: quien graba ya se da cuenta —la toma sigue abierta—
+                // y lo que hace falta es poder mirar al día siguiente si el
+                // profesor siguió hablando o si el umbral está mal puesto.
+                if (ev.tipo === 'pausa-corta') {
+                    registro.anotar('main', 'senal.pausa-corta', {
+                        segundo: Math.round((ev.ms - s.estado.ceroMs) / 100) / 10,
+                        huecoSec: ev.huecoSec,
+                        pide: vivo.SILENCIO_TRAS_PAUSA_SEC
+                    });
+                }
             }
             if (eventos.length) espejo.escribir(s);
         }
@@ -692,6 +703,7 @@ module.exports = {
     listar,
     reanudar,
     regenerar: sesionesGrabadas.regenerar,
+    rehacerXml: json => sesionesGrabadas.rehacerXml(json, enCurso()),
     renombrarGrabada,
     borrarGrabada,
     // Para poder empujar el ciclo desde una prueba o desde el arnés, sin esperar

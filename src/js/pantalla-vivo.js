@@ -67,8 +67,16 @@ let sobreBorde = null;
 /** Cuándo llegó el último estado del motor, para darse cuenta si se calló. */
 let ultimoAvisoMs = 0;
 
-/** Lo último que se tecleó en un campo, para no tomar como atajo lo que sigue. */
-let ultimaTeclaEnCampo = 0;
+/**
+ * Cuándo desapareció al repintar el campo que tenía el foco.
+ *
+ * Es lo único que justifica tragarse una tecla: lo que se siga escribiendo es
+ * texto que iba a una nota, no atajos. Antes esto se marcaba en CADA tecla
+ * escrita en un campo, y con eso el Enter que suelta la nota dejaba muerto al
+ * Enter siguiente —el que abre la toma— y cada Enter estiraba la espera otros
+ * segundo y medio. En la clase del 29/09 el atajo «a veces no abría».
+ */
+let campoDesaparecidoMs = 0;
 
 /** El foco de un campo que desapareció al repintar y hay que buscar en su nuevo sitio. */
 let focoPendiente = null;
@@ -103,6 +111,7 @@ export function conectar(contexto) {
 
     $('#ahora').addEventListener('click', alClic);
     $('#lista-vivo').addEventListener('click', alClic);
+    $('#vivo-atajos').addEventListener('click', alClic);
     $('#ahora').addEventListener('change', alCambiar);
     $('#lista-vivo').addEventListener('change', alCambiar);
     // Seleccionar un pedazo del texto de una toma abre el campo para comentarlo.
@@ -222,13 +231,35 @@ function contar(ev) {
  */
 const MOTOR_CALLADO_MS = 6000;
 
+/**
+ * Cuánto dura la clase cortada: la suma de lo que va a quedar en el XML.
+ *
+ * Es lo que el editor va a entregar, y no lo que se grabó: las tomas
+ * desactivadas no cuentan, y lo que se dijo entre dos tomas tampoco. La
+ * abierta cuenta hasta donde va el audio, así que el número sube mientras el
+ * profesor habla y se queda quieto entre tomas — que es exactamente la
+ * diferencia entre las dos cosas que la barra muestra.
+ */
+function segundosCortados() {
+    const hasta = estado.ceroMs + (estado.segundos || 0) * 1000;
+    let ms = 0;
+    for (const t of estado.tomas) {
+        if (t.descartada || t.inMs == null) continue;
+        const fin = t.outMs != null ? t.outMs : hasta;
+        if (fin > t.inMs) ms += fin - t.inMs;
+    }
+    return ms / 1000;
+}
+
 /** Lo de arriba: timecode, estado de la sesión y nivel. Barato: va seguido. */
 function pintarBarra() {
-    const fps = estado.fps;
     const callado = !terminando && Date.now() - ultimoAvisoMs > MOTOR_CALLADO_MS;
     const conAudio = audio ? { ...audio, caido: audio.caido || callado } : (callado ? { caido: true } : null);
     const est = estados.deSesion(estado, conAudio);
-    $('#vivo-tc').textContent = fmt.timecode(estado.segundos, fps);
+    // Sin cuadros: son dos dígitos que cambian treinta veces por segundo al
+    // lado de los que se quieren leer. El cuadro sigue en cada fila y en el XML.
+    $('#vivo-tc').textContent = fmt.relojCorto(estado.segundos);
+    $('#vivo-cortada').textContent = fmt.relojCorto(segundosCortados());
     if (!terminando) {
         $('#vivo-estado').textContent = est.palabra;
         $('#vivo-estado').style.color =
@@ -251,6 +282,7 @@ function pintar() {
     pendiente = false;
     const fps = estado.fps;
     pintarBarra();
+    pintarAtajos();
 
     const vivas = estado.tomas.filter(t => !t.descartada);
     $('#vivo-tomas').textContent = vivas.length;
@@ -549,6 +581,46 @@ function laLista() {
     return tomas.concat(claquetas).sort((a, b) => b.ms - a.ms);
 }
 
+/**
+ * Los atajos de abajo del timecode.
+ *
+ * Se actualizan, no se rehacen: son botones que están bajo el mouse todo el
+ * tiempo, y rehacerlos en cada repintado perdía el clic que caía entre el
+ * apretar y el soltar (lo mismo que pasaba con la lista). Los de vista se
+ * arman una vez, cuando llegan las vistas de la sesión.
+ */
+function pintarAtajos() {
+    const cajaVistas = $('#atajo-vistas');
+    if (!cajaVistas.children.length && (estado.vistas || []).length) {
+        // Con el nombre de la vista y no con su sigla: «R R» y «S S» —la tecla
+        // y la sigla, que son la misma letra— no dicen nada, y acá la gracia es
+        // justamente que no haya que aprenderse las siglas para usar el mouse.
+        cajaVistas.innerHTML = estado.vistas.map(v =>
+            `<button class="atajo" type="button" data-hace="vista-tecla" data-vista="${esc(v.nombre)}"
+               style="${estiloDeVista(estado.vistas, v.nombre)}"
+               title="Poner la toma en ${esc(v.nombre)} (${esc(v.titulo)}). Tecla: ${esc(v.nombre[0])}">
+               <kbd>${esc(v.nombre[0])}</kbd><span>${esc(v.titulo)}</span></button>`).join('');
+    }
+
+    // El borde dice qué va a hacer, no las dos cosas: es la misma tecla con el
+    // signo cambiado, y leer «abrir / cerrar» obliga a decidir cuál toca.
+    const abierta = estado.abierta != null;
+    $('#atajo-borde-dice').textContent = abierta ? 'cerrar toma' : 'abrir toma';
+    $('#atajo-borde').title = abierta
+        ? 'Cerrar la toma en la última palabra dicha. Tecla: Enter'
+        : 'Abrir una toma acá. Si el profesor ya venía hablando, el IN retrocede hasta donde arrancó la frase. Tecla: Enter';
+
+    // La vista de la toma sobre la que caen las teclas, encendida.
+    const laDeTeclas = laDeLasTeclas();
+    for (const b of cajaVistas.children) {
+        b.classList.toggle('es-elegida', Boolean(laDeTeclas) && laDeTeclas.vista === b.dataset.vista);
+    }
+
+    const h = estado.historia || {};
+    $('#atajo-deshacer').disabled = !h.atras;
+    $('#atajo-deshacer').title = h.atras ? `Deshacer «${h.queAtras}». Tecla: ⌘Z` : 'No hay nada que deshacer';
+}
+
 function pintarInterruptores(desactivadas) {
     const compacto = $('#btn-compacto');
     compacto.setAttribute('aria-pressed', String(vista.compacto));
@@ -706,6 +778,7 @@ function devolverFoco(f) {
         // la cierra mientras se escribe. La toma sigue en la lista, así que se
         // despliega ahí y se sigue escribiendo en su nota, sin perder nada ni
         // mandar las letras que vienen como atajos.
+        campoDesaparecidoMs = Date.now();
         const toma = estado && estado.tomas.find(t => String(t.id) === String(f.toma));
         if (f.campo === 'nota' && toma && toma.outMs != null && vista.abierta !== `t${toma.id}`) {
             vista.abierta = `t${toma.id}`;
@@ -760,6 +833,16 @@ async function alClic(e) {
             pintar();
             break;
         case 'claqueta': await pedir(() => window.nt.grabarClaqueta()); break;
+        // Los atajos de la barra: lo mismo que las teclas, con el mouse.
+        case 'borde': await bordeDeToma(); break;
+        case 'deshacer': await volver('deshacer'); break;
+        case 'vista-tecla': {
+            const suya = laDeLasTeclas();
+            if (!suya) break;
+            vista.elegida = suya.id;
+            await editar({ tipo: 'vista', toma: suya.id, vista: boton.dataset.vista });
+            break;
+        }
         case 'abrir': await abrir(); break;
         case 'cerrar': await pedir(() => window.nt.grabarCerrarToma()); break;
         case 'vista':
@@ -888,11 +971,30 @@ async function abrir(ms) {
  * Apretarla de más abre una toma de un segundo o cierra una que no había que
  * cerrar, y las dos cosas se arreglan con Cmd-Z.
  */
+/**
+ * El Enter anterior, mientras el motor contesta.
+ *
+ * Dos Enter seguidos —cerrar y volver a abrir— salían los dos con el MISMO
+ * estado: el segundo veía la toma todavía abierta y pedía cerrarla otra vez, o
+ * sea que se perdía. Se espera al primero y se decide con lo que quedó.
+ */
+let bordeEnVuelo = null;
+
 async function bordeDeToma() {
-    if (estado && estado.abierta != null) {
-        return pedir(() => window.nt.grabarCerrarToma());
+    const previo = bordeEnVuelo;
+    if (previo) await previo.catch(() => {});
+    const mio = (async () => {
+        if (estado && estado.abierta != null) {
+            return pedir(() => window.nt.grabarCerrarToma());
+        }
+        return abrir();
+    })();
+    bordeEnVuelo = mio;
+    try {
+        return await mio;
+    } finally {
+        if (bordeEnVuelo === mio) bordeEnVuelo = null;
     }
-    return abrir();
 }
 
 async function editar(cambio) {
@@ -945,6 +1047,9 @@ function laDeLasTeclas() {
         || [...estado.tomas].reverse().find(t => !t.descartada) || null;
 }
 
+/** Cuánto se siguen tragando las letras después de que el campo desapareció. */
+const GRACIA_DE_CAMPO_MS = 1500;
+
 function escribiendo() {
     const a = document.activeElement;
     return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable);
@@ -956,7 +1061,6 @@ async function alTeclado(e) {
     // «p» en el selector de idioma cambiaba la vista de una toma.
     if (document.querySelector('.telon.es-activa')) return;
     if (escribiendo()) {
-        ultimaTeclaEnCampo = Date.now();
         const campo = document.activeElement;
         if (campo.dataset.campo === 'comentario') {
             if (e.key === 'Enter') { e.preventDefault(); return guardarComentario(); }
@@ -972,10 +1076,12 @@ async function alTeclado(e) {
     // Tecla mantenida apretada: una sola vez. Mantener la K ponía cinco
     // claquetas, y mantener Enter abría y cerraba tomas.
     if (e.repeat || e.isComposing) return;
-    // Recién se estaba escribiendo en un campo que desapareció al repintar: lo
-    // que sigue es texto, no atajos. Se estira mientras se siga tecleando.
-    if (Date.now() - ultimaTeclaEnCampo < 1500) {
-        ultimaTeclaEnCampo = Date.now();
+    // El campo que se estaba escribiendo desapareció al repintar (`devolverFoco`):
+    // lo que se siga escribiendo es esa nota y no atajos, y se estira mientras
+    // se siga escribiendo. **Enter nunca se traga**: es el borde de la toma y
+    // tiene que responder siempre, que es justo lo que se rompió.
+    if (e.key !== 'Enter' && Date.now() - campoDesaparecidoMs < GRACIA_DE_CAMPO_MS) {
+        campoDesaparecidoMs = Date.now();
         return;
     }
 

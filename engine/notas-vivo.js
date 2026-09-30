@@ -105,7 +105,11 @@ const VISTAS_RENOMBRADAS = { SL: 'S', SR: 'S' };
  * `grabacion.js`), así que la primera vez que alguien la toca queda con `S`.
  */
 function vistaLeida(nombre) {
-    const n = limpio(nombre);
+    // El marcador puede llamarse «Toma 3 · PV» —lo que escribe esta app, para
+    // que el editor vea el número en la línea de tiempo— o «PV» a secas, que es
+    // como lo escribían los XML de antes y los de Class Cut. La vista es lo que
+    // va después del separador, y los dos casos salen de la misma línea.
+    const n = limpio(nombre).split('·').pop().trim();
     return VISTAS_RENOMBRADAS[n] || n;
 }
 
@@ -300,16 +304,34 @@ function senales(palabras, finMs) {
             // la clase: se pide silencio detrás. La última palabra de la tirada
             // se resuelve con el silencio que venga después, así que quien llama
             // decide (ver `cierraDeVerdad`).
-            // Desde que TERMINA «pausa», y sin palabra detrás, hasta donde llega
-            // lo oído: antes una «pausa» al final de la ventana contaba como
-            // silencio infinito, y con medio segundo oído detrás ya cerraba.
+            //
+            // **Con palabra detrás, el hueco se mide desde donde EMPIEZA «pausa»,
+            // y no desde donde termina.** Medirlo desde el final parece más
+            // exacto y no lo es: el final sale del modelo o del DTW, que sobre
+            // una palabra suelta se corre varias décimas hacia adelante, y eso
+            // se le descontaba al hueco. En la clase del 29/09 el profesor decía
+            // «Pausa» y paraba, y la toma no cerraba: quedaban por cerrar a
+            // mano. Desde el comienzo, la única cosa que el hueco mide es
+            // cuánto tardó en llegar la palabra siguiente, que es justo lo que
+            // separa la señal de «acá hacemos una pausa en el flujo».
+            //
+            // Sin palabra detrás sí se mide desde el final, contra lo que se
+            // alcanzó a oír: lo que se pregunta ahí es otra cosa —si ya pasó el
+            // segundo de silencio— y antes una «pausa» al final de la ventana
+            // contaba como silencio infinito y cerraba con medio segundo oído.
             const siguiente = lista[i + 1];
             const finPausa = lista[i].hasta != null ? lista[i].hasta : lista[i].t;
             const hueco = siguiente
-                ? (siguiente.t - finPausa) / 1000
+                ? (siguiente.t - lista[i].t) / 1000
                 : (finMs != null ? (finMs - finPausa) / 1000 : Infinity);
             if (hueco >= SILENCIO_TRAS_PAUSA_SEC) {
                 salida.push({ tipo: 'cierra', desde: i, hasta: i, por: 'pausa' });
+            } else {
+                // Una «Pausa» que no cerró queda anotada con su hueco. Es lo
+                // único que deja saber, al día siguiente, si la toma se cerró a
+                // mano porque el profesor siguió hablando o porque este número
+                // está mal puesto (lo escribe `grabacion.js` en el registro).
+                salida.push({ tipo: 'pausa-corta', desde: i, hasta: i, huecoSec: Math.round(hueco * 100) / 100 });
             }
             continue;
         }
@@ -418,10 +440,28 @@ function tomaAbierta(estado) {
  * deja tomas a las que les falta del otro, y eso no se ve hasta que algo lee el
  * campo que no está.
  */
+/**
+ * La vista que le toca a una toma nueva: la de la última que se hizo.
+ *
+ * Una clase se graba por tramos con la misma vista —varias tomas de profesor
+ * seguidas, después varias de pantalla— así que heredarla es acertar casi
+ * siempre, y cuando no, se corrige con una tecla. Arrancar todas en `PV`
+ * obligaba a apretar la vista en CADA toma, y la que se olvidaba llegaba al XML
+ * con el color equivocado.
+ *
+ * Se mira la última no desactivada: una que se desactivó es una que no cuenta
+ * —su vista puede ser justamente la que estaba mal— y no tiene por qué decidir
+ * la de la que viene.
+ */
+function vistaHeredada(estado) {
+    const previa = [...(estado.tomas || [])].reverse().find(t => !t.descartada && t.vista);
+    return previa ? previa.vista : VISTA_POR_DEFECTO;
+}
+
 function nuevaToma(estado, inMs, cuenta) {
     return {
         id: (estado.proximaToma = estado.proximaToma + 1),
-        vista: VISTA_POR_DEFECTO,
+        vista: vistaHeredada(estado),
         comentario: '',
         cuenta: cuenta || '',
         inMs,
@@ -991,6 +1031,14 @@ function aplicarSenales(estado, palabras, opciones) {
         estado.senalesVistas[marca.tipo] = (estado.senalesVistas[marca.tipo] || [])
             .concat([nuevas[marca.hasta].t]).slice(-8);
 
+        // Una «Pausa» que no cerró: se cuenta y no se hace nada más. Tiene que
+        // estar ANTES del salto a «cierra» de abajo, que es a donde cae todo lo
+        // que no se reconoce.
+        if (marca.tipo === 'pausa-corta') {
+            eventos.push({ tipo: 'pausa-corta', ms: nuevas[marca.desde].t, huecoSec: marca.huecoSec });
+            continue;
+        }
+
         if (marca.tipo === 'claqueta') {
             // Las palabras de la claqueta se guardan como cualquier otra: si hay
             // una toma abierta, "claqueta 4" se dijo adentro de ella y sacarlo
@@ -1347,8 +1395,9 @@ module.exports = {
     fundir,
     MISMA_CLAQUETA_MS,
     CLAQUETA,
+    SILENCIO_TRAS_PAUSA_SEC,
+    vistaHeredada,
     repartir,
-    renumerar,
     cerrarProvisional,
     recordarQuitada,
     olvidarQuitada,
