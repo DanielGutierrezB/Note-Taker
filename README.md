@@ -246,8 +246,12 @@ que es justo lo que hace falta para correlacionar.
 En una clase en vivo se claquetea varias veces, así que la app las lleva
 **todas**, numeradas por orden de reloj. Entran por tres puertas:
 
-- **El aplauso**, que `golpe.js` encuentra como un pico en el PCM y se confirma
-  leyendo cuatro segundos a cada lado buscando "claqueta" o "clase N".
+- **La palmada**, que `aplausos.js` encuentra en el PCM y se confirma leyendo
+  seis segundos a cada lado buscando "claqueta". No alcanza con que suene
+  fuerte: tiene que despegarse 50 dB del piso de ESA sala, subir en menos de
+  15 ms, apagarse en menos de 250 y tener el centro de su energía arriba de
+  2,5 kHz. Con menos que eso entraba cualquier sílaba acentuada, y en una clase
+  del 29/09 se contaron 1822 "aplausos" en dos horas y media.
 - **La palabra dicha**, que oye el ciclo de señales. Existe porque el aplauso
   puede no llegar: el audio de un Zoom pasa por compresión, cancelación de eco y
   control automático de ganancia, y las tres aplastan justo lo que el detector
@@ -396,8 +400,9 @@ Eso lo hace un ayudante nativo chico (`nativo/escuchar-app.swift`, compilado por
 `tools/bundle-binaries.sh`) que Node lanza y lee. Lo que entrega es exactamente lo
 mismo que manda la ventana cuando graba un micrófono —PCM mono de 16 bits en
 pedazos de 4096 muestras—, así que el resto del motor no distingue de dónde vino.
-El tamaño del pedazo importa: `golpe.js` mide el pico y el promedio de cada uno
-para reconocer el aplauso, y sus umbrales se midieron con ese tamaño.
+El tamaño del pedazo no cambia lo que se oye: `aplausos.js` corta lo que le
+llegue en marcos de 5 ms y mide sobre esos, así que la misma palmada mide igual
+venga en pedazos de 4096 muestras o de los que quiera entregar Core Audio.
 
 **La tasa es la del dispositivo, no la del tap.** El primer ayudante declaraba
 los 48 kHz del formato del tap, pero las muestras llegan al ritmo del
@@ -703,7 +708,8 @@ engine/
   ajustar-corte.js       correr el IN y el OUT al silencio de al lado
   fcp-xml.js             el formato FCP7, con marcadores de secuencia y de clip
   captura.js             el WAV que se escribe mientras entra
-  golpe.js               el aplauso, en el PCM
+  aplausos.js            la palmada de la claqueta, en el PCM
+  golpe.js               un pico corto y fuerte (lo que usaba antes)
   oir.js · transcribe.js Whisper local, por pedazos
   oir-toma.js            volver a oír un tramo, con o sin sesión
   relecturas.js          la cola que le rehace el texto a cada toma cerrada

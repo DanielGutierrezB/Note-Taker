@@ -20,6 +20,7 @@ const FILES = [
     'deshacer.test.js',
     'turnos.test.js',
     'golpe.test.js',
+    'aplausos.test.js',
     'captura.test.js',
     'audio-app.test.js',
     'oido-residente.test.js',

@@ -1,6 +1,13 @@
 'use strict';
 /**
- * golpe.js — Encontrar el aplauso de la claqueta en el audio que va entrando.
+ * golpe.js — Encontrar un pico corto y fuerte en el audio que va entrando.
+ *
+ * **Ya no es quien decide la claqueta.** Buscaba el aplauso y encontraba
+ * cualquier transitorio: en la clase del 29/09 marcó 1822 «golpes» en dos horas
+ * y media, y en la del 30/09, 31 en siete minutos con siete palmadas de verdad.
+ * La grabación usa ahora `aplausos.js`, que además de la forma del pedazo mira
+ * el ataque, la caída y el color del pico. Esto queda como lo que siempre fue —
+ * la regla del pedazo de 85 ms, con sus números medidos sobre el curso viejo—.
  *
  * Vive en el motor y no en la ventana, aunque la ventana sea la que abre el
  * micrófono. La razón es que acá se puede comprobar: el audio que se captura

@@ -211,18 +211,24 @@ const OK = /^ok[.,…!?]*$/i;
  * Es la tercera puerta por la que entra una claqueta, y existe porque el
  * aplauso puede no llegar: el audio de una reunión de Zoom pasa por compresión,
  * cancelación de eco y control automático de ganancia, y las tres cosas
- * aplastan justo lo que `golpe.js` busca —un pico corto y muy por encima del
- * fondo—. Con la clase en vivo entrando por un dispositivo virtual, confiar
- * solo en el pico es confiar en que el procesamiento de otro programa deje
- * pasar un transitorio.
+ * aplastan justo lo que `aplausos.js` busca —un chasquido corto y muy por
+ * encima del piso—. Con la clase en vivo entrando por un dispositivo virtual,
+ * confiar solo en el pico es confiar en que el procesamiento de otro programa
+ * deje pasar un transitorio.
  *
  * El pedazo del medio y no la palabra entera, con el mismo motivo que en la
- * confirmación del golpe: Whisper no conoce la palabra y la escribió
- * "Claqueta", "Claquetados", "Cacleta", "Klaqueta" y hasta "clasedos" pegando
- * "clase dos". Se pide de cinco letras para arriba para que no la dispare
- * cualquier sílaba suelta.
+ * confirmación de la palmada: Whisper no conoce la palabra y la escribió
+ * "Claqueta", "Claquetados", "Cacleta", "Klaqueta" y, el 30/09, "Laqueta" y
+ * "TLAQUETA CLASE 2". "laque" cubre a las cuatro que empiezan distinto y
+ * "cacle" a la que le baila la ele; son cinco letras, que es lo bastante largo
+ * para que no lo dispare cualquier sílaba suelta.
+ *
+ * Lo que NO cubre, y se sabe: "Tlajeta clase 4" y "La quinta", que fue como
+ * escribió otras dos palmadas del mismo día. Ahí la claqueta se avisa sin
+ * confirmar y se pone con la tecla K; inventar una regla para "quinta" sería
+ * peor que la enfermedad.
  */
-const CLAQUETA = /claque|cacle|klaque/i;
+const CLAQUETA = /laque|cacle/i;
 
 /** Cuántos números seguidos hacen una cuenta. Uno solo es habla. */
 const MINIMO_DE_CUENTA = 2;
@@ -852,7 +858,7 @@ const PALABRA_Y_APLAUSO_MS = 6000;
 /** Los aplausos oídos que se recuerdan para emparejar con la palabra. */
 const APLAUSOS_RECORDADOS = 200;
 
-/** Un aplauso que oyó `golpe.js`. Solo, no es una claqueta: espera su palabra. */
+/** Una palmada que oyó `aplausos.js`. Sola, no es una claqueta: espera su palabra. */
 function recordarAplauso(estado, ms) {
     estado.aplausos = (estado.aplausos || []).concat([ms]).slice(-APLAUSOS_RECORDADOS);
 }

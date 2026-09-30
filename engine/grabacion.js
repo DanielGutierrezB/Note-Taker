@@ -44,7 +44,7 @@
 
 const captura = require('./captura');
 const registro = require('./registro');
-const golpe = require('./golpe');
+const aplausos = require('./aplausos');
 const vivo = require('./notas-vivo');
 const historial = require('./deshacer');
 const nombreDeSesion = require('./nombre-de-sesion');
@@ -86,8 +86,17 @@ const CONTEXTO_MS = 6000;
 const NUEVO_MIN_MS = 700;
 const COLA_MS = 500;
 
-/** Cuánto se le da a Whisper alrededor de un golpe para leer la frase. */
-const MARGEN_CLAQUETA_MS = 4000;
+/**
+ * Cuánto se le da a Whisper alrededor de una palmada para leer la frase.
+ *
+ * Los mismos seis segundos que `notas-vivo.PALABRA_Y_APLAUSO_MS`, que es la
+ * otra mitad de la misma regla. Estaba en cuatro, y con cuatro se perdía la
+ * claqueta del 30/09 a los 75,86 s: el profesor dijo «clase 2, claqueta» y
+ * aplaudió 4,3 s después, así que la palabra caía justo afuera de la ventana y
+ * la palmada quedaba sin confirmar. Con una palmada de verdad al lado, abrirla
+ * no agrega falsos: lo que decide sigue siendo que se haya dicho la palabra.
+ */
+const MARGEN_CLAQUETA_MS = vivo.PALABRA_Y_APLAUSO_MS;
 
 /**
  * Lo que se busca alrededor del aplauso para creerle.
@@ -172,8 +181,9 @@ function iniciar(params) {
         }),
         dir: p.dir,
         captura: null,
-        // El fondo de esta sala y cuándo fue el último golpe (`golpe.js`).
-        golpes: golpe.nuevo(),
+        // El piso de esta sala y cuándo fue la última palmada (`aplausos.js`).
+        // Lo arma `abrirEscucha`, acá abajo, que es donde se sabe la tasa.
+        palmadas: null,
         // Los golpes que todavía no se leyeron, en orden: la hora de cada uno. Se
         // leen cuando el audio de alrededor ya está en el disco (`leerCandidatas`).
         candidatas: [],
@@ -221,13 +231,16 @@ function abrirEscucha(params) {
     });
     sesion.captura = { ...info, segundos: 0 };
     sesion.escuchadoHastaMs = info.desdeMs;
+    // El buscador de palmadas trabaja en marcos de 5 ms, así que necesita la
+    // tasa de verdad —la que quedó, no la que se pidió— para medirlos.
+    sesion.palmadas = aplausos.nuevo({ tasa: info.sampleRate });
     return info;
 }
 
 /**
- * El PCM que manda la ventana: se escribe y se mira si trajo un golpe.
+ * El PCM que manda la ventana: se escribe y se mira si trajo una palmada.
  *
- * La hora que se le da al buscador de golpes sale de la POSICIÓN EN EL AUDIO y
+ * La hora que se le da al buscador de palmadas sale de la POSICIÓN EN EL AUDIO y
  * no de `Date.now()`, y eso importa por dos motivos. Uno: el pedazo que llega
  * ahora se grabó hace un instante, y el aplauso tiene que quedar donde suena.
  * El otro es que así el mismo código sirve para pasarle el audio de una clase
@@ -235,11 +248,11 @@ function abrirEscucha(params) {
  * (`tools/simular-grabacion.js`), que es la única forma de probar esto sin
  * ponerse a aplaudir delante del micrófono.
  *
- * **Los golpes no se dejan de anotar nunca.** En Class Cut, con la claqueta ya
- * confirmada no se anotaba ninguno más, porque en una clase de allá se aplaude
+ * **Las palmadas no se dejan de anotar nunca.** En Class Cut, con la claqueta ya
+ * confirmada no se anotaba ninguna más, porque en una clase de allá se aplaude
  * una vez. Acá se claquetea cada vez que hace falta volver a sincronizar, así
- * que cada golpe es candidato y `anotarClaqueta` se ocupa de que dos que sean el
- * mismo no entren dos veces.
+ * que cada palmada es candidata y `anotarClaqueta` se ocupa de que dos que sean
+ * la misma no entren dos veces.
  */
 function pcm(buffer) {
     if (!sesion || !sesion.captura) return null;
@@ -249,13 +262,15 @@ function pcm(buffer) {
     const r = captura.escribir(sesion.captura.id, buffer);
     sesion.captura.segundos = r.segundos;
 
-    const visto = golpe.mirar(sesion.golpes, buffer, Math.round(desdeMs));
-    if (visto.golpe) {
+    // Las palmadas que salen acá no son de ESTE pedazo: `aplausos.js` decide
+    // 300 ms tarde, porque la caída es parte de lo que la hace una palmada. El
+    // `ms` de cada una es el del pico, que es donde tiene que ir el marcador.
+    for (const palmada of aplausos.mirar(sesion.palmadas, buffer, Math.round(desdeMs)).aplausos) {
         // Un aplauso solo no es una claqueta: se recuerda para emparejarlo con
         // la palabra (la que oiga el ciclo en vivo, o la que se lea alrededor).
-        vivo.recordarAplauso(sesion.estado, visto.ms);
-        sesion.candidatas.push(visto.ms);
-        sesion.avisar({ tipo: 'golpe', ms: visto.ms });
+        vivo.recordarAplauso(sesion.estado, palmada.ms);
+        sesion.candidatas.push(palmada.ms);
+        sesion.avisar({ tipo: 'golpe', ms: palmada.ms });
     }
     return r;
 }
@@ -391,7 +406,7 @@ function vigilarDeriva() {
  *
  * Cada aplauso ancla un punto de sincronía, y el editor los usa para saber si
  * los archivos de Premiere son uno o varios y dónde empieza cada uno.
- * Encontrarlos tiene dos mitades: el pico lo oye `golpe.js` en el PCM, y
+ * Encontrarlos tiene dos mitades: la palmada la oye `aplausos.js` en el PCM, y
  * creerle o no es lo de acá. La tercera puerta —la palabra "claqueta" dicha— no
  * pasa por este tramo: entra por el ciclo de señales (`notas-vivo.senales`),
  * porque ahí el audio ya está transcripto.
