@@ -281,7 +281,10 @@ function ponerEnLista(lista, quitar, poner, opciones) {
     const o = opciones || {};
     const esLaMisma = o.esLaMisma || ((a, b) => a.ms === b.ms);
     const i = quitar ? lista.findIndex(x => esLaMisma(x, quitar)) : -1;
-    if (Array.isArray(o.campos) && i >= 0 && poner) {
+    if (Array.isArray(o.campos) && quitar && poner) {
+        // Un paso de campos es sobre un elemento que ya estaba: si no está, no
+        // hay a quién reponerle nada, y empujar la foto lo haría resucitar.
+        if (i < 0) return;
         for (const clave of o.campos) {
             if (!(clave in poner)) delete lista[i][clave];
             else lista[i][clave] = Array.isArray(poner[clave]) ? poner[clave].slice() : poner[clave];

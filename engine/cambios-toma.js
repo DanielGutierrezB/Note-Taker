@@ -127,15 +127,24 @@ function editar(sesion, cambio) {
  * la foto es de la claqueta sola, y `volver` repone `comentario` y nada más
  * porque el paso dice qué campos tocó (ver `ponerEnLista`).
  *
+ * Se busca por `ms` cuando viene, y el número queda de respaldo: la ventana
+ * manda también el cambio que sale cuando el repintado saca el campo, y el `n`
+ * de ese renglón puede ser de antes de una renumeración. `mismaClaqueta` y no
+ * igualdad, porque una fusión le corre el `ms` a la claqueta.
+ *
  * Una claqueta que ya no está —la quitaron mientras el campo estaba abierto—
  * deja el gesto sin efecto y sin paso, igual que una toma que no se encuentra.
  */
 function notaDeClaqueta(sesion, c) {
-    const claqueta = (sesion.estado.claquetas || []).find(x => x.n === Number(c.n));
+    const lista = sesion.estado.claquetas || [];
+    const claqueta = c.ms != null && Number.isFinite(Number(c.ms))
+        ? lista.find(x => vivo.mismaClaqueta(x, { ms: Number(c.ms) }))
+        : lista.find(x => x.n === Number(c.n));
     if (!claqueta) return espejo.resumen(sesion);
     const antes = { ...claqueta };
     vivo.aplicarAClaqueta(claqueta, c);
-    anotarDeLaSesion(sesion, 'claquetas', antes, c, { ...claqueta });
+    // El número de la que se encontró, que es el que dice «deshacer» (`comoSeLlama`).
+    anotarDeLaSesion(sesion, 'claquetas', antes, { ...c, n: claqueta.n }, { ...claqueta });
     espejo.escribir(sesion);
     return espejo.resumen(sesion);
 }

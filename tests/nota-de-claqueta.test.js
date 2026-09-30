@@ -173,6 +173,15 @@ module.exports = function (t) {
         t.eq(lista[0].ms, T0 + 1500, 'y el `ms` que dejó la fusión no se toca');
     });
 
+    t.test('un paso de campos sobre una claqueta que ya no está no la resucita', () => {
+        const lista = [{ n: 1, ms: T0 + 60000, comentario: '' }];
+        historial.ponerEnLista(lista, { n: 2, ms: T0, comentario: 'lo escrito' },
+            { n: 2, ms: T0, comentario: '' },
+            { campos: ['comentario'], esLaMisma: vivo.mismaClaqueta });
+        t.eq(lista.length, 1, 'no empujó una copia de la que se fue');
+        t.eq(lista[0].ms, T0 + 60000);
+    });
+
     t.test('sin campos sigue siendo saca-y-pone, que es lo que quitar necesita', () => {
         const lista = [{ n: 1, ms: T0, comentario: 'x' }];
         historial.ponerEnLista(lista, { ...lista[0] }, null);
@@ -215,6 +224,48 @@ module.exports = function (t) {
         }
         const xml = fs.readFileSync(estado.archivos.xml, 'utf8');
         t.ok(xml.includes('Cámara 2 arrancó tarde'), 'y el XML del disco la tiene');
+    });
+
+    t.test('con el `ms`, la nota cae en su claqueta aunque la hayan renumerado', () => {
+        // El `change` que sale cuando el repintado SACA el campo trae el `n` del
+        // renglón viejo. Si entretanto entró una claqueta anterior, ese `n` ya
+        // es de otra, y por número la nota se escribía en la equivocada.
+        const dir = carpeta();
+        try {
+            grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 60; i++) grabacion.pcm(Buffer.alloc(8192));
+            const s = grabacion._sesion();
+            const cero = s.estado.ceroMs;
+            const tarde = vivo.anotarClaqueta(s.estado, { ms: cero + 90000, confirmada: true, origen: 'golpe' }).claqueta;
+            t.eq(tarde.n, 1);
+            // Se lee tarde una claqueta que sonó antes, y corre los números.
+            vivo.anotarClaqueta(s.estado, { ms: cero + 30000, confirmada: true, origen: 'golpe,voz' });
+            t.eq(tarde.n, 2, 'la de la nota pasó a ser la 2');
+
+            grabacion.editar({ tipo: 'nota-claqueta', n: 1, ms: cero + 90000, texto: 'la de la nota' });
+            t.eq(tarde.comentario, 'la de la nota', 'fue a la que tiene ese ms');
+            t.eq(s.estado.claquetas.find(c => c.n === 1).comentario, '', 'y no a la que ahora es la 1');
+            t.eq(grabacion.deshacer().que, 'la nota de la claqueta 2', 'deshacer nombra la de verdad');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('y la encuentra aunque la fusión le haya corrido el `ms` desde que se abrió', () => {
+        const dir = carpeta();
+        try {
+            grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            for (let i = 0; i < 60; i++) grabacion.pcm(Buffer.alloc(8192));
+            const s = grabacion._sesion();
+            const cero = s.estado.ceroMs;
+            const puesta = vivo.anotarClaqueta(s.estado, { ms: cero + 40000, confirmada: true, origen: 'editor' }).claqueta;
+            vivo.anotarClaqueta(s.estado, { ms: cero + 39600, confirmada: true, origen: 'golpe,voz' });
+            t.eq(puesta.ms, cero + 39600, 'la fusión la corrió al golpe');
+            grabacion.editar({ tipo: 'nota-claqueta', n: 1, ms: cero + 40000, texto: 'con el ms de antes' });
+            t.eq(puesta.comentario, 'con el ms de antes');
+        } finally {
+            grabacion.apagar();
+        }
     });
 
     t.test('la nota de una claqueta que ya no está no rompe nada', () => {
@@ -305,18 +356,31 @@ module.exports = function (t) {
         t.ok(/va en el marcador del XML/.test(js), 'y dice adónde va lo que se escribe');
     });
 
-    t.test('la fila y su campo se identifican por `ms`, que no se corre', () => {
+    t.test('la fila y su campo se identifican por `ms`, con la tolerancia de la fusión', () => {
+        // Por `ms` exacto, la fusión con el aplauso le corría el `ms` a la
+        // claqueta abierta y el repintado siguiente plegaba la fila a mitad de
+        // la nota: lo que seguía tecleándose caía como atajos.
         const js = leer('src', 'js', 'pantalla-vivo.js');
-        t.ok(/vista\.abierta === `c\$\{c\.ms\}`/.test(js), 'lo abierto se recuerda por ms');
+        t.ok(/const abierta = esLaAbierta\(c\);/.test(js), 'lo abierto se reconoce con tolerancia');
+        t.ok(/if \(abierta\) vista\.abierta = `c\$\{c\.ms\}`;/.test(js), 'y se corre al ms nuevo para seguirla');
+        t.ok(/function esLaAbierta[\s\S]{0,200}mismaClaqueta\(a\.slice\(1\), c\.ms\)/.test(js));
         t.ok(/data-campo="nota-claqueta" data-claqueta="\$\{c\.n\}" data-ms="\$\{c\.ms\}"/.test(js),
-            'el campo lleva los dos: el ms para encontrarlo y el n para el cambio');
-        t.ok(/f\.ms \? `\[data-ms="\$\{f\.ms\}"\]`/.test(js),
-            'y al repintar se vuelve a él por ms');
+            'el campo lleva los dos: el ms para encontrarlo y el n de respaldo');
+        t.ok(/\.find\(el => mismaClaqueta\(el\.dataset\.ms, f\.ms\)\)/.test(js),
+            'y al repintar se vuelve a él con la misma tolerancia');
+    });
+
+    t.test('la ventana usa la misma ventana que el motor para decir «la misma claqueta»', () => {
+        const js = leer('src', 'js', 'pantalla-vivo.js');
+        const m = /const MISMA_CLAQUETA_MS = (\d+);/.exec(js);
+        t.ok(m, 'la ventana tiene su copia del número');
+        t.eq(Number(m[1]), vivo.MISMA_CLAQUETA_MS, 'y es el mismo que el del motor');
     });
 
     t.test('el cambio que sale de la fila es el que el motor entiende', () => {
         const js = leer('src', 'js', 'pantalla-vivo.js');
-        t.ok(/tipo: 'nota-claqueta', n: Number\(claqueta\.dataset\.claqueta\)/.test(js));
+        t.ok(/tipo: 'nota-claqueta',\s*n: Number\(claqueta\.dataset\.claqueta\),\s*ms: Number\(claqueta\.dataset\.ms\)/.test(js),
+            'con el n y el ms');
         const motor = leer('engine', 'cambios-toma.js');
         t.ok(/c\.tipo === 'nota-claqueta'/.test(motor), 'y el motor lo desvía antes de buscar la toma');
     });

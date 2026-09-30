@@ -960,9 +960,13 @@ function recordarFoco() {
 function devolverFoco(f) {
     if (!f) return;
     const donde = f.enAhora ? '#ahora' : '#lista-vivo';
-    const cual = f.ms ? `[data-ms="${f.ms}"]` : `[data-toma="${f.toma}"]`;
-    const campo = document.querySelector(`${donde} [data-campo="${f.campo}"]${cual}`)
-        || document.querySelector(`#vista-vivo [data-campo="${f.campo}"]${cual}`);
+    // El de una claqueta, con la misma tolerancia con que se la despliega: el
+    // `ms` pudo correrse con una fusión desde el repintado anterior.
+    const campo = f.ms
+        ? [...document.querySelectorAll(`#vista-vivo [data-campo="${f.campo}"][data-ms]`)]
+            .find(el => mismaClaqueta(el.dataset.ms, f.ms))
+        : document.querySelector(`${donde} [data-campo="${f.campo}"][data-toma="${f.toma}"]`)
+            || document.querySelector(`#vista-vivo [data-campo="${f.campo}"][data-toma="${f.toma}"]`);
     if (!campo) {
         // El campo se fue: pasa con la nota de la toma abierta cuando «Pausa»
         // la cierra mientras se escribe. La toma sigue en la lista, así que se
@@ -1006,13 +1010,21 @@ function devolverFoco(f) {
  * El número no es estable: una claqueta que se lee tarde y cayó ANTES que esta
  * corre los de todas las de atrás (`renumerar`), y con la fila abierta y una
  * nota a medio escribir eso significaba seguir escribiendo en la claqueta
- * equivocada. El `ms` es con lo que el motor las identifica en el historial
- * (`ponerEnLista`), así que es la misma identidad de los dos lados. El `n` va
- * igual, porque es lo que viaja en el cambio, y sale del renglón ya repintado.
+ * equivocada.
+ *
+ * **Pero no por el `ms` exacto**, porque tampoco es fijo: al fundirse con la
+ * que llega del aplauso, la claqueta se queda con el `ms` del golpe (`fundir`).
+ * Pasa cuando la K se aprieta antes de que el aplauso termine de oírse, que es
+ * justo cuando alguien le escribe una nota a la claqueta recién puesta; con el
+ * `ms` exacto, el repintado siguiente plegaba la fila a mitad de la nota y lo
+ * que seguía tecleándose caía como atajos. Se reconoce con la misma ventana
+ * con que el motor decide que dos entradas son la misma (`mismaClaqueta`), y
+ * `vista.abierta` se corre al `ms` nuevo para seguirla.
  */
 function filaClaqueta(c, fps) {
     const est = estados.deClaqueta(c);
-    const abierta = vista.abierta === `c${c.ms}`;
+    const abierta = esLaAbierta(c);
+    if (abierta) vista.abierta = `c${c.ms}`;
     // La nota tapa la frase, igual que en una toma la nota tapa las primeras
     // palabras: lo que escribió una persona vale más que lo que se oyó.
     const nota = loQueSeLee(c);
@@ -1035,6 +1047,23 @@ function filaClaqueta(c, fps) {
       </div>
       ${abierta ? cuerpoClaqueta(c) : ''}
     </div>`;
+}
+
+/**
+ * Dos entradas a menos de esto son la misma claqueta. Es `MISMA_CLAQUETA_MS` de
+ * `engine/notas-vivo.js`, que la ventana no puede importar; una prueba compara
+ * los dos números (`tests/nota-de-claqueta.test.js`).
+ */
+const MISMA_CLAQUETA_MS = 5000;
+
+function mismaClaqueta(msA, msB) {
+    return Math.abs(Number(msA) - Number(msB)) < MISMA_CLAQUETA_MS;
+}
+
+/** ¿Es esta la claqueta desplegada, aunque la fusión le haya corrido el `ms`? */
+function esLaAbierta(c) {
+    const a = vista.abierta;
+    return typeof a === 'string' && a[0] === 'c' && mismaClaqueta(a.slice(1), c.ms);
 }
 
 /** Lo que se lee en el renglón plegado: la nota si la hay, y si no lo que se oyó. */
@@ -1299,10 +1328,15 @@ async function guardarComentario() {
 async function alCambiar(e) {
     const claqueta = e.target.closest('[data-campo="nota-claqueta"]');
     if (claqueta) {
-        // El `n` sale del renglón como esté AHORA: si mientras se escribía entró
-        // una claqueta más vieja y las renumeró, el repintado ya lo corrigió y
-        // `devolverFoco` volvió al mismo campo por su `ms` (ver `filaClaqueta`).
-        await editar({ tipo: 'nota-claqueta', n: Number(claqueta.dataset.claqueta), texto: claqueta.value });
+        // Con el `ms` además del `n`, y el motor busca por el `ms`: este `change`
+        // también sale cuando el repintado SACA el campo con texto sin guardar,
+        // y ahí el `n` del renglón viejo puede ser de antes de una renumeración.
+        await editar({
+            tipo: 'nota-claqueta',
+            n: Number(claqueta.dataset.claqueta),
+            ms: Number(claqueta.dataset.ms),
+            texto: claqueta.value
+        });
         return;
     }
     const campo = e.target.closest('[data-campo="nota"]');
