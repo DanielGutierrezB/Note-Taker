@@ -29,7 +29,7 @@ const CLAQUETA = /laque|cacle/i;
 
 const MINIMO_DE_CUENTA = 2;
 const VALOR = { 3: 3, tres: 3, 2: 2, dos: 2, 1: 1, uno: 1 };
-const SILENCIO_TRAS_PAUSA_SEC = 1;
+export const SILENCIO_TRAS_PAUSA_SEC = 1;
 
 /**
  * Cuánto se separan la palabra y el aplauso de la misma claqueta.
@@ -65,7 +65,7 @@ function valorDeCuenta(texto) {
  * cerrada, y la marca se corrige sola.
  *
  * @param {Array} lista [{t, texto, hasta}] en orden
- * @returns {Array} [{tipo:'abre'|'cierra'|'claqueta'|'pausa-corta', desde, hasta}]
+ * @returns {Array} [{tipo:'abre'|'cierra'|'claqueta'|'pausa-corta', desde, hasta, huecoSec?}]
  */
 export function senalesEn(lista) {
     const ws = lista || [];
@@ -90,7 +90,11 @@ export function senalesEn(lista) {
             salida.push({
                 tipo: hueco >= SILENCIO_TRAS_PAUSA_SEC ? 'cierra' : 'pausa-corta',
                 desde: i,
-                hasta: i
+                hasta: i,
+                // El hueco medido, para poder decirlo. `null` cuando todavía no
+                // hay palabra detrás: ahí no se midió nada, y poner 0 sería
+                // decir que el profesor siguió hablando sin respirar.
+                huecoSec: siguiente ? Math.round(hueco * 100) / 100 : null
             });
             continue;
         }
@@ -115,12 +119,15 @@ export function senalesEn(lista) {
 }
 
 /**
- * Índice de palabra → qué señal es, para pintar.
+ * Índice de palabra → la señal que es, para pintar.
  *
  * Los cortes de una toma larga (`recortarAbierta`) parten la tirada: a los dos
  * lados de un «… 900 palabras más …» no hay ninguna relación, y una «Pausa»
  * justo antes del corte tendría como palabra siguiente una de veinte minutos
  * después. Se busca por tramos y se devuelven los índices de la lista entera.
+ *
+ * El valor es la señal entera y no su tipo, porque la «Pausa» que no cerró trae
+ * además su hueco y es lo único que explica por qué no cerró (`pistaDe`).
  */
 export function porPalabra(lista) {
     const ws = lista || [];
@@ -137,7 +144,7 @@ export function porPalabra(lista) {
 
     for (const [a, b] of tramos) {
         for (const s of senalesEn(ws.slice(a, b))) {
-            for (let i = s.desde; i <= s.hasta; i++) marcas.set(a + i, s.tipo);
+            for (let i = s.desde; i <= s.hasta; i++) marcas.set(a + i, s);
         }
     }
     return marcas;
@@ -150,3 +157,22 @@ export const QUE_HACE = {
     claqueta: 'Acá la app anota una claqueta',
     'pausa-corta': '«Pausa» sin el segundo de silencio detrás: la app no cerró la toma'
 };
+
+/**
+ * La pista de una palabra marcada, con el dato que le falta a la plaquita.
+ *
+ * La plaquita hueca ya dice que la app no hizo nada, pero no CUÁNTO faltó, y
+ * ese número es el que decide qué pasó: con 0,3 s el profesor siguió hablando y
+ * la toma tenía que seguir abierta; con 0,9 s el umbral está pidiendo demasiado
+ * y hay que bajarlo. El motor lo mide y lo anota en el registro
+ * (`senal.pausa-corta`), así que hasta ahora había que abrir el diario al día
+ * siguiente para saber de cuánto fue; acá está al pasar el mouse por encima.
+ *
+ * Sin palabra detrás no se dice nada: no hay hueco medido todavía.
+ */
+export function pistaDe(senal) {
+    const base = QUE_HACE[senal && senal.tipo] || '';
+    if (!senal || senal.tipo !== 'pausa-corta' || senal.huecoSec == null) return base;
+    const hueco = String(senal.huecoSec).replace('.', ',');
+    return `${base}. El hueco fue de ${hueco} s y hace falta ${SILENCIO_TRAS_PAUSA_SEC}`;
+}

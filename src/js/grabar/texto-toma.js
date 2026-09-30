@@ -85,8 +85,8 @@ function palabra(w, comentarios, senal) {
         s.classList.add('es-comentada');
     }
     if (senal) {
-        s.dataset.senal = senal;
-        s.title = senales.QUE_HACE[senal] || '';
+        s.dataset.senal = senal.tipo;
+        s.title = senales.pistaDe(senal);
     }
     return s;
 }

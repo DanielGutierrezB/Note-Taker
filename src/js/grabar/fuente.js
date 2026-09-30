@@ -22,7 +22,7 @@ export const ZOOM = { id: 'app:zoom', nombre: 'Audio de Zoom (la llamada)', tipo
 
 let tipo = null;
 let info = { dispositivo: null, sampleRate: 48000, canales: 1 };
-let avisos = { alNivel: () => {}, alCaerse: () => {}, alVolver: () => {} };
+let avisos = { alNivel: () => {}, alCaerse: () => {}, alVolver: () => {}, alRomperse: () => {} };
 let escuchandoZoom = false;
 
 // El canal de Zoom se escucha una sola vez: `onAudioApp` agrega un oyente cada
@@ -43,6 +43,15 @@ function engancharZoom() {
             avisar(`No llegó audio de Zoom por ${aviso.segundos} s: se completó con silencio ` +
                 'para que el WAV no se atrase contra la cámara.', 'error');
         }
+        // Y este no lo resuelve nadie. El pedazo que reventó al procesarse NO
+        // se escribió: al WAV le falta ese trozo y todo lo que viene detrás
+        // queda corrido contra la cámara. Es lo peor que puede pasar en medio
+        // de una clase y hasta ahora no se veía en ninguna parte — el ayudante
+        // seguía vivo, el medidor seguía moviéndose y el editor se enteraba al
+        // abrir el XML. No va a una tostada y nada más: va al estado del audio,
+        // que es lo que se queda a la vista (ver `alRomperse` en
+        // `pantalla-preparar.js` y `deSesion` en `estados.js`).
+        if (aviso.tipo === 'error') avisos.alRomperse(aviso.mensaje);
     });
 }
 
@@ -71,7 +80,10 @@ export async function entradas() {
  */
 export async function abrir(entrada, losAvisos) {
     await cerrar();
-    avisos = { alNivel: () => {}, alCaerse: () => {}, alVolver: () => {}, ...(losAvisos || {}) };
+    avisos = {
+        alNivel: () => {}, alCaerse: () => {}, alVolver: () => {}, alRomperse: () => {},
+        ...(losAvisos || {})
+    };
 
     if (entrada && entrada.tipo === 'app') {
         engancharZoom();

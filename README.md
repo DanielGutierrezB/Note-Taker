@@ -67,7 +67,8 @@ y en texto corrido no se distingue del resto. La marca es una plaquita, no un
 color —al lado ya hablan los cinco colores de vista, el IN azul y el OUT rojo—
 y viene en dos formas: **rellena** cuando la app actuó con esa palabra, y
 **hueca** cuando la oyó y no hizo nada, que hoy es el caso de un "Pausa" sin el
-segundo de silencio detrás. La regla es la misma del motor y no se estima:
+segundo de silencio detrás —y la pista de esa dice de cuánto fue el hueco que
+faltó. La regla es la misma del motor y no se estima:
 `src/js/grabar/senales.js` la tiene escrita para la ventana, y una prueba
 compara las dos expresiones letra por letra.
 
@@ -115,9 +116,11 @@ paraba, y la toma no cerraba: había que cerrarla a mano. Desde el comienzo, lo
 único que el hueco mide es cuánto tardó en llegar la palabra siguiente. Cuando
 «Pausa» es lo último que se oyó todavía se mide desde el final, porque ahí la
 pregunta es otra: si ya pasó el segundo de silencio. Una «Pausa» que no cierra
-queda anotada en el registro con su hueco (`senal.pausa-corta`), que es lo que
-deja saber al día siguiente si el umbral está mal puesto o si el profesor siguió
-hablando.
+queda anotada en el registro con su hueco (`senal.pausa-corta`), y el hueco se
+dice también en la pista de la plaquita hueca del transcript: es el número que
+decide qué pasó —con 0,3 s el profesor siguió hablando y la toma tenía que
+seguir abierta, con 0,9 el umbral está pidiendo demasiado— y hasta ahora había
+que abrir el diario al día siguiente para saberlo.
 
 **Un conteo adentro de una toma abierta no la parte.** Un profesor explicando
 "…porque dije 3, 2, 1" dejaba una toma huérfana de tres segundos y la buena al
@@ -525,6 +528,13 @@ entrega siempre 48 kHz.
 - La sesión compara cada segundo lo grabado contra el reloj (`vigilarDeriva`).
   Si se atrasa más de dos segundos, lo avisa. Es la pregunta que habría
   encontrado el error del doble de velocidad en el primer minuto.
+- Y si el procesado de un pedazo revienta —el disco lleno es el caso—, ese
+  pedazo no llegó al WAV y todo lo que viene detrás queda corrido contra la
+  cámara. La barra pasa a **`audio perdido`** en rojo y no se borra sola:
+  cuántos pedazos se perdieron y por qué están en la explicación del renglón, y
+  el aviso sale una sola vez porque esto puede fallar doce veces por segundo.
+  Antes el motor lo decía y no lo recibía nadie: el ayudante seguía vivo, el
+  medidor seguía moviéndose y el agujero se descubría al abrir el XML.
 
 La primera versión de esta red medía la tasa por el reloj y remuestreaba si no
 coincidía. Una revisión mostró que no distinguía "no llegó nada un rato" de

@@ -412,6 +412,10 @@ function pintarBarra() {
     $('#vivo-cortada').textContent = fmt.relojCorto(segundosCortados());
     if (!terminando) {
         $('#vivo-estado').textContent = est.palabra;
+        // Lo que la palabra no puede decir en dos palabras. Hasta ahora este
+        // renglón era el único estado de la app sin su explicación al lado, y
+        // «audio perdido» es justo el que no se entiende solo.
+        $('#vivo-estado').title = est.porque || '';
         $('#vivo-estado').style.color =
             est.clave === 'sin audio' ? 'var(--error)'
                 : (est.clave === 'abierta' || est.clave === 'releyendo' ? 'var(--accent)' : 'var(--ok)');

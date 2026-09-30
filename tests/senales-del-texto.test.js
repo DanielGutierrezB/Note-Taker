@@ -39,7 +39,7 @@ module.exports = async t => {
     /** Los tipos por palabra, para poder escribir la expectativa de un tirón. */
     const marcas = ws => {
         const m = senales.porPalabra(ws);
-        return ws.map((w, i) => m.get(i) || null);
+        return ws.map((w, i) => (m.get(i) || {}).tipo || null);
     };
 
     t.group('señales · el conteo que abre');
@@ -125,7 +125,7 @@ module.exports = async t => {
         const antes = palabras('tres dos uno');
         const dentro = palabras('Hola y bienvenidos');
         const m = senales.porPalabra(antes.concat(dentro));
-        t.deep([0, 1, 2].map(i => m.get(i)), ['abre', 'abre', 'abre']);
+        t.deep([0, 1, 2].map(i => m.get(i).tipo), ['abre', 'abre', 'abre']);
         t.eq(m.get(3), undefined, 'lo de la toma no se marca');
     });
 
@@ -135,7 +135,7 @@ module.exports = async t => {
         const ws = palabras('y listo Pausa.', 420)
             .concat([{ corte: 900 }], palabras('después de todo eso', 420));
         const m = senales.porPalabra(ws);
-        t.eq(m.get(2), 'pausa-corta', 'no se le cree al otro lado del corte');
+        t.eq(m.get(2).tipo, 'pausa-corta', 'no se le cree al otro lado del corte');
         t.eq(m.get(3), undefined, 'el corte no es una palabra');
     });
 
@@ -147,7 +147,38 @@ module.exports = async t => {
     t.test('cada tipo de señal dice qué hace, para la pista de la palabra', () => {
         for (const tipo of ['abre', 'cierra', 'claqueta', 'pausa-corta']) {
             t.ok(senales.QUE_HACE[tipo], `${tipo} tiene pista`);
+            t.ok(senales.pistaDe({ tipo }).startsWith(senales.QUE_HACE[tipo]), `${tipo} la usa`);
         }
+    });
+
+    t.test('la «Pausa» que no cerró dice de cuánto fue el hueco', () => {
+        // El dato lo mide la ventana y lo tiraba: la plaquita hueca decía que
+        // la app no hizo nada, y no cuánto faltó. Con 0,3 s el profesor siguió
+        // hablando y la toma tenía que seguir abierta; con 0,9 el umbral está
+        // pidiendo demasiado. Hasta ahora eso solo estaba en el registro.
+        const ws = palabras('hacemos una pausa en el flujo', 420);
+        const senal = senales.porPalabra(ws).get(2);
+        t.eq(senal.tipo, 'pausa-corta');
+        t.eq(senal.huecoSec, 0.42, 'el hueco medido, redondeado como en el motor');
+        const pista = senales.pistaDe(senal);
+        t.ok(/0,42 s/.test(pista), 'con coma, que es como se escriben acá los decimales');
+        t.ok(new RegExp(`hace falta ${senales.SILENCIO_TRAS_PAUSA_SEC}$`).test(pista),
+            'y contra cuánto se lo compara');
+    });
+
+    t.test('sin palabra detrás no se inventa un hueco de cero', () => {
+        // Ahí no se midió nada todavía: decir «el hueco fue de 0 s» sería decir
+        // que el profesor siguió hablando sin respirar.
+        const senal = senales.porPalabra(palabras('y listo Pausa.')).get(2);
+        t.eq(senal.tipo, 'pausa-corta');
+        t.eq(senal.huecoSec, null, 'no hay hueco que medir');
+        t.eq(senales.pistaDe(senal), senales.QUE_HACE['pausa-corta'], 'y no se dice nada de más');
+    });
+
+    t.test('la palabra lleva el tipo en el atributo y la pista entera en el título', () => {
+        const codigo = leer('src', 'js', 'grabar', 'texto-toma.js');
+        t.ok(/s\.dataset\.senal = senal\.tipo/.test(codigo), 'el CSS sigue pintando por tipo');
+        t.ok(/s\.title = senales\.pistaDe\(senal\)/.test(codigo), 'y el hueco llega al título');
     });
 
     t.group('señales · la ventana y el motor dicen lo mismo');

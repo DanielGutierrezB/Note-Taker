@@ -120,6 +120,25 @@ export function dePalmada(palmada) {
 export function deSesion(estado, audio) {
     if (!estado) return { clave: 'terminada', palabra: 'sin sesión' };
     if (estado.terminando) return { clave: 'releyendo', palabra: 'terminando' };
+    // Antes que «sin audio», y es a propósito: una entrada que se cae se nota
+    // —el medidor se planta— y esto no se nota en nada. El audio sigue
+    // llegando, el medidor sigue moviéndose, y los pedazos que reventaron al
+    // procesarse no llegaron al WAV. Se queda puesto hasta que la sesión
+    // termine aunque deje de fallar, porque el agujero ya está hecho y lo que
+    // hay que saber al entregar es que está.
+    if (audio && audio.roto) {
+        const n = audio.roto.veces || 1;
+        return {
+            clave: 'sin audio',
+            palabra: 'audio perdido',
+            porque: (n === 1
+                ? 'Un pedazo del audio no se pudo procesar y no llegó al WAV'
+                : `${n} pedazos del audio no se pudieron procesar y no llegaron al WAV`) +
+                ': lo que falta no está, y todo lo que viene después queda corrido contra la ' +
+                `cámara. Motivo: ${audio.roto.mensaje}. Si sigue pasando, terminá la sesión: ` +
+                'se puede reanudar en otro WAV y el XML sigue siendo el mismo.'
+        };
+    }
     if (audio && audio.caido) return { clave: 'sin audio', palabra: 'sin audio' };
     if (estado.abierta != null) return { clave: 'abierta', palabra: 'toma abierta' };
     if (estado.releyendo) {

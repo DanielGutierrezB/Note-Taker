@@ -30,11 +30,17 @@ let reanudar = null;
 /**
  * Lo que se sabe de la entrada elegida. `clase` es qué tipo de entrada es
  * (`estados.claseDeEntrada`), `aceptado` que alguien eligió usar un micrófono
- * a sabiendas, y `error` el motivo cuando no se pudo abrir.
+ * a sabiendas, `error` el motivo cuando no se pudo abrir, y `roto` el audio que
+ * se perdió en medio de la grabación (`alRomperse`, más abajo).
+ *
+ * **Este objeto lo mira también la pantalla de En vivo**, que lo recibe tal
+ * cual en `app.irAVivo` y lo lee en cada repintado de la barra: la entrada la
+ * abre y la sigue esta pantalla, así que lo que le pase durante la clase entra
+ * por acá.
  */
 const audio = {
     abierto: false, caido: false, pico: 0, dispositivo: null,
-    clase: null, aceptado: false, error: null
+    clase: null, aceptado: false, error: null, roto: null
 };
 
 /** El pico decae solo: sin esto, un golpe deja el medidor arriba para siempre. */
@@ -85,7 +91,7 @@ async function releerEntradas() {
 
 export async function salir() {
     await fuente.cerrar();
-    Object.assign(audio, { abierto: false, caido: false, pico: 0, error: null });
+    Object.assign(audio, { abierto: false, caido: false, pico: 0, error: null, roto: null });
 }
 
 function pintar() {
@@ -257,13 +263,17 @@ async function abrirEntrada(id) {
     const entrada = entradas.find(d => d.id === id) || (id === fuente.ZOOM.id ? fuente.ZOOM : null);
     if (!entrada) {
         await fuente.cerrar();
-        Object.assign(audio, { abierto: false, pico: 0, dispositivo: null, clase: null, error: null });
+        Object.assign(audio, {
+            abierto: false, pico: 0, dispositivo: null, clase: null, error: null, roto: null
+        });
         return;
     }
     // Cada entrada nueva vuelve a preguntar: haber aceptado usar un micrófono
-    // no vale para el siguiente que se elija.
+    // no vale para el siguiente que se elija. Y lo que se perdió se perdió con
+    // la entrada anterior: esta arranca limpia.
     Object.assign(audio, {
-        clase: estados.claseDeEntrada(entrada), aceptado: false, error: null, caido: false, pico: 0
+        clase: estados.claseDeEntrada(entrada), aceptado: false, error: null,
+        caido: false, pico: 0, roto: null
     });
     ultimoPico = 0;
     ultimoListo = null;
@@ -288,7 +298,27 @@ async function abrirEntrada(id) {
         },
         alCaerse: () => { audio.caido = true; pintar(); },
         // La escucha de Zoom vuelve sola de una traba o de un rearme.
-        alVolver: () => { audio.caido = false; pintar(); }
+        alVolver: () => { audio.caido = false; pintar(); },
+        /**
+         * El procesado de un pedazo de PCM reventó en medio de la grabación.
+         *
+         * Solo puede pasar grabando —los pedazos se procesan recién desde
+         * «Iniciar»—, así que esto se ve en la barra de En vivo y no acá. Se
+         * cuentan porque puede reventar con cada pedazo, doce veces por
+         * segundo, y saber si fue uno o fueron mil es la diferencia entre un
+         * tropiezo y una clase perdida.
+         *
+         * **La tostada sale una sola vez.** Doce por segundo no son un aviso
+         * sino una pared, y lo que queda a la vista después es la pastilla.
+         */
+        alRomperse: mensaje => {
+            const veces = (audio.roto ? audio.roto.veces : 0) + 1;
+            audio.roto = { mensaje, veces };
+            if (veces === 1) {
+                avisar(`Se está perdiendo audio de la grabación: ${mensaje}`, 'error');
+            }
+            pintar();
+        }
     });
     if (!r.ok) {
         // El motivo va al renglón y no a un aviso que se va: es lo que hay que

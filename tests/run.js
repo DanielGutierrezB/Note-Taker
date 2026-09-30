@@ -39,7 +39,8 @@ const FILES = [
     'vivo-interfaz.test.js',
     'senales-del-texto.test.js',
     'menu-de-palabra.test.js',
-    'aviso-de-palmada.test.js'
+    'aviso-de-palmada.test.js',
+    'audio-que-se-rompe.test.js'
 ];
 
 const filter = process.argv[2] || '';

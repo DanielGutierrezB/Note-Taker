@@ -87,8 +87,11 @@ function registrar({ ipcMain, app, send, anotar }) {
             avisar: aviso => {
                 // Lo que le pasa a la escucha en medio de la clase va al
                 // registro siempre: es lo que explica un WAV con silencios
-                // puestos, una tasa que cambió o una escucha que se rearmó.
-                if (aviso && ['ayudante', 'relleno', 'rearmada', 'caido', 'vuelve'].includes(aviso.tipo)) {
+                // puestos, una tasa que cambió o una escucha que se rearmó. Y
+                // `error` más que ninguno: es un pedazo de audio que no se
+                // escribió, y al día siguiente es lo único que explica por qué
+                // el WAV es más corto que la clase.
+                if (aviso && ['ayudante', 'relleno', 'rearmada', 'caido', 'vuelve', 'error'].includes(aviso.tipo)) {
                     anotar(`audio-app.${aviso.tipo}`, aviso);
                 }
                 send('audio-app', aviso);
