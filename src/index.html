@@ -152,6 +152,14 @@
         <button class="atajo" type="button" data-hace="deshacer" id="atajo-deshacer">
           <kbd>⌘Z</kbd><span>deshacer</span>
         </button>
+        <!-- La palmada que se oyó y todavía no es una claqueta.
+             Va en esta fila, que es la de la K —lo que hay que apretar si no se
+             confirma—, y AL FINAL de los atajos y no al lado de la K por una
+             razón medida: puesta antes, aparecer corría 136 px a la derecha a
+             todos los atajos siguientes, y al desaparecer un clic apuntado a
+             «abrir toma» caía en el de las vistas. Acá lo único que cede es el
+             hueco elástico y la ruta, que ya se recorta sola. -->
+        <span class="pastilla" id="vivo-palmada" hidden></span>
         <span class="crece"></span>
         <span id="vivo-donde"></span>
       </div>
@@ -194,6 +202,12 @@
     </div>
   </section>
 </div>
+
+<!-- ── El menú del clic derecho sobre una palabra ─────────────────────
+     Poner el IN o el OUT en esa palabra, que es lo mismo que arrastrar la línea
+     hasta ahí. Vive acá afuera y no adentro de la tarjeta porque «Ahora» se
+     rehace cada segundo y se lo llevaría puesto. Lo llena `pantalla-vivo.js`. -->
+<div class="menu-palabra" id="menu-palabra" role="menu" hidden></div>
 
 <!-- ── Ajustes ────────────────────────────────────────────────────────
      Lo que no cambia durante una clase. El fps está acá y no en Preparar

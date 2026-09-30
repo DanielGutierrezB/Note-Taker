@@ -206,6 +206,15 @@ window.AudioWorkletNode = class {
 
 const espera = ms => new Promise(r => setTimeout(r, ms));
 
+/**
+ * Empujarle a la ventana un aviso del motor, desde afuera.
+ *
+ * Es la única manera de comprobar lo que la ventana hace con lo que LLEGA y no
+ * con lo que pide: que un estado nuevo repinte, que el golpe de una palmada se
+ * vea, y que con un menú abierto el texto de debajo se quede quieto.
+ */
+window.maqueta = { avisar: a => { for (const cb of avisos) cb(a); } };
+
 async function aplicar() {
     // Se espera el arranque de verdad y no un rato al azar: `arrancar` lee los
     // ajustes y lista la carpeta, así que empujar la app antes de que termine
@@ -225,12 +234,14 @@ async function aplicar() {
         return;
     }
 
-    if (hay('en-vivo') || hay('toma-abierta') || hay('releyendo') || hay('sin-audio')) {
+    if (hay('en-vivo') || hay('toma-abierta') || hay('releyendo') || hay('sin-audio') ||
+        hay('palmada') || hay('palmada-vencida')) {
         const estado = estadoEnVivo(estadoDeLaClase());
         vivo = estado;
         app.irAVivo(estado, { abierto: true, caido: hay('sin-audio'), pico: 0.42 });
         // Una toma cerrada desplegada: es donde se ven los dos bordes y las orillas.
         if (hay('desplegada')) document.querySelector('#lista-vivo [data-hace="plegar"][data-toma="1"]').click();
+        if (hay('palmada') || hay('palmada-vencida')) await conPalmada(estado);
         return;
     }
 
@@ -241,6 +252,24 @@ async function aplicar() {
 
     if (hay('ajustes')) app.verAjustes();
     if (hay('diagnostico')) app.verDiagnostico();
+}
+
+/**
+ * Una palmada oída, en sus dos momentos.
+ *
+ * Entra por donde entra de verdad —el aviso `golpe` del motor— y vence por donde
+ * vence de verdad: con el reloj del audio grabado, que es un estado más con más
+ * `segundos`. Nada de tocar la pastilla a mano, que es lo que habría mostrado
+ * una pastilla linda encima de una cuenta que no funciona.
+ */
+async function conPalmada(estado) {
+    const palmadaMs = estado.ceroMs + estado.segundos * 1000 - 400;
+    for (const cb of avisos) cb({ tipo: 'golpe', ms: palmadaMs });
+    if (!hay('palmada-vencida')) return;
+    // Los 6 s de audio que al motor le faltan para poder leer, más los 6 de la
+    // pasada de Whisper. Pasados, nadie confirmó nada y eso hay que decirlo.
+    await espera(50);
+    for (const cb of avisos) cb({ tipo: 'estado', estado: { ...estado, segundos: estado.segundos + 13 } });
 }
 
 /**

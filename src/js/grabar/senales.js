@@ -31,6 +31,16 @@ const MINIMO_DE_CUENTA = 2;
 const VALOR = { 3: 3, tres: 3, 2: 2, dos: 2, 1: 1, uno: 1 };
 const SILENCIO_TRAS_PAUSA_SEC = 1;
 
+/**
+ * Cuánto se separan la palabra y el aplauso de la misma claqueta.
+ *
+ * Copiada del motor por lo mismo que las de arriba, y la usa el aviso de la
+ * palmada: son los segundos de audio que el motor necesita DETRÁS del aplauso
+ * para leer lo que se dijo, así que hasta que no pasen no puede haber
+ * confirmación y la pantalla no tiene nada que reprocharle.
+ */
+export const PALABRA_Y_APLAUSO_MS = 6000;
+
 function limpio(texto) {
     return String(texto == null ? '' : texto).trim();
 }

@@ -164,6 +164,40 @@ function malParada(texto, b) {
     return true;
 }
 
+/**
+ * Qué bordes se pueden poner en una palabra, sin arrastrar nada.
+ *
+ * Es lo que necesita el menú del clic derecho, y vive acá y no en la pantalla
+ * porque son las mismas reglas del arrastre y salen del mismo sitio: el orden de
+ * los hermanos. Contesta también el `ms` de cada uno, que es el que `soltar`
+ * calcularía si la línea se hubiera arrastrado hasta ahí, así que las dos
+ * maneras de mover un borde le piden al motor exactamente lo mismo.
+ *
+ *   · **El IN va DELANTE de la palabra** y ella queda adentro: su `ms` es el de
+ *     la palabra. Alcanza con que esté antes del OUT — una toma de una palabra
+ *     sola es legal, es lo que `malParada` deja pasar.
+ *   · **El OUT va DETRÁS** y la palabra es la última de la toma: su `ms` es el
+ *     de la palabra SIGUIENTE, que es donde apoya la pared. Si no hay
+ *     siguiente no se puede: no hay pared, y el arrastre tampoco puede.
+ *   · **Poner un borde donde ya está no se ofrece**: no cambiaría nada y
+ *     dejaría un paso de deshacer que no deshace nada.
+ */
+export function bordesQuePuede(texto, w) {
+    const lineaIn = texto.querySelector('.borde.es-in');
+    const lineaOut = texto.querySelector('.borde.es-out');
+    const antes = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const siguiente = palabraDespuesDe(w);
+    const puede = [];
+    if (lineaIn && (!lineaOut || antes(w, lineaOut)) && palabraDespuesDe(lineaIn) !== w) {
+        puede.push({ borde: 'in', ms: Number(w.dataset.t) });
+    }
+    if (lineaIn && lineaOut && siguiente && antes(lineaIn, w) &&
+        palabraDespuesDe(lineaOut) !== siguiente) {
+        puede.push({ borde: 'out', ms: Number(siguiente.dataset.t) });
+    }
+    return puede;
+}
+
 /** Cuánto se desplaza el texto por movimiento cuando el puntero está en un borde. */
 const PASO_DE_SCROLL = 14;
 

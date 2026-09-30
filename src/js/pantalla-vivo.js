@@ -33,6 +33,7 @@ import * as estados from './estados.js';
 import * as fuente from './grabar/fuente.js';
 import { mostrador } from './grabar/turnos.js';
 import * as texto from './grabar/texto-toma.js';
+import { PALABRA_Y_APLAUSO_MS } from './grabar/senales.js';
 import { estiloDeVista } from './colores.js';
 
 let app = null;
@@ -119,6 +120,17 @@ export function conectar(contexto) {
     // Seleccionar un pedazo del texto de una toma abre el campo para comentarlo.
     $('#ahora').addEventListener('mouseup', alSeleccionar);
     $('#lista-vivo').addEventListener('mouseup', alSeleccionar);
+    // Y el clic derecho sobre UNA palabra pone ahí el IN o el OUT. En la
+    // pantalla entera para que el clic derecho en cualquier otro lado también
+    // cierre el menú, y en el documento para que lo cierre el de afuera.
+    $('#vista-vivo').addEventListener('contextmenu', alClicDerecho);
+    $('#menu-palabra').addEventListener('click', alClic);
+    document.addEventListener('pointerdown', e => {
+        if (menuPalabra && !e.target.closest('#menu-palabra')) cerrarMenuDePalabra();
+    }, true);
+    // La ventana se fue a otro lado: un menú abierto encima de una pantalla que
+    // ya no se está mirando, y con el texto congelado detrás, no sirve a nadie.
+    window.addEventListener('blur', cerrarMenuDePalabra);
 
     $('#btn-compacto').addEventListener('click', () => {
         vista.compacto = !vista.compacto;
@@ -185,6 +197,9 @@ export function ver(primerEstado, elAudio) {
     vista.abierta = null;
     vista.elegida = null;
     vista.comentando = null;
+    // Una palmada de la sesión anterior no dice nada de esta.
+    palmada = null;
+    pintarPalmada();
     ultimoAvisoMs = Date.now();
     verVista('vista-vivo');
     pintar();
@@ -202,10 +217,92 @@ function alAviso(aviso) {
         return;
     }
     if (aviso.tipo === 'claqueta') {
+        // Cualquier claqueta anotada resuelve la palmada que estaba esperando:
+        // la manual también, porque el motor funde las dos cuando caen juntas.
+        palmada = null;
+        pintarPalmada();
         avisar(`Claqueta ${aviso.claqueta} anotada (${aviso.por === 'golpe' ? 'aplauso' : 'voz'}).`);
         return;
     }
+    if (aviso.tipo === 'golpe') {
+        palmada = { ms: aviso.ms, sinConfirmar: false, dicho: false };
+        pintarPalmada();
+        return;
+    }
     if (aviso.tipo === 'error') avisar(aviso.mensaje, 'error');
+}
+
+/* ─── La palmada que se oyó y todavía no es una claqueta ────────────────── */
+
+/**
+ * La última palmada sin resolver, o null.
+ *
+ * Es una sola y la nueva reemplaza a la vieja: dos palmadas seguidas son la
+ * misma claqueta para el motor (`MISMA_CLAQUETA_MS`), y una lista de palmadas
+ * en la barra sería ruido justo cuando hay que mirar al profesor.
+ */
+let palmada = null;
+
+/**
+ * Cuánto se le da al motor para contestar, después de tener el audio.
+ *
+ * El motor no puede confirmar antes de `PALABRA_Y_APLAUSO_MS`: le hace falta
+ * ese audio de DESPUÉS del aplauso para leer si se dijo la palabra. Recién
+ * cuando lo tiene empieza a leer, y eso es una pasada de Whisper sobre doce
+ * segundos. Estos seis son para esa pasada, y se cuentan en tiempo de audio
+ * grabado y no de reloj: si el audio se atrasa —Zoom que tartamudea, la máquina
+ * ocupada— el aviso espera lo que haga falta en vez de acusar al motor de algo
+ * que todavía no pudo hacer.
+ */
+const LECTURA_DE_PALMADA_MS = 6000;
+
+/**
+ * ¿Ya se le puede decir al editor que esa palmada no se confirmó?
+ *
+ * Se mide con el audio que el motor tiene grabado, que es el mismo reloj con el
+ * que él decide cuándo leer (`grabadoHastaMs` en `engine/grabacion.js`).
+ */
+function palmadaVencida() {
+    if (!palmada || palmada.sinConfirmar || !estado) return false;
+    const grabadoHasta = estado.ceroMs + (estado.segundos || 0) * 1000;
+    return grabadoHasta >= palmada.ms + PALABRA_Y_APLAUSO_MS + LECTURA_DE_PALMADA_MS;
+}
+
+/**
+ * La pastilla de la palmada, en sus dos estados.
+ *
+ * Está en la fila de los atajos —la de la K, que es lo que hay que apretar si no
+ * se confirma— y no en la de arriba, que a 900 px no tiene un pixel libre. Su
+ * sitio exacto dentro de la fila está explicado en el HTML: aparecer no le puede
+ * mover el suyo a ningún atajo.
+ *
+ * **No se puede apretar.** Sería una tercera puerta para lo mismo, y la K y el
+ * botón de Claqueta ya están los dos a la vista.
+ *
+ * Que no se confirme NO se borra solo. Es la verdad de ese momento —«la última
+ * palmada que oí no llegó a ser claqueta»— y es exactamente el diagnóstico que
+ * le faltaba al editor cuando dijo «aún no está reconociendo la claqueta». Se
+ * va cuando se anota una claqueta o cuando llega otra palmada.
+ */
+function pintarPalmada() {
+    const chapa = $('#vivo-palmada');
+    if (palmadaVencida()) {
+        palmada.sinConfirmar = true;
+        // Dicho una vez y en rojo, además de la pastilla: es el espejo exacto de
+        // «se dijo claqueta pero no se oyó el aplauso», y las dos mitades del
+        // mismo problema tienen que avisar igual.
+        if (!palmada.dicho) {
+            palmada.dicho = true;
+            avisar('Se oyó una palmada y no se leyó «claqueta» alrededor: no se anotó ninguna. ' +
+                'Si fue una claqueta, apretá K.', 'error');
+        }
+    }
+    const est = estados.dePalmada(palmada);
+    chapa.hidden = !est;
+    if (!est) return;
+    chapa.dataset.estado = est.clave;
+    chapa.textContent = est.palabra;
+    chapa.title = est.porque;
 }
 
 /** Lo que pasó solo se dice; lo que el editor hizo ya lo vio hacer. */
@@ -273,11 +370,18 @@ function pintarBarra() {
         barra.firstElementChild.style.width = `${Math.min(100, (audio.pico || 0) * 140)}%`;
         barra.dataset.pico = audio.pico > 0.95 ? 'clip' : (audio.pico > 0.7 ? 'alto' : '');
     }
+    // Acá y no en `pintar`, por dos razones: esto corre igual mientras se
+    // arrastra un borde o se escribe una nota, y sobre todo el vencimiento de la
+    // palmada pasa SIN que el motor avise nada —es justamente que no avisó—.
+    pintarPalmada();
 }
 
 function pintar() {
     if (!estado) return;
-    if (pulsando || componiendo) {
+    // Con el menú de una palabra abierto tampoco se repinta: el menú habla de
+    // una palabra de un texto que se rehace cada segundo, y debajo de «poner el
+    // OUT acá» tiene que seguir estando lo mismo hasta que se elija o se cierre.
+    if (pulsando || componiendo || menuPalabra) {
         pendiente = true;
         return;
     }
@@ -656,12 +760,13 @@ function montarTextos(quedan) {
                 pintar();
             });
         };
+        const soltar = enviar((borde, ms) => ponerBorde(cual, toma && toma.id, borde, ms));
         if (cual === 'espera') {
             hueco.append(texto.textoDe({
                 modo: 'inactiva',
                 palabras: sueltasLibres(),
                 vacio: 'Escuchando… lo que se diga va a aparecer acá.'
-            }, enviar((borde, ms) => abrir(ms))));
+            }, soltar));
         } else if (cual === 'abierta' && toma) {
             hueco.append(texto.textoDe({
                 modo: 'abierta',
@@ -669,9 +774,7 @@ function montarTextos(quedan) {
                 palabras: recortarAbierta(toma.palabras),
                 comentarios: toma.comentarios,
                 vacio: 'Todavía no se oyó nada de esta toma.'
-            }, enviar((borde, ms) => (borde === 'out'
-                ? pedir(() => window.nt.grabarCerrarToma(ms))
-                : editar({ tipo: 'borde', toma: toma.id, borde, paredMs: ms })))));
+            }, soltar));
         } else if (cual === 'cerrada' && toma) {
             hueco.append(texto.textoDe({
                 modo: 'cerrada',
@@ -680,9 +783,31 @@ function montarTextos(quedan) {
                 despues: toma.despues,
                 comentarios: toma.comentarios,
                 vacio: 'Esta toma no tiene texto.'
-            }, enviar((borde, ms) => editar({ tipo: 'borde', toma: toma.id, borde, paredMs: ms }))));
+            }, soltar));
         }
     }
+}
+
+/**
+ * Poner un borde de una toma en la palabra que empieza en `ms`.
+ *
+ * Es el único sitio que sabe a qué le pide cada borde de cada texto, y está
+ * aparte porque hay DOS maneras de hacerlo —arrastrar la línea y el menú del
+ * clic derecho— y las dos tienen que terminar en la misma llamada. Cada una
+ * pasa por el motor por su puerta de siempre, así que el deshacer por campo
+ * (`engine/deshacer.js`) ve lo mismo que veía: un `borde` es un cambio de toma,
+ * cerrar es cerrar y abrir es abrir.
+ *
+ *   espera   no hay toma: poner el IN ahí es ABRIRLA desde esa palabra
+ *   abierta  el OUT la cierra en esa palabra; el IN mueve el principio
+ *   cerrada  los dos mueven su borde
+ */
+function ponerBorde(cual, tomaId, borde, ms) {
+    if (cual === 'espera') return abrir(ms);
+    if (cual === 'abierta' && borde === 'out') {
+        return pedir(() => window.nt.grabarCerrarToma(ms));
+    }
+    return editar({ tipo: 'borde', toma: tomaId, borde, paredMs: ms });
 }
 
 /**
@@ -867,7 +992,126 @@ async function alClic(e) {
         case 'quitar-claqueta':
             await pedir(() => window.nt.grabarQuitarClaqueta(Number(boton.dataset.claqueta)));
             break;
+        case 'borde-aqui': {
+            // La palabra y el texto se leyeron al abrir el menú: el texto no se
+            // repintó mientras estaba abierto, pero la elección ya está tomada
+            // y no depende de lo que haya debajo ahora.
+            const que = menuPalabra;
+            cerrarMenuDePalabra();
+            if (que) await ponerBorde(que.cual, que.toma, boton.dataset.borde, Number(boton.dataset.ms));
+            break;
+        }
     }
+}
+
+/* ─── El menú del clic derecho sobre una palabra ───────────────────────── */
+
+/**
+ * Lo que el menú abierto va a hacer, o null.
+ *
+ * Se resuelve al abrirlo y no al elegir: mientras está abierto el texto no se
+ * repinta, pero igual conviene que la opción lleve su palabra puesta, que es lo
+ * que hace que elegir «poner el OUT» no dependa de dónde quedó el mouse.
+ */
+let menuPalabra = null;
+
+/**
+ * Clic derecho sobre una palabra: poner ahí el IN o el OUT.
+ *
+ * Es la otra manera de hacer lo que hace el arrastre. Existe porque arrastrar
+ * una línea treinta renglones hacia arriba pide pulso, y porque en una toma
+ * larga el borde que se quiere mover puede estar fuera de la vista.
+ *
+ * **Seleccionar de corrido sigue siendo comentar.** Son dos gestos que no se
+ * pisan: `alSeleccionar` ignora el botón derecho, y esto solo mira una palabra.
+ */
+function alClicDerecho(e) {
+    const w = e.target.closest && e.target.closest('.palabra');
+    const donde = w && w.closest('.transcript.es-movible');
+    cerrarMenuDePalabra();
+    if (!w || !donde) return;
+    // Sin esto sale el menú del navegador encima del nuestro. Electron no pone
+    // ninguno propio (no hay `context-menu` en `main.js`), pero el de Chromium
+    // aparece igual mientras se mira la maqueta.
+    e.preventDefault();
+
+    const hueco = donde.closest('[data-texto]');
+    const cual = hueco.dataset.texto;
+    const toma = hueco.dataset.toma ? Number(hueco.dataset.toma) : null;
+    const opciones = texto.bordesQuePuede(donde, w).map(o => ({ ...o, ...comoSeLlama(cual, o.borde) }));
+    if (!opciones.length) return;
+    menuPalabra = { cual, toma };
+    abrirMenuDePalabra(opciones, w.textContent, e.clientX, e.clientY);
+}
+
+/**
+ * Cómo se llama cada opción, que es lo que el motor va a hacer de verdad.
+ *
+ * Las reglas de qué se puede ofrecer están en `texto.bordesQuePuede`, con el
+ * arrastre. Acá está solo el nombre, porque el nombre no depende de la geometría
+ * sino de qué texto es: el mismo IN puesto en el campo de espera ABRE una toma,
+ * y puesto en una toma abierta le mueve el principio. Sin toma abierta el menú
+ * sale con una opción sola, y eso es correcto: el OUT de una toma que no existe
+ * no es nada, y cerrar la abierta en su última palabra ya es el botón primario.
+ */
+function comoSeLlama(cual, borde) {
+    if (borde === 'in') {
+        return cual === 'espera'
+            ? { icono: 'abrirToma', dice: 'Abrir la toma acá',
+                pista: 'La toma empieza en esta palabra. Es lo mismo que arrastrar el IN hasta acá' }
+            : { icono: 'abrirToma', dice: 'Poner el IN acá',
+                pista: 'La toma empieza en esta palabra, y lo de antes queda afuera' };
+    }
+    return cual === 'abierta'
+        ? { icono: 'cerrarToma', dice: 'Cerrar la toma acá',
+            pista: 'Esta palabra es la última de la toma, y la toma queda cerrada' }
+        : { icono: 'cerrarToma', dice: 'Poner el OUT acá',
+            pista: 'Esta palabra es la última de la toma, y lo de después queda afuera' };
+}
+
+function abrirMenuDePalabra(opciones, palabra, x, y) {
+    const menu = $('#menu-palabra');
+    menu.innerHTML = `<span class="menu-titulo">«${esc(recortar(palabra))}»</span>` +
+        opciones.map(o => `<button class="menu-fila" type="button" role="menuitem"
+            data-hace="borde-aqui" data-borde="${o.borde}" data-ms="${o.ms}"
+            title="${esc(o.pista)}">
+            <span class="hp-ico">${icono(o.icono)}</span>${o.dice}</button>`).join('');
+    menu.hidden = false;
+    // Medido y después acomodado: contra el borde de abajo o de la derecha se
+    // abre hacia el otro lado, que es lo que hace cualquier menú y lo que evita
+    // que la última palabra de un texto largo abra un menú fuera de la pantalla.
+    const caja = menu.getBoundingClientRect();
+    const margen = 8;
+    const izq = Math.max(margen, Math.min(x, window.innerWidth - caja.width - margen));
+    const arr = y + caja.height + margen > window.innerHeight
+        ? Math.max(margen, y - caja.height)
+        : y;
+    menu.style.left = `${Math.round(izq)}px`;
+    menu.style.top = `${Math.round(arr)}px`;
+    const primera = menu.querySelector('.menu-fila');
+    if (primera) primera.focus({ preventScroll: true });
+}
+
+/** El título del menú es para reconocer la palabra, no para leerla entera. */
+function recortar(palabra) {
+    const p = String(palabra || '').trim();
+    return p.length > 24 ? `${p.slice(0, 23)}…` : p;
+}
+
+function cerrarMenuDePalabra() {
+    if (!menuPalabra) return;
+    menuPalabra = null;
+    const menu = $('#menu-palabra');
+    // Si el foco estaba en una opción, vuelve a la pantalla: vaciar el menú con
+    // el foco adentro lo dejaba en el `body`, y desde ahí la K y el Enter
+    // siguen andando de casualidad, porque el teclado se escucha en el documento.
+    if (document.activeElement && menu.contains(document.activeElement)) {
+        $('#vista-vivo').focus({ preventScroll: true });
+    }
+    menu.hidden = true;
+    menu.innerHTML = '';
+    // Mientras estaba abierto no se repintó: lo que llegó espera acá.
+    if (pendiente) pintar();
 }
 
 /**
@@ -878,6 +1122,10 @@ async function alClic(e) {
  * está adentro de la toma, que es lo que va al XML.
  */
 function alSeleccionar(e) {
+    // El botón derecho es el menú de la palabra y nada más. `mouseup` llega
+    // igual con el derecho, así que sin esto un clic derecho hecho sobre una
+    // selección que quedaba de antes abría además el campo de comentario.
+    if (e.button !== 0) return;
     if (texto.arrastrando() || e.target.closest('.borde')) return;
     const hueco = e.target.closest('[data-texto="abierta"], [data-texto="cerrada"]');
     if (!hueco) return;
@@ -1058,6 +1306,22 @@ async function alTeclado(e) {
     // Con Ajustes o Diagnóstico abiertos encima, el teclado es de ellos: una
     // «p» en el selector de idioma cambiaba la vista de una toma.
     if (document.querySelector('.telon.es-activa')) return;
+    // Con el menú de una palabra abierto, el teclado es del menú: Escape lo
+    // cierra sin tocar nada y las flechas van de una opción a la otra. Enter y
+    // espacio los atiende el botón solo, que es lo que hace un botón.
+    if (menuPalabra) {
+        if (e.key === 'Escape') { e.preventDefault(); return cerrarMenuDePalabra(); }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            const filas = [...$('#menu-palabra').querySelectorAll('.menu-fila')];
+            const i = filas.indexOf(document.activeElement);
+            const paso = e.key === 'ArrowDown' ? 1 : -1;
+            const cual = filas[(Math.max(0, i) + paso + filas.length) % filas.length];
+            if (cual) cual.focus({ preventScroll: true });
+            return;
+        }
+        if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Tab') return;
+    }
     if (escribiendo()) {
         const campo = document.activeElement;
         if (campo.dataset.campo === 'comentario') {

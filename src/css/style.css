@@ -617,6 +617,7 @@ b {
 
 .pastilla[data-estado='sin audio'],
 .pastilla[data-estado='dispositivo perdido'],
+.pastilla[data-estado='sin confirmar'],
 .pastilla[data-estado='falta'] {
   background: rgba(255, 138, 138, 0.14);
   color: var(--error);
@@ -1628,6 +1629,58 @@ kbd {
 .aviso[data-tono='ok'] {
   background: rgba(62, 216, 144, 0.1);
   color: var(--ok);
+}
+
+/* El menú del clic derecho sobre una palabra: poner ahí el IN o el OUT.
+   Se abre en el cursor, así que `left`/`top` los pone el JS ya medidos. Filas de
+   32 px como cualquier fila de la app, y por debajo de la tostada y del telón:
+   un aviso que llega no tiene que quedar tapado por un menú abierto. */
+.menu-palabra {
+  position: fixed;
+  z-index: 50;
+  min-width: 200px;
+  padding: var(--sp-2);
+  background: var(--bg-overlay);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+}
+
+/* La palabra de la que habla el menú, para no tener que acordarse de dónde se
+   hizo clic. No es una opción, así que no se puede apretar ni se ilumina. */
+.menu-titulo {
+  display: block;
+  padding: var(--sp-2) var(--sp-3) var(--sp-1);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--row);
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-fila:hover {
+  background: var(--layer-hover);
+}
+
+.menu-fila:active {
+  background: var(--layer-press);
 }
 
 /* El aviso que aparece y se va. Va abajo a la derecha y no arriba al centro:

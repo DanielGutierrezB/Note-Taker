@@ -168,6 +168,28 @@ Es el mismo gesto que en Class Cut: la línea viaja por el texto mientras se
 arrastra y lo gris cambia en el acto, así que se ve qué entra antes de soltar.
 Mientras hay una agarrada, la pantalla no se repinta.
 
+**Y con el clic derecho sobre una palabra, el mismo borde se pone sin
+arrastrar**: un menú de dos opciones, poner el IN en esa palabra o poner el OUT
+detrás. Existe porque arrastrar una línea treinta renglones hacia arriba pide
+pulso, y porque en una toma larga el borde que se quiere mover puede estar fuera
+de la vista. Va al mismo sitio del motor que el arrastre, así que ⌘Z lo deshace
+igual.
+
+![El menú del clic derecho sobre una palabra de la toma abierta](docs/capturas/menu-toma-abierta.png)
+
+Las opciones son las que tienen sentido ahí y no siempre dos. **Sin toma
+abierta hay una sola** —«Abrir la toma acá»—, porque el OUT de una toma que no
+existe no es nada. Sobre lo gris de antes del IN solo se ofrece el IN, y sobre
+lo gris de después del OUT solo el OUT: cruzar una línea al otro lado dejaría
+una toma imposible, igual que arrastrando. No se ofrece **poner un borde donde
+ya está** —dejaría un paso de deshacer que no deshace nada—, ni cerrar sobre la
+última palabra oída, porque el OUT apoya en la siguiente y no hay ninguna (para
+eso está el botón **Cerrar toma**, que no necesita pared).
+
+Seleccionar texto de corrido sigue siendo dejar un comentario, que es el otro
+gesto sobre el mismo texto: el clic derecho no lo toca, y el menú del sistema
+no aparece encima.
+
 ### Cada toma, del color de su marcador
 
 ![Una toma abierta en «Profesor»: el bloque teñido del mismo rojo que su marcador en Premiere](docs/capturas/toma-abierta-1180.png)
@@ -277,6 +299,38 @@ dijo, y el número —"claqueta 4, clase 4"— solo aparece en el texto), y
 **Un golpe sin frase se anota igual, sin confirmar.** Una claqueta de más se
 borra con un clic; una de menos es un punto de sincronía que el editor no tiene.
 La pantalla la muestra como `por confirmar` y quien está mirando decide.
+
+### Aplaudir se ve en el momento
+
+![La barra con la pastilla ámbar «palmada oída» en la fila de los atajos](docs/capturas/palmada-barra-esperando.png)
+
+En cuanto el detector oye una palmada, la fila de atajos dice **`palmada oída`**
+en ámbar. Antes no decía nada, y eso costó una tarde de desconfianza: la
+confirmación no puede llegar hasta que la app tenga los seis segundos de audio
+de DESPUÉS del aplauso, así que aplaudir y mirar la pantalla daba exactamente lo
+mismo que aplaudir con la app apagada. El 30/09 el editor reportó «aún no está
+reconociendo la claqueta» y parte de eso era este silencio.
+
+Mientras la pastilla dice `palmada oída` **apretar K la deja en la palmada
+misma** —la manual y la automática se funden si caen a menos de cinco segundos—,
+así que es el momento exacto en que vale la pena afirmarla a mano.
+
+![La misma barra con la pastilla roja «palmada sin confirmar»](docs/capturas/palmada-barra-sin-confirmar.png)
+
+**Y el ciclo se cierra.** Si nadie confirmó nada, la pastilla pasa a
+**`palmada sin confirmar`** en rojo y el aviso lo dice una vez: se oyó la
+palmada, no se leyó «claqueta» alrededor, no se anotó ninguna. Es el caso real
+del 30/09, donde Whisper escribió «La quinta» y «Tlajeta clase 4» y dos
+claquetas de verdad se quedaron afuera sin que nada lo contara. La pastilla no
+se borra sola: mientras esté ahí, lo que dice es «la última palmada que oí no
+llegó a ser claqueta», que es justamente el diagnóstico que faltaba. Se va
+cuando se anota una claqueta o cuando llega otra palmada.
+
+La cuenta para declararla sin confirmar **no es de reloj de pared sino de audio
+grabado**, y son los seis segundos que al motor le faltan más otros seis para la
+pasada de Whisper. Medirla con el reloj la habría puesto en rojo cada vez que el
+audio se atrasa —un Zoom que tartamudea, la máquina ocupada—, acusando al motor
+de algo que todavía no pudo hacer, y un aviso que se equivoca se deja de mirar.
 
 ## El XML
 

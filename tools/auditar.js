@@ -45,7 +45,7 @@ const ALTO = Number(arg('alto', 840));
 /** Los escenarios que se auditan, y a qué anchos. */
 const ESCENARIOS = arg('escenario', null)
     ? [arg('escenario')]
-    : ['sesiones', 'preparar', 'en-vivo', 'toma-abierta', 'terminada', 'diagnostico'];
+    : ['sesiones', 'preparar', 'en-vivo', 'toma-abierta', 'palmada', 'palmada-vencida', 'terminada', 'diagnostico'];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
 
 /**

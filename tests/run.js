@@ -37,7 +37,9 @@ const FILES = [
     'revision-motor.test.js',
     'puente-grabar.test.js',
     'vivo-interfaz.test.js',
-    'senales-del-texto.test.js'
+    'senales-del-texto.test.js',
+    'menu-de-palabra.test.js',
+    'aviso-de-palmada.test.js'
 ];
 
 const filter = process.argv[2] || '';

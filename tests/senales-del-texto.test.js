@@ -156,11 +156,14 @@ module.exports = async t => {
         const motor = leer('engine', 'notas-vivo.js');
         const ventana = leer('src', 'js', 'grabar', 'senales.js');
         const literal = (codigo, nombre) => {
-            const m = codigo.match(new RegExp(`^const ${nombre} = (.+);$`, 'm'));
+            const m = codigo.match(new RegExp(`^(?:export )?const ${nombre} = (.+);$`, 'm'));
             return m ? m[1].trim() : null;
         };
+        // PALABRA_Y_APLAUSO_MS está acá porque de ella cuelga el aviso de la
+        // palmada: es lo que el motor tarda como MÍNIMO en poder confirmar, y si
+        // el motor la cambiara, la pantalla diría «sin confirmar» antes de tiempo.
         for (const nombre of ['CUENTA', 'RETOMAR', 'PAUSA', 'OK', 'CLAQUETA',
-            'MINIMO_DE_CUENTA', 'VALOR', 'SILENCIO_TRAS_PAUSA_SEC']) {
+            'MINIMO_DE_CUENTA', 'VALOR', 'SILENCIO_TRAS_PAUSA_SEC', 'PALABRA_Y_APLAUSO_MS']) {
             const delMotor = literal(motor, nombre);
             t.ok(delMotor, `${nombre} se encontró en el motor`);
             t.eq(literal(ventana, nombre), delMotor, `${nombre} es la misma en la ventana`);
