@@ -71,19 +71,62 @@ module.exports = async t => {
 
     t.test('la pantalla que abre la entrada lo guarda y lo dice una sola vez', () => {
         const js = leer('src', 'js', 'pantalla-preparar.js');
-        const cuerpo = js.slice(js.indexOf('alRomperse: mensaje =>'),
-            js.indexOf('\n        }', js.indexOf('alRomperse: mensaje =>')));
-        t.ok(/audio\.roto = \{ mensaje, veces \}/.test(cuerpo),
+        const desde = js.indexOf('alRomperse: (mensaje, cuantos) =>');
+        const cuerpo = js.slice(desde, js.indexOf('\n        }', desde));
+        t.ok(desde > 0, 'la función está');
+        t.ok(/audio\.roto = \{/.test(cuerpo),
             'queda en el estado del audio, que es lo que se queda a la vista');
-        t.ok(/veces === 1/.test(cuerpo),
+        t.ok(/const primera = !audio\.roto/.test(cuerpo),
             'y la tostada sale una vez: puede reventar doce veces por segundo');
-        t.ok(/avisar\(/.test(cuerpo), 'pero sale, para enterarse en el momento');
+        t.ok(/if \(primera\) avisar\(/.test(cuerpo), 'pero sale, para enterarse en el momento');
+        t.ok(/cuantos != null \? cuantos/.test(cuerpo),
+            'y acepta la cuenta ya hecha, que es como llega la del micrófono');
     });
 
     t.test('una entrada nueva arranca sin lo que perdió la anterior', () => {
         const js = leer('src', 'js', 'pantalla-preparar.js');
         t.eq([...js.matchAll(/roto: null/g)].length, 4,
             'el estado inicial, las dos aperturas y el salir');
+    });
+
+    t.group('audio roto · el del micrófono, que no pasa por Zoom');
+
+    t.test('el puente lo cuenta y lo dice en vez de tragárselo', () => {
+        const puente = leer('ipc', 'grabar.js');
+        const desde = puente.indexOf('function pcmRoto(');
+        const cuerpo = puente.slice(desde, puente.indexOf('\n    }', desde));
+        t.ok(desde > 0, 'hay un sitio donde se atiende y no solo un catch mudo');
+        t.ok(/pcm\.veces\+\+/.test(cuerpo), 'los cuenta todos');
+        t.ok(/send\('grabar-aviso', \{ tipo: 'audio-roto'/.test(cuerpo),
+            'y cruza el puente: antes solo iba al diario y la clase se perdía en silencio');
+        t.ok(/veces: pcm\.veces/.test(cuerpo), 'con la cuenta acumulada');
+    });
+
+    t.test('y los espacia, porque revientan doce por segundo', () => {
+        const puente = leer('ipc', 'grabar.js');
+        t.ok(/const AVISO_DE_PCM_MS = \d+/.test(puente), 'hay una cadencia declarada');
+        const desde = puente.indexOf('function pcmRoto(');
+        const cuerpo = puente.slice(desde, puente.indexOf('\n    }', desde));
+        t.ok(/pcm\.veces > 1 && ahora - pcm\.avisadoMs < AVISO_DE_PCM_MS\) return/.test(cuerpo),
+            'el primero sale en el acto y los demás cada tanto');
+        t.ok(/anotar\('grabar\.pcm-falla'/.test(cuerpo),
+            'el diario sigue estando, con la misma cadencia');
+    });
+
+    t.test('cada sesión arranca con su cuenta en cero', () => {
+        const puente = leer('ipc', 'grabar.js');
+        t.eq([...puente.matchAll(/^\s+olvidarPcmRoto\(\);$/gm)].length, 2,
+            'las dos puertas por las que se empieza a grabar: iniciar y reanudar');
+    });
+
+    t.test('la ventana lo lleva a la misma pastilla que el de Zoom', () => {
+        const vivo = leer('src', 'js', 'pantalla-vivo.js');
+        t.ok(/aviso\.tipo === 'audio-roto'/.test(vivo), 'lo reconoce');
+        t.ok(/fuente\.seRompio\(aviso\.mensaje, aviso\.veces\)/.test(vivo),
+            'y lo manda por donde ya iba el de Zoom, con la cuenta puesta');
+        const fuente = leer('src', 'js', 'grabar', 'fuente.js');
+        t.ok(/export function seRompio\(mensaje, veces\)/.test(fuente));
+        t.ok(/avisos\.alRomperse\(mensaje, veces\)/.test(fuente));
     });
 
     t.group('audio roto · lo que se ve en la barra');

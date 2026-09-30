@@ -229,6 +229,15 @@ function alAviso(aviso) {
         pintarPalmada();
         return;
     }
+    // Un pedazo del PCM del micrófono reventó al procesarse y NO llegó al WAV.
+    // Va a la misma pastilla que el mismo agujero por el lado de Zoom, y no a
+    // una tostada y nada más, porque el agujero se queda hecho: lo que hay que
+    // saber al entregar es que está (ver `seRompio` y `deSesion`).
+    if (aviso.tipo === 'audio-roto') {
+        fuente.seRompio(aviso.mensaje, aviso.veces);
+        pintarBarra();
+        return;
+    }
     if (aviso.tipo === 'error') avisar(aviso.mensaje, 'error');
 }
 

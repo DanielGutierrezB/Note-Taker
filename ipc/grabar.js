@@ -16,12 +16,22 @@ const grabacion = require('../engine/grabacion');
 const vivo = require('../engine/notas-vivo');
 const audioApp = require('../engine/audio-app');
 
+/** Cada cuánto se repite el aviso de que el audio se está perdiendo. */
+const AVISO_DE_PCM_MS = 2000;
+
 /**
  * @param {object} deps { ipcMain, app, send, anotar } de `main.js`
  */
 function registrar({ ipcMain, app, send, anotar }) {
+    // Los pedazos de PCM que reventaron en ESTA sesión, y cuándo se dijo por
+    // última vez. Se ponen a cero al arrancar y al reanudar: lo que se perdió
+    // en la clase anterior ya está dicho, y su cuenta no es de esta.
+    const pcm = { veces: 0, avisadoMs: 0 };
+    const olvidarPcmRoto = () => Object.assign(pcm, { veces: 0, avisadoMs: 0 });
+
     ipcMain.handle('grabar-iniciar', (event, payload) => {
         const p = payload || {};
+        olvidarPcmRoto();
         try {
             const estado = grabacion.iniciar({
                 ...p,
@@ -44,6 +54,7 @@ function registrar({ ipcMain, app, send, anotar }) {
      * Reanudar una sesión que quedó abierta: mismo XML, mismo cero, otro WAV.
      */
     ipcMain.handle('grabar-reanudar', (event, json, payload) => {
+        olvidarPcmRoto();
         try {
             const estado = grabacion.reanudar(json, {
                 ...(payload || {}),
@@ -61,14 +72,39 @@ function registrar({ ipcMain, app, send, anotar }) {
      * El PCM que manda la ventana. Va por `on` y no por `handle`: llega varias
      * veces por segundo y no hay nada que esperar de vuelta, y devolver el
      * estado entero cada vez llenaría el puente de tomas repetidas.
+     *
+     * **Un pedazo que revienta al procesarse NO llegó al WAV**, y hasta ahora
+     * eso solo quedaba en el diario: la ventana seguía mandando audio, el
+     * medidor seguía moviéndose y el agujero aparecía al abrir el XML, con
+     * todo lo de después corrido contra la cámara. Es el mismo agujero que ya
+     * se avisa cuando el que revienta es el audio de Zoom, y va por el mismo
+     * camino y a la misma pastilla (`alRomperse` en `pantalla-preparar.js`).
+     *
+     * Lo único distinto es que este lado tiene que contar y espaciar. El
+     * motivo de que reviente un pedazo —el disco lleno, la carpeta que se
+     * desmontó— revienta todos los que siguen, doce por segundo: mandarlos
+     * todos serían doce repintados por segundo de una pantalla que ya dijo lo
+     * que tenía que decir, y doce renglones por segundo en el diario. Así que
+     * se cuentan todos y se avisa el primero en el acto —es el que hay que
+     * ver— y después uno cada dos segundos, con la cuenta acumulada, que es lo
+     * que distingue un tropiezo de una clase perdida.
      */
     ipcMain.on('grabar-pcm', (event, chunk) => {
         try {
             grabacion.pcm(chunk);
         } catch (err) {
-            anotar('grabar.pcm-falla', { error: err.message });
+            pcmRoto(err.message);
         }
     });
+
+    function pcmRoto(mensaje) {
+        pcm.veces++;
+        const ahora = Date.now();
+        if (pcm.veces > 1 && ahora - pcm.avisadoMs < AVISO_DE_PCM_MS) return;
+        pcm.avisadoMs = ahora;
+        anotar('grabar.pcm-falla', { error: mensaje, veces: pcm.veces });
+        send('grabar-aviso', { tipo: 'audio-roto', mensaje, veces: pcm.veces });
+    }
 
     /**
      * La otra fuente: el sonido de Zoom, que no pasa por la ventana.

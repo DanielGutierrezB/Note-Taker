@@ -310,13 +310,20 @@ async function abrirEntrada(id) {
          *
          * **La tostada sale una sola vez.** Doce por segundo no son un aviso
          * sino una pared, y lo que queda a la vista después es la pastilla.
+         *
+         * @param {number} [cuantos] la cuenta ya hecha, para el micrófono: ahí
+         *   los pedazos revientan del lado de Node y el puente los junta y
+         *   avisa cada dos segundos, así que el número lo trae el aviso y no
+         *   se puede sacar contando llamadas (ver `ipc/grabar.js`). El de Zoom
+         *   llega de a uno y lo cuenta acá.
          */
-        alRomperse: mensaje => {
-            const veces = (audio.roto ? audio.roto.veces : 0) + 1;
-            audio.roto = { mensaje, veces };
-            if (veces === 1) {
-                avisar(`Se está perdiendo audio de la grabación: ${mensaje}`, 'error');
-            }
+        alRomperse: (mensaje, cuantos) => {
+            const primera = !audio.roto;
+            audio.roto = {
+                mensaje,
+                veces: cuantos != null ? cuantos : (audio.roto ? audio.roto.veces : 0) + 1
+            };
+            if (primera) avisar(`Se está perdiendo audio de la grabación: ${mensaje}`, 'error');
             pintar();
         }
     });

@@ -558,6 +558,13 @@ entrega siempre 48 kHz.
   el aviso sale una sola vez porque esto puede fallar doce veces por segundo.
   Antes el motor lo decía y no lo recibía nadie: el ayudante seguía vivo, el
   medidor seguía moviéndose y el agujero se descubría al abrir el XML.
+- **Lo mismo por el lado del micrófono.** Ahí los pedazos los manda la ventana
+  y el que revienta revienta del lado de Node, así que hasta ahora terminaba en
+  el diario y en ningún otro sitio. Va a la misma pastilla, con una diferencia:
+  el puente los cuenta y los junta antes de cruzar —el primero sale en el acto
+  y después uno cada dos segundos, con la cuenta acumulada—, porque doce avisos
+  por segundo son doce repintados por segundo de una pantalla que ya dijo lo
+  que tenía que decir.
 
 La primera versión de esta red medía la tasa por el reloj y remuestreaba si no
 coincidía. Una revisión mostró que no distinguía "no llegó nada un rato" de

@@ -56,6 +56,22 @@ function engancharZoom() {
 }
 
 /**
+ * El motor avisa que un pedazo del PCM del MICRÓFONO reventó al procesarse.
+ *
+ * Es el mismo agujero que el `error` de Zoom de acá arriba —lo que reventó no
+ * llegó al WAV y todo lo de atrás queda corrido contra la cámara— y por eso va
+ * a la misma pastilla. Lo que cambia es de dónde viene: el de Zoom lo grita el
+ * motor por su canal y este viaja por `grabar-aviso`, que lo atiende la
+ * pantalla En vivo, así que entra por acá en vez de por el enganche.
+ *
+ * La cuenta viene hecha del otro lado: allá los pedazos revientan de a doce
+ * por segundo y el puente los junta antes de cruzar (ver `ipc/grabar.js`).
+ */
+export function seRompio(mensaje, veces) {
+    avisos.alRomperse(mensaje, veces);
+}
+
+/**
  * Las entradas que hay: Zoom primero, después los dispositivos.
  *
  * @returns {Promise<{ok:boolean, lista:Array, zoom:object, error?:string}>}
