@@ -121,31 +121,14 @@ export function senalesEn(lista) {
 /**
  * Índice de palabra → la señal que es, para pintar.
  *
- * Los cortes de una toma larga (`recortarAbierta`) parten la tirada: a los dos
- * lados de un «… 900 palabras más …» no hay ninguna relación, y una «Pausa»
- * justo antes del corte tendría como palabra siguiente una de veinte minutos
- * después. Se busca por tramos y se devuelven los índices de la lista entera.
- *
  * El valor es la señal entera y no su tipo, porque la «Pausa» que no cerró trae
  * además su hueco y es lo único que explica por qué no cerró (`pistaDe`).
  */
 export function porPalabra(lista) {
     const ws = lista || [];
     const marcas = new Map();
-    let desde = 0;
-    const tramos = [];
-    for (let i = 0; i < ws.length; i++) {
-        if (ws[i] && ws[i].corte) {
-            tramos.push([desde, i]);
-            desde = i + 1;
-        }
-    }
-    tramos.push([desde, ws.length]);
-
-    for (const [a, b] of tramos) {
-        for (const s of senalesEn(ws.slice(a, b))) {
-            for (let i = s.desde; i <= s.hasta; i++) marcas.set(a + i, s);
-        }
+    for (const s of senalesEn(ws)) {
+        for (let i = s.desde; i <= s.hasta; i++) marcas.set(i, s);
     }
     return marcas;
 }

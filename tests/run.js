@@ -40,6 +40,7 @@ const FILES = [
     'vivo-interfaz.test.js',
     'senales-del-texto.test.js',
     'menu-de-palabra.test.js',
+    'transcript-que-crece.test.js',
     'aviso-de-palmada.test.js',
     'audio-que-se-rompe.test.js',
     'nota-de-claqueta.test.js'

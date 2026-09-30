@@ -16,14 +16,15 @@
  * transcript que la pantalla dibuja de verdad, que se arman con `textoDe` y no a
  * mano para que la prueba no se quede con una estructura que ya cambió.
  *
- * Hay un DOM de juguete porque el runner no tiene ninguno y no vamos a meter una
- * dependencia por esto. Tiene solo lo que estas reglas usan —hermanos, orden y
- * `dataset`—, que es justamente lo que se quiere probar.
+ * El DOM de juguete está en `fixtures/dom.js`, compartido con las pruebas del
+ * transcript que crece: las dos preguntan por el mismo transcript.
  */
 
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
+
+const dom = require('./fixtures/dom');
 
 const RAIZ = path.join(__dirname, '..');
 
@@ -36,74 +37,8 @@ function palabras(texto, desde) {
     }));
 }
 
-/* ─── Un DOM de juguete ──────────────────────────────────────────────────── */
-
-class Nodo {
-    constructor(tipo) {
-        this.tipo = tipo;
-        this.hijos = [];
-        this.dataset = {};
-        this.style = {};
-        this.clases = new Set();
-        this.textoPropio = '';
-        this.classList = {
-            add: c => this.clases.add(c),
-            remove: c => this.clases.delete(c),
-            contains: c => this.clases.has(c),
-            toggle: (c, si) => (si ? this.clases.add(c) : this.clases.delete(c))
-        };
-    }
-    set className(v) {
-        this.clases = new Set(String(v).split(/\s+/).filter(Boolean));
-    }
-    get className() { return [...this.clases].join(' '); }
-    set textContent(v) { this.textoPropio = String(v); this.hijos = []; }
-    get textContent() {
-        return this.hijos.length ? this.hijos.map(h => h.textContent).join('') : this.textoPropio;
-    }
-    set innerHTML(v) { this.html = String(v); this.hijos = []; }
-    append(...nodos) {
-        for (const n of nodos) { n.padre = this; this.hijos.push(n); }
-    }
-    prepend(...nodos) {
-        for (const n of nodos) n.padre = this;
-        this.hijos.unshift(...nodos);
-    }
-    setAttribute() {}
-    get children() { return this.hijos.filter(n => n.tipo !== 'texto'); }
-    get hermanos() { return this.padre ? this.padre.hijos : [this]; }
-    get nextElementSibling() {
-        const h = this.hermanos.filter(n => n.tipo !== 'texto');
-        return h[h.indexOf(this) + 1] || null;
-    }
-    /** Solo el bit que se usa: ¿el otro viene DESPUÉS de mí? */
-    compareDocumentPosition(otro) {
-        const h = this.hermanos;
-        return h.indexOf(otro) > h.indexOf(this) ? 4 : 2;
-    }
-    /** Selectores de una o dos clases, que es lo único que el código pide. */
-    querySelector(sel) {
-        return this.todos().find(n => sel.split('.').filter(Boolean).every(c => n.clases.has(c))) || null;
-    }
-    todos() {
-        return this.hijos.flatMap(h => [h, ...h.todos()]);
-    }
-}
-
-function fingirDom() {
-    globalThis.Node = { DOCUMENT_POSITION_FOLLOWING: 4 };
-    globalThis.document = {
-        createElement: () => new Nodo('el'),
-        createTextNode: t => {
-            const n = new Nodo('texto');
-            n.textoPropio = t;
-            return n;
-        }
-    };
-}
-
 module.exports = async t => {
-    fingirDom();
+    dom.fingir();
     const texto = await import(pathToFileURL(path.join(RAIZ, 'src', 'js', 'grabar', 'texto-toma.js')).href);
 
     /** El transcript como lo arma la pantalla, y sus palabras por texto. */

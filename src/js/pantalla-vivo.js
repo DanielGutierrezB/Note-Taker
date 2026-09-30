@@ -492,6 +492,7 @@ function pintar() {
     const pantalla = $('#vista-vivo');
     const habiaFoco = pantalla.contains(document.activeElement) && document.activeElement !== pantalla;
     const rollos = recordarRollos();
+    const eligiendo = recordarSeleccion();
     const quedan = textosQueSeQuedan();
     const lienzo = pantalla.querySelector('.scroll');
     const arriba = lienzo ? lienzo.scrollTop : 0;
@@ -508,6 +509,7 @@ function pintar() {
 
     montarTextos(quedan);
     devolverRollos(rollos, quedan);
+    devolverSeleccion(eligiendo);
     if (lienzo) lienzo.scrollTop = arriba;
     devolverFoco(foco);
     // El foco estaba en algo de esta pantalla que ya no existe (un botón que se
@@ -517,25 +519,36 @@ function pintar() {
 }
 
 /**
- * Los textos que NO se rehacen en este repintado: el que se está arrastrando,
- * el que espera la respuesta de un borde soltado, y aquel cuyo IN/OUT está bajo
- * el puntero —si le entran palabras, la línea se corre justo antes de agarrarla
- * (medido: 293 px con seis palabras nuevas)—. Se sacan del DOM viejo y se
- * vuelven a poner en el hueco nuevo, con sus escuchas y todo.
+ * Los textos que ya estaban dibujados, para que el repintado no empiece de cero.
+ *
+ * Devuelve dos cosas, y la diferencia importa:
+ *
+ *   `previos`  todos, por clave. `textoDe` los recibe y, si lo único que cambió
+ *              es que hay palabras nuevas al final, les agrega esas palabras y
+ *              devuelve el MISMO elemento en vez de uno nuevo. Es lo que hace
+ *              que el texto ya escrito no se mueva ni se pierda la selección
+ *              mientras se graba (ver `crecer` en grabar/texto-toma.js).
+ *   `intactos` los que no se tocan ni para eso: el que se está arrastrando, el
+ *              que espera la respuesta de un borde soltado, y aquel cuyo IN/OUT
+ *              está bajo el puntero —si le entran palabras, la línea se corre
+ *              justo antes de agarrarla (medido: 293 px con seis palabras
+ *              nuevas)—.
+ *
+ * En los dos casos el elemento se saca del DOM viejo y se vuelve a poner en el
+ * hueco nuevo, con sus escuchas y todo.
  */
 function textosQueSeQuedan() {
-    const claves = new Set();
+    const intactos = new Set();
     const agarrado = texto.arrastrado();
-    if (agarrado && agarrado.parentElement) claves.add(claveDe(agarrado.parentElement));
-    if (enVuelo && Date.now() < enVuelo.hasta) claves.add(enVuelo.clave);
-    if (sobreBorde) claves.add(sobreBorde);
-    const quedan = new Map();
+    if (agarrado && agarrado.parentElement) intactos.add(claveDe(agarrado.parentElement));
+    if (enVuelo && Date.now() < enVuelo.hasta) intactos.add(enVuelo.clave);
+    if (sobreBorde) intactos.add(sobreBorde);
+    const previos = new Map();
     for (const hueco of document.querySelectorAll('#vista-vivo [data-texto]')) {
-        const clave = claveDe(hueco);
         const t = hueco.querySelector('.transcript');
-        if (t && claves.has(clave)) quedan.set(clave, t);
+        if (t) previos.set(claveDe(hueco), t);
     }
-    return quedan;
+    return { previos, intactos };
 }
 
 function botonHistoria(boton, hay, que, verbo) {
@@ -826,13 +839,18 @@ function pintarInterruptores(desactivadas) {
  * traer. Cada hueco dice qué texto es (`data-texto`) y de qué toma.
  */
 function montarTextos(quedan) {
+    const previos = (quedan && quedan.previos) || new Map();
+    const intactos = (quedan && quedan.intactos) || new Set();
     for (const hueco of document.querySelectorAll('#vista-vivo [data-texto]')) {
         const cual = hueco.dataset.texto;
         const clave = claveDe(hueco);
-        if (quedan && quedan.has(clave)) {
-            hueco.append(quedan.get(clave));
+        if (intactos.has(clave) && previos.has(clave)) {
+            hueco.append(previos.get(clave));
             continue;
         }
+        // El que ya estaba: `textoDe` lo hace crecer si solo hay palabras
+        // nuevas al final, y si no lo descarta y dibuja uno nuevo.
+        const previo = previos.get(clave);
         const toma = estado.tomas.find(t => t.id === Number(hueco.dataset.toma));
         // Soltar un borde: el texto queda como se soltó hasta que el motor
         // conteste (`enVuelo`), y ahí se repinta con lo que dijo.
@@ -849,15 +867,31 @@ function montarTextos(quedan) {
                 modo: 'inactiva',
                 palabras: sueltasLibres(),
                 vacio: 'Escuchando… lo que se diga va a aparecer acá.'
-            }, soltar));
+            }, soltar, previo));
         } else if (cual === 'abierta' && toma) {
+            // **La toma abierta se dibuja entera.** Antes se dibujaba el
+            // principio y las últimas 300 palabras con un «… 900 palabras más …»
+            // en el medio, para no repintar tres mil palabras cada segundo. Eso
+            // era exactamente lo que hacía saltar el texto: la ventana de 300
+            // está pegada al FINAL, así que cada palabra nueva sacaba una de
+            // arriba y, cada doce palabras, todo lo de abajo subía un renglón.
+            // Medido en la maqueta con la toma más larga del 30/09: 24 px de
+            // salto —un renglón justo— con 1400 palabras, y 0 px con 120. Con
+            // la toma entera, 0 px en los dos casos.
+            //
+            // Se paga en el repintado: un segundo de clase con esas 1950
+            // palabras pasó de 3,9 ms a 7,9 ms de mediana, porque son 1950
+            // spans y no 340 los que el navegador vuelve a acomodar. Cabe de
+            // sobra en el cuadro, el arrastre del IN no se movió (medido igual
+            // con 340 y con 1950), y a cambio el texto se queda quieto y la
+            // selección aguanta.
             hueco.append(texto.textoDe({
                 modo: 'abierta',
                 antes: sueltasLibres().filter(w => w.t < toma.inMs).slice(-ORILLA_ABIERTA),
-                palabras: recortarAbierta(toma.palabras),
+                palabras: toma.palabras,
                 comentarios: toma.comentarios,
                 vacio: 'Todavía no se oyó nada de esta toma.'
-            }, soltar));
+            }, soltar, previo));
         } else if (cual === 'cerrada' && toma) {
             hueco.append(texto.textoDe({
                 modo: 'cerrada',
@@ -866,7 +900,7 @@ function montarTextos(quedan) {
                 despues: toma.despues,
                 comentarios: toma.comentarios,
                 vacio: 'Esta toma no tiene texto.'
-            }, soltar));
+            }, soltar, previo));
         }
     }
 }
@@ -891,23 +925,6 @@ function ponerBorde(cual, tomaId, borde, ms) {
         return pedir(() => window.nt.grabarCerrarToma(ms));
     }
     return editar({ tipo: 'borde', toma: tomaId, borde, paredMs: ms });
-}
-
-/**
- * Cuántas palabras de una toma abierta larga se dibujan: el principio, para
- * poder correr el IN, y el final, que es lo que se está diciendo. Una toma de
- * veinte minutos son tres mil palabras, y repintarlas cada segundo costaba
- * 18 ms más casi 2 ms por cada movimiento del mouse al arrastrar.
- */
-const ABIERTA_PRINCIPIO = 40;
-const ABIERTA_FINAL = 300;
-
-function recortarAbierta(palabras) {
-    const ws = palabras || [];
-    if (ws.length <= ABIERTA_PRINCIPIO + ABIERTA_FINAL + 20) return ws;
-    const salteadas = ws.length - ABIERTA_PRINCIPIO - ABIERTA_FINAL;
-    return ws.slice(0, ABIERTA_PRINCIPIO)
-        .concat([{ corte: salteadas }], ws.slice(-ABIERTA_FINAL));
 }
 
 /**
@@ -938,7 +955,7 @@ function devolverRollos(rollos, quedan) {
         const antes = rollos.get(claveDe(hueco));
         // El que se quedó igual vuelve a donde estaba: sacarlo del DOM y volver
         // a meterlo le borra el scroll.
-        if (quedan && quedan.has(claveDe(hueco)) && antes) t.scrollTop = antes.arriba;
+        if (quedan && quedan.intactos.has(claveDe(hueco)) && antes) t.scrollTop = antes.arriba;
         else t.scrollTop = !antes || antes.alFondo ? t.scrollHeight : antes.arriba;
         marcarTapado(t);
         t.onscroll = () => marcarTapado(t);
@@ -952,6 +969,45 @@ function marcarTapado(t) {
 
 function claveDe(hueco) {
     return `${hueco.dataset.texto}:${hueco.dataset.toma || ''}`;
+}
+
+/**
+ * La frase seleccionada sobrevive al repintado.
+ *
+ * El editor lo pidió de frente: «para que pueda seleccionar fácilmente mientras
+ * se está grabando». Que el texto ya no salte (ver `crecer`) es la mitad; la
+ * otra es que la selección no se borre. Y se borraba, aunque el transcript
+ * creciera en vez de rehacerse: `$('#ahora').innerHTML = …` lo saca del
+ * documento un momento, y sacar del documento el nodo donde está la selección
+ * la deshace.
+ *
+ * Por eso se guardan los DOS extremos del rango —el nodo y la posición dentro
+ * de él— y se vuelven a poner. Funciona porque creciendo los nodos de las
+ * palabras son LOS MISMOS objetos; si el texto se tuvo que rehacer, los
+ * extremos ya no están en el documento y no se devuelve nada, que es lo
+ * correcto: ahí el texto cambió y señalar lo de antes sería señalar mal.
+ */
+function recordarSeleccion() {
+    const s = document.getSelection();
+    if (!s || s.rangeCount === 0 || s.isCollapsed) return null;
+    const r = s.getRangeAt(0);
+    if (!$('#vista-vivo').contains(r.commonAncestorContainer)) return null;
+    return { a: r.startContainer, da: r.startOffset, b: r.endContainer, db: r.endOffset };
+}
+
+function devolverSeleccion(g) {
+    if (!g || !document.contains(g.a) || !document.contains(g.b)) return;
+    try {
+        const r = document.createRange();
+        r.setStart(g.a, g.da);
+        r.setEnd(g.b, g.db);
+        const s = document.getSelection();
+        s.removeAllRanges();
+        s.addRange(r);
+    } catch {
+        // Un extremo que quedó fuera de su nodo: se deja sin selección, que es
+        // lo que ya pasaba antes de esto.
+    }
 }
 
 /**

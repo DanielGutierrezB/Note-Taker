@@ -309,8 +309,12 @@ function empezar(texto, b, alSoltar) {
  *   vacio     qué decir si no hay ninguna palabra
  * @param {function(string, number)} [alSoltar] (borde, hora de la palabra); sin
  *   él las líneas se ven pero no se mueven
+ * @param {Element} [previo] el transcript que ya estaba dibujado ahí. Si lo único
+ *   que cambió es que hay palabras nuevas al final, se le agregan y se devuelve
+ *   el mismo elemento en vez de uno nuevo (ver `crecer`).
  */
-export function textoDe(p, alSoltar) {
+export function textoDe(p, alSoltar, previo) {
+    if (previo && crecer(previo, p)) return previo;
     const texto = document.createElement('div');
     texto.className = `transcript es-${p.modo}${alSoltar ? ' es-movible' : ''}`;
     // Las señales se buscan sobre la tirada ENTERA y en el orden en que se
@@ -323,15 +327,6 @@ export function textoDe(p, alSoltar) {
     let cual = -1;
     const poner = w => {
         cual++;
-        // Lo que se dejó de dibujar en el medio de una toma larga (ver
-        // `recortarAbierta` en pantalla-vivo.js).
-        if (w.corte) {
-            const c = document.createElement('span');
-            c.className = 'transcript-corte';
-            c.textContent = `… ${w.corte} palabras más …`;
-            texto.append(c, document.createTextNode(' '));
-            return;
-        }
         texto.append(palabra(w, p.comentarios, marcas.get(cual)), document.createTextNode(' '));
     };
     const conBarra = (cual, pista) => {
@@ -374,5 +369,125 @@ export function textoDe(p, alSoltar) {
     }
 
     marcarOrillas(texto);
+    dibujado.set(texto, huella(p));
     return texto;
+}
+
+/** Con qué se dibujó cada transcript, para saber si puede crecer. */
+const dibujado = new WeakMap();
+
+/**
+ * Cuántas palabras del final pueden cambiar de señal cuando entra una nueva.
+ *
+ * `senales.porPalabra` decide mirando una ventana corta alrededor de cada
+ * palabra —una «Pausa» no se sabe si es corta hasta que llega la que sigue, un
+ * conteo se lee hacia atrás—, así que al agregar al final solo el final se
+ * mueve. De todas formas el repaso recorre todo y solo ESCRIBE donde cambió,
+ * que es lo que cuesta; este número solo está para documentar por qué agregar
+ * al final no le miente a lo de arriba.
+ */
+const COLA_DE_SENALES = 16;
+
+function huella(p) {
+    return {
+        modo: p.modo,
+        antes: firma(p.antes),
+        palabras: (p.palabras || []).map(sello),
+        despues: firma(p.despues),
+        comentarios: (p.comentarios || []).map(c => `${c.desdeMs}-${c.hastaMs}`).join(',')
+    };
+}
+
+const sello = w => (w.corte ? `…${w.corte}` : `${w.t}|${w.texto}`);
+const firma = ws => (ws || []).map(sello).join(' ');
+
+/**
+ * Le agrega al transcript que ya está en pantalla las palabras nuevas, en vez
+ * de rehacerlo.
+ *
+ * **Esto existe porque el texto ya escrito no puede moverse.** El editor lo
+ * pidió así: «el texto en la ventana del transcript va saltando […] debería no
+ * moverse en lo posible, para que pueda seleccionar fácilmente mientras se está
+ * grabando». Rehacer el div entero cada segundo tiene dos costos que no se ven
+ * en una captura: la selección del sistema vive en los nodos, así que al
+ * reemplazarlos se borra —no se puede seleccionar una frase y quedarse
+ * mirándola—, y el scroll hay que devolverlo a mano (`devolverRollos` en
+ * pantalla-vivo.js). Creciendo, los nodos de arriba son LOS MISMOS: no hay nada
+ * que devolver y no hay nada que borrar.
+ *
+ * Solo crece si lo único que cambió es que hay palabras nuevas al final. Todo
+ * lo demás —que se haya movido un borde, que el modelo grande haya reescrito
+ * una palabra de atrás, que aparezca o desaparezca un comentario— devuelve
+ * `false` y el llamador dibuja de nuevo, que es lo correcto: ahí el texto de
+ * arriba SÍ cambió y taparlo sería mentir.
+ *
+ * @returns {boolean} si creció; `false` si hay que dibujar de nuevo
+ */
+function crecer(previo, p) {
+    // A mitad de un arrastre la línea ya se movió en la pantalla y el motor
+    // todavía no lo sabe, así que lo dibujado no coincide con `p` a propósito.
+    if (agarrado === previo) return false;
+    const antes = dibujado.get(previo);
+    if (!antes) return false;
+    if (antes.modo !== p.modo) return false;
+    // La primera palabra de la toma tiene que sacar el «Todavía no se oyó nada
+    // de esta toma»; dibujarla de nuevo es más simple y pasa una sola vez.
+    if (previo.querySelector('.transcript-vacio')) return false;
+    if (antes.antes !== firma(p.antes) || antes.despues !== firma(p.despues)) return false;
+    if (antes.comentarios !== (p.comentarios || []).map(c => `${c.desdeMs}-${c.hastaMs}`).join(',')) return false;
+
+    const ahora = (p.palabras || []).map(sello);
+    if (ahora.length < antes.palabras.length) return false;
+    for (let i = 0; i < antes.palabras.length; i++) {
+        if (ahora[i] !== antes.palabras[i]) return false;
+    }
+
+    const nuevas = (p.palabras || []).slice(antes.palabras.length);
+    const enOrden = [...(p.antes || []), ...(p.palabras || []), ...(p.despues || [])];
+    const marcas = senales.porPalabra(enOrden);
+    if (nuevas.length) {
+        // En la inactiva el IN espera al final y todo lo oído queda antes; en
+        // las demás, las palabras de la toma van entre las dos líneas. En los
+        // dos casos el sitio es «justo antes de la línea que las cierra», y
+        // ponerlas ahí no toca ni un nodo de los de arriba.
+        const cierra = previo.querySelector(p.modo === 'inactiva' ? '.borde[data-borde="in"]' : '.borde[data-borde="out"]');
+        const trozo = document.createDocumentFragment();
+        let cual = (p.antes || []).length + antes.palabras.length - 1;
+        for (const w of nuevas) {
+            cual++;
+            trozo.append(palabra(w, p.comentarios, marcas.get(cual)), document.createTextNode(' '));
+        }
+        if (cierra) previo.insertBefore(trozo, cierra);
+        else previo.append(trozo);
+        marcarOrillas(previo);
+    }
+    repasarSenales(previo, marcas);
+    dibujado.set(previo, huella(p));
+    return true;
+}
+
+/**
+ * Pone al día las señales de lo que ya estaba dibujado.
+ *
+ * Recorre todo pero solo escribe donde la señal cambió de verdad, que en la
+ * práctica son las últimas palabras (ver `COLA_DE_SENALES`): tocar el atributo
+ * de una palabra de arriba le pediría al navegador recalcular su estilo sin
+ * que nada haya cambiado.
+ */
+function repasarSenales(texto, marcas) {
+    let cual = -1;
+    for (const hijo of texto.children) {
+        if (hijo.classList.contains('borde') || hijo.classList.contains('transcript-vacio')) continue;
+        cual++;
+        if (!hijo.classList.contains('palabra')) continue;
+        const marca = marcas.get(cual);
+        if ((hijo.dataset.senal || '') === (marca ? marca.tipo : '')) continue;
+        if (marca) {
+            hijo.dataset.senal = marca.tipo;
+            hijo.title = senales.pistaDe(marca);
+        } else {
+            delete hijo.dataset.senal;
+            hijo.removeAttribute('title');
+        }
+    }
 }

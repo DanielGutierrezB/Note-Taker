@@ -1416,11 +1416,6 @@ kbd {
   .borde.es-guardando { animation: none; opacity: 0.7; }
 }
 
-.transcript-corte {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
 /* La pantalla recibe el foco cuando lo que lo tenía se repintó: sin anillo,
    porque no es un control. */
 #vista-vivo:focus {
