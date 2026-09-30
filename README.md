@@ -437,10 +437,21 @@ estiraba el audio bueno al doble. Se sacó.
 
 **Sobre el silencio no se escribe.** Zoom manda ceros exactos cuando nadie habla,
 y sobre eso Whisper escribe lo que aprendió de los subtítulos: «Gracias.»,
-«Gracias por ver el video.». `engine/sonido.js` mide el nivel de cada recorte:
-si no suena nada no se le pregunta a Whisper, y una palabra sin sonido alrededor
-(−60 dBFS, lejos de la voz, de −13 a −30, y del ruido de sala más bajo de un
-micrófono, −55) se descarta.
+«Gracias por ver el video.». `engine/sonido.js` mide el nivel de cada recorte: si
+no suena nada no se le pregunta a Whisper, y una palabra sin sonido alrededor se
+descarta.
+
+El corte **no es un número fijo**. Uno de −60 dBFS quedaba DEBAJO del ruido de
+una sala de verdad —con AirPods el piso está en −65— y no filtraba nada. Lo que
+separa es cuánto sobresale del ruido de ESE micrófono: el piso se aprende de las
+últimas 300 pasadas y se le piden **+24 dB**, que es la mitad justa entre lo
+dicho (nunca bajó de +30) y lo inventado (nunca pasó de +19).
+
+Y no alcanza con el pico: un clic de teclado llega a −33 dB y pasa cualquier
+corte de nivel. Lo que un golpe no tiene es duración, así que lo que se mide es
+**tiempo sostenido sobre el corte, 150 ms**. Con eso se van las palabras
+inventadas de las dos grabaciones reales sin tocar ninguna de las dichas, y de
+paso casi la mitad de las pasadas ya ni llegan a Whisper.
 
 **Lo que la lista no deja elegir en verde.** Los nombres de la lista confunden, y
 el error se descubría después de la clase:
@@ -711,6 +722,7 @@ engine/
   aplausos.js            la palmada de la claqueta, en el PCM
   golpe.js               un pico corto y fuerte (lo que usaba antes)
   oir.js · transcribe.js Whisper local, por pedazos
+  sonido.js              si algo sonó de verdad, para no creerle a Whisper
   oir-toma.js            volver a oír un tramo, con o sin sesión
   relecturas.js          la cola que le rehace el texto a cada toma cerrada
   insistir.js            qué hacer cuando Whisper se muere
