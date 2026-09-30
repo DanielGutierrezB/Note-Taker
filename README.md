@@ -61,6 +61,16 @@ porque la pregunta que contestan aparece en cualquier momento.
 | **"Claqueta"** | se anota una claqueta |
 | un **aplauso** | lo mismo, y se confirma leyendo lo que se dijo alrededor |
 
+**Esas palabras se ven marcadas en el transcript**, que es la única manera de
+saber si la app oyó: un "3, 2, 1" que Whisper escribió "3, 2, uña" no abre nada,
+y en texto corrido no se distingue del resto. La marca es una plaquita, no un
+color —al lado ya hablan los cinco colores de vista, el IN azul y el OUT rojo—
+y viene en dos formas: **rellena** cuando la app actuó con esa palabra, y
+**hueca** cuando la oyó y no hizo nada, que hoy es el caso de un "Pausa" sin el
+segundo de silencio detrás. La regla es la misma del motor y no se estima:
+`src/js/grabar/senales.js` la tiene escrita para la ventana, y una prueba
+compara las dos expresiones letra por letra.
+
 Y lo que se hace a mano, para cuando nada de eso se dijo:
 
 | tecla | qué pasa |

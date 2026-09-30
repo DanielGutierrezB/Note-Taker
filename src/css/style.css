@@ -1451,6 +1451,67 @@ kbd {
   border-radius: 2px;
 }
 
+/* ── Las palabras con las que la app abre, cierra y claquetea ───────────────
+   Lo que hace falta mientras la clase corre no es leer el transcript sino saber
+   si la app OYÓ: si el «3, 2, 1» quedó escrito «3, 2, uña» no abre nada, y en
+   texto corrido y gris eso se lee igual que el resto. Casi siempre caen además
+   en la orilla —el conteo va antes del IN y la «Pausa» después del OUT—, o sea
+   en el más bajo de los tres niveles de texto.
+
+   **Sin un color nuevo, y no por falta de ganas.** Acá al lado ya hablan los
+   cinco colores de vista (el bloque teñido y su sigla), el IN azul y el OUT
+   rojo: un sexto matiz en el mismo renglón se leería como una vista más, que es
+   justo lo que no tiene que decir. Así que el canal es el que esta paleta
+   declara como cuarto —la FORMA—: la palabra sube al primer nivel de texto
+   (12,13:1), engorda y se para sobre una plaquita. Y al ser una capa de blanco
+   translúcido anda igual sobre los cinco tintes de vista, que es donde vive el
+   texto de la toma abierta; cualquier tono habría peleado con uno de ellos.
+
+   El relleno va con `padding` horizontal y nada vertical: el arrastre elige la
+   palabra por la mitad de su caja (`palabraBajo`), y la mitad de una caja con
+   padding parejo sigue estando en el mismo sitio.
+
+   Van DESPUÉS del hover de la palabra a propósito: el hover es una capa del
+   mismo blanco, y encimada dejaba la hueca viéndose rellena, o sea diciendo lo
+   contrario de lo que dice. */
+.transcript .palabra[data-senal] {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--layer-press);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* «Pausa» sin el segundo de silencio detrás NO cierra la toma, y es la pregunta
+   que se hace el editor cuando la clase siguió de largo: se dijo y no pasó nada.
+   Va con la MISMA plaquita, hueca: rellena es «la app hizo esto», de contorno es
+   «la app la oyó y no hizo nada». El par lleno/hueco se lee sin leyenda y sin
+   gastar otro matiz, y el contorno usa la línea de 3,37:1, que es la que esta
+   paleta reserva para identificar un estado (WCAG 1.4.11).
+
+   La sombra va `inset` para no tocar la geometría: un borde de verdad le
+   agregaría un píxel de cada lado a la caja que el arrastre mide. */
+.transcript .palabra[data-senal='pausa-corta'] {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--border-field);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* La palabra bajo el puntero se sigue señalando —es lo que dice dónde va a caer
+   la línea— pero por fuera, con un halo, que no le toca el relleno a la
+   plaquita ni la caja al arrastre. */
+.transcript.es-movible .palabra[data-senal]:hover {
+  background: var(--layer-press);
+  box-shadow: 0 0 0 2px var(--layer-hover);
+}
+
+.transcript.es-movible .palabra[data-senal='pausa-corta']:hover {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--border-field), 0 0 0 2px var(--layer-hover);
+}
+
+
 /* Los nombres de los bordes en las pistas, del mismo color que el borde. */
 .pista {
   margin-top: var(--sp-2);

@@ -286,11 +286,20 @@ function estadoDeLaClase() {
         const palabras = base.tomas[0].palabras.slice(0, 12).map(w => ({
             ...w, t: w.t + 990000, hasta: w.hasta + 990000
         }));
+        // El conteo con el que se abrió, en lo gris de antes del IN: es donde
+        // cae siempre —el IN va DESPUÉS de la última palabra de la cuenta— y es
+        // lo que hay que poder ver marcado para saber que la app lo oyó.
+        const conteo = base.sueltas.slice(-6).map((w, i) => ({
+            ...w,
+            t: palabras[0].t - (4 - i * 0.6) * 1000,
+            hasta: palabras[0].t - (4 - i * 0.6) * 1000 + 380,
+            texto: ['entonces', 'arrancamos', 'ok', 'tres,', 'dos,', 'uno.'][i]
+        }));
         const abierta = {
             ...base.tomas[5], id: 7, outMs: null, comentario: '', relectura: null,
             inMs: palabras[0].t, palabras
         };
-        return { abierta: 7, tomas: base.tomas.concat([abierta]) };
+        return { abierta: 7, sueltas: conteo, tomas: base.tomas.concat([abierta]) };
     }
     if (hay('releyendo')) return { releyendo: 2 };
     return {};

@@ -36,7 +36,8 @@ const FILES = [
     'sesion.test.js',
     'revision-motor.test.js',
     'puente-grabar.test.js',
-    'vivo-interfaz.test.js'
+    'vivo-interfaz.test.js',
+    'senales-del-texto.test.js'
 ];
 
 const filter = process.argv[2] || '';

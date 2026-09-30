@@ -84,11 +84,20 @@ const CLAQUETAS = [
 /**
  * Lo que se oyó después de la última toma, sin ninguna abierta: el texto del
  * campo de espera. Empieza apenas después del OUT de la 6 (1010 s).
+ *
+ * Llevan adentro las dos señales que se ven en un campo de espera de verdad, y
+ * son las que hacen falta para mirar cómo quedan marcadas:
+ *
+ *   «pausa»   dicha hablando de otra cosa, con la clase siguiendo detrás: es la
+ *             que el motor anota como `pausa-corta` y NO cierra nada.
+ *   «Laqueta» como Whisper escribió una claqueta el 30/09. Sin claqueta en la
+ *             lista a esa altura, que es el caso de verdad: se dijo, no se oyó
+ *             el aplauso y la app lo avisa para poner la K.
  */
 const SUELTAS = palabras(
-    'bueno ahora vamos con lo siguiente entonces lo que hacemos acá es tomar el ' +
-    'disparador y conectarlo con la condición de salida y fíjense que cuando ' +
-    'cambia el valor se vuelve a evaluar todo el flujo desde el principio', 1015);
+    'bueno ahora vamos con lo siguiente acá hacemos una pausa en el flujo y ' +
+    'conectamos el disparador con la condición de salida fíjense que cuando ' +
+    'cambia el valor se vuelve a evaluar todo desde el principio Laqueta clase dos', 1015);
 
 /** El estado de una sesión en curso, como lo manda `espejo.resumen`. */
 export function estadoEnVivo(extra) {

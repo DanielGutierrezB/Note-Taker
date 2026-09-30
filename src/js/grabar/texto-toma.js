@@ -21,6 +21,8 @@
  *              que quedó guardado.
  */
 
+import * as senales from './senales.js';
+
 /** El texto cuya línea está agarrada, o null. */
 let agarrado = null;
 let alTerminar = () => {};
@@ -62,7 +64,16 @@ function barra(cual, pista) {
     return b;
 }
 
-function palabra(w, comentarios) {
+/**
+ * Una palabra.
+ *
+ * La señal va en un `data-senal` del MISMO span y no en un elemento que lo
+ * envuelva: el arrastre del IN y del OUT encuentra la palabra por su caja en
+ * pantalla (`palabraBajo`) y mueve la línea entre hermanos (`marcarOrillas`,
+ * `malParada`), así que un nodo de más en el medio cambiaría las dos cosas. Un
+ * atributo no cambia ninguna.
+ */
+function palabra(w, comentarios, senal) {
     const s = document.createElement('span');
     s.className = 'palabra';
     s.dataset.t = w.t;
@@ -72,6 +83,10 @@ function palabra(w, comentarios) {
     // comentario de la lista de abajo.
     if ((comentarios || []).some(c => w.t >= c.desdeMs && w.t <= c.hastaMs)) {
         s.classList.add('es-comentada');
+    }
+    if (senal) {
+        s.dataset.senal = senal;
+        s.title = senales.QUE_HACE[senal] || '';
     }
     return s;
 }
@@ -264,7 +279,16 @@ function empezar(texto, b, alSoltar) {
 export function textoDe(p, alSoltar) {
     const texto = document.createElement('div');
     texto.className = `transcript es-${p.modo}${alSoltar ? ' es-movible' : ''}`;
+    // Las señales se buscan sobre la tirada ENTERA y en el orden en que se
+    // dibuja, no sobre cada pedazo: el conteo que abrió la toma está en lo gris
+    // de antes del IN y la «Pausa» que la cerró en lo gris de después del OUT,
+    // y esa «Pausa» se resuelve con la palabra que la sigue, que está del otro
+    // lado del borde.
+    const enOrden = [...(p.antes || []), ...(p.palabras || []), ...(p.despues || [])];
+    const marcas = senales.porPalabra(enOrden);
+    let cual = -1;
     const poner = w => {
+        cual++;
         // Lo que se dejó de dibujar en el medio de una toma larga (ver
         // `recortarAbierta` en pantalla-vivo.js).
         if (w.corte) {
@@ -274,7 +298,7 @@ export function textoDe(p, alSoltar) {
             texto.append(c, document.createTextNode(' '));
             return;
         }
-        texto.append(palabra(w, p.comentarios), document.createTextNode(' '));
+        texto.append(palabra(w, p.comentarios, marcas.get(cual)), document.createTextNode(' '));
     };
     const conBarra = (cual, pista) => {
         const b = barra(cual, pista);
