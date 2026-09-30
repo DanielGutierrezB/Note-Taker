@@ -66,6 +66,19 @@ function aHoraDelDia(words, sesion, desdeSec) {
  * (`oido-residente.js`). Null si no está o si falla esta vez: entonces se oye
  * por `whisper-cli` como antes, y la pasada no se pierde.
  */
+/**
+ * El piso de ruido de cada sesión de captura. En un WeakMap y no en la sesión
+ * para no meterlo en lo que se guarda a disco; se va solo cuando la sesión se
+ * va.
+ */
+const pisos = new WeakMap();
+
+function pisoDe(sesion) {
+    let s = pisos.get(sesion);
+    if (!s) { s = sonido.seguidor(); pisos.set(sesion, s); }
+    return s;
+}
+
 async function delResidente(archivo, idioma) {
     if (!residente.listo()) return null;
     try {
@@ -119,8 +132,14 @@ async function escuchar(params) {
 
         // Un recorte donde no suena nada no se le pasa a Whisper: lo único que
         // puede devolver es lo que inventa sobre el silencio (`sonido.js`).
+        // «Nada» es contra el ruido de ESTA sala, que se aprende de las pasadas
+        // del ciclo —cortas y seguidas, casi siempre con algún silencio adentro—
+        // y no de la relectura de una toma, que es habla de punta a punta.
         const nivel = sonido.niveles(recortado.archivo);
-        if (!sonido.algoSuena(nivel)) return { palabras: [], colapsadas: 0, mudas: 0 };
+        const piso = pisoDe(p.sesion);
+        if (p.liviano) sonido.aprender(piso, nivel);
+        const corte = sonido.umbral(piso);
+        if (!sonido.algoSuena(nivel, corte)) return { palabras: [], colapsadas: 0, mudas: 0 };
 
         // Con tope: un whisper-cli colgado dejaba el ciclo esperando para
         // siempre —ni una señal más en toda la clase— y a «Terminar» también.
@@ -140,7 +159,7 @@ async function escuchar(params) {
         const limpias = transcribe.collapseLoops(salida.words || []);
         // Y lo que quedó escrito sobre un silencio sin repetirse: «Gracias.»
         // suelto, o tres, que el colapso no alcanza a ver como bucle.
-        const oidas = sonido.conSonido(limpias.words, nivel);
+        const oidas = sonido.conSonido(limpias.words, nivel, corte);
 
         return {
             palabras: aHoraDelDia(oidas.words, p.sesion, recortado.desdeSec),

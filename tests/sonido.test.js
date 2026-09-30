@@ -63,11 +63,71 @@ module.exports = function (t) {
         t.eq(r.words.length, 1);
     });
 
-    t.test('el ruido de sala de un micrófono no es silencio', () => {
-        // −55 dB, lo más bajo medido con unos AirPods como micrófono.
-        const n = sonido.niveles(wav([[3, Math.pow(10, -55 / 20) * Math.SQRT2]]));
-        t.eq(sonido.algoSuena(n), true);
-        t.eq(sonido.conSonido([{ start: 1, end: 1.3, text: 'sí' }], n).words.length, 1);
+    t.test('sobre el ruido de sala, con el piso aprendido, tampoco se dijo nada', () => {
+        // El caso del 30/09: el micrófono eran unos AirPods, el silencio de la
+        // sala estaba en −65 y el corte fijo de −60 no filtraba nada.
+        const ruido = Math.pow(10, -65 / 20) * Math.SQRT2;
+        const piso = sonido.seguidor();
+        for (let i = 0; i < sonido.MINIMO; i++) sonido.aprender(piso, sonido.niveles(wav([[2, ruido]])));
+        const corte = sonido.umbral(piso);
+        t.ok(corte > -50 && corte < -35, `el corte quedó en ${corte.toFixed(1)} dBFS`);
+
+        const n = sonido.niveles(wav([[3, ruido]]));
+        t.eq(sonido.algoSuena(n, corte), false);
+        t.eq(sonido.conSonido([{ start: 1, end: 1.3, text: 'Gracias.' }], n, corte).words.length, 0);
+    });
+
+    t.test('con el piso aprendido, lo hablado sobre ese mismo ruido se queda', () => {
+        const ruido = Math.pow(10, -65 / 20) * Math.SQRT2;
+        const piso = sonido.seguidor();
+        for (let i = 0; i < sonido.MINIMO; i++) sonido.aprender(piso, sonido.niveles(wav([[2, ruido]])));
+        const corte = sonido.umbral(piso);
+
+        // −20 dB, que es donde estuvo la voz en las dos grabaciones reales.
+        const n = sonido.niveles(wav([[2, ruido], [2, Math.pow(10, -20 / 20) * Math.SQRT2]]));
+        t.eq(sonido.algoSuena(n, corte), true);
+        const r = sonido.conSonido([
+            { start: 0.5, end: 0.9, text: 'Gracias.' },
+            { start: 2.5, end: 2.9, text: 'Hola' }
+        ], n, corte);
+        t.deep(r.words.map(w => w.text), ['Hola']);
+    });
+
+    t.test('un golpe corto no es una palabra por más fuerte que sea', () => {
+        // El caso que se colaba con el corte adaptativo solo: un clic de teclado
+        // llega a −33 dB y pasa cualquier corte de nivel, pero dura 40 ms.
+        const ruido = Math.pow(10, -65 / 20) * Math.SQRT2;
+        const fuerte = Math.pow(10, -20 / 20) * Math.SQRT2;
+        const piso = sonido.seguidor();
+        for (let i = 0; i < sonido.MINIMO; i++) sonido.aprender(piso, sonido.niveles(wav([[2, ruido]])));
+        const corte = sonido.umbral(piso);
+
+        const golpe = sonido.niveles(wav([[2, ruido], [0.04, fuerte], [2, ruido]]));
+        t.eq(sonido.algoSuena(golpe, corte), false);
+        t.eq(sonido.conSonido([{ start: 2.0, end: 2.05, text: 'Gracias.' }], golpe, corte).words.length, 0);
+
+        const palabra = sonido.niveles(wav([[2, ruido], [0.4, fuerte], [2, ruido]]));
+        t.eq(sonido.algoSuena(palabra, corte), true);
+        t.eq(sonido.conSonido([{ start: 2.0, end: 2.4, text: 'Hola' }], palabra, corte).words.length, 1);
+    });
+
+    t.test('sin pasadas medidas el corte es el de abajo, que no se come nada', () => {
+        t.eq(sonido.umbral(sonido.seguidor()), sonido.PISO_DB);
+        t.eq(sonido.umbral(null), sonido.PISO_DB);
+    });
+
+    t.test('con silencio digital el corte no se hunde con el piso', () => {
+        // Piso −120 + 24 daría −96: cualquier cosa pasaría. Se planta en −60.
+        const piso = sonido.seguidor();
+        for (let i = 0; i < 5; i++) sonido.aprender(piso, sonido.niveles(wav([[2, 0]])));
+        t.eq(sonido.umbral(piso), sonido.PISO_DB);
+    });
+
+    t.test('en una sala ruidosa el filtro se rinde antes que comerse lo hablado', () => {
+        const piso = sonido.seguidor();
+        const ruido = Math.pow(10, -40 / 20) * Math.SQRT2;
+        for (let i = 0; i < 5; i++) sonido.aprender(piso, sonido.niveles(wav([[2, ruido]])));
+        t.eq(sonido.umbral(piso), sonido.TECHO_DB);
     });
 
     t.test('un archivo que no se entiende no filtra nada', () => {
