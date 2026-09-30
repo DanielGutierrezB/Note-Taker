@@ -48,7 +48,10 @@ contextBridge.exposeInMainWorld('nt', {
     onAudioApp: callback => {
         ipcRenderer.on('audio-app', (_event, payload) => callback(payload));
     },
-    grabarClaqueta: () => ipcRenderer.invoke('grabar-claqueta'),
+    // Sin argumento, la claqueta cae donde llegó el audio. Con el `ms` de un
+    // aviso `golpe`, cae en ESA palmada: es lo que deja que la K enganche la
+    // palmada que la pastilla está señalando aunque ya haya pasado su ventana.
+    grabarClaqueta: palmadaMs => ipcRenderer.invoke('grabar-claqueta', palmadaMs),
     grabarQuitarClaqueta: n => ipcRenderer.invoke('grabar-quitar-claqueta', n),
     grabarEditar: cambio => ipcRenderer.invoke('grabar-editar', cambio),
     grabarEditarGrabada: (json, cambio) => ipcRenderer.invoke('grabar-editar-grabada', json, cambio),

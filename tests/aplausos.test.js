@@ -559,6 +559,66 @@ module.exports = function (t) {
         t.eq(vivo.aplausoCerca(e, T0 + 41200), null, 'una palmada de hace medio minuto no es esta');
     });
 
+    t.group('aplausos · la K que llega tarde engancha la palmada igual');
+
+    t.test('la palmada señalada se encuentra aunque la cercanía ya no la vea', () => {
+        // Es el caso que importa y el que no se podía resolver por cercanía. La
+        // pastilla roja no puede aparecer hasta doce segundos después de la
+        // palmada —seis de audio que al motor le faltan para leer, seis de la
+        // pasada de Whisper—, así que cuando el editor se entera de que no se
+        // anotó ninguna, `aplausoCerca` ya no la alcanza.
+        const T0 = Date.parse('2026-09-30T09:08:36');
+        const e = vivo.estadoNuevo({ secuencia: 'x', ceroMs: T0, fps: 30 });
+        vivo.recordarAplauso(e, T0 + 40000);
+        const apreta = T0 + 53000;
+        t.eq(vivo.aplausoCerca(e, apreta), null, 'a los trece segundos la cercanía ya no la ve');
+        t.eq(vivo.aplausoOido(e, T0 + 40000), T0 + 40000, 'y señalada sí');
+    });
+
+    t.test('pero solo las que se oyeron: una hora inventada no mueve nada', () => {
+        // El `ms` cruza el puente `window.nt`, así que se busca en la lista en
+        // vez de creerle. La ventana puede señalar una palmada vieja; no puede
+        // poner una claqueta en un momento en que no sonó nada.
+        const T0 = Date.parse('2026-09-30T09:08:36');
+        const e = vivo.estadoNuevo({ secuencia: 'x', ceroMs: T0, fps: 30 });
+        vivo.recordarAplauso(e, T0 + 40000);
+        for (const inventada of [T0 + 40001, T0 + 99000, 0, -1, null, undefined, NaN, 'hola']) {
+            t.eq(vivo.aplausoOido(e, inventada), null, String(inventada));
+        }
+    });
+
+    t.test('la sesión entera: K a los trece segundos cae en la palmada', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-palmada-'));
+        try {
+            grabacion.iniciar({
+                dir, curso: 'prueba', fps: 30, sampleRate: TASA, sinReloj: true
+            });
+            const x = PALMADA_EN_1300;
+            for (let off = 0; off + MUESTRAS_POR_PEDAZO <= x.length; off += MUESTRAS_POR_PEDAZO) {
+                grabacion.pcm(muestras(x, off, MUESTRAS_POR_PEDAZO));
+            }
+            const estado = grabacion._sesion().estado;
+            const palmada = estado.aplausos[0];
+
+            // Trece segundos más de audio: el dedo ya no está cerca de nada, y
+            // es exactamente cuando la pastilla roja le pide que apriete.
+            const silencio = pista(13);
+            for (let off = 0; off + MUESTRAS_POR_PEDAZO <= silencio.length; off += MUESTRAS_POR_PEDAZO) {
+                grabacion.pcm(muestras(silencio, off, MUESTRAS_POR_PEDAZO));
+            }
+
+            const sinSeñalar = grabacion.claqueta();
+            t.ok(sinSeñalar.claquetas[0].ms - palmada > 10000, 'sin señalar cae donde el dedo');
+            grabacion.quitarClaqueta(sinSeñalar.claquetas[0].n);
+
+            const conSeñal = grabacion.claqueta(palmada);
+            t.eq(conSeñal.claquetas.length, 1, 'una claqueta');
+            t.eq(conSeñal.claquetas[0].ms, palmada, 'y en el instante de ESA palmada');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
     t.group('aplausos · la sesión entera, con la palmada en el PCM');
 
     t.test('una palmada de verdad se oye, y el botón se le pega encima', () => {

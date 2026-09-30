@@ -257,6 +257,30 @@ let palmada = null;
 const LECTURA_DE_PALMADA_MS = 6000;
 
 /**
+ * Cuánto se le da al editor para reaccionar a la pastilla roja.
+ *
+ * Ocho segundos, que con los doce de antes son veinte desde la palmada. Es el
+ * número que hace honesta a la pastilla: el motor no puede decir «sin
+ * confirmar» antes de los doce, y si la K dejara de enganchar ahí mismo, el
+ * aviso llegaría justo tarde para lo único que pide hacer.
+ *
+ * Por arriba no hay riesgo de enganchar de más. El peligro sería que el editor
+ * ponga a mano una claqueta NUEVA —una cuyo aplauso Zoom se comió, que es para
+ * lo que la K existe— con una pastilla vieja todavía en pantalla, y que la
+ * marca se fuera veinte segundos atrás. Pero dos claquetas de verdad nunca
+ * están tan cerca: entre una y la siguiente hay una toma, o por lo menos el
+ * tiempo de reacomodar una cámara (`MISMA_CLAQUETA_MS` en `notas-vivo.js`, que
+ * da cinco segundos por el mismo motivo). Y si la palmada sí se oye, el aviso
+ * nuevo reemplaza al viejo y la cuenta arranca de cero.
+ */
+const REACCION_MS = 8000;
+
+/** Cuánto audio grabado lleva el motor, que es el reloj con el que él decide. */
+function grabadoHastaMs() {
+    return estado.ceroMs + (estado.segundos || 0) * 1000;
+}
+
+/**
  * ¿Ya se le puede decir al editor que esa palmada no se confirmó?
  *
  * Se mide con el audio que el motor tiene grabado, que es el mismo reloj con el
@@ -264,8 +288,31 @@ const LECTURA_DE_PALMADA_MS = 6000;
  */
 function palmadaVencida() {
     if (!palmada || palmada.sinConfirmar || !estado) return false;
-    const grabadoHasta = estado.ceroMs + (estado.segundos || 0) * 1000;
-    return grabadoHasta >= palmada.ms + PALABRA_Y_APLAUSO_MS + LECTURA_DE_PALMADA_MS;
+    return grabadoHastaMs() >= palmada.ms + PALABRA_Y_APLAUSO_MS + LECTURA_DE_PALMADA_MS;
+}
+
+/**
+ * ¿La claqueta a mano todavía se engancha a esta palmada?
+ *
+ * Con el mismo reloj que el vencimiento, y por lo mismo: con el audio atrasado
+ * el motor tampoco leyó, así que la pastilla todavía no dijo nada y el editor
+ * no pudo reaccionar a nada.
+ */
+function palmadaEnganchable() {
+    if (!palmada || !estado) return false;
+    return grabadoHastaMs() <=
+        palmada.ms + PALABRA_Y_APLAUSO_MS + LECTURA_DE_PALMADA_MS + REACCION_MS;
+}
+
+/**
+ * La palmada en la que tiene que caer la claqueta a mano, o null para «acá».
+ *
+ * Es el `ms` que mandó el motor en su aviso `golpe`, de vuelta tal cual: él lo
+ * busca en su lista antes de usarlo (`aplausoOido` en `notas-vivo.js`), así que
+ * mandarlo de más no puede mover una marca a un sitio inventado.
+ */
+function palmadaParaEnganchar() {
+    return palmadaEnganchable() ? palmada.ms : null;
 }
 
 /**
@@ -294,9 +341,13 @@ function pintarPalmada() {
         if (!palmada.dicho) {
             palmada.dicho = true;
             avisar('Se oyó una palmada y no se leyó «claqueta» alrededor: no se anotó ninguna. ' +
-                'Si fue una claqueta, apretá K.', 'error');
+                'Si fue una claqueta, apretá K y queda en la palmada.', 'error');
         }
     }
+    // Lo que la pastilla promete depende de si la K todavía engancha, así que
+    // se resuelve acá y viaja con la palmada: `estados.js` dice las palabras,
+    // no mira relojes.
+    if (palmada) palmada.enganchable = palmadaEnganchable();
     const est = estados.dePalmada(palmada);
     chapa.hidden = !est;
     if (!est) return;
@@ -955,7 +1006,7 @@ async function alClic(e) {
             vista.elegida = toma;
             pintar();
             break;
-        case 'claqueta': await pedir(() => window.nt.grabarClaqueta()); break;
+        case 'claqueta': await pedir(() => window.nt.grabarClaqueta(palmadaParaEnganchar())); break;
         // Los atajos de la barra: lo mismo que las teclas, con el mouse.
         case 'borde': await bordeDeToma(); break;
         case 'deshacer': await volver('deshacer'); break;
@@ -1368,7 +1419,7 @@ async function alTeclado(e) {
     const tecla = e.key.toLowerCase();
     if (tecla === 'k') {
         e.preventDefault();
-        return pedir(() => window.nt.grabarClaqueta());
+        return pedir(() => window.nt.grabarClaqueta(palmadaParaEnganchar()));
     }
     if (e.key === 'Enter') {
         e.preventDefault();

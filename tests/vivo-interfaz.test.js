@@ -60,9 +60,18 @@ module.exports = function (t) {
     });
 
     t.test('`alClic` y la tecla K llaman a `grabarClaqueta`, y nadie más', () => {
-        t.ok(/case 'claqueta': await pedir\(\(\) => window\.nt\.grabarClaqueta\(\)\)/.test(js));
+        t.ok(/case 'claqueta': await pedir\(\(\) => window\.nt\.grabarClaqueta\(/.test(js));
         t.ok(/tecla === 'k'/.test(js), 'la tecla sigue siendo la K');
         const llamadas = [...js.matchAll(/window\.nt\.grabarClaqueta\(/g)].length;
         t.eq(llamadas, 2, 'una por el clic y una por la tecla: nada duplicado');
+    });
+
+    t.test('las dos mandan la palmada que la pastilla está señalando', () => {
+        // Las DOS: el botón de la barra y la tecla hacen lo mismo, y una que
+        // se olvidara de mandarla dejaría la claqueta en el dedo según por
+        // dónde se haya pedido, que es la clase de diferencia que nadie
+        // entiende mirando el XML al día siguiente.
+        const conPalmada = [...js.matchAll(/window\.nt\.grabarClaqueta\(palmadaParaEnganchar\(\)\)/g)];
+        t.eq(conPalmada.length, 2, 'el clic y la tecla, las dos');
     });
 };

@@ -894,6 +894,28 @@ function aplausoCerca(estado, ms) {
 }
 
 /**
+ * La palmada que se oyó EXACTAMENTE en `ms`, o null.
+ *
+ * Es la vuelta del aviso `golpe`: el motor le manda a la ventana el `ms` del
+ * pico, la ventana lo enseña en la pastilla, y cuando el editor aprieta K lo
+ * devuelve para decir «anotá ESA». Existe porque por cercanía no alcanza: la
+ * pastilla roja no puede aparecer hasta doce segundos después de la palmada
+ * —seis de audio que al motor le faltan y seis de la pasada de Whisper—, y para
+ * entonces `aplausoCerca` ya no la encuentra. Justo cuando el editor se entera
+ * de que la claqueta no se anotó, apretar K dejaba de caer en la palmada.
+ *
+ * **Se busca de verdad en vez de creerle.** Por igualdad y no por cercanía,
+ * porque el número que vuelve es el mismo que salió de acá y no una
+ * aproximación; y contra la lista de palmadas oídas, porque así la ventana
+ * puede señalar una palmada vieja pero no puede inventar una hora.
+ */
+function aplausoOido(estado, ms) {
+    const n = Number(ms);
+    if (!Number.isFinite(n)) return null;
+    return (estado.aplausos || []).includes(n) ? n : null;
+}
+
+/**
  * La palabra «claqueta» dicha a la hora `ms`: si hubo un aplauso cerca, ESA es
  * la claqueta, y va en el aplauso —que es el punto de sincronía, el cuadro que
  * el editor busca en la onda—. Sin aplauso cerca, no es una claqueta.
@@ -1439,6 +1461,7 @@ module.exports = {
     claquetaDicha,
     recordarAplauso,
     aplausoCerca,
+    aplausoOido,
     PALABRA_Y_APLAUSO_MS,
     moverBorde,
     tomasQueQuedan,

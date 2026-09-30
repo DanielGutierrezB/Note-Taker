@@ -328,9 +328,11 @@ de DESPUÉS del aplauso, así que aplaudir y mirar la pantalla daba exactamente 
 mismo que aplaudir con la app apagada. El 30/09 el editor reportó «aún no está
 reconociendo la claqueta» y parte de eso era este silencio.
 
-Mientras la pastilla dice `palmada oída` **apretar K la deja en la palmada
-misma** —la manual y la automática se funden si caen a menos de cinco segundos—,
-así que es el momento exacto en que vale la pena afirmarla a mano.
+Mientras la pastilla esté en pantalla, **apretar K deja la claqueta en la
+palmada misma** y no donde esté el dedo: el aviso lleva el `ms` del pico y la
+ventana lo devuelve con la petición, así que el motor anota en ESA palmada. La
+manual y la automática se funden, y de la fusión el `ms` lo pone siempre el
+aplauso, que es el único de los tres que mide sobre la onda.
 
 ![La misma barra con la pastilla roja «palmada sin confirmar»](docs/capturas/palmada-barra-sin-confirmar.png)
 
@@ -348,6 +350,19 @@ grabado**, y son los seis segundos que al motor le faltan más otros seis para l
 pasada de Whisper. Medirla con el reloj la habría puesto en rojo cada vez que el
 audio se atrasa —un Zoom que tartamudea, la máquina ocupada—, acusando al motor
 de algo que todavía no pudo hacer, y un aviso que se equivoca se deja de mirar.
+
+**Y el enganche de la K dura más que esa cuenta**, que es lo que hace honesto al
+aviso. El motor estampaba en el aplauso solo si había uno a menos de seis
+segundos, y la pastilla roja no puede aparecer antes de los doce: justo cuando
+el editor se entera de que la palmada no llegó a ser claqueta, apretar K ya no
+caía en la palmada. Se resolvió por identidad y no por tiempo —el aviso lleva el
+`ms` del pico y vuelve con la petición, y el motor lo busca en su lista de
+palmadas antes de usarlo, así que la ventana puede señalar una vieja pero no
+inventar una hora—, con ocho segundos de reacción encima de los doce. Veinte en
+total, que es mucho menos de lo que hay entre dos claquetas de verdad: entre una
+y la siguiente hay una toma, o por lo menos el tiempo de reacomodar una cámara.
+Pasados los veinte, la pastilla sigue roja —el diagnóstico no cambió— y lo que
+cambia es lo que promete: ahí dice que la marca va a caer donde se apriete.
 
 ## El XML
 

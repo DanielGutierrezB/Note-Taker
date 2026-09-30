@@ -113,10 +113,15 @@ function registrar({ ipcMain, app, send, anotar }) {
      * (`espejo.grabadoHastaMs`). Mandarla desde la ventana sería mandar
      * `Date.now()`, que va uno o dos pedazos por delante de lo que se grabó, y
      * en una clase larga eso son marcas que no coinciden con la onda.
+     *
+     * Lo único que sí viaja es `palmadaMs`, y no es una hora sino una
+     * referencia: el `ms` con el que el motor avisó «oí una palmada», de vuelta
+     * para decirle en cuál anotar (ver `grabacion.claqueta`). El motor lo busca
+     * en su propia lista antes de usarlo.
      */
-    ipcMain.handle('grabar-claqueta', () => {
-        anotar('grabar.claqueta', { aMano: true });
-        return grabacion.claqueta();
+    ipcMain.handle('grabar-claqueta', (event, palmadaMs) => {
+        anotar('grabar.claqueta', { aMano: true, palmadaMs: palmadaMs == null ? null : palmadaMs });
+        return grabacion.claqueta(palmadaMs);
     });
 
     ipcMain.handle('grabar-quitar-claqueta', (event, n) => {

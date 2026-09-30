@@ -45,11 +45,22 @@ module.exports = async t => {
         t.ok(/K/.test(e.porque), 'y dice qué hacer si ya se sabe que era una claqueta');
     });
 
-    t.test('sin confirmar lo dice, y avisa que la K ya no cae en la palmada', () => {
-        const e = estados.dePalmada({ ms: 30000, sinConfirmar: true });
+    t.test('sin confirmar lo dice, y promete que la K cae en la palmada', () => {
+        const e = estados.dePalmada({ ms: 30000, sinConfirmar: true, enganchable: true });
         t.eq(e.palabra, 'palmada sin confirmar', 'no se calla ni finge que se anotó');
         t.eq(e.clave, 'sin confirmar', 'en rojo, como cualquier cosa que no salió');
-        t.ok(/no en la palmada/.test(e.porque),
+        t.ok(/cae en la palmada misma/.test(e.porque),
+            'es lo que el aviso existe para que se pueda hacer');
+        t.ok(!/quedó atrás/.test(e.porque), 'y no se disculpa de algo que ya no pasa');
+    });
+
+    t.test('y cuando la K ya no engancha, lo dice en vez de esconderlo', () => {
+        // El aviso no puede ser más generoso que el motor: pasado el enganche,
+        // la marca cae donde está el dedo y eso hay que decirlo. Un aviso que
+        // promete algo que no hace es peor que no tener aviso.
+        const e = estados.dePalmada({ ms: 30000, sinConfirmar: true, enganchable: false });
+        t.eq(e.palabra, 'palmada sin confirmar', 'la misma palabra: el diagnóstico no cambió');
+        t.ok(/no en la palmada, que ya quedó atrás/.test(e.porque),
             'la marca a mano cae donde se aprieta, y eso no se esconde');
     });
 
@@ -73,8 +84,11 @@ module.exports = async t => {
             codigo.indexOf('\n}', codigo.indexOf('function palmadaVencida()')));
         t.ok(/PALABRA_Y_APLAUSO_MS \+ LECTURA_DE_PALMADA_MS/.test(cuerpo),
             'se esperan los dos: el audio que le falta y la pasada de Whisper');
-        t.ok(/estado\.segundos/.test(cuerpo),
+        t.ok(/grabadoHastaMs\(\)/.test(cuerpo),
             'y se cuentan con el audio grabado, que es el reloj con el que el motor lee');
+        t.ok(/estado\.segundos/.test(codigo.slice(codigo.indexOf('function grabadoHastaMs()'),
+            codigo.indexOf('\n}', codigo.indexOf('function grabadoHastaMs()')))),
+        'que es lo que ese reloj mide');
         t.ok(!/Date\.now/.test(cuerpo),
             'no con el reloj de pared: el audio atrasado no es culpa del motor');
     });
@@ -90,6 +104,53 @@ module.exports = async t => {
         t.ok(!vencida(30000, 35000), 'a los 5 s el motor todavía no tiene el audio: se espera');
         t.ok(!vencida(30000, 36500), 'recién ahí empieza a leer: tampoco se lo acusa');
         t.ok(vencida(30000, 30000 + 6000 + lectura), 'pasado el margen, se dice que no se confirmó');
+    });
+
+    t.group('palmada · la K engancha la palmada que la pastilla señala');
+
+    t.test('el enganche dura más que lo que tarda la pastilla en ponerse roja', () => {
+        // Lo que hacía falso al aviso: el motor solo estampaba en el aplauso si
+        // había uno a menos de seis segundos, y la pastilla roja no puede
+        // aparecer antes de doce. Justo cuando el editor se entera de que la
+        // palmada no se confirmó, apretar K ya no caía en la palmada.
+        const codigo = leer('src', 'js', 'pantalla-vivo.js');
+        const lectura = Number(codigo.match(/const LECTURA_DE_PALMADA_MS = (\d+);/)[1]);
+        const reaccion = Number(codigo.match(/const REACCION_MS = (\d+);/)[1]);
+        const enRojo = senales.PALABRA_Y_APLAUSO_MS + lectura;
+        t.ok(reaccion > 0, 'el editor tiene tiempo de reaccionar a lo que acaba de leer');
+        // Y por arriba: dos claquetas de verdad nunca están a veinte segundos
+        // (`MISMA_CLAQUETA_MS` da cinco por el mismo motivo), así que el
+        // enganche no se puede llevar una claqueta nueva puesta a mano.
+        t.ok(enRojo + reaccion <= 30000, 'y no tanto como para robarle una claqueta nueva');
+    });
+
+    t.test('se mide con el mismo reloj que el vencimiento: el audio grabado', () => {
+        const codigo = leer('src', 'js', 'pantalla-vivo.js');
+        const cuerpo = codigo.slice(codigo.indexOf('function palmadaEnganchable()'),
+            codigo.indexOf('\n}', codigo.indexOf('function palmadaEnganchable()')));
+        t.ok(/grabadoHastaMs\(\)/.test(cuerpo), 'audio grabado y no reloj de pared');
+        t.ok(/REACCION_MS/.test(cuerpo), 'y lleva los segundos de la reacción');
+        t.ok(!/Date\.now/.test(cuerpo),
+            'con el audio atrasado el editor tampoco leyó nada todavía');
+    });
+
+    t.test('lo que se manda es el `ms` del aviso, tal cual', () => {
+        const codigo = leer('src', 'js', 'pantalla-vivo.js');
+        const cuerpo = codigo.slice(codigo.indexOf('function palmadaParaEnganchar()'),
+            codigo.indexOf('\n}', codigo.indexOf('function palmadaParaEnganchar()')));
+        t.ok(/palmada\.ms/.test(cuerpo), 'el mismo número que mandó el motor');
+        t.ok(/null/.test(cuerpo), 'y null cuando ya no engancha: ahí la claqueta cae acá');
+    });
+
+    t.test('el puente lo lleva de ida y el motor no se lo cree', () => {
+        t.ok(/grabarClaqueta: palmadaMs => ipcRenderer\.invoke\('grabar-claqueta', palmadaMs\)/
+            .test(leer('preload.js')), 'preload pasa el argumento');
+        t.ok(/'grabar-claqueta', \(event, palmadaMs\) =>/.test(leer('ipc', 'grabar.js')),
+            'el puente lo recibe');
+        t.ok(/grabacion\.claqueta\(palmadaMs\)/.test(leer('ipc', 'grabar.js')),
+            'y se lo da al motor');
+        t.ok(/vivo\.aplausoOido\(sesion\.estado, palmadaMs\)/.test(leer('engine', 'grabacion.js')),
+            'que lo busca en su lista de palmadas antes de usarlo');
     });
 
     t.group('palmada · el ciclo se cierra');

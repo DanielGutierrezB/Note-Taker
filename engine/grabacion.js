@@ -503,13 +503,29 @@ async function leerClaqueta(ms, s) {
  * Al revés funciona igual y por lo mismo: si la confirmación ya llegó, el botón
  * cae exactamente sobre la claqueta que hay y la funde en vez de agregar otra.
  *
+ * **Y la ventana puede señalar CUÁL palmada**, con `palmadaMs`. Buscar por
+ * cercanía alcanza mientras el editor aprieta la tecla al oír el aplauso, y no
+ * alcanza en el caso que importa: la pantalla no puede decir «palmada sin
+ * confirmar» hasta doce segundos después —seis de audio que al motor le faltan
+ * para poder leer, seis de la pasada de Whisper—, así que justo cuando el
+ * editor se entera de que no se anotó ninguna, la ventana de seis segundos ya
+ * pasó y la K caía donde estaba su dedo. Con el `ms` del aviso de vuelta cae en
+ * la palmada. No se le cree a ojos cerrados: `aplausoOido` lo busca en la lista
+ * de palmadas de esta sesión, así que la ventana puede señalar una vieja pero
+ * no puede inventar una hora.
+ *
  * **Va al historial como todo lo demás**, y la foto es de la lista entera:
  * anotar puede fundir dos y renumerar las de atrás (ver `anotarClaqueta`).
+ *
+ * @param {number} [palmadaMs] el `ms` de un aviso `golpe`, para anotar en ESA
  */
-function claqueta() {
+function claqueta(palmadaMs) {
     if (!sesion || !sesion.captura) return null;
     const ahora = espejo.grabadoHastaMs(sesion);
-    const palmada = vivo.aplausoCerca(sesion.estado, ahora);
+    // La señalada manda sobre la buscada por cercanía: la ventana sabe cuál
+    // palmada está mirando el editor, y el motor solo puede adivinarlo.
+    const palmada = vivo.aplausoOido(sesion.estado, palmadaMs) ??
+        vivo.aplausoCerca(sesion.estado, ahora);
     const ms = palmada == null ? ahora : palmada;
     // El paso es de UNA claqueta: la que había ahí (si se funde) y la que quedó.
     // Una foto de la lista entera se llevaba al deshacer las que el aplauso o
