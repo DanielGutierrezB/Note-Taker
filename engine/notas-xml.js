@@ -115,9 +115,30 @@ function colorDeVista(nombre) {
  * La primera dice además que es la de referencia. Es la que el editor
  * correlaciona primero para saber si en Premiere hay uno o varios archivos, así
  * que tiene que distinguirse de un vistazo entre siete marcadores blancos.
+ *
+ * ─── Y la nota, si alguien la escribió ───────────────────────────────────
+ *
+ * **Va en el comentario y no en el nombre, y en segundo lugar.** Las dos
+ * decisiones tienen el mismo motivo detrás y no son de gusto.
+ *
+ * En el comentario, porque el nombre de este marcador es lo único por lo que se
+ * lo reconoce después. `rodecaster-xml.js` clasifica un marcador como claqueta
+ * buscando "claqueta" o "clapperboard" en su COMENTARIO (`isClapMarker`), y
+ * "Claqueta N" a secas es lo que la herramienta del CD espera leer en el
+ * nombre; una nota libre metida ahí rompe el viaje de vuelta de un XML que esta
+ * app escribió. El comentario, en cambio, ya es texto compuesto, y la nota
+ * entra detrás del número sin sacarle la palabra que lo identifica.
+ *
+ * En segundo lugar y no al final, porque es lo único de este renglón que no se
+ * puede deducir: el número, la hora, la referencia y la frase los escribió la
+ * app, y la nota la escribió una persona que estaba mirando la clase. Es el
+ * mismo orden con el que sale el marcador de una toma, donde la nota del
+ * director va primero y el cue detrás (`comentarioDeEntrada`). En el panel de
+ * marcadores de Premiere la columna se corta, y lo que se lee es el principio.
  */
 function comentarioDeClaqueta(claqueta, esReferencia) {
     const partes = [`Claqueta ${claqueta.n}`];
+    if (vivo.limpio(claqueta.comentario)) partes.push(vivo.limpio(claqueta.comentario));
     if (esReferencia) partes.push('referencia de sincronía');
     if (claqueta.paredMs) partes.push(horaDelDia(claqueta.paredMs));
     if (!claqueta.confirmada) partes.push('sin confirmar');

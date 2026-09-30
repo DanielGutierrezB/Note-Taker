@@ -40,7 +40,8 @@ const FILES = [
     'senales-del-texto.test.js',
     'menu-de-palabra.test.js',
     'aviso-de-palmada.test.js',
-    'audio-que-se-rompe.test.js'
+    'audio-que-se-rompe.test.js',
+    'nota-de-claqueta.test.js'
 ];
 
 const filter = process.argv[2] || '';

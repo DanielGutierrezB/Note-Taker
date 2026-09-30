@@ -514,8 +514,8 @@ async function leerClaqueta(ms, s) {
  * de palmadas de esta sesión, así que la ventana puede señalar una vieja pero
  * no puede inventar una hora.
  *
- * **Va al historial como todo lo demás**, y la foto es de la lista entera:
- * anotar puede fundir dos y renumerar las de atrás (ver `anotarClaqueta`).
+ * **Va al historial como todo lo demás**, y la foto es de la claqueta que
+ * quedó, con la que había ahí como foto de antes por si se fundieron.
  *
  * @param {number} [palmadaMs] el `ms` de un aviso `golpe`, para anotar en ESA
  */

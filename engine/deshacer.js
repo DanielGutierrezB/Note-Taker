@@ -174,8 +174,14 @@ function mismaFoto(a, b) {
  */
 function anotar(historia, paso) {
     if (mismaFoto(paso.antes, paso.despues)) return;
-    // Qué campos cambió el gesto, para reponer esos y nada más (ver `poner`).
-    if (paso.id != null && paso.antes && paso.despues) paso.campos = camposQueCambian(paso.antes, paso.despues);
+    // Qué campos cambió el gesto, para reponer esos y nada más (ver `poner` y
+    // `ponerEnLista`). Vale igual para una toma y para un elemento de una lista
+    // de la sesión: los dos son objetos que siguen vivos mientras la foto
+    // espera, y los dos se rompen igual si se los repone enteros. `ponerCampo`
+    // —el temario— no lo mira, porque ahí la foto ES el campo.
+    if (paso.antes && paso.despues && (paso.id != null || paso.campo === 'claquetas')) {
+        paso.campos = camposQueCambian(paso.antes, paso.despues);
+    }
     historia.atras.push(paso);
     if (historia.atras.length > TOPE) historia.atras.shift();
     // Rehacer solo tiene sentido sobre lo que se deshizo: si después de deshacer
@@ -253,12 +259,36 @@ function poner(tomas, id, cual, campos) {
  * Antes la foto era de la lista entera, y la lista NO cambia solo a mano: los
  * aplausos y la voz le agregan claquetas mientras tanto. Deshacer una claqueta
  * puesta a mano se llevaba todas las que se habían detectado después.
+ *
+ * **Y con `opciones.campos`, de un elemento tampoco se repone todo**, que es el
+ * mismo defecto una escala más abajo y por el mismo motivo que en `poner`: la
+ * claqueta que está en la lista sigue cambiando mientras la foto espera. El
+ * editor le escribe la nota, unos segundos después la relectura oye "claqueta
+ * 4, clase 4" y `fundir` le deja la frase y el origen `golpe,voz`; un Cmd-Z
+ * que repusiera el elemento entero volvería la nota Y borraría la frase, que
+ * nadie pidió deshacer. Reponiendo solo `comentario`, la frase se queda.
+ *
+ * **Y `opciones.esLaMisma` es cómo se busca, porque el `ms` tampoco es fijo.**
+ * Esa misma fusión le corre el `ms` a la claqueta —se queda con el del golpe,
+ * que es el que sirve para sincronizar—, así que buscarla por igualdad exacta
+ * no la encontraba: el paso terminaba empujando una copia y la clase quedaba
+ * con dos claquetas donde hubo una. Quien llama sabe cuándo dos entradas son
+ * la misma cosa (`vivo.mismaClaqueta`), y acá no se puede saber.
+ *
+ * @param {{campos?:string[], esLaMisma?:function}} [opciones]
  */
-function ponerEnLista(lista, quitar, poner) {
-    if (quitar) {
-        const i = lista.findIndex(x => x.ms === quitar.ms);
-        if (i >= 0) lista.splice(i, 1);
+function ponerEnLista(lista, quitar, poner, opciones) {
+    const o = opciones || {};
+    const esLaMisma = o.esLaMisma || ((a, b) => a.ms === b.ms);
+    const i = quitar ? lista.findIndex(x => esLaMisma(x, quitar)) : -1;
+    if (Array.isArray(o.campos) && i >= 0 && poner) {
+        for (const clave of o.campos) {
+            if (!(clave in poner)) delete lista[i][clave];
+            else lista[i][clave] = Array.isArray(poner[clave]) ? poner[clave].slice() : poner[clave];
+        }
+        return;
     }
+    if (i >= 0) lista.splice(i, 1);
     if (poner) lista.push({ ...poner });
 }
 

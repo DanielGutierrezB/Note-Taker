@@ -775,13 +775,17 @@ b {
 }
 
 /* La fila de una claqueta, en la lista con las tomas: un renglón de 32 px como
-   ellas, pero sin fondo de color —no es una toma, no tiene vista— y sin chevron,
-   porque no tiene nada que desplegar. El icono ocupa el sitio del chevron para
-   que el número quede en la misma columna que el de las tomas. */
-.fila-claqueta,
-.fila-claqueta:hover {
-  cursor: default;
+   ellas, pero sin fondo de color, porque no es una toma y no tiene vista. El
+   chevron sí lo tiene desde que se despliega para escribirle una nota, y va en
+   la misma columna que el de las tomas para que los números queden alineados. */
+.fila-claqueta {
   background: transparent;
+}
+
+/* El hover se nota menos que el de una toma —el renglón parte de transparente,
+   no de `--bg-surface`— pero tiene que notarse: es la señal de que se abre. */
+.fila-claqueta:hover {
+  background: var(--bg-surface);
 }
 
 .fila-claqueta .hp-ico {

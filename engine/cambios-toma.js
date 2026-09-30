@@ -32,6 +32,10 @@ const vivo = require('./notas-vivo');
  *   borrar-comentario { indice }
  *   eliminar          —                               descartar: sacarla de la sesión
  *
+ * Y uno que no es de ninguna toma, porque la fila de al lado tampoco lo es:
+ *
+ *   nota-claqueta     { n, texto }                    la nota de la claqueta n
+ *
  * Todo pasa por acá y todo escribe el XML: la pantalla no guarda nada por su
  * cuenta, así que lo que se ve y lo que está en el archivo son lo mismo siempre.
  *
@@ -42,6 +46,7 @@ const vivo = require('./notas-vivo');
 function editar(sesion, cambio) {
     if (!sesion) return null;
     const c = cambio || {};
+    if (c.tipo === 'nota-claqueta') return notaDeClaqueta(sesion, c);
     const toma = sesion.estado.tomas.find(t => t.id === c.toma);
     if (!toma) return espejo.resumen(sesion);
 
@@ -114,6 +119,28 @@ function editar(sesion, cambio) {
 }
 
 /**
+ * La nota de una claqueta: lo mismo que la nota de una toma, en la otra fila.
+ *
+ * Sale por su propia puerta porque una claqueta no está en `estado.tomas` y su
+ * paso de historial es de lista, no de toma (`campo: 'claquetas'`). De ahí en
+ * adelante es idéntico: el portero de `historial.anotar` decide si hubo cambio,
+ * la foto es de la claqueta sola, y `volver` repone `comentario` y nada más
+ * porque el paso dice qué campos tocó (ver `ponerEnLista`).
+ *
+ * Una claqueta que ya no está —la quitaron mientras el campo estaba abierto—
+ * deja el gesto sin efecto y sin paso, igual que una toma que no se encuentra.
+ */
+function notaDeClaqueta(sesion, c) {
+    const claqueta = (sesion.estado.claquetas || []).find(x => x.n === Number(c.n));
+    if (!claqueta) return espejo.resumen(sesion);
+    const antes = { ...claqueta };
+    vivo.aplicarAClaqueta(claqueta, c);
+    anotarDeLaSesion(sesion, 'claquetas', antes, c, { ...claqueta });
+    espejo.escribir(sesion);
+    return espejo.resumen(sesion);
+}
+
+/**
  * Cómo se llama lo que se acaba de hacer, para poder decirlo al deshacerlo.
  *
  * Se dice QUÉ se deshizo y no solo que algo pasó, igual que en la revisión de
@@ -140,6 +167,7 @@ function comoSeLlama(c) {
         // La claqueta lleva su número porque en una clase en vivo hay varias:
         // «deshacer la claqueta» con siete anotadas no dice cuál se va.
         case 'claquetas': return c.n ? `poner la claqueta ${c.n}` : 'quitar una claqueta';
+        case 'nota-claqueta': return `la nota de la claqueta ${c.n}`;
         default: return `el cambio en ${cual}`;
     }
 }
@@ -153,9 +181,11 @@ function comoSeLlama(c) {
  * estado en vez de una toma, y por eso el paso lleva `campo` en lugar de `id`
  * (ver `engine/deshacer.js`).
  *
- * La foto es de la LISTA entera y no de la claqueta que se tocó, y tiene que
- * serlo: anotar una claqueta puede fundirla con otra y renumerar las que venían
- * detrás, así que reponer una sola dejaría los números corridos.
+ * La foto es de LA CLAQUETA que se tocó y no de la lista, por lo mismo que la
+ * de una toma no es de la sesión: la lista se llena sola mientras la foto
+ * espera —el aplauso y la voz anotan claquetas— y reponerla entera se llevaba
+ * puestas las que habían entrado después. Los números no se corren porque
+ * `volver` renumera al terminar, que es lo que hace el gesto original.
  *
  * Quien los llama es `grabacion.js`, que es el único que sabe cuál es la sesión.
  * La foto de antes la toma él, antes de tocar nada; la de después se saca acá,
@@ -263,7 +293,8 @@ function volver(sesion, hacia) {
 
     const dado = historial.sacar(sesion.historia, hacia);
     if (paso.campo === 'claquetas') {
-        historial.ponerEnLista(sesion.estado.claquetas || (sesion.estado.claquetas = []), dado.quitar, dado.foto);
+        historial.ponerEnLista(sesion.estado.claquetas || (sesion.estado.claquetas = []),
+            dado.quitar, dado.foto, { campos: dado.campos, esLaMisma: vivo.mismaClaqueta });
         // Una claqueta que vuelve deja de estar entre las quitadas a mano, y una
         // que se va a mano entra: las mismas reglas que el gesto original.
         vivo.olvidarQuitada(sesion.estado, dado.foto);

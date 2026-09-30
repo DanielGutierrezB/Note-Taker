@@ -241,6 +241,11 @@ async function aplicar() {
         app.irAVivo(estado, { abierto: true, caido: hay('sin-audio'), pico: 0.42 });
         // Una toma cerrada desplegada: es donde se ven los dos bordes y las orillas.
         if (hay('desplegada')) document.querySelector('#lista-vivo [data-hace="plegar"][data-toma="1"]').click();
+        // Y una claqueta desplegada, que es donde se le escribe la nota: el
+        // renglón se abre igual que el de una toma y trae el mismo campo.
+        if (hay('claqueta-abierta')) {
+            document.querySelector('#lista-vivo [data-hace="plegar-claqueta"]').click();
+        }
         if (hay('palmada') || hay('palmada-vencida')) await conPalmada(estado);
         return;
     }

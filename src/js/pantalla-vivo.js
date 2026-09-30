@@ -939,6 +939,8 @@ function recordarFoco() {
     return {
         campo: a.dataset.campo,
         toma: a.dataset.toma,
+        // De una claqueta, por `ms`: su número se corre solo (ver `filaClaqueta`).
+        ms: a.dataset.ms,
         enAhora: !!a.closest('#ahora'),
         valor: a.value,
         desde: a.selectionStart,
@@ -949,8 +951,9 @@ function recordarFoco() {
 function devolverFoco(f) {
     if (!f) return;
     const donde = f.enAhora ? '#ahora' : '#lista-vivo';
-    const campo = document.querySelector(`${donde} [data-campo="${f.campo}"][data-toma="${f.toma}"]`)
-        || document.querySelector(`#vista-vivo [data-campo="${f.campo}"][data-toma="${f.toma}"]`);
+    const cual = f.ms ? `[data-ms="${f.ms}"]` : `[data-toma="${f.toma}"]`;
+    const campo = document.querySelector(`${donde} [data-campo="${f.campo}"]${cual}`)
+        || document.querySelector(`#vista-vivo [data-campo="${f.campo}"]${cual}`);
     if (!campo) {
         // El campo se fue: pasa con la nota de la toma abierta cuando «Pausa»
         // la cierra mientras se escribe. La toma sigue en la lista, así que se
@@ -973,24 +976,79 @@ function devolverFoco(f) {
 /**
  * Una claqueta, en la lista con las tomas.
  *
- * Un renglón de 32 px como una toma, pero sin fondo de color ni chevron: no es
- * una toma, no tiene vista ni nada que desplegar. Lo que la identifica va a la
- * izquierda —el icono, el número, el timecode, la frase con la que se dijo— y
- * lo que se confirma a la derecha: si es la referencia, cómo está y quitarla.
+ * Un renglón de 32 px como una toma, pero sin fondo de color: no es una toma y
+ * no tiene vista. Lo que la identifica va a la izquierda —el chevron, el icono,
+ * el número, el timecode, la nota o la frase con la que se dijo— y lo que se
+ * confirma a la derecha: si es la referencia, cómo está y quitarla.
+ *
+ * **Se despliega como una toma porque ahora tiene algo adentro: su nota.** El
+ * renglón no la tenía y por eso no tenía chevron; ahora el gesto es el mismo
+ * que el de una toma —clic para abrir, un campo de una línea, se guarda al
+ * salir— para que no haya dos maneras de escribir lo mismo en la misma lista.
+ *
+ * Lo que NO es igual es quién es el botón. En una toma lo es el renglón entero
+ * (`role="button"`); acá no puede serlo, porque adentro está el botón de
+ * quitarla, y un botón dentro de otro no es nada que un lector de pantalla
+ * pueda anunciar. Así que el que abre es el chevron, que sí es un botón de
+ * verdad —teclado incluido, sin ayuda de `alTeclado`— y el renglón entero
+ * sigue abriendo al clic, que es lo que hace la mano.
+ *
+ * **Y se identifica por `ms` y no por `n`**, tanto acá como en `vista.abierta`.
+ * El número no es estable: una claqueta que se lee tarde y cayó ANTES que esta
+ * corre los de todas las de atrás (`renumerar`), y con la fila abierta y una
+ * nota a medio escribir eso significaba seguir escribiendo en la claqueta
+ * equivocada. El `ms` es con lo que el motor las identifica en el historial
+ * (`ponerEnLista`), así que es la misma identidad de los dos lados. El `n` va
+ * igual, porque es lo que viaja en el cambio, y sale del renglón ya repintado.
  */
 function filaClaqueta(c, fps) {
     const est = estados.deClaqueta(c);
-    return `<div class="fila fila-claqueta guarda" data-estado="${est.clave}"
-        data-claqueta="${c.n}" ${est.porque ? `title="${esc(est.porque)}"` : ''}>
-      <span class="hp-ico">${icono('claqueta')}</span>
-      <span class="fila-nombre">Claqueta ${c.n}</span>
-      <time class="fila-dato tc">${fmt.timecodeDe(c.ms, estado.ceroMs, fps)}</time>
-      ${c.frase ? `<span class="fila-nota">«${esc(c.frase)}»</span>` : ''}
-      <span class="crece"></span>
-      ${c.n === 1 ? '<span class="pastilla" data-estado="listo" title="Es contra esta que el editor correlaciona los archivos en Premiere">referencia</span>' : ''}
-      <span class="pastilla" data-estado="${est.clave}">${esc(est.palabra)}</span>
-      <button class="btn btn-tenue btn-ico" type="button" data-hace="quitar-claqueta"
-              data-claqueta="${c.n}" title="Quitarla: no era una claqueta">${icono('cerrar')}</button>
+    const abierta = vista.abierta === `c${c.ms}`;
+    // La nota tapa la frase, igual que en una toma la nota tapa las primeras
+    // palabras: lo que escribió una persona vale más que lo que se oyó.
+    const nota = loQueSeLee(c);
+    return `<div class="bloque-claqueta ${abierta ? 'es-abierta' : ''}">
+      <div class="fila fila-claqueta guarda" data-estado="${est.clave}"
+           data-hace="plegar-claqueta" data-claqueta="${c.n}" data-ms="${c.ms}"
+           ${est.porque ? `title="${esc(est.porque)}"` : ''}>
+        <button class="btn btn-tenue btn-ico chevron" type="button" data-hace="plegar-claqueta"
+                data-claqueta="${c.n}" data-ms="${c.ms}" aria-expanded="${abierta}"
+                title="Su nota, la que va en el marcador del XML">${icono('chevron')}</button>
+        <span class="hp-ico">${icono('claqueta')}</span>
+        <span class="fila-nombre">Claqueta ${c.n}</span>
+        <time class="fila-dato tc">${fmt.timecodeDe(c.ms, estado.ceroMs, fps)}</time>
+        ${nota ? `<span class="fila-nota">${esc(nota)}</span>` : ''}
+        <span class="crece"></span>
+        ${c.n === 1 ? '<span class="pastilla" data-estado="listo" title="Es contra esta que el editor correlaciona los archivos en Premiere">referencia</span>' : ''}
+        <span class="pastilla" data-estado="${est.clave}">${esc(est.palabra)}</span>
+        <button class="btn btn-tenue btn-ico" type="button" data-hace="quitar-claqueta"
+                data-claqueta="${c.n}" title="Quitarla: no era una claqueta">${icono('cerrar')}</button>
+      </div>
+      ${abierta ? cuerpoClaqueta(c) : ''}
+    </div>`;
+}
+
+/** Lo que se lee en el renglón plegado: la nota si la hay, y si no lo que se oyó. */
+function loQueSeLee(c) {
+    if (c.comentario) return c.comentario;
+    return c.frase ? `«${c.frase}»` : '';
+}
+
+/**
+ * Lo que hay dentro de una claqueta abierta: su nota, y lo que se oyó.
+ *
+ * Es `cuerpo-toma` a propósito —la misma caja, el mismo campo de una línea, el
+ * mismo sitio— porque es el mismo gesto: escribir algo que va a salir en el
+ * marcador del XML. La frase se repite acá abajo porque arriba la tapa la nota
+ * en cuanto hay una, y es lo que deja comprobar que la claqueta es la que se
+ * cree («claqueta 4, clase 4») mientras se escribe sobre ella.
+ */
+function cuerpoClaqueta(c) {
+    return `<div class="cuerpo-toma">
+        <input type="text" data-campo="nota-claqueta" data-claqueta="${c.n}" data-ms="${c.ms}"
+               value="${esc(c.comentario || '')}"
+               placeholder="Nota de la claqueta — va en el marcador del XML">
+        ${c.frase ? `<p class="v3 pista">Se oyó: <q>${esc(c.frase)}</q></p>` : ''}
     </div>`;
 }
 
@@ -1010,6 +1068,13 @@ async function alClic(e) {
             vista.elegida = toma;
             pintar();
             break;
+        case 'plegar-claqueta': {
+            // Por `ms` y no por número, que se corre al renumerar (ver `filaClaqueta`).
+            const cual = `c${boton.dataset.ms}`;
+            vista.abierta = vista.abierta === cual ? null : cual;
+            pintar();
+            break;
+        }
         case 'claqueta': await pedir(() => window.nt.grabarClaqueta(palmadaParaEnganchar())); break;
         // Los atajos de la barra: lo mismo que las teclas, con el mouse.
         case 'borde': await bordeDeToma(); break;
@@ -1223,6 +1288,14 @@ async function guardarComentario() {
 }
 
 async function alCambiar(e) {
+    const claqueta = e.target.closest('[data-campo="nota-claqueta"]');
+    if (claqueta) {
+        // El `n` sale del renglón como esté AHORA: si mientras se escribía entró
+        // una claqueta más vieja y las renumeró, el repintado ya lo corrigió y
+        // `devolverFoco` volvió al mismo campo por su `ms` (ver `filaClaqueta`).
+        await editar({ tipo: 'nota-claqueta', n: Number(claqueta.dataset.claqueta), texto: claqueta.value });
+        return;
+    }
     const campo = e.target.closest('[data-campo="nota"]');
     if (!campo) return;
     await editar({ tipo: 'nota', toma: Number(campo.dataset.toma), texto: campo.value });

@@ -133,7 +133,11 @@ function registrar({ ipcMain, app, send, anotar }) {
     });
 
     ipcMain.handle('grabar-editar', (event, cambio) => {
-        anotar('grabar.editar', { toma: cambio && cambio.toma, tipo: cambio && cambio.tipo });
+        // `n` es de los cambios que no son de ninguna toma —la nota de una
+        // claqueta—, donde `toma` viene vacío y el registro no diría sobre qué.
+        anotar('grabar.editar', {
+            toma: cambio && cambio.toma, claqueta: cambio && cambio.n, tipo: cambio && cambio.tipo
+        });
         return grabacion.editar(cambio);
     });
 
@@ -199,7 +203,8 @@ function registrar({ ipcMain, app, send, anotar }) {
     // la respuesta dice si se pudo: la ventana avisa con eso.
     ipcMain.handle('grabar-editar-grabada', (event, json, cambio) => {
         anotar('grabar.editar-grabada', {
-            json, toma: cambio && cambio.toma, tipo: cambio && cambio.tipo
+            json, toma: cambio && cambio.toma, claqueta: cambio && cambio.n,
+            tipo: cambio && cambio.tipo
         });
         try {
             return { ok: true, ...grabacion.editarGrabada(json, cambio) };

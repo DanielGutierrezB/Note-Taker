@@ -767,6 +767,13 @@ function fundir(vieja, nueva) {
         ms: deGolpe ? deGolpe.ms : Math.min(vieja.ms, nueva.ms),
         paredMs: deGolpe ? deGolpe.paredMs : (vieja.paredMs || nueva.paredMs),
         frase: limpio(nueva.frase) || limpio(vieja.frase),
+        // La nota del editor sobrevive a la fusión, y va explícita aunque el
+        // `...vieja` de arriba ya la traiga: la que se comenta es siempre una
+        // que está en la lista —o sea `vieja`—, y la que llega detrás es una
+        // detección, que nunca trae nota. Escribirlo deja dicho cuál gana el
+        // día que dos con nota se junten, y que perderla no es una opción: es
+        // lo único de la claqueta que alguien escribió a mano.
+        comentario: limpio(vieja.comentario) || limpio(nueva.comentario),
         confirmada: Boolean(vieja.confirmada || nueva.confirmada),
         // Los dos, separados por coma, porque saberlo cambia cuánto se le cree:
         // una claqueta que solo vio el editor no tiene aplauso con el que
@@ -790,7 +797,7 @@ function fundir(vieja, nueva) {
  * posterior.
  *
  * @param {object} estado el de la sesión, se muta
- * @param {object} claqueta { ms, paredMs, frase, confirmada, origen }
+ * @param {object} claqueta { ms, paredMs, frase, comentario, confirmada, origen }
  * @returns {{claqueta: object, nueva: boolean}}
  */
 function anotarClaqueta(estado, claqueta) {
@@ -806,11 +813,15 @@ function anotarClaqueta(estado, claqueta) {
         ms: Number(claqueta.ms),
         paredMs: claqueta.paredMs != null ? Number(claqueta.paredMs) : null,
         frase: limpio(claqueta.frase),
+        // Vacía salvo que la reponga el historial: las claquetas las anota el
+        // aplauso, la voz o la K, y ninguno de los tres escribe nada. La nota
+        // la pone el editor después, sobre una que ya está en la lista.
+        comentario: limpio(claqueta.comentario),
         confirmada: Boolean(claqueta.confirmada),
         origen: claqueta.origen || 'editor'
     };
 
-    const cerca = lista.find(c => Math.abs(c.ms - entra.ms) < MISMA_CLAQUETA_MS);
+    const cerca = lista.find(c => mismaClaqueta(c, entra));
     if (cerca) {
         Object.assign(cerca, fundir(cerca, entra));
         renumerar(estado);
@@ -821,6 +832,21 @@ function anotarClaqueta(estado, claqueta) {
     lista.push(entra);
     renumerar(estado);
     return { claqueta: entra, nueva: true };
+}
+
+/**
+ * Si dos entradas son la misma claqueta: a menos de cinco segundos una de otra.
+ *
+ * Es la definición de la app y está acá, en una función, porque hacen falta dos
+ * respuestas distintas con la misma regla: `anotarClaqueta` la usa para fundir
+ * lo que llega con lo que ya está, y el historial para volver a encontrar una
+ * claqueta que puede haber cambiado de `ms` justamente por esa fusión (ver
+ * `ponerEnLista` en `deshacer.js`). Dos claquetas de verdad nunca caen tan
+ * cerca —la de acá las habría fundido—, así que la ventana no puede confundir
+ * una con otra.
+ */
+function mismaClaqueta(a, b) {
+    return Boolean(a) && Boolean(b) && Math.abs(Number(a.ms) - Number(b.ms)) < MISMA_CLAQUETA_MS;
 }
 
 /** Las claquetas por orden de reloj, con su número puesto de nuevo. */
@@ -1423,6 +1449,29 @@ function aplicar(toma, cambio) {
     }
 }
 
+/**
+ * Lo mismo, pero sobre una claqueta: hoy, su nota.
+ *
+ * Es una función aparte y no un caso más de `aplicar` porque una claqueta no es
+ * una toma —no tiene bordes, ni texto, ni vista— y mezclarlas obligaría a cada
+ * caso de allá a preguntarse cuál de las dos cosas le están pasando. Lo que sí
+ * comparte es el motivo de existir: está en el motor y es una sola, así que
+ * comentar una claqueta de la clase de ayer y una de la que se está grabando
+ * escriben el mismo XML (ver `aplicar` y `editarGrabada`).
+ *
+ * @throws si el cambio no es de los que una claqueta entiende
+ */
+function aplicarAClaqueta(claqueta, cambio) {
+    const c = cambio || {};
+    switch (c.tipo) {
+        case 'nota-claqueta':
+            claqueta.comentario = limpio(c.texto);
+            return;
+        default:
+            throw new Error(`Cambio de claqueta sin definir: ${c.tipo}`);
+    }
+}
+
 module.exports = {
     CAMARA,
     PANTALLA,
@@ -1431,6 +1480,7 @@ module.exports = {
     MAPA_DE_VISTAS,
     vistaLeida,
     aplicar,
+    aplicarAClaqueta,
     estadoNuevo,
     senales,
     aplicarSenales,
@@ -1445,6 +1495,7 @@ module.exports = {
     FRESCURA_MAX_SEC,
     finDeToma,
     anotarClaqueta,
+    mismaClaqueta,
     renumerar,
     quitarClaqueta,
     claquetaDeReferencia,

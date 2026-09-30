@@ -75,10 +75,12 @@ const TOMAS = [
     }
 ];
 
+// La 2 lleva nota y la 1 no: así se ven los dos renglones, el que muestra lo
+// que se oyó y el que muestra lo que alguien escribió encima.
 const CLAQUETAS = [
-    { n: 1, ms: seg(12), paredMs: seg(12), frase: 'Claqueta 1, clase 1', confirmada: true, origen: 'golpe,voz' },
-    { n: 2, ms: seg(415), paredMs: seg(415), frase: '', confirmada: false, origen: 'golpe' },
-    { n: 3, ms: seg(712), paredMs: seg(712), frase: '', confirmada: true, origen: 'editor' }
+    { n: 1, ms: seg(12), paredMs: seg(12), frase: 'Claqueta 1, clase 1', comentario: '', confirmada: true, origen: 'golpe,voz' },
+    { n: 2, ms: seg(415), paredMs: seg(415), frase: '', comentario: 'Se cambió la tarjeta de la cámara 2', confirmada: false, origen: 'golpe' },
+    { n: 3, ms: seg(712), paredMs: seg(712), frase: '', comentario: '', confirmada: true, origen: 'editor' }
 ];
 
 /**

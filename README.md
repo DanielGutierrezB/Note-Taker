@@ -238,6 +238,14 @@ número, timecode, la frase con la que se dijeron, si es la referencia y cómo
 quitarlas. En un costado aparte había que cruzar la pantalla y comparar
 timecodes para saber qué toma venía después de qué claqueta.
 
+**Y se despliegan como una toma, para escribirles una nota.** Es el mismo
+gesto: clic o Enter sobre el renglón, un campo de una línea, se guarda al salir
+y vuelve con ⌘Z. La nota sale en el marcador de la claqueta en el XML, que es
+donde el montajista la lee cuando llega a ese punto de la línea de tiempo:
+«se cambió la tarjeta de la cámara 2», «desde acá el audio es del lavalier».
+Con la nota puesta, el renglón plegado la muestra en lugar de la frase que se
+oyó, igual que en una toma la nota tapa las primeras palabras.
+
 Un detalle que costó descubrir: **el umbral de "todavía está hablando" no puede
 ser el mismo que el hueco entre dos palabras.** Lo que la app tiene oído va
 siempre atrasado, y se sabe cuánto —el ciclo corre cada segundo, oye con medio
@@ -406,7 +414,22 @@ escribían las versiones anteriores y como los escribe Class Cut, se sigue
 leyendo igual.
 
 Cada claqueta lleva su número, su hora del día y la frase que se oyó, y la
-primera dice que es **la referencia de sincronía**.
+primera dice que es **la referencia de sincronía**. Todo eso va en el
+COMENTARIO del marcador; el nombre es `Claqueta N` y nada más. La nota que se
+le haya escrito va también en el comentario, en segundo lugar:
+
+```
+Claqueta 2 · Se cambió la tarjeta de la cámara 2 · 09:13:56 · «Claqueta 2, clase 2»
+```
+
+Las dos decisiones tienen el mismo motivo. **En el comentario y no en el
+nombre**, porque el nombre es por lo que el marcador se reconoce al volver a
+entrar: el parser clasifica una claqueta buscando la palabra en su comentario,
+y la herramienta del CD espera leer `Claqueta N` limpio en el nombre. **En
+segundo lugar y no al final**, porque es lo único del renglón que no se puede
+deducir —el resto lo escribió la app— y en el panel de marcadores de Premiere
+la columna se corta por la derecha. Es el mismo orden que el marcador de una
+toma, donde la nota del director va delante y el cue detrás.
 
 ### El corte cae entre palabras, no encima de una
 

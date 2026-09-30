@@ -238,6 +238,14 @@ function editarGrabada(json, cambio) {
 
     if (c.tipo === 'quitar-claqueta') {
         vivo.quitarClaqueta(estado, Number(c.n));
+    } else if (c.tipo === 'nota-claqueta') {
+        // Un sidecar de antes de que esto existiera no trae `comentario` en
+        // ninguna claqueta, y no hace falta migrarlo: el campo entra al
+        // escribirlo y el que no lo tiene se lee como vacío en todas partes
+        // (`comentarioDeClaqueta`, la fila, `fundir`).
+        const claqueta = (estado.claquetas || []).find(x => x.n === Number(c.n));
+        if (!claqueta) throw new Error(`Esa sesión no tiene la claqueta ${c.n}.`);
+        vivo.aplicarAClaqueta(claqueta, c);
     } else {
         const toma = (estado.tomas || []).find(t => t.id === c.toma);
         if (!toma) throw new Error(`Esa sesión no tiene la toma ${c.toma}.`);
