@@ -17,6 +17,7 @@
  * el disco exactamente el estado que las otras cuatro cuentan.
  */
 
+const ajustar = require('./ajustar-corte');
 const historial = require('./deshacer');
 const notasXml = require('./notas-xml');
 const vivo = require('./notas-vivo');
@@ -72,6 +73,14 @@ function escribir(sesion) {
         sesiones: sesion.estado.sesiones.concat(
             sesion.captura ? [{ ...sesion.captura }] : [])
     };
+
+    // Los bordes de las tomas, corridos al silencio de al lado mirando el WAV
+    // (`ajustar-corte.js`). Va acá y no adentro de `xmlDeNotas` porque esto lee
+    // el disco y aquello es una traducción pura; y va ANTES de las dos
+    // escrituras para que el sidecar se lleve el ajuste ya calculado y "Rehacer
+    // XML" pueda repetir el mismo corte sin el audio. El estado se comparte con
+    // `sesion.estado`, así que cada toma se mira una vez y no en cada cambio.
+    ajustar.ajustarSesion(conSesiones);
 
     workspace.writeAtomic(archivos.xml, notasXml.xmlDeNotas(conSesiones));
     workspace.writeJson(archivos.json, notasXml.sidecar(conSesiones));

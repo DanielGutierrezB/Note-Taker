@@ -305,14 +305,40 @@ leyendo igual.
 Cada claqueta lleva su número, su hora del día y la frase que se oyó, y la
 primera dice que es **la referencia de sincronía**.
 
+### El corte cae entre palabras, no encima de una
+
+El IN y el OUT salen de las marcas de palabra de Whisper, y esas marcas se
+corren una o dos décimas. En el XML no se nota; en Premiere sí, porque el
+montajista corta por el marcador y el corte parte la palabra al medio. De los 72
+bordes de la clase del 29/09, **58 caían sobre voz clara** —varios en −15 dBFS,
+o sea la mitad de una sílaba—.
+
+Así que antes de escribir el XML, `ajustar-corte.js` mira la ONDA del WAV y
+corre cada borde al silencio más cercano. El umbral no es un número fijo: se
+estima de la distribución del propio archivo, porque el piso de ruido se mueve
+diez dB según el micrófono. Con eso quedan 8 de los 58, y los 8 son los que no
+tienen ningún silencio cerca.
+
+Un IN y un OUT no se tratan igual: el IN quiere caer antes de que empiece a
+sonar la voz y el OUT después de que termine, así que cada uno tiene ventaja
+hacia su lado. **Solo se mueven los bordes de las tomas.** Las claquetas no —un
+marcador de claqueta señala un golpe, y correrlo rompe justo lo que existe para
+hacer, que es correlacionar con las cámaras— y los comentarios sobre el texto
+tampoco, que señalan una frase y no un corte.
+
+Los tiempos que el editor marcó no se pisan nunca: el ajuste va aparte en el
+sidecar, con el motivo de cada borde —si se movió, si ya estaba en silencio o si
+no había hueco—. Sin el WAV en el disco no se ajusta nada y los bordes quedan
+como estaban.
+
 ### Rehacer el XML de una clase ya grabada
 
 El XML se escribe mientras se graba, así que un arreglo del formato no le llega
 solo a las clases de antes. **Rehacer el XML** (en la lista de sesiones y en la
 pantalla de Cierre) lo reescribe desde el sidecar con el molde de hoy: tarda un
 segundo, no toca el audio y no cambia una palabra de las notas. Es lo que lleva
-a una clase vieja los marcadores del clip maestro o el nombre con el número de
-la toma.
+a una clase vieja los marcadores del clip maestro, el nombre con el número de la
+toma o los bordes corridos al silencio, y dice cuántos movió.
 
 No es lo mismo que **Regenerar**, que está al lado: ese vuelve a pasarle cada
 toma a Whisper con el modelo grande —arregla el TEXTO de una toma que salió con
@@ -674,6 +700,7 @@ engine/
   espejo.js              lo que se ve de la sesión: el disco y la pantalla
   notas-vivo.js          qué es una toma y qué es una claqueta
   notas-xml.js           cómo se escribe todo eso para Premiere
+  ajustar-corte.js       correr el IN y el OUT al silencio de al lado
   fcp-xml.js             el formato FCP7, con marcadores de secuencia y de clip
   captura.js             el WAV que se escribe mientras entra
   golpe.js               el aplauso, en el PCM

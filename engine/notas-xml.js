@@ -39,6 +39,7 @@
  * que una clase grabada acá todavía puede pasar por aquel pipeline de corte.
  */
 
+const ajustar = require('./ajustar-corte');
 const vivo = require('./notas-vivo');
 const { xmlSafe, rateFor, sequenceXml, toFrames } = require('./fcp-xml');
 
@@ -168,8 +169,15 @@ function marcadores(estado) {
     for (const toma of vivo.tomasQueQuedan(estado)) {
         const vista = vivo.vistaLeida(toma.vista) || vivo.VISTA_POR_DEFECTO;
         const color = colorDeVista(vista);
-        const entra = seg(toma.inMs);
-        const sale = seg(toma.outMs);
+        // **Los bordes van AJUSTADOS a la onda y el resto no.** El IN y el OUT
+        // son lo único por lo que alguien corta, y venían de las marcas de
+        // palabra de Whisper, que se corren unas décimas y dejaban el corte en
+        // el medio de una sílaba. `ajustar-corte` los corrió al silencio más
+        // cercano; cuando no había ninguno decente, o cuando no hay audio,
+        // devuelve el mismo tiempo. Las claquetas y los comentarios sobre el
+        // texto se quedan donde están, y el por qué está allá.
+        const entra = seg(ajustar.inAjustado(toma));
+        const sale = seg(ajustar.outAjustado(toma));
 
         // **El nombre lleva el número de la toma.** En la línea de tiempo de
         // Premiere el editor ve «Toma 1 · PV», «Toma 2 · PV», y con eso se da
@@ -368,6 +376,14 @@ function sidecar(estado) {
             outMs: t.outMs,
             inISO: t.inMs ? new Date(t.inMs).toISOString() : null,
             outISO: t.outMs ? new Date(t.outMs).toISOString() : null,
+            // A qué silencio se corrieron esos bordes para el XML, y contra qué
+            // se calculó. Va al sidecar por dos motivos: "Rehacer XML" escribe
+            // el MISMO corte aunque el WAV ya no esté en el disco, y un corte
+            // que salió raro se puede auditar sin volver a analizar el audio
+            // (`porQueIn`/`porQueOut` dicen si se movió, si ya estaba en
+            // silencio o si no había hueco). Los tiempos de arriba siguen
+            // siendo los que el editor marcó: eso no se pisa nunca.
+            ajuste: t.ajuste || null,
             palabras: (t.palabras || []).map(palabraDelArchivo),
             // Qué le pasó a la relectura de esta toma, cuando le pasó algo
             // (`engine/insistir.js`). Va al sidecar y no solo a la pantalla

@@ -19,6 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 
+const ajustar = require('./ajustar-corte');
 const notasXml = require('./notas-xml');
 const nombreDeSesion = require('./nombre-de-sesion');
 const workspace = require('./workspace');
@@ -165,6 +166,9 @@ async function regenerar(json, avisar, enCurso) {
             aviso({ tipo: 'regenerando', json, hechas: i + 1, total: tomas.length });
         }
 
+        // Releer mueve los bordes —el modelo grande oye la palabra en otro
+        // sitio—, así que el ajuste se vuelve a hacer con los tiempos nuevos.
+        ajustarBordes(estado, sitio);
         workspace.writeAtomic(sitio.xml, notasXml.xmlDeNotas(estado));
         workspace.writeJson(sitio.json, notasXml.sidecar(estado));
         // `degradadas` y `sinLeer` se cuentan para poder decirlo al terminar:
@@ -190,6 +194,24 @@ function dondeQuedoElWav(sitio, guardado) {
     if (guardado && fs.existsSync(guardado)) return guardado;
     const nombre = path.basename(guardado || '');
     return path.join(sitio.audio, nombre);
+}
+
+/**
+ * Corre los bordes de las tomas al silencio más cercano antes de escribir.
+ *
+ * Todo lo de este archivo que escribe el XML pasa por acá, y por eso hay UNA
+ * función: los cuatro caminos —regenerar, editar, rehacer y renombrar— tienen
+ * que dar el mismo corte, y con la llamada escrita cuatro veces alguna se iba a
+ * quedar atrás. El WAV se busca donde esté HOY (`dondeQuedoElWav`), que es lo
+ * que hace que esto siga funcionando con una carpeta que se movió.
+ *
+ * Sin audio no pasa nada: `ajustarSesion` deja los tiempos como estaban, y el
+ * ajuste que ya venía en el sidecar se reescribe igual. Es lo que hace que
+ * "Rehacer XML" sobre una sesión cuyo WAV se borró escriba el mismo XML de
+ * antes en vez de perder los cortes buenos.
+ */
+function ajustarBordes(estado, sitio) {
+    return ajustar.ajustarSesion(estado, { resolver: g => dondeQuedoElWav(sitio, g) });
 }
 
 /**
@@ -222,6 +244,10 @@ function editarGrabada(json, cambio) {
         vivo.aplicar(toma, c);
     }
 
+    // Arrastrar un borde a mano invalida su ajuste, y esto lo vuelve a hacer
+    // contra el tiempo nuevo: el editor suelta la línea roja donde quiere y la
+    // onda termina de acomodarla al hueco.
+    ajustarBordes(estado, sitio);
     workspace.writeAtomic(sitio.xml, notasXml.xmlDeNotas(estado));
     workspace.writeJson(sitio.json, notasXml.sidecar(estado));
     return { archivos: { xml: sitio.xml, json: sitio.json } };
@@ -247,6 +273,13 @@ function editarGrabada(json, cambio) {
  * borde, y el XML son esos mismos datos en cuadros. Por eso reescribirlo no
  * puede perder nada — y por eso el sidecar también se reescribe, para que la
  * sesión quede entera con la forma de esta versión.
+ *
+ * **Y es el botón con el que una clase vieja gana los cortes ajustados.** El
+ * ajuste a la onda (`ajustar-corte.js`) es justamente un arreglo del XML que no
+ * cambia una palabra de las notas: apretar esto sobre la clase de ayer le corre
+ * los bordes al silencio sin volver a pasar el audio por Whisper. Con el WAV
+ * borrado escribe lo que ya estaba guardado en el sidecar, así que tampoco
+ * puede empeorar.
  */
 function rehacerXml(json, enCurso) {
     const estado = leerSidecar(json);
@@ -254,11 +287,16 @@ function rehacerXml(json, enCurso) {
     if (estado.secuencia && estado.secuencia === enCurso) {
         throw new Error('Esa sesión se está grabando ahora: su XML se reescribe en cada cambio.');
     }
+    const ajustados = ajustarBordes(estado, sitio);
     workspace.writeAtomic(sitio.xml, notasXml.xmlDeNotas(estado));
     workspace.writeJson(sitio.json, notasXml.sidecar(estado));
     return {
         tomas: vivo.tomasQueQuedan(estado).length,
         claquetas: (estado.claquetas || []).length,
+        // Cuántos bordes se corrieron al silencio, para poder decirlo: un botón
+        // que contesta "8 tomas" y nada más no deja ver que además arregló seis
+        // cortes que caían encima de una palabra.
+        bordesAjustados: ajustados.movidos,
         archivos: { xml: sitio.xml, json: sitio.json }
     };
 }
@@ -481,6 +519,10 @@ function renombrar(json, cambio, enCurso) {
         estado.secuencia = nombre;
         estado.curso = curso;
 
+        // Renombrar no mueve ningún tiempo, así que el ajuste que ya estaba
+        // guardado se reusa tal cual; esto solo lo calcula para una sesión vieja
+        // que todavía no lo tenía. El WAV ya está en su nombre nuevo.
+        ajustarBordes(estado, sitio);
         workspace.writeAtomic(destino.xml, notasXml.xmlDeNotas(estado));
         workspace.writeJson(destino.json, notasXml.sidecar(estado));
     } catch (err) {
@@ -550,6 +592,7 @@ module.exports = {
     regenerar,
     rehacerXml,
     dondeQuedoElWav,
+    ajustarBordes,
     editarGrabada,
     paraReanudar,
     renombrar,
