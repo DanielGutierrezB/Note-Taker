@@ -1,7 +1,7 @@
 {
   "name": "note-taker",
   "productName": "Note Taker",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Toma las notas de rodaje mientras la clase se graba en vivo y escribe el XML con el audio para Premiere Pro",
   "main": "main.js",
   "author": "Daniel Gutiérrez",
