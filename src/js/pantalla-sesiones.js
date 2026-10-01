@@ -14,6 +14,8 @@ import * as estados from './estados.js';
 
 let app = null;
 let sesiones = [];
+/** El sidecar de la sesión cuyo nombre se está editando, o null. */
+let renombrando = null;
 
 export function conectar(contexto) {
     app = contexto;
@@ -30,6 +32,7 @@ export function conectar(contexto) {
         app.irAPreparar();
     });
     $('#lista-sesiones').addEventListener('click', alClic);
+    $('#lista-sesiones').addEventListener('keydown', alTecla);
 }
 
 async function elegirCarpeta() {
@@ -51,7 +54,13 @@ export async function pintar() {
     sesiones = carpeta ? await window.nt.grabarListar([carpeta]) : [];
     $('#sesiones-cuantas').textContent = sesiones.length
         ? `${sesiones.length} en esta carpeta` : '';
+    if (renombrando && !sesiones.some(s => s.archivos.json === renombrando)) renombrando = null;
     $('#lista-sesiones').innerHTML = sesiones.length ? sesiones.map(fila).join('') : vacio(carpeta);
+    const campo = $('#lista-sesiones [data-campo="prefijo"]');
+    if (campo) {
+        campo.focus();
+        campo.select();
+    }
 }
 
 function vacio(carpeta) {
@@ -76,9 +85,10 @@ function fila(s) {
     const r = s.resumen || {};
     const est = estados.deSesionGuardada(r);
     const puedeReanudar = r.estado === 'abierta';
-    return `<div class="fila guarda" data-estado="${est.clave}" data-json="${esc(s.archivos.json)}"
-        ${est.porque ? `title="${esc(est.porque)}"` : ''}>
-      <span class="fila-nombre">${esc(s.secuencia)}</span>
+    const editando = renombrando === s.archivos.json;
+    return `<div class="fila guarda ${editando ? 'es-renombrando' : ''}" data-estado="${est.clave}" data-json="${esc(s.archivos.json)}"
+        ${est.porque && !editando ? `title="${esc(est.porque)}"` : ''}>
+      ${editando ? campoDeNombre(s) : `<span class="fila-nombre">${esc(s.secuencia)}</span>`}
       <span class="fila-dato ses-dato">${esc(cuando(s.ceroMs))}</span>
       <span class="fila-dato ses-dato">${esc(duracion(r.segundos))}</span>
       <span class="fila-dato ses-dato">${r.tomas || 0} toma${r.tomas === 1 ? '' : 's'}</span>
@@ -97,10 +107,46 @@ No se graba nada: lo que ajustes se escribe en su XML en el acto.">Notas</button
       <button class="btn btn-tenue btn-ico" type="button" data-hace="regenerar"
               title="Volver a leer todas las tomas con el modelo grande">${icono('regenerar')}</button>
       <button class="btn btn-tenue btn-ico" type="button" data-hace="renombrar"
-              title="Cambiar el nombre del curso">${icono('renombrar')}</button>
+              aria-pressed="${editando}"
+              title="${editando ? 'Dejar el nombre como estaba' : 'Ponerle un nombre delante del que puso la app'}">${icono('renombrar')}</button>
       <button class="btn btn-tenue btn-ico btn-peligro" type="button" data-hace="borrar"
               title="Borrar el XML, el audio y los datos">${icono('borrar')}</button>
     </div>`;
+}
+
+/**
+ * El nombre de una sesión mientras se lo cambia.
+ *
+ * Lo que se escribe va DELANTE del nombre que puso la app, y ese nombre se ve
+ * fijo al lado del campo mientras tanto: es lo que dice que no se va a perder
+ * la fecha ni la hora, que son las que ordenan la lista y las que el editor
+ * empareja con la cámara.
+ */
+function campoDeNombre(s) {
+    const prefijo = s.prefijo || '';
+    const base = prefijo && s.secuencia.startsWith(`${prefijo}_`)
+        ? s.secuencia.slice(prefijo.length + 1)
+        : s.secuencia;
+    return `<span class="ses-renombre">
+        <input type="text" data-campo="prefijo" value="${esc(prefijo)}"
+               placeholder="Nombre" aria-label="Nombre delante de ${esc(base)}">
+        <span class="ses-base">_${esc(base)}</span>
+        <button class="btn" type="button" data-hace="guardar-nombre">Guardar</button>
+        <span class="v3">Enter guarda · Esc cancela</span>
+      </span>`;
+}
+
+function alTecla(e) {
+    const campo = e.target.closest('[data-campo="prefijo"]');
+    if (!campo) return;
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        guardarNombre();
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        renombrando = null;
+        pintar();
+    }
 }
 
 async function alClic(e) {
@@ -128,7 +174,11 @@ async function alClic(e) {
             await rehacerXml(json, boton);
             break;
         case 'renombrar':
-            await renombrar(sesion);
+            renombrando = renombrando === json ? null : json;
+            await pintar();
+            break;
+        case 'guardar-nombre':
+            await guardarNombre();
             break;
         case 'borrar':
             await borrar(sesion);
@@ -190,12 +240,27 @@ async function regenerar(json, boton) {
     await pintar();
 }
 
-async function renombrar(sesion) {
-    const curso = window.prompt('Nombre del curso', sesion.curso || '');
-    if (curso == null) return;
-    const r = await window.nt.grabarRenombrar(sesion.archivos.json, { curso });
-    if (!r.ok) { avisar(r.error, 'error'); return; }
-    avisar(r.movida ? `Ahora se llama ${r.secuencia}` : 'El nombre quedó igual.');
+/**
+ * Guarda el nombre de delante. Renombra los tres archivos de la sesión —el XML,
+ * los datos y el audio— y la secuencia que se ve en Premiere.
+ *
+ * Antes esto pedía el nombre con `window.prompt`, que Electron no tiene: tira
+ * «prompt() is not supported», así que el lápiz nunca hizo nada. Por eso el
+ * nombre se edita en la fila misma.
+ */
+async function guardarNombre() {
+    const json = renombrando;
+    const campo = $('#lista-sesiones [data-campo="prefijo"]');
+    if (!json || !campo) return;
+    const r = await window.nt.grabarRenombrar(json, { prefijo: campo.value });
+    if (!r.ok) {
+        // El campo se queda abierto con lo escrito: el motivo suele ser que ya
+        // hay otra sesión con ese nombre, y se corrige cambiando una letra.
+        avisar(r.error, 'error');
+        return;
+    }
+    renombrando = null;
+    avisar(r.movida ? `Ahora se llama ${r.secuencia}` : 'El nombre quedó igual.', r.movida ? 'ok' : 'normal');
     await pintar();
 }
 

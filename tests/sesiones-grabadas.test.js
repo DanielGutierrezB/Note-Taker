@@ -163,6 +163,73 @@ module.exports = function (t) {
         t.ok(error && error.includes('grabando'), error);
     });
 
+    t.group('sesiones-grabadas · renombrar con un nombre delante');
+
+    t.test('lo escrito va DELANTE del nombre de siempre, como se escribió', () => {
+        // El editor: «el renombre debería agregarse antes del nombre que pone
+        // ahorita por default». El curso, la fecha y la hora se quedan.
+        const dir = carpeta();
+        const s = sembrar(dir);
+        const r = sesiones.renombrar(s.json, { prefijo: 'Clase 3 Física' });
+        t.ok(r.movida);
+        t.eq(r.secuencia, 'Clase 3 Física_curso_2026-09-29_10-00-00');
+        t.ok(fs.existsSync(r.archivos.xml) && fs.existsSync(r.archivos.json));
+        t.eq(r.audios, 1, 'el WAV se mueve con el nombre nuevo');
+        const sidecar = JSON.parse(fs.readFileSync(r.archivos.json, 'utf8'));
+        t.eq(sidecar.prefijo, 'Clase 3 Física', 'se guarda aparte');
+        t.eq(sidecar.curso, 'curso', 'y el curso no se toca');
+        t.ok(fs.readFileSync(r.archivos.xml, 'utf8').includes('Clase 3 Física_curso_2026-09-29_10-00-00'),
+            'la secuencia del XML también se llama así');
+    });
+
+    t.test('renombrar otra vez lo reemplaza, no le suma otro delante', () => {
+        const dir = carpeta();
+        const s = sembrar(dir);
+        const a = sesiones.renombrar(s.json, { prefijo: 'Clase 3' });
+        const b = sesiones.renombrar(a.archivos.json, { prefijo: 'Clase 4' });
+        t.eq(b.secuencia, 'Clase 4_curso_2026-09-29_10-00-00');
+    });
+
+    t.test('vacío vuelve al nombre de siempre', () => {
+        const dir = carpeta();
+        const s = sembrar(dir);
+        const a = sesiones.renombrar(s.json, { prefijo: 'Clase 3' });
+        const b = sesiones.renombrar(a.archivos.json, { prefijo: '   ' });
+        t.eq(b.secuencia, s.secuencia);
+        t.eq(JSON.parse(fs.readFileSync(b.archivos.json, 'utf8')).prefijo, null);
+    });
+
+    t.test('lo que un nombre de archivo no aguanta se cambia por un guion', () => {
+        const dir = carpeta();
+        const s = sembrar(dir);
+        const r = sesiones.renombrar(s.json, { prefijo: 'Clase 3/4: repaso' });
+        t.eq(r.secuencia, 'Clase 3-4- repaso_curso_2026-09-29_10-00-00');
+        t.ok(workspace.dentroDe(dir, r.archivos.xml), 'y no se sale de la carpeta');
+    });
+
+    t.test('cambiar el curso después conserva el nombre de delante', () => {
+        const dir = carpeta();
+        const s = sembrar(dir);
+        const a = sesiones.renombrar(s.json, { prefijo: 'Clase 3' });
+        const b = sesiones.renombrar(a.archivos.json, { curso: 'Otro' });
+        t.eq(b.secuencia, 'Clase 3_otro_2026-09-29_10-00-00');
+    });
+
+    t.test('la lista trae el nombre de delante, para editarlo', () => {
+        const dir = carpeta();
+        const s = sembrar(dir);
+        sesiones.renombrar(s.json, { prefijo: 'Clase 3' });
+        t.eq(sesiones.listar([dir])[0].prefijo, 'Clase 3');
+    });
+
+    t.test('la pantalla ya no usa window.prompt, que Electron no tiene', () => {
+        // `prompt()` en Electron tira «prompt() is not supported»: el lápiz
+        // nunca hizo nada.
+        const js = fs.readFileSync(path.join(__dirname, '..', 'src', 'js', 'pantalla-sesiones.js'), 'utf8');
+        t.ok(!/window\.prompt\(/.test(js));
+        t.ok(/grabarRenombrar\(json, \{ prefijo: campo\.value \}\)/.test(js), 'manda el prefijo');
+    });
+
     t.group('sesiones-grabadas · borrar');
 
     t.test('se lleva los tres archivos', () => {

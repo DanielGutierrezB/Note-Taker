@@ -303,6 +303,41 @@ body {
   font-feature-settings: 'tnum' 1;
 }
 
+/* El nombre de una sesión mientras se lo cambia: el campo para lo que va
+   delante y, al lado y fijo, el nombre que puso la app, que no se toca. Cabe en
+   el renglón de 32 px, así que el campo es de 24 y no del alto de un formulario. */
+.ses-renombre {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.ses-renombre input[type='text'] {
+  width: 180px;
+  min-height: 24px;
+  height: 24px;
+  padding: 0 var(--sp-2);
+  font-weight: 600;
+}
+
+.ses-base {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Mientras se renombra, la fila es solo eso: los datos se apartan porque la
+   fecha ya está en el nombre, y las otras acciones también, porque a 900 px no
+   caben al lado del campo y porque «borrar» no tiene nada que hacer al lado de
+   algo que se está escribiendo. Queda el lápiz, que es el que cancela. */
+.fila.es-renombrando .ses-dato,
+.fila.es-renombrando .pastilla,
+.fila.es-renombrando > .btn:not([data-hace='renombrar']) {
+  display: none;
+}
+
 .tc {
   font-family: 'SF Mono', ui-monospace, Menlo, monospace;
 }

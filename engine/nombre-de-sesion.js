@@ -49,7 +49,24 @@ function cursoEnElNombre(curso) {
 }
 
 /**
- * @param {object} params { curso, cuandoMs }
+ * El nombre que el editor le pone delante a una sesión, como cabe en un archivo.
+ *
+ * **Se respeta como se escribió**, al revés que el curso: el curso se vuelve
+ * `curso-jev` porque es la parte que la app arma sola y tiene que ordenarse igual
+ * en todas las clases, pero esto lo escribió una persona para reconocer la clase
+ * de un vistazo —«Clase 3 Física»— y pasarlo a minúsculas con guiones le borraría
+ * justo eso. Solo se saca lo que un nombre de archivo no aguanta.
+ */
+function prefijoEnElNombre(prefijo) {
+    return String(prefijo == null ? '' : prefijo)
+        .replace(/[/\\:]/g, '-')
+        .replace(/\s+/g, ' ')
+        .replace(/^[\s._]+|[\s_]+$/g, '');
+}
+
+/**
+ * @param {object} params { curso, cuandoMs, prefijo } — `prefijo` va delante
+ *   del nombre de siempre, separado por `_`; vacío, el nombre es el de siempre
  * @returns {string} el nombre, sin extensión
  */
 function armar(params) {
@@ -57,7 +74,9 @@ function armar(params) {
     const cuando = new Date(p.cuandoMs != null ? p.cuandoMs : Date.now());
     const fecha = `${cuando.getFullYear()}-${dos(cuando.getMonth() + 1)}-${dos(cuando.getDate())}`;
     const hora = `${dos(cuando.getHours())}-${dos(cuando.getMinutes())}-${dos(cuando.getSeconds())}`;
-    return `${cursoEnElNombre(p.curso)}_${fecha}_${hora}`;
+    const base = `${cursoEnElNombre(p.curso)}_${fecha}_${hora}`;
+    const prefijo = prefijoEnElNombre(p.prefijo);
+    return prefijo ? `${prefijo}_${base}` : base;
 }
 
 /**
@@ -79,4 +98,4 @@ function leer(nombre) {
     };
 }
 
-module.exports = { armar, leer, cursoEnElNombre };
+module.exports = { armar, leer, cursoEnElNombre, prefijoEnElNombre };

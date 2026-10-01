@@ -520,7 +520,14 @@ function wavRenombrado(ruta, viejo, nuevo) {
 }
 
 /**
- * Renombra una sesión: el curso, nunca la hora.
+ * Renombra una sesión: el curso o el nombre de delante, nunca la hora.
+ *
+ * **El gesto de la pantalla es el prefijo.** El editor, con la lista delante:
+ * «debería poder renombrar la secuencia si lo deseo; el renombre debería
+ * agregarse antes del nombre que pone ahorita por default». O sea que lo que
+ * escribe va DELANTE de `curso_fecha_hora`, que se queda: es lo que ordena las
+ * clases y lo que dice cuándo se grabó. Se guarda aparte (`prefijo`) para que un
+ * segundo renombrado lo reemplace, y vacío vuelve al nombre de siempre.
  *
  * **La que se está grabando no se renombra.** El motor tiene su nombre en
  * memoria y le escribe el XML en cada cambio: renombrarle los archivos por
@@ -532,7 +539,7 @@ function wavRenombrado(ruta, viejo, nuevo) {
  * sidecar apuntando a un XML que ya no se llama así.
  *
  * @param {string} json el sidecar de la sesión
- * @param {object} cambio { curso }
+ * @param {object} cambio { curso, prefijo } — el que no venga se queda como está
  * @param {string} [enCurso] la secuencia que se está grabando ahora
  */
 function renombrar(json, cambio, enCurso) {
@@ -552,7 +559,9 @@ function renombrar(json, cambio, enCurso) {
         ? String(c.curso)
         : (estado.curso || (nombreDeSesion.leer(sitio.nombre) || {}).curso || '');
 
-    const nombre = nombreDeSesion.armar({ curso, cuandoMs });
+    const prefijo = nombreDeSesion.prefijoEnElNombre(c.prefijo != null ? c.prefijo : estado.prefijo);
+
+    const nombre = nombreDeSesion.armar({ curso, cuandoMs, prefijo });
     const archivos = { xml: sitio.xml, json: sitio.json };
     // El mismo nombre no es un error: se llega acá corrigiendo una tilde que el
     // nombre de archivo ya no distinguía. Se contesta que no se movió nada, en
@@ -586,6 +595,7 @@ function renombrar(json, cambio, enCurso) {
 
         estado.secuencia = nombre;
         estado.curso = curso;
+        estado.prefijo = prefijo || null;
 
         // Renombrar no mueve ningún tiempo, así que el ajuste que ya estaba
         // guardado se reusa tal cual; esto solo lo calcula para una sesión vieja

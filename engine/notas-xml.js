@@ -368,6 +368,9 @@ function sidecar(estado) {
         version: 2,
         secuencia: estado.secuencia || null,
         curso: estado.curso || null,
+        // Lo que el editor le puso delante al nombre al renombrarla. Va aparte
+        // para que renombrar otra vez lo REEMPLACE en vez de sumarle otro delante.
+        prefijo: estado.prefijo || null,
         fps,
         // Cómo se escribe ese fps en el XML, resuelto: es lo que deja leer un
         // sidecar y saber si la secuencia era NTSC sin volver a hacer la cuenta.

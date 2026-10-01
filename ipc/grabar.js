@@ -280,7 +280,7 @@ function registrar({ ipcMain, app, send, anotar }) {
      * llega a este renglón ya está decidido, y el motor borra.
      */
     ipcMain.handle('grabar-renombrar', (event, json, cambio) => {
-        anotar('grabar.renombrar', { json, curso: cambio && cambio.curso });
+        anotar('grabar.renombrar', { json, curso: cambio && cambio.curso, prefijo: cambio && cambio.prefijo });
         try {
             const r = grabacion.renombrarGrabada(json, cambio);
             anotar('grabar.renombrada', { json, secuencia: r.secuencia, audios: r.audios });
