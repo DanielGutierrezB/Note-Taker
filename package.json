@@ -57,6 +57,13 @@
             "!models",
             "!models/**"
           ]
+        },
+        {
+          "from": "plantillas",
+          "to": "plantillas",
+          "filter": [
+            "*.prproj"
+          ]
         }
       ]
     },

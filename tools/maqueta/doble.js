@@ -153,6 +153,27 @@ window.nt = {
     grabarTerminar: async () => estadoEnVivo(),
     onGrabarAviso: cb => avisos.push(cb),
 
+    // El menú del .prproj: dos capturas y la Doble hecha de las dos, que es el
+    // caso que muestra una vista compuesta.
+    prprojConfig: async carpeta => ({
+        ok: true,
+        config: { capturas: 2, vistas: { PV: [1], R: [2], S: [2], MG: [2], X2: [1, 2] } },
+        vistas: estadoEnVivo().vistas.map(v => ({ ...v, usada: ['PV', 'R', 'X2'].includes(v.nombre) })),
+        clases: 3,
+        guardada: true,
+        destino: `${carpeta}/Proyecto/${String(carpeta).split('/').pop()}.prproj`,
+        plantilla: true
+    }),
+    prprojGuardarConfig: async (carpeta, config) => ({ ok: true, config }),
+    prprojGenerar: async carpeta => ({
+        ok: true,
+        ruta: `${carpeta}/Proyecto/${String(carpeta).split('/').pop()}.prproj`,
+        cuenta: ['3 clase(s) en 2 captura(s) y 1 grupo(s), de 412 minutos con 5 de aire entre clases.',
+            '3 precortada(s) con 41 toma(s) y 7 claqueta(s) marcada(s) en las capturas.'],
+        avisos: ['clase-2_2026-09-28_14-30-00 quedó sin terminar: entra con lo que tenía guardado.']
+    }),
+    onPrprojAviso: () => {},
+
     anotar: async () => true,
     registroDescargar: async () => ({ ok: true, archivo: '/tmp/log.md' }),
     onUpdateProgress: cb => progresoUpdate.push(cb),
@@ -271,6 +292,18 @@ async function aplicar() {
 
     if (hay('terminada')) {
         app.irACierre(estadoEnVivo());
+        return;
+    }
+
+    // El menú de «Generar .prproj», y con `prproj-listo` ya generado.
+    if (hay('prproj') || hay('prproj-listo')) {
+        await app.irASesiones();
+        document.querySelector('#btn-prproj').click();
+        await espera(80);
+        if (hay('prproj-listo')) {
+            document.querySelector('#btn-prproj-generar').click();
+            await espera(80);
+        }
         return;
     }
 

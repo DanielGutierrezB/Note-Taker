@@ -45,7 +45,11 @@ const FILES = [
     'notas-de-antes.test.js',
     'aviso-de-palmada.test.js',
     'audio-que-se-rompe.test.js',
-    'nota-de-claqueta.test.js'
+    'nota-de-claqueta.test.js',
+    'prproj.test.js',
+    'prproj-panel.test.js',
+    'prproj-nidos.test.js',
+    'prproj-carpeta.test.js'
 ];
 
 const filter = process.argv[2] || '';

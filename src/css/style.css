@@ -1657,6 +1657,98 @@ kbd {
   border-top: 1px solid var(--hairline);
 }
 
+/* El menú de «Generar .prproj». Las capturas son pastillas en fila con
+   «Agregar» al final; cada vista es un renglón de 32 px con su sigla del color
+   de la vista —la misma que en la pantalla de la clase— y un botón por captura,
+   del mismo estilo que los de elegir vista, porque es el mismo gesto. */
+.prproj-capturas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.prproj-captura {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: 32px;
+  padding: 0 var(--sp-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+.prproj-captura .btn-ico {
+  margin-right: calc(-1 * var(--sp-2));
+}
+
+.prproj-vistas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.prproj-vista {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 32px;
+}
+
+.prproj-sigla {
+  min-width: 32px;
+  padding: 2px var(--sp-2);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--vista-tinta);
+  background: var(--vista);
+  border-radius: var(--radius-sm);
+}
+
+.prproj-titulo {
+  width: 120px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.prproj-vista.es-sin-tomas .prproj-titulo {
+  color: var(--text-secondary);
+}
+
+.prproj-elige {
+  display: inline-flex;
+  gap: var(--sp-1);
+}
+
+.prproj-elige .btn-vista {
+  min-width: 32px;
+  justify-content: center;
+}
+
+.prproj-hecho {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  flex: 1;
+  color: var(--text-primary);
+}
+
+/* El gris apagado sobre el verde del aviso queda en 3,9:1; el secundario pasa. */
+.prproj-hecho .v3 {
+  color: var(--text-secondary);
+}
+
+.prproj-avisos {
+  margin: 0;
+  padding-left: var(--sp-4);
+  color: var(--warn);
+}
+
 
 /* ──────────────────────────────────────────────────────────────────────────
    12. VACÍOS Y AVISOS

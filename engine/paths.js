@@ -432,7 +432,29 @@ function doctor() {
 
 function clearCache() { cache.clear(); }
 
+/** Cómo se llama la plantilla de Premiere que viaja con la app. */
+const PLANTILLA_PRPROJ = 'Plantilla-30.prproj';
+
+/**
+ * La plantilla de la que se clona el `.prproj` de una carpeta.
+ *
+ * Viaja dentro de la app (`plantillas/`, que el instalador copia a
+ * `Resources/plantillas`), así que en otra Mac no hay nada que buscar. La
+ * variable de entorno es para probar con otra sin tocar la que va empaquetada.
+ *
+ * @returns {string|null} la ruta, o null si no está en ningún lado
+ */
+function plantillaPrproj() {
+    const candidatas = [
+        process.env.NOTETAKER_PLANTILLA_PRPROJ,
+        process.resourcesPath ? path.join(process.resourcesPath, 'plantillas', PLANTILLA_PRPROJ) : null,
+        path.join(appRoot(), 'plantillas', PLANTILLA_PRPROJ)
+    ].filter(Boolean);
+    return candidatas.find(r => fs.existsSync(r)) || null;
+}
+
 module.exports = {
+    plantillaPrproj, PLANTILLA_PRPROJ,
     resolveTool, ffprobe, ffmpeg, whisper, whisperServer, escucharApp,
     whisperModel, vadModel, modeloLiviano, modelDirs, MODEL_PREFERENCE,
     // El escalón de abajo, que es lo que la política de reintento le pregunta

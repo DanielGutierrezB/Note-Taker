@@ -76,6 +76,15 @@ contextBridge.exposeInMainWorld('nt', {
         ipcRenderer.on('grabar-aviso', (_event, payload) => callback(payload));
     },
 
+    // El proyecto de Premiere de la carpeta (`ipc/prproj.js`): leer y guardar la
+    // configuración del menú, y generar.
+    prprojConfig: carpeta => ipcRenderer.invoke('prproj-config', carpeta),
+    prprojGuardarConfig: (carpeta, config) => ipcRenderer.invoke('prproj-guardar-config', carpeta, config),
+    prprojGenerar: (carpeta, config) => ipcRenderer.invoke('prproj-generar', carpeta, config),
+    onPrprojAviso: callback => {
+        ipcRenderer.on('prproj-aviso', (_event, payload) => callback(payload));
+    },
+
     // El diario de la sesión. La ventana solo anota y pide el archivo: el
     // registro entero vive del lado de Node, para que las dos mitades queden en
     // un mismo orden y con un mismo reloj.

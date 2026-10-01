@@ -11,6 +11,7 @@ import { $, esc, avisar, verVista } from './chrome.js';
 import { icono } from './iconos.js';
 import { duracion, cuando } from './formato.js';
 import * as estados from './estados.js';
+import * as panelPrproj from './panel-prproj.js';
 
 let app = null;
 let sesiones = [];
@@ -33,6 +34,8 @@ export function conectar(contexto) {
     });
     $('#lista-sesiones').addEventListener('click', alClic);
     $('#lista-sesiones').addEventListener('keydown', alTecla);
+    $('#btn-prproj').addEventListener('click', () => panelPrproj.abrir(app.ajustes.carpeta));
+    panelPrproj.conectar();
 }
 
 async function elegirCarpeta() {
@@ -54,6 +57,8 @@ export async function pintar() {
     sesiones = carpeta ? await window.nt.grabarListar([carpeta]) : [];
     $('#sesiones-cuantas').textContent = sesiones.length
         ? `${sesiones.length} en esta carpeta` : '';
+    // Sin clases no hay nada que precortar ni ninguna claqueta que marcar.
+    $('#btn-prproj').hidden = !sesiones.length;
     if (renombrando && !sesiones.some(s => s.archivos.json === renombrando)) renombrando = null;
     $('#lista-sesiones').innerHTML = sesiones.length ? sesiones.map(fila).join('') : vacio(carpeta);
     const campo = $('#lista-sesiones [data-campo="prefijo"]');

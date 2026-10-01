@@ -58,6 +58,8 @@
           <span>Sesiones</span>
           <span id="sesiones-cuantas" class="v3"></span>
           <span class="crece"></span>
+          <button id="btn-prproj" class="btn" type="button"
+                  title="Un proyecto de Premiere con todas las clases de esta carpeta: las capturas para sincronizar y cada clase precortada">Generar .prproj</button>
           <button id="btn-nueva" class="btn btn-primario" type="button">Nueva sesión</button>
         </div>
         <div id="lista-sesiones" class="lista"></div>
@@ -281,6 +283,39 @@
     <div class="panel-pie">
       <button class="btn btn-tenue" type="button" data-cerrar="telon-dependencias">Ahora no</button>
       <button id="btn-deps-todo" class="btn btn-primario" type="button">Instalar lo que falta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Generar el .prproj ─────────────────────────────────────────────
+     Qué capturas hay y qué capturas componen cada vista. Lo que se elige acá
+     queda guardado en la carpeta (`prproj-carpeta.leerConfig`). -->
+<div class="telon" id="telon-prproj">
+  <div class="panel">
+    <div class="panel-cabeza">
+      <span class="v1">Proyecto de Premiere</span>
+      <span class="crece"></span>
+      <button id="btn-prproj-cerrar" class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-prproj"
+              title="Cerrar"></button>
+    </div>
+    <div class="panel-cuerpo">
+      <p class="v2" id="prproj-dice"></p>
+      <div class="campo">
+        <span class="rotulo">Capturas</span>
+        <div class="prproj-capturas" id="prproj-capturas"></div>
+        <p class="v3">Cada captura es una anidación vacía: ahí sueltas el vídeo de esa cámara o
+          pantalla y lo sincronizas con el audio de referencia y las claquetas que ya trae.</p>
+      </div>
+      <div class="campo">
+        <span class="rotulo">Qué capturas componen cada vista</span>
+        <div class="prproj-vistas" id="prproj-vistas"></div>
+      </div>
+      <p class="v3" id="prproj-destino"></p>
+      <div id="prproj-resultado"></div>
+    </div>
+    <div class="panel-pie">
+      <button class="btn btn-tenue" type="button" data-cerrar="telon-prproj">Cerrar</button>
+      <button id="btn-prproj-generar" class="btn btn-primario" type="button">Generar</button>
     </div>
   </div>
 </div>

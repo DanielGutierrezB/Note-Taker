@@ -22,6 +22,7 @@ const updates = require('./engine/updates');
 const registro = require('./engine/registro');
 const dependencias = require('./engine/dependencias');
 const ipcGrabar = require('./ipc/grabar');
+const ipcPrproj = require('./ipc/prproj');
 const devShot = require('./dev-shot');
 
 let mainWindow = null;
@@ -321,3 +322,4 @@ ipcMain.handle('open-path', async (event, target) => {
 });
 
 ipcGrabar.registrar({ ipcMain, app, send, anotar });
+ipcPrproj.registrar({ ipcMain, dialog, ventana: () => mainWindow, send, anotar });

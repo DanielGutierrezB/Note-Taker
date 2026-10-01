@@ -637,6 +637,68 @@ node tools/ver-marcadores.js --fps 29.97
 Escribe un XML de prueba en `/tmp` con las cinco vistas, tres claquetas y una
 toma desactivada que no tiene que aparecer.
 
+## El proyecto de Premiere de la carpeta
+
+«Generar .prproj», en la cabecera de Sesiones, arma un proyecto de Premiere con
+todas las clases de la carpeta, en `<carpeta>/Proyecto/<carpeta>.prproj`. Antes
+abre un menú para decir qué capturas hay y qué capturas componen cada vista.
+
+**Lo que sale:**
+
+- **Una anidación por captura** (`Captura 1`, `Captura 2`…), vacía de vídeo: es
+  donde sueltas el archivo de esa cámara o de esa pantalla y lo sincronizas. Las
+  clases van una detrás de otra, con cinco minutos en negro entre clase y clase,
+  como en Class Cut. Cada anidación trae, silenciados:
+  - el WAV de referencia de cada clase, entero y en su franja, para sincronizar
+    contra su onda;
+  - en las capturas 2 en adelante, además la Captura 1 anidada en A1, para
+    sincronizar cualquier captura contra la primera;
+  - un marcador al principio de cada clase y uno por cada claqueta.
+- **Una anidación por grupo**, cuando una vista se compone de dos o más capturas
+  (por ejemplo «Doble» = Captura 1 + Captura 2). Lleva las capturas del grupo
+  apiladas; el encuadre lo ajustas tú una vez y vale para todas las tomas.
+- **Una secuencia precortada por clase**: las tomas que van al XML una detrás de
+  otra, con los bordes ajustados a la onda. Hay un track de vídeo por cada
+  captura o grupo que usan las vistas, y en cada toma solo está encendido el de
+  su vista; para cambiar de plano se enciende otro. A1 es el audio de la
+  Captura 1 y A2 el WAV de referencia, con el track silenciado.
+
+Como las precortadas cortan SOBRE las anidaciones, en cuanto sincronizas una
+captura adentro de su anidación, todos los cortes de todas las clases la
+muestran bien.
+
+**Un proyecto que ya existe no se pisa en silencio.** Al generar otra vez sale
+la pregunta: guardar uno nuevo al lado (`curso 2.prproj`), reemplazarlo o
+cancelar. Si generas uno por día, copias lo que haga falta del nuevo al viejo.
+
+**La configuración se recuerda por carpeta**, en `xml/Datos/prproj.json`, y la
+última que usaste es el punto de partida de una carpeta nueva.
+
+### La plantilla
+
+Un `.prproj` no se escribe de cero: se clona una plantilla que guardó Premiere,
+porque el formato cambia entre versiones y la plantilla trae todo correcto
+(ver la cabecera de `engine/prproj.js`). La app lleva la suya adentro, en
+`plantillas/`, así que en otra Mac no hay que buscar nada.
+
+Para armarla, en Premiere, con un proyecto nuevo y material de prueba
+cualquiera:
+
+1. Secuencia nueva a **30 fps**, 1920×1080. Los cuadros por segundo de todas las
+   secuencias que se generen salen de acá.
+2. En esa secuencia, al menos **un clip de vídeo** en V1.
+3. **Un clip de audio mono** en una pista de audio (un WAV de un canal; los de
+   Note Taker sirven).
+4. **Un clip de audio estéreo** en otra pista (un WAV o un vídeo con audio de dos
+   canales).
+5. **Un bin** cualquiera en el panel de proyecto.
+6. Guardar. Nada de lo que tenga adentro llega al proyecto generado: la app
+   descuelga todo y lo usa solo como molde.
+
+La app comprueba al generar que no falte nada de esto y dice qué falta. Ojo con
+una cosa: quien abra el proyecto necesita **la misma versión de Premiere o una
+más nueva** que la que guardó la plantilla.
+
 ## Las dos lecturas de Whisper
 
 Hay dos ciclos y la separación es lo que protege el transcript.

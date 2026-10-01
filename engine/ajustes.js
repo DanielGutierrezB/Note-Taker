@@ -69,8 +69,27 @@ const DEFAULTS = {
      */
     dispositivo: null,
     /** Si se abre la vista de cámara al entrar a una sesión. */
-    camara: false
+    camara: false,
+    /**
+     * La última configuración del menú de «Generar .prproj»: cuántas capturas y
+     * qué capturas componen cada vista. Cada carpeta guarda la suya
+     * (`prproj-carpeta.leerConfig`); esta es el punto de partida de una carpeta
+     * que todavía no tiene ninguna.
+     */
+    prproj: null
 };
+
+/** La configuración del .prproj con la forma de siempre, o null si no sirve. */
+function saneada(prproj) {
+    if (!prproj || typeof prproj !== 'object') return null;
+    const capturas = Math.max(1, Math.min(20, Math.floor(Number(prproj.capturas) || 1)));
+    const vistas = {};
+    for (const [vista, ids] of Object.entries(prproj.vistas || {})) {
+        if (!/^[A-Z0-9]{1,4}$/.test(vista) || !Array.isArray(ids)) continue;
+        vistas[vista] = ids.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= capturas);
+    }
+    return { capturas, vistas };
+}
 
 function archivo() {
     return path.join(os.homedir(), 'Library', 'Application Support', 'Note Taker', 'ajustes.json');
@@ -99,7 +118,8 @@ function sanear(crudo) {
         idioma: (typeof c.idioma === 'string' && /^[a-z]{2}$/.test(c.idioma))
             ? c.idioma : DEFAULTS.idioma,
         dispositivo: (typeof c.dispositivo === 'string' && c.dispositivo) || null,
-        camara: Boolean(c.camara)
+        camara: Boolean(c.camara),
+        prproj: saneada(c.prproj)
     };
 }
 
