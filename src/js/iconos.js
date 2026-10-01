@@ -157,15 +157,6 @@ const DIBUJOS = {
     sinEnlace: '<path d="M10.3 13.7a3.4 3.4 0 0 1 0-4.8l2.4-2.4a3.4 3.4 0 0 1 4.8 4.8l-1.2 1.2"/>'
         + '<path d="M13.7 10.3a3.4 3.4 0 0 1 0 4.8l-2.4 2.4a3.4 3.4 0 0 1-4.8-4.8l1.2-1.2"/>'
         + '<path d="m4.6 4.6 14.8 14.8"/>',
-    // Qué hace una captura en las tomas de las otras vistas, en el mismo menú:
-    // el clip que ocupa la pista entera es «puesta en todas, apagada donde no
-    // toca», y el clip corto con la pista vacía a los lados es «solo en las
-    // tomas de su vista». Son dos pistas de Premiere vistas de lejos, que es lo
-    // que el botón decide.
-    pistaEntera: '<rect x="2.8" y="8.4" width="18.4" height="7.2" rx="1.6"/>',
-    pistaPorToma: '<rect x="7.4" y="8.4" width="9.2" height="7.2" rx="1.6"/>'
-        + '<path d="M2.6 12h3.4M18 12h3.4"/>',
-
     cerrar: '<path d="m6.4 6.4 11.2 11.2M17.6 6.4 6.4 17.6"/>',
     mas: '<path d="M12 5.2v13.6M5.2 12h13.6"/>'
 };

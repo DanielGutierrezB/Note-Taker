@@ -732,16 +732,20 @@ abre un menú para decir qué capturas hay y qué capturas componen cada vista.
     encima quede arriba; si dos vistas sueltas piden apilados contrarios no hay
     forma de cumplir las dos —las pistas son las mismas— y se avisa cuál quedó
     sin cumplir y que la solución es anidar una de las dos.
-- **Y cada captura dice qué hace en las tomas de las OTRAS vistas**, con el
-  botoncito de su cajita (uno solo para la anidación entera, que es un clip en
-  una sola pista):
-  - **clip largo**: queda **puesta en todas las tomas** de la clase, apagada
+- **Y cada captura dice qué hace en las tomas de las OTRAS vistas**, con la
+  palabra que lleva al lado (una sola para la anidación entera, que es un clip
+  en una sola pista):
+  - **«en todas»**: queda **puesta en todas las tomas** de la clase, apagada
     donde no le toca, y cambiar de plano es encenderla ahí mismo. Es como trabaja
     Class Cut, y es lo que viene puesto.
-  - **clip corto**: entra **solo en las tomas de su vista** y en las demás su
-    pista queda vacía. Línea de tiempo limpia, a cambio de que ahí ya no haya un
-    clip para encender. Si dos vistas comparten una pista y no piden lo mismo,
-    queda puesta y se avisa cuál quedó sin cumplir.
+  - **«solo PV»** (la sigla de su vista): entra **solo en las tomas de su vista**
+    y en las demás su pista queda vacía. Línea de tiempo limpia, a cambio de que
+    ahí ya no haya un clip para encender. Si dos vistas comparten una pista y no
+    piden lo mismo, queda puesta y se avisa cuál quedó sin cumplir.
+
+  Estuvo dibujado —la pista vista de lejos, un clip largo contra uno corto— y a
+  15 px eran dos rectángulos que había que apretar para saber qué hacían. Los
+  estados de esta app van en palabras, y este no era la excepción.
 - **Una secuencia precortada por clase**: las tomas que van al XML una detrás de
   otra, con los bordes ajustados a la onda. Hay un track de vídeo por cada
   captura o grupo que usan las vistas, y en cada toma solo está encendido el de

@@ -121,16 +121,16 @@ function pintar() {
 
     // Lo del apilado sale solo cuando hay algo apilado: con una captura por
     // vista no hay nada que ordenar ni que anidar, y sería una línea de ruido.
-    // Lo del botoncito está siempre, porque el botoncito está siempre.
+    // Lo de «en todas» está siempre, porque esa palabra está siempre.
     const hayPilas = Object.values(config.vistas).some(v => v.capturas.length > 1);
     $('#prproj-pilas-dice').textContent = (hayPilas
         ? 'Arrastrá las cajitas: la de la derecha va encima, como las pistas de Premiere.'
             + ' Dentro del recuadro van juntas en una anidación, con el encuadre puesto una vez para'
             + ' toda la carpeta; sin recuadro, cada una va en su pista y se acomoda toma por toma. '
         : '')
-        + 'El botoncito dice qué pasa en las tomas de las otras vistas: con el clip largo la captura'
-        + ' queda puesta en todas, apagada donde no toca, y cambiar de plano es encenderla; con el'
-        + ' clip corto entra solo en las tomas de su vista y en las demás su pista queda vacía.';
+        + 'La palabra de al lado dice dónde está esa captura: «en todas» la deja puesta en todas las'
+        + ' tomas de la clase, apagada donde no toca, y cambiar de plano es encenderla ahí mismo;'
+        + ' «solo PV» la pone únicamente en las tomas de su vista y en las demás su pista queda vacía.';
 }
 
 /**
@@ -153,7 +153,7 @@ function cajita(vista, suya, id, encendida) {
                 >${id}</button>`;
     if (!encendida) return chip;
     // El número es el asa del arrastre y la cajita entera es el sitio donde se
-    // suelta: así soltar sobre el botoncito de al lado también cuenta.
+    // suelta: así soltar sobre la palabra de al lado también cuenta.
     return `<span class="prproj-caja" data-vista="${esc(vista.nombre)}" data-captura="${id}"
                 ${apilada ? 'data-arrastra="si"' : ''}
                 >${chip}${suya.unidas ? '' : siempre(vista, suya, [id])}</span>`;
@@ -166,21 +166,24 @@ function cajita(vista, suya, id, encendida) {
  * captura suelta, y uno solo para la anidación entera, que es un clip en una
  * sola pista y no se puede partir.
  *
- * El dibujo es la pista vista de lejos —el clip largo ocupa todas las tomas, el
- * corto solo las suyas— porque es exactamente lo que el editor va a ver al
- * abrir la precortada.
+ * **Lo dice con una palabra y no con un dibujo.** Estuvo dibujado —la pista
+ * vista de lejos, el clip largo contra el corto— y a 15 px eran dos rectángulos
+ * que no decían nada: había que apretarlos para enterarse de qué hacían. Las
+ * dos palabras son las dos respuestas a «¿dónde está esta captura?»: en todas
+ * las tomas, o solo en las de esta vista. Es la misma regla que el resto de la
+ * app, donde los estados van en palabras y no en color ni en forma.
  */
 function siempre(vista, suya, ids) {
     const puesta = ids.every(id => suya.siempre.includes(id));
     const quien = ids.length > 1 ? 'La anidación' : `La Captura ${ids[0]}`;
     const donde = esc(vista.titulo);
-    return `<button class="btn btn-tenue btn-ico prproj-siempre" type="button" data-hace="siempre"
+    return `<button class="btn btn-tenue prproj-siempre" type="button" data-hace="siempre"
                 data-vista="${esc(vista.nombre)}" ${ids.length > 1 ? '' : `data-captura="${ids[0]}"`}
                 aria-pressed="${puesta}"
                 title="${puesta
         ? `${quien} queda puesta en todas las tomas de la clase, encendida solo en las de ${donde}: cambiar de plano es encenderla ahí mismo. Clic para que entre solo en las tomas de ${donde}.`
         : `${quien} entra solo en las tomas de ${donde}; en las demás su pista queda vacía. Clic para dejarla puesta en todas, apagada donde no toca.`}"
-                >${icono(puesta ? 'pistaEntera' : 'pistaPorToma')}</button>`;
+                >${puesta ? 'en todas' : `solo ${esc(vista.nombre)}`}</button>`;
 }
 
 /**
@@ -323,7 +326,13 @@ function alSoltar(e) {
     const caja = destinoDe(e);
     if (!caja) return;
     e.preventDefault();
-    const sitio = caja.getBoundingClientRect();
+    // Antes o después se mide contra el NÚMERO y no contra la cajita entera: la
+    // cajita incluye la palabra de la derecha, así que su mitad caía dentro de
+    // la palabra y soltar sobre el número de al lado siempre significaba
+    // «antes». Contra el número, la palabra cuenta como «después», que es el
+    // lado donde está.
+    const chip = caja.querySelector('.btn-vista') || caja;
+    const sitio = chip.getBoundingClientRect();
     mover(arrastre.vista, arrastre.id, Number(caja.dataset.captura), e.clientX > sitio.left + sitio.width / 2);
     arrastre = null;
 }

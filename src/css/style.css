@@ -1836,12 +1836,19 @@ kbd {
   background: var(--hairline);
 }
 
-/* El número y su botoncito son una sola cajita: se arrastra del número, pero
-   soltar encima del botoncito cuenta igual, porque visualmente son lo mismo. */
+/* El número y su palabra son una sola cajita: se arrastra del número, pero
+   soltar encima de la palabra cuenta igual, porque visualmente son lo mismo.
+
+   Por eso el hueco de adentro es menor que el de afuera: con el mismo hueco en
+   los dos lados, «solo X2» parecía la palabra de la captura siguiente. */
 .prproj-caja {
   display: inline-flex;
   align-items: center;
   gap: 1px;
+}
+
+.prproj-pila:not(.es-anidada) {
+  gap: var(--sp-3);
 }
 
 .prproj-elige .btn-vista[draggable="true"] {
@@ -1853,13 +1860,29 @@ kbd {
   cursor: grabbing;
 }
 
-.prproj-une svg,
-.prproj-siempre svg {
+.prproj-une svg {
   width: 15px;
   height: 15px;
 }
 
-.prproj-une[aria-pressed="true"],
+.prproj-une[aria-pressed="true"] {
+  color: var(--text-primary);
+}
+
+/* «en todas» / «solo PV»: la palabra que dice dónde está esa captura.
+
+   Va en minúscula y chica, a la altura de la cajita: es un dato de la captura
+   que tiene al lado, no un control de la fila. Los dos estados valen lo mismo
+   —ninguno es «apagado»— así que ninguno se tiñe de color; el que está puesto
+   se lee más claro, nada más. */
+.prproj-siempre {
+  height: 26px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .prproj-siempre[aria-pressed="true"] {
   color: var(--text-primary);
 }

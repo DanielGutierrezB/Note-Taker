@@ -188,7 +188,7 @@ window.nt = {
 
     // El menú del .prproj: dos capturas, una vista anidada y otra suelta —los
     // dos estados del botón de unir— y en X2 una captura puesta en todas las
-    // tomas y la otra solo en las suyas, que son los dos del botoncito.
+    // tomas y la otra solo en las suyas, que son las dos palabras del menú.
     prprojConfig: async carpeta => ({
         ok: true,
         config: {
