@@ -302,9 +302,13 @@ function vadModel() {
 /**
  * Los modelos chicos, de menor a mayor.
  *
- * Los usa el ciclo de señales de la toma de notas en vivo (`engine/oir.js`), que
- * solo busca tres palabras conocidas y tira el texto: ahí lo que importa es
- * cuánto tarda, no cuánto acierta.
+ * Son el RESPALDO del ciclo de señales en vivo (`engine/oir.js`), no su modelo de
+ * todos los días: el ciclo le pregunta al servidor residente, que tiene cargado el
+ * grande (`oido-residente.js` arranca con `whisperModel`), y solo cae acá cuando el
+ * servidor no contestó —los primeros segundos de la clase, o si se murió—. Que el
+ * respaldo sea chico es lo que hace que caer no se note: el ciclo busca tres
+ * palabras conocidas y tira el texto, así que ahí lo que importa es cuánto tarda y
+ * no cuánto acierta.
  *
  * **En esta Mac el liviano y el escalón de abajo son el mismo archivo**, y no es
  * casualidad ni desprolijidad: las dos preguntas son la misma —cuál es el modelo
@@ -313,17 +317,17 @@ function vadModel() {
  * la clase 02: el ciclo pasa de 815 ms por pasada con el turbo a 317 ms con
  * `small`, o sea de ocupar un cuarto de cada ciclo a ocupar un noveno. Y la otra,
  * que es la que importa el día que el sistema se lleve al grande: el escalón al
- * que se baja es un archivo que el ciclo de señales ya viene mapeando cada tres
- * segundos, así que sus páginas están calientes y bajar no cuesta leer 488 MB de
- * disco con la máquina justo en el peor momento.
+ * que se baja es un archivo chico y conocido, así que bajar no cuesta leer 488 MB
+ * de disco con la máquina justo en el peor momento.
  */
 const MODELOS_LIVIANOS = ['ggml-base.bin', 'ggml-small.bin', 'ggml-medium.bin'];
 
 /**
  * Memoizado junto con las herramientas, y no en quien lo pide: el ciclo de
- * señales lo consulta cada tres segundos, y recorrer las carpetas de modelos cada
- * vez es tirar disco. Al vivir en el mismo `cache`, `clearCache` lo suelta con
- * el resto, y Diagnóstico y el ciclo ven siempre lo mismo.
+ * señales lo consulta en cada pasada —una por segundo— aunque después no lo use,
+ * y recorrer las carpetas de modelos cada vez es tirar disco. Al vivir en el mismo
+ * `cache`, `clearCache` lo suelta con el resto, y Diagnóstico y el ciclo ven
+ * siempre lo mismo.
  */
 function modeloLiviano() {
     if (!cache.has('modelo-liviano')) {

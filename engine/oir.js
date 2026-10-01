@@ -117,11 +117,13 @@ async function escuchar(params) {
 
     try {
         const opciones = { language: p.idioma || 'es' };
-        // El liviano, si está. La búsqueda es la misma que muestra Diagnóstico
-        // (`paths.modeloLiviano`), así que no pueden discrepar. Si no hay, el
-        // ciclo cae al modelo de siempre: peor —un segundo cada tres en vez de un
-        // décimo— pero funciona, y no se baja nada solo: bajar un modelo a mitad
-        // de una grabación es lo último que uno quiere.
+        // El liviano, si está. Es el respaldo de abajo: el ciclo en vivo pregunta
+        // primero al servidor residente, que tiene cargado el grande, y esto es
+        // para cuando el servidor no contestó. La búsqueda es la misma que muestra
+        // Diagnóstico (`paths.modeloLiviano`), así que no pueden discrepar. Si
+        // tampoco hay liviano, cae al modelo de siempre: más lento, pero funciona,
+        // y no se baja nada solo —bajar un modelo a mitad de una grabación es lo
+        // último que uno quiere—.
         const liviano = p.liviano ? paths.modeloLiviano() : null;
         if (liviano && liviano.path) opciones.model = liviano;
         // Y el escalón de abajo, cuando la pasada grande ya se murió con el bueno

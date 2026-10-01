@@ -4,10 +4,17 @@
  *
  * Es el segundo de los dos ciclos de una grabación, y la separación entre los
  * dos es lo que protege el transcript. El de señales (`grabacion.js`) corre
- * seguido con un modelo liviano y su texto es descartable: solo sirve para saber
- * si alguien dijo "3, 2, 1" o "Pausa", y de eso solo se le cree la hora. Este
- * corre una vez por toma, al cerrarla, con el modelo grande, y ESE texto es el
- * que queda.
+ * seguido y su texto es descartable: solo sirve para saber si alguien dijo
+ * "3, 2, 1" o "Pausa", y de eso solo se le cree la hora. Este corre una vez por
+ * toma, al cerrarla, y ESE texto es el que queda.
+ *
+ * **Los dos usan el modelo grande, y la diferencia no es el modelo: es qué audio
+ * se le da y qué se le cree.** El ciclo de señales lo consulta por el servidor
+ * residente (`oido-residente.js`, que arranca con `paths.whisperModel()`), que
+ * tiene el modelo ya cargado y contesta una ventana de seis segundos en menos de
+ * un segundo; el modelo chico quedó como respaldo para cuando el servidor no
+ * está listo (ver `liviano` en `oir.js`). Acá se le pasa la toma entera, de una,
+ * y se guarda lo que diga palabra por palabra.
  *
  * Está en su archivo porque es una máquina con estado propio: una fila, una
  * pasada en vuelo, y la regla de que nunca haya dos. Lo llaman el ciclo de
