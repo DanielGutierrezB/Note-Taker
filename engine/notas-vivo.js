@@ -633,6 +633,55 @@ function juntas(a, b) {
 }
 
 /**
+ * La toma de antes: la más cercana que termina antes de que esta empiece.
+ *
+ * **Las descartadas no cuentan.** Descartar es sacar la toma del XML, así que
+ * el tramo que ocupaba queda libre de verdad: es justamente lo que se hace
+ * cuando una toma salió mal y hay que rehacerla desde más atrás. En la pantalla
+ * eso se llama «desactivada», y es el mismo campo (`descartada`): una sola cosa,
+ * un solo nombre acá.
+ *
+ * Se elige por el OUT más grande y no por el orden de la lista, porque los
+ * bordes se mueven a mano: después de arrastrar dos INs, el orden en que se
+ * abrieron ya no es el orden en el tiempo.
+ */
+function tomaAnterior(tomas, toma) {
+    let previa = null;
+    for (const t of tomas || []) {
+        if (t === toma || t.id === toma.id || t.descartada) continue;
+        if (t.outMs == null || t.inMs == null || t.inMs >= toma.inMs) continue;
+        if (!previa || t.outMs > previa.outMs) previa = t;
+    }
+    return previa;
+}
+
+/**
+ * Hasta dónde puede retroceder el IN de una toma: el OUT de la de antes.
+ *
+ * El editor, después de la clase del 30/09: «No debería poder colocar un In
+ * antes del OUT de la toma anterior. Esto si sucede, solo parece que se demora
+ * en cargar lo anterior. Cuando pues es un espacio compartido.» Tenía razón en
+ * las dos mitades: el texto de la toma de antes ya está escrito y ahora se ve
+ * (ver `antesDeLaAbierta` en pantalla-vivo.js), y por eso mismo el IN no puede
+ * meterse ahí — las dos tomas se quedarían con las mismas palabras y el XML
+ * tendría dos bloques pisados sobre el mismo tramo de clase.
+ *
+ * **El OUT es exclusivo en toda la app** (`repartir`), así que un IN puesto
+ * justo EN el OUT de la de antes es legal: se tocan y no se pisan. El piso es
+ * un mínimo, no una prohibición.
+ *
+ * Esta es la última palabra sobre la regla. La ventana la dibuja —el arrastre se
+ * frena en la marca y el menú del clic derecho no ofrece el IN más atrás—, pero
+ * el motor no le cree: cada camino que mueve un IN pasa por acá.
+ *
+ * @returns {number|null} el ms mínimo, o `null` si no hay toma antes
+ */
+function pisoDelIn(tomas, toma) {
+    const previa = toma && toma.inMs != null ? tomaAnterior(tomas, toma) : null;
+    return previa ? previa.outMs : null;
+}
+
+/**
  * Corre el IN de la toma que está ABIERTA.
  *
  * Es otro caso que el de una toma cerrada, y por eso va aparte de `moverBorde`:
@@ -643,14 +692,20 @@ function juntas(a, b) {
  * quedan afuera vuelven a estar sueltas, y un "abrir a mano" posterior puede
  * volver a encontrarlas.
  *
+ * Se frena en el OUT de la toma anterior (`pisoDelIn`), como el arrastre se
+ * frena en el otro borde: no explota ni ignora el gesto, lo deja en el límite.
+ *
  * @returns {boolean} si se movió
  */
 function moverInAbierta(estado, toma, ms) {
     if (!toma || toma.outMs != null || !Number.isFinite(ms)) return false;
+    const piso = pisoDelIn(estado.tomas, toma);
+    const donde = piso != null ? Math.max(ms, piso) : ms;
+    if (donde === toma.inMs) return false;
     const todas = juntas(estado.sueltas, toma.palabras);
-    toma.inMs = ms;
-    toma.palabras = todas.filter(w => w.t >= ms);
-    estado.sueltas = todas.filter(w => w.t < ms);
+    toma.inMs = donde;
+    toma.palabras = todas.filter(w => w.t >= donde);
+    estado.sueltas = todas.filter(w => w.t < donde);
     return true;
 }
 
@@ -1325,13 +1380,23 @@ function repartir(palabras, toma) {
  * dijo, así que el final bueno es una palabra concreta y no el momento en que
  * alguien dijo "Pausa".
  *
+ * El IN se frena además en el OUT de la toma anterior, si le pasan las tomas
+ * para saber cuál es (`pisoDelIn`). Sin ellas no se frena, y eso es a propósito:
+ * hay un solo camino que mueve el IN de una toma cerrada y le pasa las tomas
+ * —lo comprueba `tomas-que-no-se-pisan.test.js`—, así que si mañana aparece otro
+ * la prueba se pone roja en vez de dejar pasar un borde pisado.
+ *
+ * @param {Array} [tomas] las de la sesión, para saber dónde termina la de antes
  * @returns {boolean} si se pudo mover
  */
-function moverBorde(toma, cual, paredMs) {
+function moverBorde(toma, cual, paredMs, tomas) {
     if (!toma || paredMs == null) return false;
     if (cual === 'in') {
         if (toma.outMs != null && paredMs >= toma.outMs) return false;
-        toma.inMs = paredMs;
+        const piso = tomas ? pisoDelIn(tomas, toma) : null;
+        const donde = piso != null ? Math.max(paredMs, piso) : paredMs;
+        if (donde === toma.inMs || (toma.outMs != null && donde >= toma.outMs)) return false;
+        toma.inMs = donde;
         return true;
     }
     if (toma.inMs != null && paredMs <= toma.inMs) return false;
@@ -1383,7 +1448,7 @@ function descomentar(toma, indice) {
  * se pasó, así que no explota: no se mueve y la línea vuelve a su sitio sola al
  * repintar, igual que en la clase en curso.
  */
-function moverBordeGuardado(toma, cual, paredMs) {
+function moverBordeGuardado(toma, cual, paredMs, tomas) {
     const guardadas = (toma.antes || []).concat(toma.palabras || [], toma.despues || []);
     const ultima = guardadas[guardadas.length - 1];
     if (!guardadas.length || !Number.isFinite(paredMs) ||
@@ -1392,7 +1457,7 @@ function moverBordeGuardado(toma, cual, paredMs) {
             'Corrilo hasta donde llega el gris y usá "Regenerar": relee la toma ' +
             'del audio y deja otros segundos de contexto para seguir.');
     }
-    if (!moverBorde(toma, cual, paredMs)) return;
+    if (!moverBorde(toma, cual, paredMs, tomas)) return;
     Object.assign(toma, repartir(guardadas, toma));
 }
 
@@ -1411,9 +1476,11 @@ function moverBordeGuardado(toma, cual, paredMs) {
  * no hay texto, y un tipo que no existe es un error de programa. Así que lo que
  * contesta es una excepción con el motivo, que vive donde vive la regla.
  *
+ * @param {Array} [tomas] las de la sesión: solo `borde` las usa, para que el IN
+ *   no cruce el OUT de la toma anterior (`pisoDelIn`)
  * @throws si el cambio no se puede hacer sin volver a oír el audio
  */
-function aplicar(toma, cambio) {
+function aplicar(toma, cambio, tomas) {
     const c = cambio || {};
     switch (c.tipo) {
         case 'vista':
@@ -1432,7 +1499,7 @@ function aplicar(toma, cambio) {
             descomentar(toma, c.indice);
             return;
         case 'borde':
-            moverBordeGuardado(toma, c.borde, Number(c.paredMs));
+            moverBordeGuardado(toma, c.borde, Number(c.paredMs), tomas);
             return;
         case 'reabrir':
             // Reabrir es dejar la toma sin OUT para que el ciclo de señales le
@@ -1488,6 +1555,8 @@ module.exports = {
     tomaAbierta,
     abrirToma,
     moverInAbierta,
+    tomaAnterior,
+    pisoDelIn,
     cerrarEn,
     arranqueDeLaTirada,
     HUECO_DE_TIRADA_SEC,

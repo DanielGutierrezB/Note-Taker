@@ -71,7 +71,7 @@ function editar(sesion, cambio) {
             // en vez de pedirle el texto a Whisper.
             if (toma.outMs == null && c.borde === 'in') {
                 vivo.moverInAbierta(sesion.estado, toma, Number(c.paredMs));
-            } else if (vivo.moverBorde(toma, c.borde, Number(c.paredMs))) {
+            } else if (vivo.moverBorde(toma, c.borde, Number(c.paredMs), sesion.estado.tomas)) {
                 // Las palabras se reparten YA con lo que hay, y la relectura
                 // afina después. Sin esto el borde volvía a su palabra de antes
                 // hasta que terminaba la relectura —cargar 1,6 GB de modelo y
@@ -95,7 +95,7 @@ function editar(sesion, cambio) {
         // `borde` también entra ahí, pero acá va aparte: con la sesión viva se
         // relee el tramo, así que el borde no está atado a las orillas guardadas.
         default:
-            vivo.aplicar(toma, c);
+            vivo.aplicar(toma, c, sesion.estado.tomas);
     }
 
     // Al historial entra lo que cambió la toma, y nada más. Quien decide eso es

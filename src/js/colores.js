@@ -63,8 +63,21 @@ export function tintaSobre(hex) {
  * elegido— y este archivo solo diga cuál es el color.
  */
 export function estiloDeVista(vistas, nombre) {
+    const c = coloresDeVista(vistas, nombre);
+    return c ? `--vista:${c.color};--vista-tinta:${c.tinta}` : '';
+}
+
+/**
+ * Lo mismo pero sin envolverlo en CSS, para quien pone las variables a mano.
+ *
+ * Lo pide el transcript: la marca de la toma anterior y sus palabras llevan el
+ * color de la vista de ESA toma, y `texto-toma.js` las escribe con
+ * `setProperty` sobre el elemento que ya tiene (ver `limiteDe`), no con un
+ * `style=""` en una plantilla.
+ */
+export function coloresDeVista(vistas, nombre) {
     const v = (vistas || []).find(x => x.nombre === nombre) || (vistas || [])[0];
-    if (!v) return '';
+    if (!v) return null;
     const hex = hexDeMarcador(v.colorDeMarcador);
-    return `--vista:${hex};--vista-tinta:${tintaSobre(hex)}`;
+    return { color: hex, tinta: tintaSobre(hex) };
 }

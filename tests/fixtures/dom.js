@@ -17,8 +17,17 @@ class Nodo {
     constructor(tipo) {
         this.tipo = tipo;
         this.hijos = [];
-        this.dataset = {};
-        this.style = {};
+        // Los `data-*` guardan cadenas, como en el DOM de verdad: sin esto un
+        // `dataset.x = 1` se leía como número acá y como '1' en la app, y una
+        // prueba con `===` pasaba en un sitio y fallaba en el otro.
+        this.dataset = new Proxy({}, {
+            set: (o, k, v) => { o[k] = String(v); return true; }
+        });
+        this.style = {
+            propiedades: {},
+            setProperty: (k, v) => { this.style.propiedades[k] = String(v); },
+            getPropertyValue: k => this.style.propiedades[k] || ''
+        };
         this.atributos = {};
         this.clases = new Set();
         this.textoPropio = '';

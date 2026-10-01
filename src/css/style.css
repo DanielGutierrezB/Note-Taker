@@ -1364,7 +1364,8 @@ kbd {
    Una pastilla con su nombre y no una rayita de 3 px: dice qué es sin tener
    que aprenderlo, y se agarra. Azul donde entra, roja donde sale, como en
    Class Cut. Viaja en el texto mientras se arrastra (`texto-toma.js`). */
-.borde {
+.borde,
+.transcript-limite {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -1385,6 +1386,49 @@ kbd {
 
 .borde.es-in { background: var(--accent); }
 .borde.es-out { background: var(--error); }
+
+/* ── Hasta dónde llega la toma anterior ────────────────────────────────────
+   El texto de la toma de antes se ve durante la toma abierta, para poder hacer
+   scroll y seleccionar sin esperar a que esta cierre. Y como es espacio
+   compartido, hay que ver de quién es cada tramo: el color es el de la VISTA de
+   esa toma, el mismo que lleva su bloque en la lista, así que no hay un lenguaje
+   nuevo que aprender.
+
+   El color no es el único canal: la pastilla dice «fin de la toma 12» con
+   letras. Va rellena del color de la vista con la tinta que contrasta contra
+   él, igual que la sigla de la lista.
+
+   No se agarra —no es un borde, es un tope— y por eso no tiene `ew-resize` ni el
+   anillo del hover. */
+.transcript-limite {
+  background: var(--vista-ajena, var(--layer-press));
+  color: var(--tinta-ajena, var(--text-secondary));
+  cursor: default;
+}
+
+/* Las palabras que ya son de otra toma: el mismo gris de orilla —son contexto,
+   no contenido— y encima el tinte de su vista, como el bloque de la toma en la
+   lista. Mezclado al 16 %, igual que `--tinte`, para que el gris siga pasando
+   4,5:1 encima (lo mide `tools/contrastes.js`).
+
+   El halo del mismo tinte es lo que lo vuelve un TRAMO y no palabras pintadas
+   una por una: desborda la caja y tapa los espacios de entre palabras y de
+   entre renglones, así que el tramo se lee de un saque. Va por fuera y no con
+   padding para no tocarle la caja a la palabra, que es la que mide el arrastre
+   (`palabraBajo`). */
+.transcript .palabra[data-de-toma] {
+  --tinte-ajeno: color-mix(in srgb, var(--vista-ajena, transparent) 16%, var(--bg-inset));
+  background: var(--tinte-ajeno);
+  box-shadow: 0 0 0 3px var(--tinte-ajeno);
+}
+
+/* Y no se señalan bajo el puntero: ahí la línea del IN no puede caer, así que
+   ofrecerlo sería ofrecer un gesto que no existe. */
+.transcript.es-movible .palabra[data-de-toma]:hover {
+  background: var(--tinte-ajeno);
+  box-shadow: 0 0 0 3px var(--tinte-ajeno);
+  cursor: text;
+}
 
 .transcript.es-movible .borde { cursor: ew-resize; }
 

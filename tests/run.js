@@ -41,6 +41,7 @@ const FILES = [
     'senales-del-texto.test.js',
     'menu-de-palabra.test.js',
     'transcript-que-crece.test.js',
+    'tomas-que-no-se-pisan.test.js',
     'aviso-de-palmada.test.js',
     'audio-que-se-rompe.test.js',
     'nota-de-claqueta.test.js'

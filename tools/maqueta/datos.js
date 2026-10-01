@@ -67,9 +67,18 @@ const TOMAS = [
         antes: [], despues: [], comentarios: [], relectura: null, repiteA: null, pausaAdentro: null
     },
     {
+        // La toma de antes de la abierta: su texto se ve durante la toma
+        // siguiente, en lo gris de antes del IN y con su color, para poder hacer
+        // scroll y seleccionar sin esperar a que esta cierre (ver
+        // `antesDeLaAbierta` en pantalla-vivo.js). Tiene palabras aunque esté
+        // «sin releer» porque es lo que pasa de verdad: el ciclo en vivo ya las
+        // escribió y la relectura solo las afina.
         id: 6, vista: 'PV', comentario: 'Preguntas', cuenta: '3, 2, 1.',
         inMs: seg(820), outMs: seg(1010), descartada: false, cerradaSola: false,
-        palabras: [], antes: [], despues: [], comentarios: [],
+        palabras: palabras('Y acá viene la parte de las preguntas que es donde se ve si ' +
+            'quedó claro miren lo que pregunta alguien del chat porque es justo la duda ' +
+            'que yo tenía la primera vez que armé uno de estos', 820),
+        antes: [], despues: [], comentarios: [],
         relectura: { estado: 'sin-leer', bueno: 'ggml-large-v3-turbo.bin' },
         repiteA: null, pausaAdentro: null
     }

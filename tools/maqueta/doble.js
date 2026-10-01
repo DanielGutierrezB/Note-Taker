@@ -131,7 +131,9 @@ window.nt = {
     grabarPcm: () => {},
     grabarClaqueta: async () => estadoEnVivo(),
     grabarQuitarClaqueta: async () => estadoEnVivo(),
-    grabarEditar: async () => estadoEnVivo(),
+    grabarEditar: async c => (c && c.tipo === 'borde' && c.borde === 'in'
+        ? moverInEn(Number(c.paredMs))
+        : estadoEnVivo()),
     grabarEditarGrabada: async () => ({ ok: true }),
     grabarAbrirToma: async ms => abrirEn(ms),
     grabarCerrarToma: async ms => cerrarEn(ms),
@@ -286,6 +288,38 @@ async function conPalmada(estado) {
  * el estado tal cual, porque ahí lo que se mira es la pantalla, no el motor.
  */
 let vivo = null;
+
+/**
+ * Correr el IN de la toma abierta, con el tope de la toma anterior.
+ *
+ * Es el tercer gesto que la maqueta hace de verdad, por el mismo motivo que los
+ * otros dos: es lo que hay que poder ARRASTRAR acá para ver qué pasa. Y el tope
+ * está porque sin él la maqueta mostraba lo contrario de lo que hace la app —el
+ * IN se metía en la toma de antes al soltar— y una captura así miente.
+ *
+ * Es el mismo cálculo que `pisoDelIn` y `moverInAbierta` en
+ * `engine/notas-vivo.js`, que son la última palabra; acá está en corto porque la
+ * maqueta no tiene motor.
+ */
+function moverInEn(ms) {
+    const base = vivo || estadoEnVivo();
+    const toma = base.tomas.find(t => t.id === base.abierta);
+    if (!toma || !Number.isFinite(ms)) return base;
+    let piso = null;
+    for (const t of base.tomas) {
+        if (t.id === toma.id || t.descartada || t.outMs == null || t.inMs >= toma.inMs) continue;
+        if (piso == null || t.outMs > piso) piso = t.outMs;
+    }
+    const donde = piso != null ? Math.max(ms, piso) : ms;
+    const todas = (base.sueltas || []).concat(toma.palabras || []).sort((a, b) => a.t - b.t);
+    const movida = { ...toma, inMs: donde, palabras: todas.filter(w => w.t >= donde) };
+    vivo = {
+        ...base,
+        tomas: base.tomas.map(t => (t === toma ? movida : t)),
+        sueltas: todas.filter(w => w.t < donde)
+    };
+    return vivo;
+}
 
 function abrirEn(ms) {
     const base = vivo || estadoEnVivo();

@@ -249,7 +249,7 @@ function editarGrabada(json, cambio) {
     } else {
         const toma = (estado.tomas || []).find(t => t.id === c.toma);
         if (!toma) throw new Error(`Esa sesión no tiene la toma ${c.toma}.`);
-        vivo.aplicar(toma, c);
+        vivo.aplicar(toma, c, estado.tomas);
     }
 
     // Arrastrar un borde a mano invalida su ajuste, y esto lo vuelve a hacer
