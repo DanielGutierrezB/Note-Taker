@@ -344,7 +344,8 @@ module.exports = async function (t) {
         t.eq(nota.nombre, 'Nota');
         t.eq(nota.desdeSeg, 2, 'en el sitio de la precortada donde quedó ese pedazo');
         t.eq(nota.hastaSeg, 3);
-        t.eq(nota.color, notasXml.BLANCO);
+        t.eq(nota.color, carpetaPrproj.COLOR_DE_NOTA);
+        t.ok(nota.color !== carpetaPrproj.COLOR_DE_CLAQUETA, 'y no del blanco de las claquetas');
     });
 
     t.test('el audio de referencia lleva los marcadores de toda la sesión', () => {

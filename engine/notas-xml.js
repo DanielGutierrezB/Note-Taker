@@ -47,8 +47,21 @@ const { xmlSafe, rateFor, sequenceXml, toFrames } = require('./fcp-xml');
 const ANCHO = 1920;
 const ALTO = 1080;
 
-/** Blanco, el de las claquetas y el de los comentarios sobre el texto. */
+/** Blanco, el de las claquetas. */
 const BLANCO = 4294967295;
+
+/**
+ * Turquesa (#19F4D6), el de los comentarios sobre un pedazo del texto.
+ *
+ * Son el otro juego de marcadores que no pertenece a ninguna vista, y hasta acá
+ * salían blancos igual que las claquetas: en la tira de marcadores de Premiere
+ * los dos se veían iguales, y lo que significan no se parece en nada —uno marca
+ * un golpe para sincronizar y el otro una frase para leer—.
+ *
+ * El entero va en `pproColor`, que es ABGR y no ARGB (ver `componentesDePremiere`
+ * en `fcp-xml.js`): 0xFFD6F419 es el #19F4D6 que se pidió, no al revés.
+ */
+const TURQUESA = 4292277273;
 
 /**
  * Cuánto dura el marcador de entrada, en SEGUNDOS.
@@ -221,8 +234,9 @@ function marcadores(estado) {
             puntoComoIn: true
         });
 
-        // Los comentarios sobre un pedazo del texto, en blanco para
-        // distinguirlos de los de la toma.
+        // Los comentarios sobre un pedazo del texto, en turquesa: ni el color de
+        // la vista, que es de la toma y no de la frase, ni el blanco de las
+        // claquetas, que es con lo que se confundían.
         for (const c of toma.comentarios || []) {
             if (c.desdeMs == null) continue;
             const desde = seg(c.desdeMs);
@@ -232,7 +246,7 @@ function marcadores(estado) {
                 comment: vivo.limpio(c.comentario),
                 startSec: desde,
                 endSec: hasta > desde ? hasta : undefined,
-                color: BLANCO,
+                color: TURQUESA,
                 puntoComoIn: true
             });
         }
@@ -447,6 +461,7 @@ function estadoLeido(estado) {
 module.exports = {
     nombreDeToma,
     BLANCO,
+    TURQUESA,
     FIRMA,
     SEGUNDOS_DEL_MARCADOR_IN,
     aSegundos,

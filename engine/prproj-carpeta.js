@@ -71,6 +71,9 @@ const COLORES_DE_ANIDACION = ['Cerulean', 'Rose', 'Iris', 'Forest'];
 /** Blanco, el de las claquetas en el XML (`notas-xml.BLANCO`). */
 const COLOR_DE_CLAQUETA = notasXml.BLANCO;
 
+/** Turquesa, el de las notas sobre el texto en el XML (`notas-xml.TURQUESA`). */
+const COLOR_DE_NOTA = notasXml.TURQUESA;
+
 /**
  * Verde, el del marcador que dice dónde empieza cada clase adentro de una
  * captura. Es lo que el editor busca para saber dónde soltar el archivo de esa
@@ -480,7 +483,7 @@ function planear(sesiones, config) {
                     desdeSeg: enElNido,
                     hastaSeg: c.hastaMs != null
                         ? Math.max(enElNido, enNido(clase, c.hastaMs)) : enElNido,
-                    color: notasXml.BLANCO
+                    color: COLOR_DE_NOTA
                 });
                 if (c.desdeMs < inMs || c.desdeMs >= outMs) continue;
                 const desde = cursor + (c.desdeMs - inMs) / 1000;
@@ -490,7 +493,7 @@ function planear(sesiones, config) {
                     comentario: vivo.limpio(c.comentario),
                     desdeSeg: desde,
                     hastaSeg: Math.max(desde, hasta),
-                    color: notasXml.BLANCO
+                    color: COLOR_DE_NOTA
                 });
             }
             cursor += largo;
@@ -990,5 +993,6 @@ module.exports = {
     BIN_PRECORTADAS,
     BIN_AUDIO,
     COLOR_DE_CLASE,
-    COLOR_DE_CLAQUETA
+    COLOR_DE_CLAQUETA,
+    COLOR_DE_NOTA
 };
