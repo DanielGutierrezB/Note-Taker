@@ -12,7 +12,7 @@
  * motor se puede probar entero sin abrir la app (`node tests/run.js`).
  */
 
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -23,6 +23,7 @@ const registro = require('./engine/registro');
 const dependencias = require('./engine/dependencias');
 const ipcGrabar = require('./ipc/grabar');
 const ipcPrproj = require('./ipc/prproj');
+const ipcReferencias = require('./ipc/referencias');
 const devShot = require('./dev-shot');
 
 let mainWindow = null;
@@ -323,3 +324,4 @@ ipcMain.handle('open-path', async (event, target) => {
 
 ipcGrabar.registrar({ ipcMain, app, send, anotar });
 ipcPrproj.registrar({ ipcMain, dialog, ventana: () => mainWindow, send, anotar });
+ipcReferencias.registrar({ ipcMain, nativeImage, clipboard, anotar });

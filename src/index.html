@@ -245,6 +245,19 @@
         <span class="v3">Es la primera mitad del nombre del XML.</span>
       </label>
       <div class="campo">
+        <span class="rotulo">Cámara de referencia</span>
+        <div class="campo-fila">
+          <select id="aj-camara" class="camara-elige">
+            <option value="">Ninguna</option>
+          </select>
+          <video id="aj-camara-ve" class="camara-previa" muted playsinline hidden></video>
+        </div>
+        <span class="v3" id="aj-camara-dice">De acá sale la foto de cómo quedó la pantalla al
+          cerrarse cada toma, para verla al retomar o mandársela al profesor. No se graba vídeo:
+          es un fotograma por toma, guardado al lado de las notas y fuera del XML. Si la señal
+          llega por NDI, ponela en una cámara virtual (la de OBS, por ejemplo) y elegila acá.</span>
+      </div>
+      <div class="campo">
         <span class="rotulo">Lo que la app necesita</span>
         <span class="v3">Si falta algo, el botón de al lado lo instala. Los modelos se
           bajan una sola vez y quedan en tu carpeta de usuario.</span>
@@ -335,6 +348,30 @@
     <div class="panel-cuerpo" id="diagnostico-cuerpo"></div>
     <div class="panel-pie">
       <button class="btn" type="button" data-cerrar="telon-diagnostico">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── La foto del OUT de una toma ────────────────────────────────────
+     Más ancho que los otros paneles porque lo que hay que ver es la imagen:
+     es la pantalla del profesor en el momento en que la clase paró. -->
+<div class="telon" id="telon-foto">
+  <div class="panel es-ancho">
+    <div class="panel-cabeza">
+      <span class="v1" id="foto-titulo">La pantalla al poner el OUT</span>
+      <span class="crece"></span>
+      <button id="btn-foto-cerrar" class="btn btn-tenue btn-ico" type="button"
+              data-cerrar="telon-foto" title="Cerrar"></button>
+    </div>
+    <div class="panel-cuerpo">
+      <img id="foto-vista" class="foto-grande" alt="">
+      <span class="v3" id="foto-dice"></span>
+    </div>
+    <div class="panel-pie">
+      <button id="btn-foto-copiar" class="btn btn-primario" type="button">Copiar la imagen</button>
+      <button id="btn-foto-finder" class="btn btn-tenue" type="button">Mostrar en Finder</button>
+      <span class="crece"></span>
+      <button class="btn btn-tenue" type="button" data-cerrar="telon-foto">Cerrar</button>
     </div>
   </div>
 </div>

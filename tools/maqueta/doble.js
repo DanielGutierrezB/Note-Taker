@@ -13,11 +13,44 @@
  * recorre es el mismo que recorre la app de verdad.
  */
 
-import { estadoEnVivo, SESIONES, AJUSTES, ENTRADAS, DOCTOR } from './datos.js';
+import { estadoEnVivo, SESIONES, AJUSTES, ENTRADAS, CAMARAS, DOCTOR } from './datos.js';
 
 const escenarios = new Set(
     (new URLSearchParams(location.search).get('e') || '').split(',').filter(Boolean));
 const hay = nombre => escenarios.has(nombre);
+
+/**
+ * La foto de referencia de la maqueta: una pantalla de clase dibujada a mano.
+ *
+ * La maqueta no tiene cámara, así que las fotos del OUT las inventa el doble.
+ * Es un SVG y no un JPEG de verdad para que el repo no cargue con una imagen
+ * binaria, y se ve claramente dibujado: una captura de diseño no debería poder
+ * confundirse con una foto de una clase que pasó.
+ */
+const PANTALLA_FALSA = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
+      <rect width="320" height="180" fill="#101216"/>
+      <rect x="0" y="0" width="320" height="18" fill="#1b1f27"/>
+      <circle cx="12" cy="9" r="3" fill="#ff5f57"/><circle cx="22" cy="9" r="3" fill="#febc2e"/>
+      <circle cx="32" cy="9" r="3" fill="#28c840"/>
+      <text x="160" y="12" fill="#8a93a3" font-family="Helvetica" font-size="8"
+            text-anchor="middle">Automatización · paso 3 de 7</text>
+      <rect x="20" y="36" width="110" height="34" rx="4" fill="#223049" stroke="#4e7bd4"/>
+      <text x="75" y="57" fill="#cfd8e6" font-family="Helvetica" font-size="9"
+            text-anchor="middle">Disparador</text>
+      <rect x="190" y="36" width="110" height="34" rx="4" fill="#223049" stroke="#4e7bd4"/>
+      <text x="245" y="57" fill="#cfd8e6" font-family="Helvetica" font-size="9"
+            text-anchor="middle">Condición</text>
+      <path d="M130 53h60" stroke="#4e7bd4" stroke-width="1.6"/>
+      <path d="M184 49l6 4-6 4z" fill="#4e7bd4"/>
+      <rect x="105" y="98" width="110" height="34" rx="4" fill="#2b2436" stroke="#a46fd6"/>
+      <text x="160" y="119" fill="#e2d7f0" font-family="Helvetica" font-size="9"
+            text-anchor="middle">Salida</text>
+      <path d="M160 70v28" stroke="#a46fd6" stroke-width="1.6"/>
+      <path d="M156 92l4 6 4-6z" fill="#a46fd6"/>
+      <rect x="20" y="150" width="190" height="4" rx="2" fill="#2a3040"/>
+      <rect x="20" y="160" width="120" height="4" rx="2" fill="#2a3040"/>
+    </svg>`);
 
 /* ─── El puente ───────────────────────────────────────────────────────── */
 
@@ -184,6 +217,21 @@ window.nt = {
     }),
     onPrprojAviso: () => {},
 
+    fotosListar: async (carpeta, secuencia) => ({
+        ok: true,
+        fotos: [1, 2, 3, 4, 6].map(toma => ({
+            toma,
+            ruta: `${carpeta}/xml/Referencias/${secuencia}/toma-${toma}.jpg`,
+            mini: PANTALLA_FALSA
+        }))
+    }),
+    fotoGuardar: async p => ({
+        ok: true, toma: p.toma, nueva: true, mini: PANTALLA_FALSA,
+        ruta: `${p.carpeta}/xml/Referencias/${p.secuencia}/toma-${p.toma}.jpg`
+    }),
+    fotoAbrir: async ruta => ({ ok: true, ruta, imagen: PANTALLA_FALSA, ancho: 1920, alto: 1080 }),
+    fotoCopiar: async () => ({ ok: true }),
+
     anotar: async () => true,
     registroDescargar: async () => ({ ok: true, archivo: '/tmp/log.md' }),
     onUpdateProgress: cb => progresoUpdate.push(cb),
@@ -207,8 +255,10 @@ Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
     value: {
         getUserMedia: async () => ({ getTracks: () => [] }),
-        enumerateDevices: async () =>
-            ENTRADAS.map(d => ({ kind: 'audioinput', deviceId: d.id, label: d.nombre }))
+        enumerateDevices: async () => [
+            ...ENTRADAS.map(d => ({ kind: 'audioinput', deviceId: d.id, label: d.nombre })),
+            ...CAMARAS.map(d => ({ kind: 'videoinput', deviceId: d.id, label: d.nombre }))
+        ]
     }
 });
 
@@ -272,7 +322,7 @@ async function aplicar() {
     }
 
     if (hay('en-vivo') || hay('toma-abierta') || hay('releyendo') || hay('sin-audio') ||
-        hay('palmada') || hay('palmada-vencida')) {
+        hay('palmada') || hay('palmada-vencida') || hay('foto')) {
         const estado = estadoEnVivo(estadoDeLaClase());
         vivo = estado;
         app.irAVivo(estado, { abierto: true, caido: hay('sin-audio'), pico: 0.42 });
@@ -284,6 +334,16 @@ async function aplicar() {
             document.querySelector('#lista-vivo [data-hace="plegar-claqueta"]').click();
         }
         if (hay('palmada') || hay('palmada-vencida')) await conPalmada(estado);
+        // La foto del OUT en grande, abierta desde el bloque de su toma: es lo
+        // que se mira para retomar, o lo que se copia para mandarle al profesor.
+        if (hay('foto')) {
+            await espera(120);
+            document.querySelector('#lista-vivo [data-hace="plegar"][data-toma="1"]').click();
+            await espera(60);
+            const mini = document.querySelector('#lista-vivo [data-hace="ver-foto"][data-toma="1"]');
+            if (mini) mini.click();
+            await espera(120);
+        }
         return;
     }
 

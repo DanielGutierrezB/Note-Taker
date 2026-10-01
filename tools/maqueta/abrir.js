@@ -31,6 +31,7 @@
  *   releyendo        la misma, con dos tomas en la cola de relectura
  *   sin-audio        la misma, con el dispositivo caído
  *   terminada        la pantalla de Cierre, con dos tomas mal leídas
+ *   foto             la foto del OUT de una toma, abierta en grande
  *   ajustes          la app con el panel de Ajustes abierto
  *   diagnostico      con el de Diagnóstico
  *   iconos           todos los iconos juntos, para mirarlos de una

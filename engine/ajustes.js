@@ -68,8 +68,17 @@ const DEFAULTS = {
      * exactamente lo que pasa con una interfaz de audio.
      */
     dispositivo: null,
-    /** Si se abre la vista de cámara al entrar a una sesión. */
-    camara: false,
+    /**
+     * La cámara de la que sale la foto del OUT de cada toma, por su nombre.
+     *
+     * Se guarda el NOMBRE y no el `deviceId` por lo mismo que la entrada de
+     * audio: el id lo inventa el navegador y cambia, y el nombre es lo que la
+     * persona eligió —«OBS Virtual Camera»— y lo que va a volver a elegir.
+     *
+     * `null` es «ninguna», que es como la app funcionaba antes de que esto
+     * existiera: sin cámara elegida no se saca ninguna foto y no cambia nada.
+     */
+    camara: null,
     /**
      * La última configuración del menú de «Generar .prproj»: cuántas capturas y
      * qué capturas componen cada vista. Cada carpeta guarda la suya
@@ -136,7 +145,9 @@ function sanear(crudo) {
         idioma: (typeof c.idioma === 'string' && /^[a-z]{2}$/.test(c.idioma))
             ? c.idioma : DEFAULTS.idioma,
         dispositivo: (typeof c.dispositivo === 'string' && c.dispositivo) || null,
-        camara: Boolean(c.camara),
+        // Lo que haya guardado que no sea un nombre —el `false` de la versión en
+        // la que esto era un sí o un no— se lee como «ninguna».
+        camara: (typeof c.camara === 'string' && c.camara) || null,
         prproj: saneada(c.prproj)
     };
 }

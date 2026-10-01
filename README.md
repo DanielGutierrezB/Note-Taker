@@ -375,6 +375,70 @@ y la siguiente hay una toma, o por lo menos el tiempo de reacomodar una cámara.
 Pasados los veinte, la pastilla sigue roja —el diagnóstico no cambió— y lo que
 cambia es lo que promete: ahí dice que la marca va a caer donde se apriete.
 
+## La foto del OUT
+
+Cada toma puede guardar **una foto de cómo estaba la pantalla del profesor en el
+momento en que la toma cerró**. Es lo que se mira al retomar —«¿en qué quedamos?
+¿qué slide estaba?»— y lo que se le manda al profesor cuando hay que repetir un
+pedazo. Sale de una cámara del sistema, que se elige en Ajustes.
+
+**No va al XML.** Es una ayuda para quien graba, no material para Premiere: el
+XML y el sidecar son byte por byte los mismos con cámara elegida o sin ella, y
+una prueba lo fija (`tests/referencias.test.js`). Las fotos viven aparte, en
+`xml/Referencias/<clase>/toma-N.jpg`, y se mueven y se borran con su clase.
+
+**Sin cámara elegida —que es como viene— la app es exactamente la de antes**: no
+pide permiso de cámara, no abre nada y no dibuja ninguna miniatura.
+
+### La cámara, y el NDI
+
+En Ajustes hay un selector con las cámaras que la Mac tiene, y «Ninguna». La
+señal del Rodecaster entra por USB-C y aparece ahí directamente. **El NDI no es
+una cámara del sistema**, así que para usarlo hay que ponerlo en una cámara
+virtual: el NDI en una escena del OBS y «Iniciar cámara virtual». Por eso el
+selector lista cámaras y no fuentes NDI: hablar NDI desde dentro de la app
+habría sido meter el SDK de NewTek en un `.pkg` que hoy no depende de nada, para
+terminar en el mismo sitio.
+
+Se recuerda **por nombre** y no por identificador, igual que el dispositivo de
+audio: el identificador cambia de un arranque a otro y el ajuste se habría
+perdido solo. Una cámara elegida que hoy no está conectada sigue en la lista,
+dicho, en vez de desaparecer del ajuste.
+
+### El fotograma es el del instante del OUT, no el de cuando se avisa
+
+Es lo único difícil de todo esto. El OUT casi nunca se pone ahora: lo pone
+«Pausa», y para creerle hacen falta el segundo de silencio de atrás y la pasada
+de Whisper que lee la palabra, así que cuando el motor dice «la toma 4 cerró» el
+momento que interesa pasó hace varios segundos. Sacar la foto al enterarse daría
+la pantalla de **después** —el profesor ya se movió, ya cambió de slide—, que es
+justo la que no sirve.
+
+Así que la cámara, mientras graba, guarda **un fotograma cada medio segundo con
+la hora en que se sacó**, y conserva los últimos veinticinco segundos. Cuando
+una toma cierra, se busca el fotograma más cercano a la hora de su OUT y se
+guarda ese. Son unos cuarenta JPEG de 1280 px en memoria y un encode cada medio
+segundo: lo más barato que hace esta app mientras graba.
+
+**Una foto por toma, y no se vuelve a sacar nunca.** Si después se corre el OUT,
+o se reabre y se cierra la toma, la foto sigue siendo la del momento en que la
+clase paró, que es lo que se estaba guardando. Y si no hay fotograma cerca de
+ese momento —la cámara se abrió después, el OUT lo corrió el editor a mano— la
+toma se queda sin foto, que es mejor que una foto de otro momento.
+
+### Dónde se ve
+
+La miniatura sale en el bloque de la toma, y la de la última toma cerrada sale
+en la tarjeta de **Ahora** mientras no hay toma abierta: es el momento en que
+esto se mira, con la clase en pausa. Un clic la abre en grande, con **Copiar la
+imagen** —que es cómo se le manda al profesor, pegándola en el chat— y
+**Mostrar en Finder**.
+
+Nada de esto puede estorbar una grabación: si la cámara no abre, se dice una vez
+y la clase sigue igual, sin fotos. Si la cámara se desconecta en medio, se dice
+y las tomas que sigan se quedan sin foto. No hay ningún camino en el que una
+foto detenga, retrase o cambie lo que se graba.
+
 ## El XML
 
 Se importa en Premiere tal cual. Lleva **dos cosas**, y las dos hacen falta:
@@ -938,11 +1002,22 @@ velocidad porque los tiempos no salen de `Date.now()` sino de la posición en el
 audio: seis minutos de clase se pasan en dos minutos de reloj y los timecodes
 que salen son los que habrían salido en vivo.
 
+**La cámara de referencia se prueba con la cámara falsa de Chrome.** Lo que
+`src/js/grabar/ojo.js` hace —abrir una cámara, guardar un fotograma cada medio
+segundo y devolver el de una hora dada— no se puede leer en el código: se corre
+el módulo de verdad en Chrome con `--use-fake-device-for-media-stream`, con la
+misma política de contenido que lleva la app, y se mira que los fotogramas sean
+JPEG, que el del instante pedido aparezca, que uno de hace un minuto no, y que
+una miniatura en `data:` se dibuje. Las reglas que sí se leen —una foto por
+toma, fuera del XML, la ruta comprobada antes de abrirla— están en
+`tests/foto-del-out.test.js` y en `tests/referencias.test.js`.
+
 ### Estructura
 
 ```
 main.js · preload.js     Electron (el motor corre en el proceso principal)
 ipc/grabar.js            el puente de la grabación
+ipc/referencias.js       el de las fotos del OUT
 engine/
   grabacion.js           la sesión: los relojes, el ciclo de señales, las claquetas
   espejo.js              lo que se ve de la sesión: el disco y la pantalla
@@ -960,6 +1035,7 @@ engine/
   insistir.js            qué hacer cuando Whisper se muere
   cambios-toma.js        lo que el editor cambia a mano, y deshacer
   sesiones-grabadas.js   listar, renombrar, borrar y reanudar
+  referencias.js         las fotos del OUT en el disco, al lado de las notas
   workspace.js           dónde escribe la app, y la escritura atómica
   paths.js               dónde están ffmpeg y whisper en esta máquina
 src/js/
@@ -969,6 +1045,8 @@ src/js/
   formato.js             el timecode, que tiene que dar lo mismo que el XML
   iconos.js              SVG de trazo, un dibujo por concepto
   grabar/oido.js         getUserMedia y el worklet que manda el PCM
+  grabar/ojo.js          la cámara de referencia y el anillo de fotogramas
+  fotos.js               cuándo se guarda la foto de una toma
 tools/                   maqueta, auditoría, simulación, build
 tests/                   corredor propio: node tests/run.js
 ```

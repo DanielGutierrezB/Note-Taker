@@ -961,6 +961,77 @@ b {
   border-radius: var(--radius);
 }
 
+/* La foto de cómo quedó la pantalla al cerrarse la toma. Va en una fila con su
+   rótulo al lado, porque sola no se entiende qué es ni de qué momento. La
+   miniatura es un botón: el clic la abre en grande (`panel-foto.js`). */
+.foto-toma {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.foto-mini {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-field);
+  border-radius: var(--radius-sm);
+  line-height: 0;
+  flex: 0 0 auto;
+}
+
+.foto-mini img {
+  display: block;
+  width: 112px;
+  height: auto;
+}
+
+.foto-mini:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+/* En el visor, la imagen manda: se le deja todo el ancho del panel y el alto
+   que quede de pantalla, sin recortarla. */
+.foto-grande {
+  display: block;
+  width: 100%;
+  max-height: 68vh;
+  object-fit: contain;
+  background: #000;
+  border-radius: var(--radius-sm);
+}
+
+/* La cámara elegida, en Ajustes: es la única forma de estar seguro de que la
+   fuente es la que uno cree antes de empezar la clase. */
+/* El selector toma el ancho que le deja la vista previa, como cualquier otro
+   campo de Ajustes: los nombres de las cámaras virtuales son largos. */
+.camara-elige {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.camara-previa {
+  flex: 0 0 auto;
+  width: 112px;
+  height: 63px;
+  object-fit: cover;
+  background: #000;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+/* El vídeo del que salen los fotogramas. No se ve, pero tampoco se puede poner
+   en `display:none`: un vídeo oculto así lo pausa el navegador y los fotogramas
+   dejarían de llegar. */
+.ojo-escondido {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 2px;
+  height: 2px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* El campo de espera: la tarjeta de una toma que todavía no empezó. El borde
    punteado es lo que la distingue de una toma de verdad sin decir nada. */
 .tarjeta-espera {
@@ -1655,6 +1726,12 @@ kbd {
   gap: var(--sp-3);
   padding: var(--sp-4) var(--sp-5);
   border-top: 1px solid var(--hairline);
+}
+
+/* El visor de la foto del OUT: lo que hay que ver es la imagen, así que el
+   panel crece hasta donde la ventana deja. */
+.panel.es-ancho {
+  width: min(980px, 100%);
 }
 
 /* El menú de «Generar .prproj». Las capturas son pastillas en fila con

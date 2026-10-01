@@ -32,6 +32,8 @@ const FILES = [
     'notas-xml.test.js',
     'formato.test.js',
     'sesiones-grabadas.test.js',
+    'referencias.test.js',
+    'foto-del-out.test.js',
     'ajustar-corte.test.js',
     'sesion.test.js',
     'reloj-del-audio.test.js',

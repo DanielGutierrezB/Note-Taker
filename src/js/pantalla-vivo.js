@@ -35,6 +35,8 @@ import { mostrador } from './grabar/turnos.js';
 import * as texto from './grabar/texto-toma.js';
 import { PALABRA_Y_APLAUSO_MS } from './grabar/senales.js';
 import { estiloDeVista, coloresDeVista } from './colores.js';
+import * as fotos from './fotos.js';
+import * as panelFoto from './panel-foto.js';
 
 let app = null;
 let estado = null;
@@ -103,6 +105,14 @@ const turno = mostrador();
 
 export function conectar(contexto) {
     app = contexto;
+
+    panelFoto.conectar();
+    // Una foto nueva repinta: la miniatura aparece en su bloque sola, sin que
+    // nadie tenga que volver a entrar a la toma.
+    fotos.conectar({
+        alCambiar: () => { if (estado) pintar(); },
+        avisar
+    });
 
     $('#btn-terminar').addEventListener('click', terminar);
     $('#btn-deshacer').addEventListener('click', () => volver('deshacer'));
@@ -203,6 +213,26 @@ export function ver(primerEstado, elAudio) {
     ultimoAvisoMs = Date.now();
     verVista('vista-vivo');
     pintar();
+    // Las fotos del OUT: las que esta clase ya tenga, y la cámara encendida si
+    // se está grabando y hay alguna elegida. No se espera: la pantalla no
+    // depende de esto para nada.
+    fotos.entrar({
+        carpeta: estado.dir,
+        secuencia: estado.secuencia,
+        grabando: estado.grabando !== false,
+        camara: app.ajustes && app.ajustes.camara
+    });
+}
+
+/**
+ * Se sale de la pantalla de la clase.
+ *
+ * Lo único que hay que soltar es la cámara de referencia: el motor ya no está
+ * grabando —o la clase era de mirar— y dejarla abierta mantendría la luz
+ * encendida y el anillo de fotogramas dando vueltas.
+ */
+export function salir() {
+    return fotos.salir();
 }
 
 /**
@@ -236,6 +266,9 @@ function alAviso(aviso) {
         ultimoAvisoMs = Date.now();
         for (const ev of aviso.eventos || []) contar(ev);
         pintar();
+        // Y si alguna toma cerró, su foto. Va detrás del repintado a propósito:
+        // guardar una foto no puede retrasar lo que la pantalla muestra.
+        fotos.alEstado(estado);
         return;
     }
     if (aviso.tipo === 'claqueta') {
@@ -746,6 +779,7 @@ retrocede solo hasta donde empezó la frase. Tecla: Enter">
             <div data-texto="espera"></div>
             <p class="v3 pista">Se abre sola con «3, 2, 1». Si ya empezó, arrastrá el
               <b class="pista-in">IN</b> hasta la primera palabra de la toma.</p>
+            ${laDeLaPausa()}
           </div>
         </div>`;
     }
@@ -822,6 +856,39 @@ function primeras(t) {
     return (t.palabras || []).slice(0, 10).map(w => w.texto).join(' ');
 }
 
+/**
+ * La foto de la última toma que cerró, en la tarjeta de espera.
+ *
+ * Es el momento en que esto se mira: la clase está en pausa y lo que hace falta
+ * saber para retomar es dónde se quedó el profesor. Es exactamente lo que el
+ * editor pidió —«para ver cómo estaba la pantalla cuando pararon en la toma
+ * anterior»— y acá está sin tener que abrir ninguna fila.
+ */
+function laDeLaPausa() {
+    const foto = fotos.ultima(estado);
+    if (!foto) return '';
+    return laFoto(foto.toma, `Así quedó la pantalla al cerrarse la toma ${foto.toma}: desde ahí retoma la clase.`);
+}
+
+/**
+ * La foto del OUT de una toma, si la tiene.
+ *
+ * Sale solo cuando hay foto: sin cámara elegida en Ajustes, los bloques se ven
+ * exactamente como se veían antes de que esto existiera. El rótulo va al lado
+ * porque una miniatura sola no dice de qué momento es.
+ */
+function laFoto(tomaId, dice) {
+    const foto = fotos.de(tomaId);
+    if (!foto) return '';
+    return `<div class="foto-toma">
+        <button class="btn foto-mini" type="button" data-hace="ver-foto" data-toma="${tomaId}"
+                title="La pantalla en el momento en que se puso el OUT de la toma ${tomaId}. Clic para verla en grande, copiarla o mandarla">
+          <img src="${foto.mini}" alt="La pantalla al poner el OUT de la toma ${tomaId}">
+        </button>
+        <span class="v3">${esc(dice)}</span>
+      </div>`;
+}
+
 function cuerpoToma(t) {
     // La abierta se edita arriba, en «Ahora»: dos textos movibles de la misma
     // toma serían dos líneas de IN que se pisan.
@@ -837,6 +904,7 @@ function cuerpoToma(t) {
         <p class="v3 pista">Lo gris es lo que se dijo fuera de la toma. Arrastrá el
           <b class="pista-in">IN</b> o el <b class="pista-out">OUT</b> para moverlos, o
           seleccioná un pedazo para comentarlo.</p>
+        ${laFoto(t.id, 'Cómo quedó la pantalla cuando esta toma cerró.')}
         ${comentariosDe(t)}
         <div class="campo-fila" style="margin-top:8px">
           ${t.descartada ? '' : vistas(t)}
@@ -1346,6 +1414,11 @@ async function alClic(e) {
         }
         case 'abrir': await abrir(); break;
         case 'cerrar': await pedir(() => window.nt.grabarCerrarToma()); break;
+        case 'ver-foto': {
+            const foto = fotos.de(toma);
+            if (foto) await panelFoto.abrir({ ruta: foto.ruta, toma });
+            break;
+        }
         case 'vista':
             await editar({ tipo: 'vista', toma, vista: boton.dataset.vista });
             break;

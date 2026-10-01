@@ -169,7 +169,10 @@ export const AJUSTES = {
     fps: 29.97,
     idioma: 'es',
     dispositivo: 'Audio de Zoom (la llamada)',
-    camara: false
+    // Sin cámara de referencia: es como arranca la app, y es lo que deja que la
+    // maqueta corra en una máquina sin ninguna cámara. Las fotos que se ven en
+    // los bloques son las que el doble dice que ya están en el disco.
+    camara: null
 };
 
 // Los nombres son los de verdad de una Mac con Zoom instalado: es la lista
@@ -180,6 +183,14 @@ export const ENTRADAS = [
     { id: 'mac', nombre: 'MacBook Pro Microphone (Built-in)' },
     { id: 'iphone', nombre: 'iPhone de Daniel Microphone' },
     { id: 'zoomdev', nombre: 'ZoomAudioDevice (Virtual)' }
+];
+
+// Las cámaras, con los mismos nombres que da una Mac: la del Mac, la
+// Rodecaster por USB-C y la virtual del OBS, que es por donde entra el NDI.
+export const CAMARAS = [
+    { id: 'facetime', nombre: 'FaceTime HD Camera' },
+    { id: 'rodecaster', nombre: 'RØDECaster Video' },
+    { id: 'obs', nombre: 'OBS Virtual Camera' }
 ];
 
 export const DOCTOR = {

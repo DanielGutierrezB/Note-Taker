@@ -85,6 +85,14 @@ contextBridge.exposeInMainWorld('nt', {
         ipcRenderer.on('prproj-aviso', (_event, payload) => callback(payload));
     },
 
+    // Las fotos del OUT (`ipc/referencias.js`). El JPEG cruza como bytes y las
+    // imágenes vuelven como `data:`, que es lo único que la ventana puede
+    // dibujar con su CSP.
+    fotoGuardar: pedido => ipcRenderer.invoke('foto-guardar', pedido),
+    fotosListar: (carpeta, secuencia) => ipcRenderer.invoke('fotos-listar', carpeta, secuencia),
+    fotoAbrir: ruta => ipcRenderer.invoke('foto-abrir', ruta),
+    fotoCopiar: ruta => ipcRenderer.invoke('foto-copiar', ruta),
+
     // El diario de la sesión. La ventana solo anota y pide el archivo: el
     // registro entero vive del lado de Node, para que las dos mitades queden en
     // un mismo orden y con un mismo reloj.

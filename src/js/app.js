@@ -24,12 +24,14 @@ import * as preparar from './pantalla-preparar.js';
 import * as vivo from './pantalla-vivo.js';
 import * as cierre from './pantalla-cierre.js';
 import * as dependencias from './dependencias.js';
+import * as ojo from './grabar/ojo.js';
 
 const app = {
     ajustes: null,
 
     irASesiones() {
         preparar.salir();
+        vivo.salir();
         $('#btn-volver').hidden = true;
         return sesiones.ver();
     },
@@ -61,11 +63,20 @@ const app = {
     },
 
     irACierre(salida) {
+        // La clase terminó: la cámara de referencia se apaga acá y no al volver
+        // a Sesiones, que puede tardar lo que el editor tarde en leer el cierre.
+        vivo.salir();
         $('#btn-volver').hidden = false;
         cierre.ver(salida);
     },
 
-    verAjustes() { verPanel('telon-ajustes', true); },
+    // Pintar es parte de abrir: los ajustes se leen del archivo y la lista de
+    // cámaras del sistema, y las dos cosas cambian mientras la app está abierta.
+    verAjustes() {
+        pintarAjustes();
+        dependencias.refrescar();
+        verPanel('telon-ajustes', true);
+    },
     verDiagnostico() { pintarDiagnostico(); verPanel('telon-diagnostico', true); }
 };
 
@@ -78,23 +89,19 @@ async function arrancar() {
     $('#btn-volver').innerHTML = `${icono('volver')}<span>Sesiones</span>`;
     $('#btn-volver').addEventListener('click', () => app.irASesiones());
 
-    $('#btn-ajustes').addEventListener('click', () => {
-        pintarAjustes();
-        dependencias.refrescar();
-        app.verAjustes();
-    });
+    $('#btn-ajustes').addEventListener('click', () => app.verAjustes());
     $('#btn-diagnostico').addEventListener('click', () => app.verDiagnostico());
     for (const b of $$('[data-cerrar]')) {
-        b.addEventListener('click', () => verPanel(b.dataset.cerrar, false));
+        b.addEventListener('click', () => cerrarPanel(b.dataset.cerrar));
     }
     // Un clic en el telón cierra, y Escape también. Son las dos maneras que uno
     // prueba sin pensar.
     for (const t of $$('.telon')) {
-        t.addEventListener('mousedown', e => { if (e.target === t) verPanel(t.id, false); });
+        t.addEventListener('mousedown', e => { if (e.target === t) cerrarPanel(t.id); });
     }
     document.addEventListener('keydown', e => {
         if (e.key !== 'Escape') return;
-        for (const t of $$('.telon.es-activa')) verPanel(t.id, false);
+        for (const t of $$('.telon.es-activa')) cerrarPanel(t.id);
     });
 
     sesiones.conectar(app);
@@ -111,6 +118,18 @@ async function arrancar() {
     const info = await window.nt.appInfo();
     pintarVersion(info.version);
     window.nt.anotar('ventana.lista', { version: info.version });
+}
+
+/**
+ * Cerrar un panel, por cualquiera de las tres maneras.
+ *
+ * Es una función y no `verPanel` suelto porque Ajustes deja algo encendido: la
+ * vista previa de la cámara. Si no se la soltara al cerrar, quedaría la luz de
+ * la cámara prendida toda la clase sin que nadie la esté mirando.
+ */
+function cerrarPanel(id) {
+    verPanel(id, false);
+    if (id === 'telon-ajustes') ojo.soltar('ajustes');
 }
 
 /* ─── Lo que falta ────────────────────────────────────────────────────── */
@@ -169,6 +188,10 @@ function conectarAjustes() {
     $('#aj-fps').addEventListener('change', e => guardar({ fps: Number(e.target.value) }));
     $('#aj-idioma').addEventListener('change', e => guardar({ idioma: e.target.value }));
     $('#aj-curso').addEventListener('change', e => guardar({ curso: e.target.value }));
+    $('#aj-camara').addEventListener('change', async e => {
+        await guardar({ camara: e.target.value || null });
+        await verLaCamara();
+    });
     $('#btn-log').addEventListener('click', async () => {
         const r = await window.nt.registroDescargar();
         avisar(r.ok ? 'El registro quedó en Descargas.' : `No se pudo: ${r.error}`,
@@ -184,6 +207,64 @@ function pintarAjustes() {
     $('#aj-fps').value = String(app.ajustes.fps);
     $('#aj-idioma').value = app.ajustes.idioma;
     $('#aj-curso').value = app.ajustes.curso || '';
+    pintarCamaras();
+}
+
+/* ─── La cámara de referencia ─────────────────────────────────────────── */
+
+/**
+ * El selector de cámaras, con la elegida puesta.
+ *
+ * La lista se pide cada vez que se abre Ajustes y no al arrancar la app: una
+ * cámara virtual aparece cuando se abre el OBS, y pedir la lista al arrancar
+ * dejaría un selector sin la opción que la persona está buscando. Pedirla
+ * implica pedir permiso de cámara (si no, los nombres vienen vacíos), así que
+ * solo pasa acá, cuando alguien vino a elegir una.
+ *
+ * **La elegida se guarda aunque hoy no esté conectada**, y sigue en la lista con
+ * su nombre: una cámara desenchufada no es un cambio de ajuste.
+ */
+async function pintarCamaras() {
+    const select = $('#aj-camara');
+    const elegida = app.ajustes.camara || '';
+    const { ok, lista, error } = await ojo.camaras();
+    const nombres = (lista || []).map(c => c.nombre);
+    if (elegida && !nombres.includes(elegida)) nombres.push(elegida);
+
+    select.innerHTML = '<option value="">Ninguna</option>'
+        + nombres.map(n => `<option value="${esc(n)}" ${n === elegida ? 'selected' : ''}>`
+            + `${esc(n)}${(lista || []).some(c => c.nombre === n) ? '' : ' (no está conectada)'}</option>`).join('');
+    select.value = elegida;
+    if (!ok && error) $('#aj-camara-dice').textContent = error;
+    await verLaCamara();
+}
+
+/**
+ * La vista previa, encendida solo mientras Ajustes está abierto.
+ *
+ * Se pide la cámara con un nombre propio («ajustes»), así que si hay una clase
+ * grabando con esa misma cámara, cerrar este panel no la apaga: la suelta, y
+ * sigue encendida para la clase (ver `ojo.tomar`).
+ */
+async function verLaCamara() {
+    const video = $('#aj-camara-ve');
+    const cual = app.ajustes.camara;
+    if (!cual) {
+        await ojo.soltar('ajustes');
+        video.srcObject = null;
+        video.hidden = true;
+        return;
+    }
+    const r = await ojo.tomar('ajustes', cual);
+    if (!r.ok) {
+        video.srcObject = null;
+        video.hidden = true;
+        $('#aj-camara-dice').textContent = r.error;
+        return;
+    }
+    video.srcObject = ojo.elStream();
+    video.hidden = false;
+    try { await video.play(); } catch (e) { /* la muestra el navegador cuando pueda */ }
 }
 
 /* ─── Diagnóstico ─────────────────────────────────────────────────────── */

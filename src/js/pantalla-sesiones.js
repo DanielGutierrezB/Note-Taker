@@ -277,7 +277,9 @@ async function borrar(sesion) {
         titulo: `¿Borrar «${sesion.secuencia}»?`,
         ok: 'Borrar',
         mensaje: 'Se van del disco el XML que importás en Premiere, el audio grabado ' +
-            `(${duracion(r.segundos)}) y los datos de la sesión. Esto no se puede deshacer.`
+            `(${duracion(r.segundos)}), los datos de la sesión`
+            + (r.fotos ? ` y ${r.fotos === 1 ? 'la foto de referencia' : `las ${r.fotos} fotos de referencia`}` : '')
+            + '. Esto no se puede deshacer.'
     });
     if (!ok) return;
     const res = await window.nt.grabarBorrar(sesion.archivos.json);

@@ -24,6 +24,7 @@ const path = require('path');
  *       Clase_de_React_2026-09-29_10-15-00.xml   lo que se importa en Premiere
  *       Audio/                                    el WAV de la sesión
  *       Datos/                                    el archivo con la hora del día
+ *       Referencias/                              la foto del OUT de cada toma
  *
  * Lo único que el editor abre a mano es el XML, así que los XML quedan juntos y
  * a la vista y lo demás baja un piso.
@@ -32,10 +33,15 @@ const path = require('path');
  * editor abre todo el día, y `Datos` la sigue. Se llama `Datos` y no `Notas`
  * porque las notas SON el XML: esto es lo que la app se guarda para sí misma, y
  * el nombre tiene que decir "acá no hay nada que importar".
+ *
+ * `Referencias` es la excepción a eso: son las fotos que el editor sí abre —y
+ * manda— y por eso tienen carpeta propia con su nombre en castellano, una
+ * subcarpeta por clase, y no se mezclan con los datos de la app.
  */
 const XML_DIR = 'xml';
 const AUDIO_DIR = 'Audio';
 const DATOS_DIR = 'Datos';
+const REFERENCIAS_DIR = 'Referencias';
 
 /**
  * Cómo termina el archivo con la hora del día, que es lo que hace visible a una
@@ -55,6 +61,12 @@ function datosDir(base) {
     return path.join(xmlDir(base), DATOS_DIR);
 }
 
+/** Las fotos de referencia van en una subcarpeta por clase, con su nombre. */
+function referenciasDir(base, nombre) {
+    const dir = path.join(xmlDir(base), REFERENCIAS_DIR);
+    return nombre == null ? dir : path.join(dir, nombre);
+}
+
 /**
  * Dónde van el XML y el archivo con la hora del día de una sesión.
  *
@@ -66,7 +78,8 @@ function datosDir(base) {
 function archivosDeSesion(base, nombre) {
     return {
         xml: path.join(xmlDir(base), `${nombre}.xml`),
-        json: path.join(datosDir(base), `${nombre}${SUFIJO_SIDECAR}`)
+        json: path.join(datosDir(base), `${nombre}${SUFIJO_SIDECAR}`),
+        referencias: referenciasDir(base, nombre)
     };
 }
 
@@ -90,7 +103,8 @@ function sesionDelSidecar(json) {
             ? path.join(xmlDir(base), `${nombre}.xml`)
             : path.join(base, `${nombre}.xml`),
         json,
-        audio: audioDir(base)
+        audio: audioDir(base),
+        referencias: referenciasDir(base, nombre)
     };
 }
 
@@ -181,10 +195,12 @@ module.exports = {
     XML_DIR,
     AUDIO_DIR,
     DATOS_DIR,
+    REFERENCIAS_DIR,
     SUFIJO_SIDECAR,
     xmlDir,
     audioDir,
     datosDir,
+    referenciasDir,
     archivosDeSesion,
     sesionDelSidecar,
     dentroDe,

@@ -24,6 +24,7 @@ const espejo = require('./espejo');
 const historial = require('./deshacer');
 const notasXml = require('./notas-xml');
 const nombreDeSesion = require('./nombre-de-sesion');
+const referencias = require('./referencias');
 const workspace = require('./workspace');
 const oirToma = require('./oir-toma');
 const vivo = require('./notas-vivo');
@@ -83,7 +84,13 @@ function sidecaresDe(donde, base) {
                 ...leida,
                 carpeta: base,
                 archivos: { xml: suyos.xml, json },
-                resumen: resumirParaLaLista(leida)
+                resumen: {
+                    ...resumirParaLaLista(leida),
+                    // Las fotos no se cuentan del sidecar sino del disco, y se
+                    // cuentan acá para que el aviso de borrar pueda nombrarlas:
+                    // borrar una clase se las lleva, y eso hay que decirlo.
+                    fotos: referencias.listar(base, leida.secuencia).length
+                }
             });
         } catch (e) {
             // Un sidecar roto no puede tirar la lista entera: se salta y las
@@ -593,6 +600,10 @@ function renombrar(json, cambio, enCurso) {
             wav.sesion.archivo = nuevo;
         }
 
+        // Las fotos de referencia se mudan con la clase: su carpeta se llama
+        // como ella, y dejarlas atrás sería perderlas sin decirlo.
+        referencias.mover(sitio.base, sitio.nombre, nombre);
+
         estado.secuencia = nombre;
         estado.curso = curso;
         estado.prefijo = prefijo || null;
@@ -611,6 +622,7 @@ function renombrar(json, cambio, enCurso) {
         for (const [de, a] of movidos.reverse()) {
             try { fs.renameSync(a, de); } catch (e) { /* se hizo lo que se pudo */ }
         }
+        try { referencias.mover(sitio.base, nombre, sitio.nombre); } catch (e) { /* idem */ }
         quitar(destino.xml);
         quitar(destino.json);
         throw err;
@@ -657,9 +669,10 @@ function borrar(json, enCurso) {
         if (quitar(wav.archivo)) audios++;
     }
 
+    const fotos = referencias.borrar(sitio.base, sitio.nombre);
     const xml = quitar(sitio.xml);
     const sidecar = quitar(sitio.json);
-    return { secuencia: estado.secuencia || sitio.nombre, xml, sidecar, audios };
+    return { secuencia: estado.secuencia || sitio.nombre, xml, sidecar, audios, fotos };
 }
 
 module.exports = {

@@ -295,7 +295,7 @@ function registrar({ ipcMain, app, send, anotar }) {
         anotar('grabar.borrar', { json });
         try {
             const r = grabacion.borrarGrabada(json);
-            anotar('grabar.borrada', { json, secuencia: r.secuencia, audios: r.audios });
+            anotar('grabar.borrada', { json, secuencia: r.secuencia, audios: r.audios, fotos: r.fotos });
             return { ok: true, ...r };
         } catch (err) {
             anotar('grabar.borrar-falla', { json, error: err.message });
