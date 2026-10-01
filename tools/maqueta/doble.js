@@ -191,7 +191,19 @@ window.nt = {
     // tomas y la otra solo en las suyas, que son las dos palabras del menú.
     prprojConfig: async carpeta => ({
         ok: true,
-        config: {
+        // Con `prproj-lleno`, el peor caso del menú: las seis capturas, y una
+        // vista que usa todas. Es lo que hay que mirar para saber si el menú
+        // sigue cabiendo en la ventana más chica que la app deja abrir.
+        config: hay('prproj-lleno') ? {
+            capturas: 6,
+            vistas: {
+                PV: { capturas: [1, 2, 3, 4, 5, 6], unidas: false, siempre: [1, 2, 3, 4, 5, 6] },
+                R: { capturas: [2, 1], unidas: true, siempre: [2, 1] },
+                S: { capturas: [1, 2, 3], unidas: true, siempre: [1, 2, 3] },
+                MG: { capturas: [1, 2], unidas: false, siempre: [1, 2] },
+                X2: { capturas: [1, 2], unidas: true, siempre: [1, 2] }
+            }
+        } : {
             capturas: 2,
             vistas: {
                 PV: { capturas: [1], unidas: false, siempre: [1] },
@@ -366,7 +378,7 @@ async function aplicar() {
     }
 
     // El menú de «Generar .prproj», y con `prproj-listo` ya generado.
-    if (hay('prproj') || hay('prproj-listo')) {
+    if (hay('prproj') || hay('prproj-listo') || hay('prproj-lleno')) {
         await app.irASesiones();
         document.querySelector('#btn-prproj').click();
         await espera(80);

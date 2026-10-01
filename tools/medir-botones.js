@@ -11,7 +11,7 @@
  *   node tools/medir-botones.js
  *   node tools/medir-botones.js --escenario en-vivo --ancho 900
  *
- * Dos precisiones que sin ellas el número miente:
+ * Tres precisiones que sin ellas el número miente:
  *
  *   · **`scrollWidth` NO sirve de criterio.** Los botones son `inline-flex`
  *     con `justify-content: center`, así que el texto que no entra se sale por
@@ -19,6 +19,11 @@
  *     es `max-content` contra el ancho real, y el `max-content` no se estima:
  *     se clona el botón como hermano suyo —así los selectores por descendencia
  *     siguen aplicando— y se lo mide.
+ *
+ *   · **Un panel que no cabe no deja rastro en la página.** Va centrado en un
+ *     telón `fixed`: cuando su contenido mide más que la ventana, el panel
+ *     crece hacia los dos lados y lo que sobra queda detrás del borde de la
+ *     pantalla, sin scroll que lo alcance. Se mide panel por panel.
  *
  *   · **Lo que recorta con ellipsis NO chorrea.** Un nombre largo con
  *     `text-overflow: ellipsis` pide más de lo que tiene y eso está bien: es
@@ -40,7 +45,7 @@ function arg(nombre, def) {
 const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
     'sin-carpeta', 'sesiones', 'preparar', 'preparar-sin-audio', 'sin-whisper',
     'preparar-microfono', 'preparar-zoom-falso', 'sin-zoom',
-    'en-vivo', 'toma-abierta', 'palmada-vencida', 'terminada', 'notas-de-antes', 'foto', 'prproj', 'prproj-listo', 'ajustes', 'diagnostico'
+    'en-vivo', 'toma-abierta', 'palmada-vencida', 'terminada', 'notas-de-antes', 'foto', 'prproj', 'prproj-lleno', 'prproj-listo', 'ajustes', 'diagnostico'
 ];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
 const ALTO = Number(arg('alto', 840));
@@ -115,10 +120,33 @@ async function medir(pagina) {
             }
         }
 
+        /* ── Paneles que no caben en la ventana ───────────────────────── */
+        // Un panel va centrado dentro de un telón `fixed`, así que cuando su
+        // contenido mide más que la ventana no aparece scroll en la página:
+        // el panel crece hacia los dos lados y lo que sobra queda detrás del
+        // borde de la pantalla, sin forma de alcanzarlo. Por eso se mide
+        // aparte de `desbordeH`, que de eso no se enteraba.
+        const apretados = [];
+        for (const panel of document.querySelectorAll('.panel')) {
+            if (!visible(panel)) continue;
+            const r = panel.getBoundingClientRect();
+            const corrido = panel.scrollWidth > panel.clientWidth + MARGEN;
+            const afuera = r.left < -MARGEN || r.right > window.innerWidth + MARGEN;
+            if (!corrido && !afuera) continue;
+            const cabeza = panel.querySelector('.panel-cabeza');
+            apretados.push({
+                titulo: ((cabeza && cabeza.textContent) || panel.className).trim().slice(0, 30),
+                tiene: Math.round(panel.clientWidth),
+                necesita: Math.round(panel.scrollWidth),
+                afuera
+            });
+        }
+
         return {
             botones: botones.length,
             desbordados,
             solapes,
+            apretados,
             // El documento no puede tener scroll horizontal: si lo tiene, hay
             // algo más ancho que la ventana y la app se lee corrida.
             desbordeH: document.documentElement.scrollWidth > window.innerWidth
@@ -148,17 +176,22 @@ async function main() {
                 await pagina.close();
                 mirados += m.botones;
 
-                const mal = m.desbordados.length || m.solapes.length || m.desbordeH;
+                const mal = m.desbordados.length || m.solapes.length || m.apretados.length || m.desbordeH;
                 if (mal) fallos++;
                 console.log(`${mal ? '✗' : '·'} ${escenario} @ ${ancho} — ${m.botones} cajas` +
                     `${m.desbordados.length ? `, ${m.desbordados.length} con el texto afuera` : ''}` +
                     `${m.solapes.length ? `, ${m.solapes.length} solapes` : ''}` +
+                    `${m.apretados.length ? `, ${m.apretados.length} panel(es) sin caber` : ''}` +
                     `${m.desbordeH ? ', la página se sale de ancho' : ''}`);
                 for (const d of m.desbordados.slice(0, 8)) {
                     console.log(`    «${d.texto}» tiene ${d.tiene} px y necesita ${d.necesita}`);
                 }
                 for (const s of m.solapes.slice(0, 8)) {
                     console.log(`    «${s.a}» encima de «${s.b}»`);
+                }
+                for (const p of m.apretados.slice(0, 8)) {
+                    console.log(`    el panel «${p.titulo}» tiene ${p.tiene} px y necesita ${p.necesita}`
+                        + `${p.afuera ? ', y se sale de la ventana' : ''}`);
                 }
             }
         }

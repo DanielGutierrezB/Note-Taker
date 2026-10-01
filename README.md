@@ -750,6 +750,14 @@ abre un menú para decir qué capturas hay y qué capturas componen cada vista.
   Estuvo dibujado —la pista vista de lejos, un clip largo contra uno corto— y a
   15 px eran dos rectángulos que había que apretar para saber qué hacían. Los
   estados de esta app van en palabras, y este no era la excepción.
+- **El menú es ancho a propósito.** Una vista que use las seis capturas es una
+  fila de seis cajitas con su palabra, y eso mide más que un panel normal: el
+  menú usa el panel ancho —el mismo del visor de la foto— y en la ventana más
+  chica que la app deja abrir, 900 px, el peor caso entra en un solo renglón. Si
+  aun así no cupiera, las cajitas envuelven; lo que no hacen es empujar el panel
+  detrás del borde de la ventana, que es lo que pasaba antes: quedaba una barra
+  de desplazamiento horizontal y las siglas de las vistas fuera de la pantalla.
+  Los párrafos no crecen con el panel: se quedan en la medida de lectura.
 - **Una secuencia precortada por clase**: las tomas que van al XML una detrás de
   otra, con los bordes ajustados a la onda. Hay un track de vídeo por cada
   captura o grupo que usan las vistas, y en cada toma solo está encendido el de
@@ -951,7 +959,7 @@ exactamente la diferencia con el timecode de al lado.
 ```bash
 node tools/contrastes.js       # la tabla WCAG de los tokens
 node tools/auditar.js          # contraste real sobre el DOM, filas, cromo, blancos de clic
-node tools/medir-botones.js    # texto fuera de su caja, solapes, desbordes
+node tools/medir-botones.js    # texto fuera de su caja, solapes, desbordes, paneles que no caben
 node tools/capturar.js         # las capturas de docs/capturas/
 node tools/maqueta/abrir.js    # la interfaz de verdad, con datos falsos
 ```

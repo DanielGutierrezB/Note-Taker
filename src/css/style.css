@@ -1728,10 +1728,20 @@ kbd {
   border-top: 1px solid var(--hairline);
 }
 
-/* El visor de la foto del OUT: lo que hay que ver es la imagen, así que el
-   panel crece hasta donde la ventana deja. */
+/* Dos paneles crecen hasta donde la ventana deja: el visor de la foto, donde lo
+   que hay que ver es la imagen, y el menú del .prproj, donde una vista de seis
+   capturas es una fila larga.
+
+   El texto no crece con ellos. Una línea de 980 px son unos 160 caracteres y a
+   esa medida el ojo pierde el renglón al volver; los párrafos se quedan en la
+   medida de lectura y lo ancho lo aprovechan las filas. */
 .panel.es-ancho {
   width: min(980px, 100%);
+}
+
+.panel.es-ancho .panel-cuerpo > p,
+.panel.es-ancho .campo > p {
+  max-width: 74ch;
 }
 
 /* El menú de «Generar .prproj». Las capturas son pastillas en fila con
@@ -1798,9 +1808,20 @@ kbd {
   color: var(--text-secondary);
 }
 
+/* Las cajitas de una vista envuelven en vez de empujar el panel.
+
+   Con seis capturas encendidas la fila mide más que la ventana, y sin esto el
+   panel entero crecía detrás del borde de la pantalla: quedaba una barra de
+   desplazamiento horizontal y las siglas de las vistas sin poder verse. Al
+   envolver, lo que crece es el alto, que es por donde el panel ya sabe
+   desplazarse. */
 .prproj-elige {
-  display: inline-flex;
-  gap: var(--sp-1);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-1);
+  flex: 1 1 260px;
+  min-width: 0;
 }
 
 .prproj-elige .btn-vista {
@@ -1815,9 +1836,11 @@ kbd {
    1.4.11) y no la hairline. El hueco de 3 px se reserva siempre, encendido o
    no, para que al anidar no se muevan las cajitas de al lado. */
 .prproj-pila {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-1);
+  min-width: 0;
   padding: 3px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);

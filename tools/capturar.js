@@ -34,7 +34,7 @@ const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
     'preparar-microfono', 'preparar-zoom-falso', 'sin-zoom',
     'en-vivo', 'en-vivo,desplegada', 'en-vivo,claqueta-abierta',
     'toma-abierta', 'releyendo', 'sin-audio', 'terminada', 'notas-de-antes', 'foto',
-    'palmada', 'palmada-vencida', 'prproj', 'prproj-listo',
+    'palmada', 'palmada-vencida', 'prproj', 'prproj-lleno', 'prproj-listo',
     'ajustes', 'diagnostico', 'faltan-modelos', 'iconos'
 ];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
