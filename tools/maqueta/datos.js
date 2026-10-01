@@ -23,7 +23,7 @@ const VISTAS = [
     { nombre: 'PV', titulo: 'Profesor', fuente: 0, colorDeMarcador: 4281740498 },
     { nombre: 'R', titulo: 'Pantalla', fuente: 1, colorDeMarcador: 4280578025 },
     { nombre: 'S', titulo: 'Slides', fuente: 1, colorDeMarcador: 4281828977 },
-    { nombre: 'MG', titulo: 'Multi', fuente: 1, colorDeMarcador: 4292277273 },
+    { nombre: 'MG', titulo: 'Multi', fuente: 1, colorDeMarcador: 4294345275 },
     { nombre: 'X2', titulo: 'Doble', fuente: 1, colorDeMarcador: 4289825711 }
 ];
 

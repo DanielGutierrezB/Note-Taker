@@ -348,6 +348,23 @@ module.exports = async function (t) {
         t.ok(nota.color !== carpetaPrproj.COLOR_DE_CLAQUETA, 'y no del blanco de las claquetas');
     });
 
+    t.test('ningún marcador del proyecto comparte color con otro', () => {
+        // Es la revisión que faltaba cuando las notas salían del mismo blanco
+        // que las claquetas: en la tira de marcadores de Premiere no hay más
+        // que el color, y dos cosas distintas del mismo color son una sola.
+        const todos = [
+            ...vivo.VISTAS.map(v => [v.nombre, v.colorDeMarcador]),
+            ['la claqueta', carpetaPrproj.COLOR_DE_CLAQUETA],
+            ['la nota', carpetaPrproj.COLOR_DE_NOTA],
+            ['el inicio de clase', carpetaPrproj.COLOR_DE_CLASE]
+        ];
+        const dueno = new Map();
+        for (const [quien, color] of todos) {
+            t.ok(!dueno.has(color), `${quien} y ${dueno.get(color)} comparten el color ${color}`);
+            dueno.set(color, quien);
+        }
+    });
+
     t.test('el audio de referencia lleva los marcadores de toda la sesión', () => {
         // Es lo único que el editor tiene para ubicarse mientras sincroniza: dos
         // horas de onda. Son los mismos que el XML le pone al clip maestro, y

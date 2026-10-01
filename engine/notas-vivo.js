@@ -48,9 +48,18 @@ const PANTALLA = 1;
  * Las vistas que se pueden elegir: con qué se ve cada una y de qué color va.
  *
  * `colorDeMarcador` es el entero nativo de Premiere (`pproColor`) y es lo que
- * se escribe en el XML. Sale de un XML de verdad del director de contenido, no
- * de elegirlo: si acá se escribiera otro, el mismo tipo de toma llegaría a la
+ * se escribe en el XML. Salen de un XML de verdad del director de contenido, no
+ * de elegirlos: si acá se escribiera otro, el mismo tipo de toma llegaría a la
  * secuencia de un color distinto según quién tomó las notas.
+ *
+ * **MG es la excepción, y se movió a mano.** El turquesa que traía (#19F4D6) es
+ * ahora el de las notas sobre el texto (`notas-xml.TURQUESA`), que antes salían
+ * del mismo blanco que las claquetas y no se distinguían de ellas. Dos cosas no
+ * pueden compartir color en la tira de marcadores, y entre las dos el editor
+ * pidió el turquesa para las notas, que las usa todos los días, y no para MG,
+ * que no se usó ni una vez en las 101 tomas grabadas hasta hoy. El azul nuevo
+ * es el más lejos que queda de las otras cuatro vistas (ΔE 50 contra la más
+ * parecida, que es X2).
  *
  * **Es también el color con el que la pantalla pinta la toma**, y no hay un
  * segundo color para eso. Class Cut sí tenía uno (`colorEnLaApp`) porque allá
@@ -67,7 +76,7 @@ const VISTAS = [
     { nombre: 'PV', titulo: 'Profesor', fuente: CAMARA, colorDeMarcador: 4281740498 },
     { nombre: 'R', titulo: 'Pantalla', fuente: PANTALLA, colorDeMarcador: 4280578025 },
     { nombre: 'S', titulo: 'Slides', fuente: PANTALLA, colorDeMarcador: 4281828977 },
-    { nombre: 'MG', titulo: 'Multi', fuente: PANTALLA, colorDeMarcador: 4292277273 },
+    { nombre: 'MG', titulo: 'Multi', fuente: PANTALLA, colorDeMarcador: 4294345275 },
     { nombre: 'X2', titulo: 'Doble', fuente: PANTALLA, colorDeMarcador: 4289825711 }
 ];
 
