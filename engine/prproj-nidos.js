@@ -1,0 +1,406 @@
+'use strict';
+/**
+ * prproj-nidos.js — Las anidaciones del curso: una sola cámara para las trece
+ * clases, un solo grabador de pantalla, un solo audio.
+ *
+ * **Por qué existe.** Antes cada secuencia de clase apuntaba directo a los
+ * archivos, así que un curso de trece clases dejaba dos mil cortes de cámara
+ * sueltos. Cambiarles algo a todos —una corrección de color, un reencuadre, un
+ * efecto— era ir corte por corte, y no hay manera de hacer eso trece veces sin
+ * equivocarse. Con las anidaciones, los dos mil cortes son dos mil ventanas a la
+ * MISMA línea de tiempo: se entra a `CAM`, se toca una vez, y cambió en todas.
+ *
+ * **Cómo se acomodan.** Las cámaras de las trece clases van una detrás de otra
+ * en una sola línea de tiempo, sin cortar y con cinco minutos de aire entre
+ * clase y clase. El aire no es decorativo: sin él, arrastrar el final de una
+ * clase para recuperar dos segundos se comería el principio de la siguiente, y
+ * en una anidación eso no se ve hasta que alguien mira el resultado.
+ *
+ * **Las cuatro comparten el mismo mapa de franjas, y eso es lo que las hace
+ * servir.** Si `CAM` y `SR` no arrancaran cada clase en el mismo segundo,
+ * `SLIDE` no podría ser dos clips de punta a punta —habría que picarlo clase por
+ * clase— y un corte tendría que calcular una entrada distinta para cada nido.
+ * Con un solo mapa, un corte que en el XML entraba en el segundo 300 de la clase
+ * seis entra en `franja(6) + 300` en cualquiera de las cuatro.
+ *
+ * Las franjas se miden con la fuente MÁS LARGA de cada clase y no con la cámara:
+ * el Live-Mix suele durar unas centésimas más que el video, y una franja cortada
+ * a la medida del video dejaría el final del audio pisando el aire de la
+ * siguiente. El aire está justamente para que eso no importe, pero una franja
+ * que miente sobre lo que contiene es una cuenta que hay que volver a hacer.
+ */
+
+const fcp = require('./fcp-xml');
+
+/**
+ * Cuánto aire va entre una clase y la siguiente adentro de una anidación.
+ *
+ * Lo pidió el editor, y el número es suyo. Sirve para dos cosas: separar a
+ * simple vista dónde termina una clase, y dejar lugar para estirar un clip sin
+ * comerse el material de la de al lado.
+ */
+const AIRE_SEG = 5 * 60;
+
+/** Cómo se llama cada anidación en el panel, y el bin que las junta. */
+const NOMBRES = {
+    raiz: 'Nidos',
+    camara: 'CAM',
+    pantalla: 'SR',
+    audio: 'AUDIO',
+    slide: 'SLIDE'
+};
+
+/**
+ * El color de cada anidación.
+ *
+ * Cerúleo la cámara y rosa el grabador de pantalla, que son los mismos que ya
+ * llevan los clips de esas pistas, para que el nido y lo que hay adentro digan
+ * lo mismo. El audio va en bosque, que lo eligió el editor: adentro los clips
+ * son caribe, pero el nido entero lo quiere verde en la línea de tiempo.
+ *
+ * Que el bosque sea además el color que Premiere le pone solo a toda secuencia
+ * (ver `COLOR_DE`) no molesta: en el panel `AUDIO` queda del mismo color que las
+ * demás secuencias, y es en la línea de tiempo donde se lo distingue.
+ *
+ * **Se pintan en dos lados y hacen falta los dos.** El color del corte manda en
+ * la línea de tiempo; el del ítem del panel manda en el panel de proyecto Y es
+ * el que hereda cualquier corte que se agregue después a mano. Pintando solo el
+ * corte, `CAM` sigue siendo una secuencia verde más entre cincuenta y siete en
+ * el panel, que es justo donde el editor la va a ir a buscar.
+ *
+ * `SLIDE` no está: es la pantalla apoyada sobre la cámara, o sea las dos cosas,
+ * y no hay un color que diga eso. Se queda con el verde de secuencia.
+ */
+const ETIQUETA_DE_CAMARA = 'Cerulean';
+const ETIQUETA_DE_PANTALLA = 'Rose';
+const ETIQUETA_DE_AUDIO = 'Forest';
+
+/** Blanco, el de los marcadores de claqueta del CD (`notas-xml.BLANCO`). */
+const COLOR_DE_CLAQUETA = 0xFFFFFFFF;
+
+/** De dónde salió el segundo de la claqueta, como lo lee el editor en el marcador. */
+const ORIGEN_DE_LA_CLAQUETA = {
+    golpe: 'el golpe, medido en el audio',
+    frase: 'el final de «claqueta clase N»: no se encontró el golpe',
+    marcador: 'la K del CD corrida por el desfase: no se oyó la claqueta, revisalo'
+};
+
+/**
+ * Un marcador de claqueta por clase, en el segundo de la anidación donde suena.
+ *
+ * Adentro de un nido cada clase arranca en su franja y todos sus archivos
+ * entran por el segundo cero, así que la claqueta de la clase cae en
+ * `franja + segundo de la claqueta en el material` en las cuatro anidaciones
+ * a la vez. Es lo que el editor mira para validar la sincronía: si la onda de
+ * una cámara no tiene el golpe debajo del marcador, esa cámara está corrida.
+ *
+ * El comentario dice de dónde salió el segundo, porque no valen lo mismo: el
+ * golpe es el instante físico; la K del CD, corrida por el desfase de los
+ * bloques, puede estar varios segundos al lado.
+ *
+ * @param {Map} claquetas clase → {seg, como} (ver `prproj-curso.claquetaDe`)
+ */
+function marcasDeClaqueta(clases, franjas, claquetas) {
+    const marcas = [];
+    for (const clase of clases) {
+        const claqueta = claquetas && claquetas.get(clase);
+        const franja = franjas.get(clase);
+        if (!claqueta || !franja || !(claqueta.seg >= 0) || claqueta.seg > franja.largoSeg) continue;
+        const seg = franja.desdeSeg + claqueta.seg;
+        marcas.push({
+            nombre: 'K',
+            comentario: `Clapperboard · ${clase.nombre} · ${ORIGEN_DE_LA_CLAQUETA[claqueta.como] || claqueta.como}`,
+            desdeSeg: seg,
+            hastaSeg: seg,
+            color: COLOR_DE_CLAQUETA
+        });
+    }
+    return marcas;
+}
+
+
+/**
+ * Dónde cae cada clase adentro de las anidaciones.
+ *
+ * @param {object[]} clases lo que devolvió `leerArchivo`, en orden de clase
+ * @returns {{franjas: Map<object, {desdeSeg, largoSeg}>, largoSeg: number}}
+ */
+function franjasDe(clases) {
+    const franjas = new Map();
+    let reloj = 0;
+    for (const clase of clases) {
+        const largoSeg = largoDe(clase);
+        franjas.set(clase, { desdeSeg: reloj, largoSeg });
+        reloj += largoSeg + AIRE_SEG;
+    }
+    // El aire de después de la última no cuenta: la anidación termina donde
+    // termina el material, no cinco minutos más tarde en negro.
+    return { franjas, largoSeg: Math.max(0, reloj - AIRE_SEG) };
+}
+
+/** Lo que dura la fuente más larga de una clase. */
+function largoDe(clase) {
+    let largo = 0;
+    for (const [, archivo] of clase.archivos) {
+        largo = Math.max(largo, archivo.duracionSeg || 0);
+    }
+    return largo;
+}
+
+/** El archivo que usa una pista, que es el mismo en todos sus cortes. */
+function archivoDe(pista) {
+    return pista && pista.cortes.length ? pista.cortes[0].archivo : null;
+}
+
+/**
+ * La cámara del profesor y el grabador de pantalla de una clase.
+ *
+ * Salen de la POSICIÓN de la pista y no del nombre del archivo: `export.js`
+ * escribe siempre la cámara en la uno y la pantalla en la dos, y el nombre lo
+ * pone el aparato que grabó, que puede llamarlas como quiera. La tercera pista,
+ * cuando está, es la cámara otra vez en chiquito; de ahí no sale nada porque es
+ * la misma fuente que la primera.
+ */
+function fuentesDeVideo(clase) {
+    return {
+        camara: archivoDe(clase.pistas.video[0]),
+        pantalla: archivoDe(clase.pistas.video[1])
+    };
+}
+
+/**
+ * La pista del Live-Mix, que es la mezcla que el aparato ya dejó lista.
+ *
+ * Se la reconoce por el ojo prendido y no por su posición ni por el nombre del
+ * archivo: `course-scan` la deja última hoy, pero eso es un orden que puede
+ * cambiar, y el nombre lo pone el Rodecaster. Lo que la define es que de las
+ * diez es la única que se escucha, y eso lo decidió el corte y viaja en el XML.
+ *
+ * Devuelve `null` cuando hay más de una sonando o ninguna, que son los dos casos
+ * en que no hay UNA mezcla: elegir igual sería señalar una pista cualquiera y
+ * llamarla el respaldo del editor.
+ */
+function pistaDelLiveMix(clase) {
+    const suenan = clase.pistas.audio.filter(p => p.cortes.some(c => c.sonando));
+    return suenan.length === 1 ? suenan[0] : null;
+}
+
+
+/**
+ * Arma las cuatro anidaciones del curso y las deja colgadas del bin que se pida.
+ *
+ * El orden importa: `CAM` y `SR` se arman primero porque `SLIDE` las usa de
+ * fuente. Es la única dependencia entre ellas.
+ *
+ * **No hay un nido para el recuadro del profesor.** Lo hubo: `MINI` era `CAM`
+ * anidada otra vez con la escala y la posición puestas, así que el encuadre se
+ * escribía una sola vez para todo el curso. El editor lo probó y prefirió que la
+ * pista de arriba sea `CAM` a secas con el efecto encima, sin una anidación de
+ * por medio: una anidación sobre otra es un nivel más para entrar cada vez que
+ * quiere ver qué está mirando. El precio es que ahora el encuadre va corte por
+ * corte, y moverlo es seleccionar todos y pegar atributos en vez de tocar uno.
+ *
+ * @param {object} taller
+ * @param {object} pedido
+ * @param {object[]} pedido.clases        las clases leídas, en orden
+ * @param {Map} pedido.mediosPorClase     clase → (id de archivo → medio importado)
+ * @param {string} pedido.bin             dónde colgar las cuatro
+ * @param {Map} [pedido.claquetas]        clase → {seg, como}, para marcarlas
+ * @returns {{franjas, largoSeg, camara, pantalla, audio, slide, cortes,
+ *            sinComponer, encuadre, claquetas}}
+ */
+function armarLosNidos(taller, pedido) {
+    const { clases, mediosPorClase, bin } = pedido;
+    const { franjas, largoSeg } = franjasDe(clases);
+    let cortes = 0;
+    // Cuántas veces no se pudo componer el slide, que hoy es cero o uno: pasa
+    // cuando la plantilla no tiene de dónde copiar el efecto de movimiento.
+    let sinComponer = 0;
+
+    const medioDe = (clase, archivo) => {
+        if (!archivo) return null;
+        const suyos = mediosPorClase.get(clase);
+        return suyos ? suyos.get(archivo.id) || null : null;
+    };
+
+    /**
+     * Un archivo de una clase, entero, en la pista y el lugar que le tocan.
+     *
+     * Es el único corte que hacen los nidos: de punta a punta de la franja y
+     * entrando por el segundo cero. Lo de picar en bloques es de las clases.
+     */
+    const poner = (suPista, clase, archivo, opciones) => {
+        const medio = medioDe(clase, archivo);
+        if (!suPista || !medio) return;
+        const op = opciones || {};
+        // Un archivo sin sonido no tiene fuente de audio, y pedirle una a
+        // `colocarCorte` sería tirar. Una cámara muda es rara pero no imposible.
+        const esAudio = op.deAudio;
+        if (esAudio && !medio.fuenteAudio) return;
+        const franja = franjas.get(clase);
+        taller.colocarCorte({
+            pista: suPista,
+            medio,
+            desdeSeg: franja.desdeSeg,
+            hastaSeg: franja.desdeSeg + (archivo.duracionSeg || franja.largoSeg),
+            entradaSeg: 0,
+            etiqueta: op.etiqueta,
+            sonando: op.sonando
+        });
+        cortes++;
+    };
+
+    /**
+     * Los canales sueltos del aparato de una clase, uno por pista, desde `desde`.
+     *
+     * Cuántas pistas hacen falta es el máximo entre las clases y no el de la
+     * primera: una clase grabada con un canal menos dejaría a las demás sin
+     * dónde poner el suyo. La pista `i` es el mismo canal en todas porque
+     * `course-scan` los ordena igual siempre y deja el Live-Mix último.
+     */
+    const cuantosCanales = clases.reduce((n, c) => Math.max(n, c.pistas.audio.length), 0);
+    const ponerLosCanales = (nido, clase, desde) => {
+        clase.pistas.audio.forEach((pista, i) => {
+            // El ojo prendido de cada canal se hereda del XML, que ya decidió
+            // que solo suene el Live-Mix. Decidirlo otra vez acá sería tener la
+            // misma regla en dos sitios esperando a que se separen.
+            poner(nido.pistasAudio[desde + i], clase, archivoDe(pista), {
+                deAudio: true,
+                sonando: pista.cortes.length ? pista.cortes[0].sonando : false
+            });
+        });
+    };
+
+    // ── Las dos de imagen ──
+    //
+    // **Un clip de video por clase, y abajo TODO el sonido de esa clase.** Lo
+    // pidió el editor y es para lo que sirve entrar acá: el audio propio de la
+    // imagen que se está mirando, el de la otra cámara, y los diez canales que
+    // el Rodecaster grabó por separado, todos alineados en la misma franja. Con
+    // eso se valida a ojo que las ondas coincidan y se resincroniza en un solo
+    // lugar para las trece clases.
+    //
+    // **Entran los ARCHIVOS y no los otros nidos**, aunque el editor lo pidió
+    // como «que traiga el audio de la anidación». `CAM` con `SR` adentro y `SR`
+    // con `CAM` adentro es una anidación circular y Premiere no la abre. Con los
+    // archivos suena lo mismo y está en el mismo segundo, porque los nidos no
+    // son más que esos archivos puestos en su franja.
+    const deImagen = (nombre, cual, etiqueta) => {
+        const otro = cual === 'camara' ? 'pantalla' : 'camara';
+        const otraEtiqueta = cual === 'camara' ? ETIQUETA_DE_PANTALLA : ETIQUETA_DE_CAMARA;
+        const nido = taller.crearSecuencia({
+            nombre, pistasVideo: 1, pistasAudio: 2 + cuantosCanales, duracionSeg: largoSeg
+        });
+        taller.guardarEn(bin, nido.itemDelPanel);
+        taller.pintarItemDelPanel(nido.itemDelPanel, etiqueta);
+        for (const clase of clases) {
+            const fuentes = fuentesDeVideo(clase);
+            poner(nido.pistasVideo[0], clase, fuentes[cual], { etiqueta });
+            // Los dos audios de imagen van arriba y pintados de su color, que es
+            // lo único que distingue una onda de otra de un vistazo. Mudos: al
+            // abrir el nido tiene que sonar el Live-Mix y nada más, o son doce
+            // pistas hablando encima.
+            poner(nido.pistasAudio[0], clase, fuentes[cual], { deAudio: true, sonando: false, etiqueta });
+            poner(nido.pistasAudio[1], clase, fuentes[otro], { deAudio: true, sonando: false, etiqueta: otraEtiqueta });
+            ponerLosCanales(nido, clase, 2);
+        }
+        return nido;
+    };
+
+    const camara = deImagen(NOMBRES.camara, 'camara', ETIQUETA_DE_CAMARA);
+    const pantalla = deImagen(NOMBRES.pantalla, 'pantalla', ETIQUETA_DE_PANTALLA);
+
+    // ── El audio: una pista por canal del aparato, y nada más ──
+    //
+    // Este es el que va en las clases, así que trae los canales pelados: los dos
+    // audios de imagen son para validar la sincronía, no para la entrega.
+    const audio = taller.crearSecuencia({
+        nombre: NOMBRES.audio,
+        pistasVideo: 1,
+        pistasAudio: Math.max(1, cuantosCanales),
+        duracionSeg: largoSeg
+    });
+    taller.guardarEn(bin, audio.itemDelPanel);
+    taller.pintarItemDelPanel(audio.itemDelPanel, ETIQUETA_DE_AUDIO);
+    for (const clase of clases) ponerLosCanales(audio, clase, 0);
+
+    // ── El slide: la pantalla al lado del profesor ──
+    //
+    // Dos clips de punta a punta: la cámara a cuadro completo abajo y la pantalla
+    // achicada encima, contra el borde izquierdo.
+    //
+    // **Antes llegaba sin componer y a propósito**, con el argumento de que el
+    // editor prefería decidir él cómo se apoyaba una sobre la otra y que esto era
+    // el andamio para hacerlo una vez y que valiera para las trece clases. Lo
+    // hizo, y de esa composición salieron los números que ahora se escriben acá
+    // (ver `PANTALLA_EN_SLIDE`). Ajustarla sigue siendo una operación de un solo
+    // clip, así que no se pierde nada de lo que aquello buscaba.
+    const slide = taller.crearSecuencia({
+        nombre: NOMBRES.slide, pistasVideo: 2, pistasAudio: 1, duracionSeg: largoSeg
+    });
+    taller.guardarEn(bin, slide.itemDelPanel);
+    const encuadreDePantalla = fcp.encuadreDeLaPantalla();
+    [camara, pantalla].forEach((fuente, i) => {
+        const item = taller.colocarCorte({
+            pista: slide.pistasVideo[i],
+            medio: fuente.comoFuente,
+            desdeSeg: 0,
+            hastaSeg: largoSeg,
+            entradaSeg: 0
+        });
+        cortes++;
+        // Solo la de arriba. La cámara se queda entera detrás, que es el fondo.
+        if (fuente === pantalla && !taller.ponerEncuadre(item, encuadreDePantalla)) sinComponer++;
+    });
+
+    // La claqueta de cada clase, en las cuatro: se entra a cualquiera a validar
+    // la sincronía y el golpe tiene que estar marcado ahí.
+    const marcas = marcasDeClaqueta(clases, franjas, pedido.claquetas);
+    for (const nido of [camara, pantalla, audio, slide]) taller.ponerMarcadores(nido.secuencia, marcas);
+
+    // El recuadro no es un nido: es la geometría que las clases le ponen a sus
+    // cortes de `CAM` en la pista de arriba. Se calcula acá porque acá está el
+    // material del que sale el cuadro contra el que se mide.
+    return {
+        franjas, largoSeg, camara, pantalla, audio, slide, cortes, sinComponer,
+        encuadre: fcp.encuadreDelRecuadro(medidasDe(clases)),
+        claquetas: marcas.length
+    };
+}
+
+/**
+ * El cuadro contra el que se calcula el recuadro.
+ *
+ * Sale del material y no de un 1920×1080 escrito acá, por lo mismo que la escala
+ * se calcula en vez de copiarse: una cámara con otro formato daría un recuadro
+ * deformado. Si ninguna clase lo dice, `encuadreDelRecuadro` pone el suyo.
+ */
+function medidasDe(clases) {
+    for (const clase of clases) {
+        const camara = fuentesDeVideo(clase).camara;
+        if (camara && camara.ancho && camara.alto) {
+            return {
+                ancho: camara.ancho,
+                alto: camara.alto,
+                fuenteAncho: camara.ancho,
+                fuenteAlto: camara.alto
+            };
+        }
+    }
+    return {};
+}
+
+module.exports = {
+    AIRE_SEG,
+    NOMBRES,
+    ETIQUETA_DE_CAMARA,
+    ETIQUETA_DE_PANTALLA,
+    ETIQUETA_DE_AUDIO,
+    COLOR_DE_CLAQUETA,
+    franjasDe,
+    largoDe,
+    fuentesDeVideo,
+    pistaDelLiveMix,
+    marcasDeClaqueta,
+    armarLosNidos
+};
