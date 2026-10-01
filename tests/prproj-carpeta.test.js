@@ -355,8 +355,7 @@ module.exports = async function (t) {
         const todos = [
             ...vivo.VISTAS.map(v => [v.nombre, v.colorDeMarcador]),
             ['la claqueta', carpetaPrproj.COLOR_DE_CLAQUETA],
-            ['la nota', carpetaPrproj.COLOR_DE_NOTA],
-            ['el inicio de clase', carpetaPrproj.COLOR_DE_CLASE]
+            ['la nota', carpetaPrproj.COLOR_DE_NOTA]
         ];
         const dueno = new Map();
         for (const [quien, color] of todos) {
@@ -523,9 +522,12 @@ module.exports = async function (t) {
         t.eq(plan.grupos.length, 0, 'la Doble no tiene tomas');
     });
 
-    t.test('las capturas llevan el inicio de cada clase y todas sus claquetas', () => {
+    t.test('las anidaciones llevan las claquetas de cada clase, y nada más', () => {
+        // Nada más quiere decir nada más: adentro de una anidación lo único que
+        // se hace es alinear el material de esa cámara contra la palmada, y la
+        // onda del audio de referencia tiene que estar a la vista para eso.
         const dir = carpeta();
-        const a = sesion(dir, { cero: T0, segundos: 600 });
+        const a = sesion(dir, { cero: T0, segundos: 600, tomas: [toma(1, 10, 20, 'PV', T0)] });
         const b = sesion(dir, {
             cero: T0 + UNA_HORA, segundos: 600,
             claquetas: [
@@ -535,25 +537,14 @@ module.exports = async function (t) {
         });
         const plan = carpetaPrproj.planear([a, b], carpetaPrproj.normalizar(null, []));
         const franja = 600 + nidos.AIRE_SEG;
-        const inicios = plan.marcadoresDeCaptura.filter(m => m.color === carpetaPrproj.COLOR_DE_CLASE);
-        t.deep(inicios.map(m => m.desdeSeg), [0, franja]);
         const claquetas = plan.marcadoresDeCaptura.filter(m => m.nombre.startsWith('Claqueta'));
         t.deep(claquetas.map(m => m.desdeSeg), [franja + 30, franja + 90]);
         t.ok(claquetas[0].comentario.startsWith(`${b.secuencia} · Claqueta 1`), claquetas[0].comentario);
         t.ok(claquetas[1].comentario.includes('sin confirmar'), 'también las sin confirmar, marcadas');
-    });
-
-    t.test('y TODAS las tomas, tengan nota o no: el nido es donde se sincroniza', () => {
-        // Al contrario de la precortada, donde el marcador solo está si hay algo
-        // que leer: ahí el plano se ve en la pista encendida, y acá no hay más
-        // que la onda del audio de referencia.
-        const dir = carpeta();
-        const s = sesion(dir, { cero: T0, segundos: 600, tomas: [toma(1, 10, 20, 'PV', T0)] });
-        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar(null, []));
-        t.deep(plan.clases[0].marcadores, [], 'en la precortada no, que no tiene nota');
-        const toma1 = plan.marcadoresDeCaptura.filter(m => m.nombre.startsWith('Toma 1'));
-        t.deep(toma1.map(m => [m.nombre, m.desdeSeg, m.hastaSeg]),
-            [['Toma 1 · PV', 10, 20], ['Toma 1 · OUT', 20, 20]]);
+        t.eq(plan.marcadoresDeCaptura.length, claquetas.length,
+            'ni las tomas, ni sus OUT, ni las notas, ni dónde empieza cada clase');
+        t.ok(plan.marcadoresDeCaptura.every(m => m.color === carpetaPrproj.COLOR_DE_CLAQUETA),
+            'y todas del blanco de la claqueta');
     });
 
     t.group('prproj de la carpeta · dónde se escribe');

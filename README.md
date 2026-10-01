@@ -737,7 +737,8 @@ abre un menú para decir qué capturas hay y qué capturas componen cada vista.
     contra su onda;
   - en las capturas 2 en adelante, además la Captura 1 anidada en A1, para
     sincronizar cualquier captura contra la primera;
-  - un marcador al principio de cada clase y uno por cada claqueta.
+  - un marcador por cada claqueta, y ninguno más: acá adentro lo único que se
+    hace es alinear contra la palmada, y la onda tiene que estar a la vista.
 - **Una vista puede llevar varias capturas.** En el menú, cada vista es una fila
   de cajitas: las encendidas son las que la componen y el orden es el apilado,
   **de abajo hacia arriba como las pistas de Premiere, así que la de más a la
@@ -790,14 +791,22 @@ abre un menú para decir qué capturas hay y qué capturas componen cada vista.
   entero medido (el quinto es el del audio de referencia) y escribir un número
   inventado dejaría el clip de un color en el panel y de otro en la línea de
   tiempo.
-- **Marcadores solo donde hay algo que leer.** En la precortada el plano ya se
-  ve —la pista encendida, con su color—, así que las tomas sin nota no llevan
-  marcador: uno por toma diciendo «Toma 4 · PV» era repetir en una tira de
-  colores lo que la línea de tiempo ya dice, y tapaba los pocos que traen algo
-  escrito. El de una toma con nota **abarca el bloque entero**, porque la nota
-  es de la toma y no de su principio; los de un pedazo comentado siguen durando
-  lo que dura ese pedazo. En el XML siguen estando todos: ahí no hay pistas que
-  mirar.
+- **Tres sitios para los marcadores, con tres trabajos.** Mezclarlos los arruina
+  a los tres, así que cada uno lleva lo suyo y nada más:
+  - **el audio de referencia**, todos los de la sesión, sin cortar y en el
+    momento en que se dijeron. Son marcadores de clip, o sea del archivo: están
+    en el monitor de origen y viajan con el WAV adonde se lo ponga, también
+    adentro de las anidaciones y en A2 de la precortada;
+  - **las anidaciones**, solo las claquetas;
+  - **la precortada**, los marcadores cortados y estirados sobre el bloque de
+    cada toma, que es lo que se lee al editar.
+- **Y en la precortada, solo donde hay algo que leer.** El plano ya se ve —la
+  pista encendida, con su color—, así que las tomas sin nota no llevan marcador:
+  uno por toma diciendo «Toma 4 · PV» era repetir en una tira de colores lo que
+  la línea de tiempo ya dice, y tapaba los pocos que traen algo escrito. El de
+  una toma con nota **abarca el bloque entero**, porque la nota es de la toma y
+  no de su principio; los de un pedazo comentado siguen durando lo que dura ese
+  pedazo. En el XML siguen estando todos: ahí no hay pistas que mirar.
 
 Como las precortadas cortan SOBRE las anidaciones, en cuanto sincronizas una
 captura adentro de su anidación, todos los cortes de todas las clases la

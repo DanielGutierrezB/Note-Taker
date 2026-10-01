@@ -86,13 +86,6 @@ const COLOR_DE_CLAQUETA = notasXml.BLANCO;
 /** Turquesa, el de las notas sobre el texto en el XML (`notas-xml.TURQUESA`). */
 const COLOR_DE_NOTA = notasXml.TURQUESA;
 
-/**
- * Verde, el del marcador que dice dónde empieza cada clase adentro de una
- * captura. Es lo que el editor busca para saber dónde soltar el archivo de esa
- * clase, así que tiene que distinguirse del blanco de las claquetas.
- */
-const COLOR_DE_CLASE = 0xFF51B858;
-
 /** El nombre de una captura sola. */
 function nombreDeCaptura(id) {
     return `Captura ${id}`;
@@ -412,7 +405,6 @@ function planear(sesiones, config) {
         let cursor = 0;
         clase.cortes = [];
         clase.marcadores = [];
-        clase.marcadoresDelNido = [];
         const tomas = vivo.tomasQueQuedan(clase.sesion).slice().sort((a, b) => a.inMs - b.inMs);
         for (const toma of tomas) {
             const vista = vivo.vistaLeida(toma.vista) || vivo.VISTA_POR_DEFECTO;
@@ -445,26 +437,6 @@ function planear(sesiones, config) {
                 referencia
             });
 
-            // **En el nido van todas las tomas y en la precortada solo las que
-            // traen algo escrito.** Son dos sitios con dos trabajos: el nido es
-            // donde el editor sincroniza su material contra la onda del audio de
-            // referencia, y ahí cada toma es un hito que hace falta; la
-            // precortada ya muestra el plano en la pista encendida.
-            clase.marcadoresDelNido.push({
-                nombre: `${notasXml.nombreDeToma(toma)} · ${vista}`,
-                comentario: vivo.comentarioDeEntrada(toma),
-                desdeSeg: enNido(clase, inMs),
-                hastaSeg: enNido(clase, outMs),
-                color: notasXml.colorDeVista(vista)
-            });
-            clase.marcadoresDelNido.push({
-                nombre: `${notasXml.nombreDeToma(toma)} · OUT`,
-                comentario: `OUT: ${vivo.cueDeSalida(toma)}`,
-                desdeSeg: enNido(clase, outMs),
-                hastaSeg: enNido(clase, outMs),
-                color: notasXml.colorDeVista(vista)
-            });
-
             // **Solo las tomas que tienen algo escrito llevan marcador, y dura
             // lo que dura la toma.** En la precortada el plano ya se ve —es la
             // pista que quedó encendida, con el color de su anidación— así que
@@ -488,15 +460,6 @@ function planear(sesiones, config) {
             // ese audio no está.
             for (const c of toma.comentarios || []) {
                 if (c.desdeMs == null) continue;
-                const enElNido = enNido(clase, c.desdeMs);
-                clase.marcadoresDelNido.push({
-                    nombre: 'Nota',
-                    comentario: vivo.limpio(c.comentario),
-                    desdeSeg: enElNido,
-                    hastaSeg: c.hastaMs != null
-                        ? Math.max(enElNido, enNido(clase, c.hastaMs)) : enElNido,
-                    color: COLOR_DE_NOTA
-                });
                 if (c.desdeMs < inMs || c.desdeMs >= outMs) continue;
                 const desde = cursor + (c.desdeMs - inMs) / 1000;
                 const hasta = c.hastaMs != null ? cursor + (Math.min(c.hastaMs, outMs) - inMs) / 1000 : desde;
@@ -514,17 +477,21 @@ function planear(sesiones, config) {
         if (!clase.cortes.length) avisos.push(`${clase.nombre} no tiene tomas que vayan al XML: no lleva precortada.`);
     }
 
-    // Los marcadores de las anidaciones: dónde empieza cada clase, sus claquetas
-    // y sus tomas.
+    // **En las anidaciones van las claquetas y nada más.**
+    //
+    // Son tres sitios con tres trabajos, y mezclarlos los arruina a los tres:
+    //
+    //   · El **audio de referencia** lleva todos los marcadores de la sesión,
+    //     sin cortar y en la hora en que se dijeron: es el archivo, y ahí está
+    //     todo lo que se oyó. Viajan con él adonde se lo ponga.
+    //   · Las **anidaciones** llevan solo las claquetas, que es lo único que se
+    //     usa acá adentro: alinear el material de esa cámara contra la palmada.
+    //     Puestas las tomas y las notas, la regla quedaba tapada de banderitas
+    //     justo donde hay que ver la onda.
+    //   · La **precortada** lleva los marcadores cortados y estirados sobre el
+    //     bloque de cada toma, que es lo que se lee al editar.
     const marcadoresDeCaptura = [];
     for (const clase of clases) {
-        marcadoresDeCaptura.push({
-            nombre: clase.nombre,
-            comentario: 'Empieza esta clase: el archivo de esta captura va desde acá.',
-            desdeSeg: clase.franja.desdeSeg,
-            hastaSeg: clase.franja.desdeSeg,
-            color: COLOR_DE_CLASE
-        });
         const claquetas = clase.sesion.claquetas || [];
         for (const c of claquetas) {
             if (c.ms == null) continue;
@@ -537,7 +504,6 @@ function planear(sesiones, config) {
                 color: COLOR_DE_CLAQUETA
             });
         }
-        marcadoresDeCaptura.push(...clase.marcadoresDelNido);
     }
 
     // Dos vistas pueden compartir una fuente —la Captura 2 sola es la misma
@@ -1005,7 +971,6 @@ module.exports = {
     BIN_PRECORTADAS,
     BIN_AUDIO,
     BINS_DEL_EDITOR,
-    COLOR_DE_CLASE,
     COLOR_DE_CLAQUETA,
     COLOR_DE_NOTA
 };
