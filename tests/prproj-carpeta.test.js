@@ -634,7 +634,8 @@ module.exports = async function (t) {
         for (const s of ['Captura 1', 'Captura 2', 'X2']) t.ok(secuencias.includes(s), s);
         t.eq(secuencias.length, 5, 'dos capturas, un grupo y dos precortadas');
         t.deep(p.porClase('BinProjectItem').map(nombre).sort(),
-            [carpetaPrproj.BIN_CAPTURAS, carpetaPrproj.BIN_PRECORTADAS, carpetaPrproj.BIN_AUDIO].sort());
+            [carpetaPrproj.BIN_CAPTURAS, carpetaPrproj.BIN_PRECORTADAS, carpetaPrproj.BIN_AUDIO,
+                ...carpetaPrproj.BINS_DEL_EDITOR].sort());
 
         // El apilado del menú, leído del archivo: la X2 se pidió `[2, 1]`, o sea
         // la 2 abajo y la 1 encima, y así tienen que haber quedado las pistas.
@@ -661,6 +662,33 @@ module.exports = async function (t) {
         t.eq(cuantos, 7, 'con los marcadores de toda la sesión');
         t.ok(p.quienReferencia(marcas).filter(k => p.clase(k) === 'AudioClip').length > 1,
             'y es el mismo que usan los cortes de ese audio en las capturas');
+    });
+
+    t.test('los bins del editor están, vacíos y en su orden', async () => {
+        // Son los que esta app no llena: están para que el proyecto se vea
+        // igual en todos los cursos. Vacío quiere decir sin lista de ítems,
+        // que es como los escribe Premiere, y en orden quiere decir que el
+        // panel los muestra como dice su número.
+        const dir = carpetaConClases(30);
+        const destino = path.join(dir, 'Proyecto', 'bins.prproj');
+        const r = await carpetaPrproj.generar({
+            carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
+            config: { capturas: 1, vistas: { PV: [1] } }
+        });
+        t.ok(r.ok, r.error || '');
+
+        const p = prproj.Proyecto.leer(destino);
+        const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
+        const raiz = p.porClase('RootProjectItem')[0];
+        const bins = p.refsDe(raiz).filter(k => p.clase(k) === 'BinProjectItem');
+        t.deep(bins.map(nombre), [
+            carpetaPrproj.BIN_CAPTURAS, carpetaPrproj.BIN_PRECORTADAS, carpetaPrproj.BIN_AUDIO,
+            ...carpetaPrproj.BINS_DEL_EDITOR
+        ], 'cuelgan de la raíz del panel, en orden');
+        for (const bin of bins.slice(3)) {
+            t.eq(/<Items/.test(p.contenido(bin)), false, `${nombre(bin)} queda vacío`);
+            t.eq(p.refsDe(bin).length, 0, `${nombre(bin)} no apunta a nada`);
+        }
     });
 
     t.test('una captura puesta solo en sus tomas no deja clips en las demás', async () => {

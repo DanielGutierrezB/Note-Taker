@@ -47,6 +47,18 @@ const BIN_CAPTURAS = '01 Capturas';
 const BIN_PRECORTADAS = '02 Precortadas';
 const BIN_AUDIO = '03 Audio de referencia';
 
+/**
+ * Y los que el proyecto deja vacíos, que son del editor.
+ *
+ * Los tres primeros los llena esta app; estos tres son donde va lo que llega
+ * después —el material que manda el profesor, las composiciones, los gráficos
+ * y las pistas— y existen desde el principio para que el proyecto se vea igual
+ * en todos los cursos y nadie tenga que acordarse de crearlos ni de cómo se
+ * llamaban. Premiere guarda un bin vacío sin lista de ítems, así que no cuesta
+ * nada tenerlos.
+ */
+const BINS_DEL_EDITOR = ['04 Material', '05 Comps', '06 Assets'];
+
 /** El audio de referencia, en el panel y en la línea de tiempo. */
 const ETIQUETA_DE_REFERENCIA = 'Caribbean';
 
@@ -901,7 +913,7 @@ async function generar(opciones) {
     try {
         const raiz = taller.raizDelPanel();
         const descolgados = taller.vaciarElPanel();
-        const bins = [BIN_CAPTURAS, BIN_PRECORTADAS, BIN_AUDIO].map((nombre, i) => {
+        const bins = [BIN_CAPTURAS, BIN_PRECORTADAS, BIN_AUDIO, ...BINS_DEL_EDITOR].map((nombre, i) => {
             const bin = taller.crearBin(nombre, { orden: i });
             taller.guardarEn(raiz, bin);
             return bin;
@@ -992,6 +1004,7 @@ module.exports = {
     BIN_CAPTURAS,
     BIN_PRECORTADAS,
     BIN_AUDIO,
+    BINS_DEL_EDITOR,
     COLOR_DE_CLASE,
     COLOR_DE_CLAQUETA,
     COLOR_DE_NOTA
