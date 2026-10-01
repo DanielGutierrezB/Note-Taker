@@ -101,7 +101,7 @@ function nombreDeFuente(ids) {
  * primera es la que va arriba. Ordenar por número, que es lo que hacía antes,
  * perdía en silencio justo lo que el menú dejaba elegir.
  *
- * @param {object} [config] { capturas: number, vistas: { PV: [1], X2: [2, 1] } }
+ * @param {object} [config] { capturas: 2, vistas: { R: { capturas: [1, 2], unidas: true } } }
  * @param {string[]} [vistasUsadas] las vistas que aparecen en las tomas
  * @returns {{capturas: number, vistas: object}}
  */
@@ -111,11 +111,30 @@ function normalizar(config, vistasUsadas) {
     const vistas = {};
     const todas = new Set(vivo.VISTAS.map(v => v.nombre).concat(vistasUsadas || []));
     for (const vista of todas) {
-        const pedidas = Array.isArray(c.vistas && c.vistas[vista]) ? c.vistas[vista] : [];
-        const ids = [...new Set(pedidas.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= capturas))];
-        vistas[vista] = ids.length ? ids : [1];
+        vistas[vista] = vistaSaneada(c.vistas && c.vistas[vista], capturas);
     }
     return { capturas, vistas };
+}
+
+/**
+ * Una vista: qué capturas la componen, en qué orden y si van anidadas.
+ *
+ * **Anidadas o sueltas es la diferencia entre un encuadre y doce.** Anidadas,
+ * las dos capturas viven adentro de una secuencia aparte y el recuadro se
+ * acomoda una vez para toda la carpeta. Sueltas, cada una va en su propia pista
+ * de la precortada y se puede mover toma por toma, que es lo que hace falta
+ * cuando el recuadro tapa algo distinto en cada una.
+ *
+ * Acepta la forma vieja —una lista pelada— porque es la que hay guardada en las
+ * carpetas de antes y en los ajustes, y ahí dos capturas siempre eran una
+ * anidación.
+ */
+function vistaSaneada(pedida, capturas) {
+    const bruta = Array.isArray(pedida) ? { capturas: pedida } : (pedida || {});
+    const pedidas = Array.isArray(bruta.capturas) ? bruta.capturas : [];
+    const ids = [...new Set(pedidas.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= capturas))];
+    const limpias = ids.length ? ids : [1];
+    return { capturas: limpias, unidas: limpias.length > 1 && bruta.unidas !== false };
 }
 
 /** Dónde guarda cada carpeta su configuración del menú. */
@@ -262,13 +281,20 @@ function planear(sesiones, config) {
     // Dónde cae un instante de una clase adentro de las anidaciones.
     const enNido = (clase, ms) => clase.franja.desdeSeg + notasXml.aSegundos(ms, clase.sesion.ceroMs);
 
-    // Las fuentes que alguna toma usa.
+    // Las fuentes que alguna toma usa. Una vista anidada enciende una sola —su
+    // grupo—; una suelta enciende una por captura, y se apilan por el orden de
+    // las pistas, que es lo que `ordenarFuentes` tiene que dejar bien.
     const usadas = new Map();
-    const fuenteDe = vista => {
-        const ids = config.vistas[vista] || [1];
+    const anotar = ids => {
         const clave = claveDeFuente(ids);
         if (!usadas.has(clave)) usadas.set(clave, { clave, ids, nombre: nombreDeFuente(ids) });
         return clave;
+    };
+    const fuentesDe = vista => {
+        const v = config.vistas[vista] || { capturas: [1], unidas: false };
+        return v.unidas && v.capturas.length > 1
+            ? [anotar(v.capturas)]
+            : v.capturas.map(id => anotar([id]));
     };
 
     for (const clase of clases) {
@@ -300,7 +326,7 @@ function planear(sesiones, config) {
             clase.cortes.push({
                 toma: toma.id,
                 vista,
-                fuente: fuenteDe(vista),
+                fuentes: fuentesDe(vista),
                 desdeSeg: cursor,
                 hastaSeg: cursor + largo,
                 entradaSeg: enNido(clase, inMs),
@@ -360,12 +386,89 @@ function planear(sesiones, config) {
         }
     }
 
-    const fuentes = [...usadas.values()].sort((a, b) =>
-        (a.ids.length - b.ids.length) || a.ids.join(',').localeCompare(b.ids.join(','), 'en', { numeric: true }));
-    // La Captura 1 siempre se arma: es el audio de A1 de todas las precortadas.
+    const fuentes = ordenarFuentes([...usadas.values()], config, avisos);
     const grupos = fuentes.filter(f => f.ids.length > 1);
 
     return { clases, largoSeg, fuentes, grupos, marcadoresDeCaptura, avisos };
+}
+
+/**
+ * En qué orden van las pistas de vídeo de la precortada, de abajo hacia arriba.
+ *
+ * Las capturas sueltas van abajo y los grupos encima, y eso no importa: de una
+ * toma solo se enciende lo suyo, y lo apagado no tapa nada.
+ *
+ * **Lo que sí importa es el orden entre capturas sueltas, porque es su
+ * apilado.** Una vista suelta con la Captura 1 sobre la 2 necesita que la pista
+ * de la 1 esté más arriba que la de la 2, y las pistas son una sola lista para
+ * toda la precortada: lo que pide una vista se lo come la otra. Así que se
+ * ordenan respetando lo que piden todas (un orden topológico, con el número de
+ * captura para desempatar y que dos corridas den lo mismo).
+ *
+ * **Dos vistas sueltas pueden pedir cosas contrarias** —una la 1 sobre la 2 y
+ * la otra al revés— y entonces no hay orden que las deje contentas a las dos.
+ * Se respeta la primera, se dice cuál quedó sin cumplir y se dice también cómo
+ * arreglarlo, que es anidar una de las dos: una anidación tiene sus propias
+ * pistas y ahí sí caben los dos apilados.
+ */
+function ordenarFuentes(fuentes, config, avisos) {
+    const solas = fuentes.filter(f => f.ids.length === 1).sort((a, b) => a.ids[0] - b.ids[0]);
+    const grupos = fuentes.filter(f => f.ids.length > 1)
+        .sort((a, b) => a.ids.join(',').localeCompare(b.ids.join(','), 'en', { numeric: true }));
+
+    // Lo que pide cada vista suelta, de arriba hacia abajo: «la a tapa a la b».
+    const pide = [];
+    for (const [vista, v] of Object.entries(config.vistas || {})) {
+        if (v.unidas || v.capturas.length < 2) continue;
+        for (let i = 1; i < v.capturas.length; i++) {
+            pide.push({ vista, arriba: v.capturas[i - 1], abajo: v.capturas[i] });
+        }
+    }
+    if (!pide.length) return solas.concat(grupos);
+
+    const hay = new Set(solas.map(f => f.ids[0]));
+    const debajoDe = new Map([...hay].map(id => [id, new Set()]));
+    const deQuien = new Map();
+    for (const p of pide) {
+        if (!hay.has(p.arriba) || !hay.has(p.abajo)) continue;
+        // Antes de aceptarla se mira que no cierre un círculo con las que ya
+        // están: aceptarla y arrepentirse después dejaría a medias un orden que
+        // nadie pidió.
+        if (alcanza(debajoDe, p.abajo, p.arriba)) {
+            const otra = deQuien.get(`${p.abajo}>${p.arriba}`);
+            avisos.push(`${p.vista} quiere la Captura ${p.arriba} sobre la ${p.abajo}`
+                + `${otra ? ` y ${otra} las quiere al revés` : ' y otra vista suelta pide lo contrario'}.`
+                + ' Las vistas sueltas comparten las pistas, así que quedó el primer apilado:'
+                + ' anidá una de las dos para tener los dos.');
+            continue;
+        }
+        debajoDe.get(p.arriba).add(p.abajo);
+        deQuien.set(`${p.arriba}>${p.abajo}`, p.vista);
+    }
+
+    // De abajo hacia arriba: primero las que nadie tiene debajo suyo.
+    const puestas = [];
+    const quedan = solas.slice();
+    while (quedan.length) {
+        const i = quedan.findIndex(f => [...debajoDe.get(f.ids[0])].every(id => puestas.includes(id)));
+        const elegida = quedan.splice(i === -1 ? 0 : i, 1)[0];
+        puestas.push(elegida.ids[0]);
+    }
+    return puestas.map(id => solas.find(f => f.ids[0] === id)).concat(grupos);
+}
+
+/** ¿Se llega de `desde` a `hasta` siguiendo «va debajo de»? */
+function alcanza(debajoDe, desde, hasta) {
+    const vistos = new Set();
+    const pendientes = [desde];
+    while (pendientes.length) {
+        const k = pendientes.pop();
+        if (k === hasta) return true;
+        if (vistos.has(k)) continue;
+        vistos.add(k);
+        for (const sig of debajoDe.get(k) || []) pendientes.push(sig);
+    }
+    return false;
 }
 
 // ─── El armado ───────────────────────────────────────────────────────
@@ -480,11 +583,14 @@ function armarGrupos(taller, plan, capturas, bin) {
 /**
  * La precortada de una clase.
  *
- * En cada toma entran TODAS las fuentes que la carpeta usa y solo está
- * encendida la de su vista, como hace Class Cut: cambiar de plano es encender
- * otra, y ninguna tapa a la buena. Las capturas entran solo como vídeo —su audio
- * es la referencia y la Captura 1, que acá ya están en A1 y A2—; colocadas con
- * audio, la precortada sonaría doble.
+ * En cada toma entran TODAS las fuentes que la carpeta usa y solo están
+ * encendidas las de su vista, como hace Class Cut: cambiar de plano es encender
+ * otra, y lo apagado no tapa a la buena. Son varias cuando la vista va suelta —
+ * una pista por captura, apiladas por el orden de las pistas— y una sola cuando
+ * va anidada.
+ *
+ * Las capturas entran solo como vídeo —su audio es la referencia y la Captura 1,
+ * que acá ya están en A1 y A2—; colocadas con audio, la precortada sonaría doble.
  */
 function armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bin) {
     const seq = taller.crearSecuencia({
@@ -504,7 +610,7 @@ function armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bin) {
                 pista: pistaDe.get(f.clave), medio: fuentes.get(f.clave).comoFuente,
                 desdeSeg: corte.desdeSeg, hastaSeg: corte.hastaSeg, entradaSeg: corte.entradaSeg,
                 etiqueta: f.ids.length > 1 ? ETIQUETA_DE_GRUPO : ETIQUETA_DE_CAPTURA,
-                sonando: f.clave === corte.fuente
+                sonando: corte.fuentes.includes(f.clave)
             });
             cortes++;
         }

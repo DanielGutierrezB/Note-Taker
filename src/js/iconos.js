@@ -149,10 +149,14 @@ const DIBUJOS = {
 
     chevron: '<path d="m9.6 5.8 6.2 6.2-6.2 6.2"/>',
     volver: '<path d="M19.4 12H5"/><path d="m10.6 5.6-5 6.4 5 6.4"/>',
-    // «Una capa más arriba», en el menú del .prproj. La flecha apunta hacia
-    // arriba aunque la pila se dibuje en fila: lo que se mueve es la capa que
-    // tapa, y eso se piensa en alto, no en izquierda.
-    subir: '<path d="M12 19V5.6"/><path d="m5.6 12 6.4-6.4 6.4 6.4"/>',
+    // Los dos estados de una vista de varias capturas, en el menú del .prproj:
+    // la cadena entera son las capturas adentro de una anidación, y la cortada
+    // son cada una en su pista.
+    enlace: '<path d="M10.3 13.7a3.4 3.4 0 0 1 0-4.8l2.4-2.4a3.4 3.4 0 0 1 4.8 4.8l-1.2 1.2"/>'
+        + '<path d="M13.7 10.3a3.4 3.4 0 0 1 0 4.8l-2.4 2.4a3.4 3.4 0 0 1-4.8-4.8l1.2-1.2"/>',
+    sinEnlace: '<path d="M10.3 13.7a3.4 3.4 0 0 1 0-4.8l2.4-2.4a3.4 3.4 0 0 1 4.8 4.8l-1.2 1.2"/>'
+        + '<path d="M13.7 10.3a3.4 3.4 0 0 1 0 4.8l-2.4 2.4a3.4 3.4 0 0 1-4.8-4.8l1.2-1.2"/>'
+        + '<path d="m4.6 4.6 14.8 14.8"/>',
     cerrar: '<path d="m6.4 6.4 11.2 11.2M17.6 6.4 6.4 17.6"/>',
     mas: '<path d="M12 5.2v13.6M5.2 12h13.6"/>'
 };

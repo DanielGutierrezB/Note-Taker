@@ -153,11 +153,20 @@ window.nt = {
     grabarTerminar: async () => estadoEnVivo(),
     onGrabarAviso: cb => avisos.push(cb),
 
-    // El menú del .prproj: dos capturas, y dos vistas compuestas apiladas al
-    // revés una de la otra, que es lo que hay que poder ver de un vistazo.
+    // El menú del .prproj: dos capturas, una vista anidada y otra suelta, que
+    // son los dos estados del botón de unir.
     prprojConfig: async carpeta => ({
         ok: true,
-        config: { capturas: 2, vistas: { PV: [1], R: [1, 2], S: [2], MG: [2], X2: [2, 1] } },
+        config: {
+            capturas: 2,
+            vistas: {
+                PV: { capturas: [1], unidas: false },
+                R: { capturas: [1, 2], unidas: true },
+                S: { capturas: [2], unidas: false },
+                MG: { capturas: [2], unidas: false },
+                X2: { capturas: [2, 1], unidas: false }
+            }
+        },
         vistas: estadoEnVivo().vistas.map(v => ({ ...v, usada: ['PV', 'R', 'X2'].includes(v.nombre) })),
         clases: 3,
         guardada: true,

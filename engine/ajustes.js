@@ -79,14 +79,29 @@ const DEFAULTS = {
     prproj: null
 };
 
-/** La configuración del .prproj con la forma de siempre, o null si no sirve. */
+/**
+ * La configuración del .prproj con la forma de siempre, o null si no sirve.
+ *
+ * Acá solo se mira la forma: que las claves parezcan siglas de vista y que los
+ * números sean capturas que existen. Qué significa cada cosa —el orden es el
+ * apilado, una vista sin capturas vuelve a la 1— lo decide
+ * `prproj-carpeta.normalizar`, que es quien la usa.
+ *
+ * Una vista puede estar guardada como lista pelada (la forma de las primeras
+ * versiones, donde dos capturas siempre eran una anidación) o como objeto con
+ * `capturas` y `unidas`. Las dos se dejan pasar con la forma nueva.
+ */
 function saneada(prproj) {
     if (!prproj || typeof prproj !== 'object') return null;
     const capturas = Math.max(1, Math.min(20, Math.floor(Number(prproj.capturas) || 1)));
     const vistas = {};
-    for (const [vista, ids] of Object.entries(prproj.vistas || {})) {
-        if (!/^[A-Z0-9]{1,4}$/.test(vista) || !Array.isArray(ids)) continue;
-        vistas[vista] = ids.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= capturas);
+    for (const [vista, guardada] of Object.entries(prproj.vistas || {})) {
+        const bruta = Array.isArray(guardada) ? { capturas: guardada } : guardada;
+        if (!/^[A-Z0-9]{1,4}$/.test(vista) || !bruta || !Array.isArray(bruta.capturas)) continue;
+        vistas[vista] = {
+            capturas: bruta.capturas.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= capturas),
+            unidas: bruta.unidas !== false
+        };
     }
     return { capturas, vistas };
 }

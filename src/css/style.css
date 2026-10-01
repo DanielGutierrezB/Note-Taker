@@ -1731,31 +1731,36 @@ kbd {
   justify-content: center;
 }
 
-/* La pila de una vista compuesta: de izquierda a derecha, de arriba a abajo. */
-.prproj-pila {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  min-width: 0;
+/* La pila de una vista: de izquierda a derecha, de arriba a abajo. */
+.prproj-arriba {
+  margin-right: 2px;
 }
 
-.prproj-capa {
+/* Dónde termina la pila y empiezan las capturas que esta vista no usa. */
+.prproj-corte {
+  width: 1px;
+  height: 16px;
+  margin: 0 var(--sp-1);
+  background: var(--hairline);
+}
+
+.prproj-elige .btn-vista[draggable="true"] {
+  cursor: grab;
+}
+
+.prproj-elige .btn-vista.se-arrastra {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.prproj-union {
   gap: var(--sp-1);
   padding: 0 var(--sp-2);
   font-size: 12px;
   white-space: nowrap;
 }
 
-.prproj-capa.es-encima {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--row-xs);
-  color: var(--text-primary);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
-}
-
-.prproj-capa svg {
+.prproj-union svg {
   width: 14px;
   height: 14px;
 }
