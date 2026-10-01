@@ -55,6 +55,9 @@ contextBridge.exposeInMainWorld('nt', {
     grabarQuitarClaqueta: n => ipcRenderer.invoke('grabar-quitar-claqueta', n),
     grabarEditar: cambio => ipcRenderer.invoke('grabar-editar', cambio),
     grabarEditarGrabada: (json, cambio) => ipcRenderer.invoke('grabar-editar-grabada', json, cambio),
+    // Abrir una clase ya grabada en la misma pantalla de la clase, de solo
+    // mirar y ajustar: contesta el mismo estado con `grabando: false`.
+    grabarAbrirGrabada: json => ipcRenderer.invoke('grabar-abrir-grabada', json),
     // Sin argumento, ahora. Con la hora de una palabra, el borde va ahí: es lo
     // que manda arrastrar el IN o el OUT sobre el texto.
     grabarAbrirToma: ms => ipcRenderer.invoke('grabar-abrir-toma', ms),

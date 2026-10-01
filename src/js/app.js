@@ -8,6 +8,10 @@
  *
  *   Sesiones ──► Preparar ──► En vivo ──► Cierre ──► Sesiones
  *
+ * Y un atajo de vuelta: desde Sesiones se puede abrir una clase ya grabada en la
+ * MISMA pantalla de En vivo, para mirarla y ajustarle las notas (`irANotas`). No
+ * es una pantalla más: es la misma con otro estado.
+ *
  * Ajustes y Diagnóstico son paneles y no pantallas: se abren encima de
  * cualquiera de las cuatro, porque la pregunta que contestan —«¿a cuántos
  * cuadros va esto?», «¿encontró Whisper?»— aparece en cualquier momento.
@@ -41,6 +45,19 @@ const app = {
         // así que el camino de vuelta se apaga hasta Terminar.
         $('#btn-volver').hidden = true;
         vivo.ver(estado, audio);
+    },
+
+    /**
+     * Las notas de una clase ya grabada, en la MISMA pantalla de la clase.
+     *
+     * No es una quinta pantalla y por eso no cambia el recorrido de arriba: es la
+     * de En vivo con el estado de una clase que ya terminó (`grabando: false`), y
+     * de ahí se vuelve a Sesiones, que es de donde se entró. El camino de vuelta
+     * se deja encendido justamente porque acá no se está grabando nada.
+     */
+    irANotas(estado) {
+        $('#btn-volver').hidden = false;
+        vivo.ver(estado, null);
     },
 
     irACierre(salida) {

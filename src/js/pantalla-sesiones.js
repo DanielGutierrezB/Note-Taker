@@ -87,6 +87,9 @@ function fila(s) {
       <span class="crece"></span>
       ${puedeReanudar
         ? `<button class="btn" type="button" data-hace="reanudar">Reanudar</button>` : ''}
+      <button class="btn" type="button" data-hace="notas"
+              title="Abrir las notas de esta clase en la misma vista de cuando se tomaron.
+No se graba nada: lo que ajustes se escribe en su XML en el acto.">Notas</button>
       <button class="btn btn-tenue btn-ico" type="button" data-hace="xml"
               title="Mostrar el XML en el Finder">${icono('finder')}</button>
       <button class="btn btn-tenue btn-ico" type="button" data-hace="rehacer-xml"
@@ -115,6 +118,9 @@ async function alClic(e) {
         case 'reanudar':
             app.irAPreparar({ reanudar: json, sesion });
             break;
+        case 'notas':
+            await verNotas(json);
+            break;
         case 'regenerar':
             await regenerar(json, boton);
             break;
@@ -128,6 +134,24 @@ async function alClic(e) {
             await borrar(sesion);
             break;
     }
+}
+
+/**
+ * Abrir las notas de una clase grabada, en la pantalla de la clase.
+ *
+ * El editor: «en esta interfaz debería poder entrar nuevamente a mis notas
+ * anteriores como en la vista de cuando las estoy tomando […] por si deseo
+ * ajustar una nota desde ahí directamente.»
+ *
+ * El motor contesta el mismo estado que manda grabando, con `grabando: false`
+ * (ver `paraMirar`), y la pantalla de la clase lo dibuja sin el cromo de grabar.
+ * Puede negarse —la clase que se está grabando ahora no se abre por acá, esa ya
+ * tiene su pantalla— y el motivo se muestra tal cual.
+ */
+async function verNotas(json) {
+    const r = await window.nt.grabarAbrirGrabada(json);
+    if (!r.ok) return avisar(r.error, 'error');
+    app.irANotas(r.estado);
 }
 
 /**

@@ -20,6 +20,8 @@ const fs = require('fs');
 const path = require('path');
 
 const ajustar = require('./ajustar-corte');
+const espejo = require('./espejo');
+const historial = require('./deshacer');
 const notasXml = require('./notas-xml');
 const nombreDeSesion = require('./nombre-de-sesion');
 const workspace = require('./workspace');
@@ -215,6 +217,59 @@ function ajustarBordes(estado, sitio) {
 }
 
 /**
+ * Una sesión ya grabada, con la forma que la pantalla de la clase sabe dibujar.
+ *
+ * El editor, con la pantalla de Sesiones delante: «en esta interfaz debería poder
+ * entrar nuevamente a mis notas anteriores como en la vista de cuando las estoy
+ * tomando. Así sea ya en un modo de solo visualización. Esto por si deseo ajustar
+ * una nota desde ahí directamente.»
+ *
+ * **Sale por `espejo.resumen` y no por una traducción propia.** La pantalla de la
+ * clase es una sola y lee UNA forma; una segunda forma parecida, escrita acá,
+ * sería la manera de que la vista de una clase vieja se fuera separando de la de
+ * la clase en curso sin que nadie lo note. Así que lo que se arma es una sesión
+ * de mentira con lo que `resumen` mira, y la respuesta lleva además `json` —de
+ * ahí cuelga cada edición (`editarGrabada`)— y `grabando: false`, que es lo que
+ * la pantalla usa para no dibujar el cromo de grabar.
+ *
+ * Una sesión EN CURSO no se abre por acá: esa tiene su propia pantalla, con el
+ * reloj andando y el ciclo de señales detrás. Abrir una copia de solo lectura de
+ * algo que está cambiando sería mostrar una foto vieja de la clase de ahora.
+ *
+ * @param {string} json el sidecar de la sesión
+ * @param {string} [enCurso] la secuencia que se está grabando ahora
+ */
+function paraMirar(json, enCurso) {
+    const sitio = workspace.sesionDelSidecar(json);
+    const estado = leerSidecar(json);
+    if (estado.secuencia && estado.secuencia === enCurso) {
+        throw new Error('Esa clase se está grabando ahora: miralá en su propia pantalla, ' +
+            'que es la que está al día.');
+    }
+    const falsa = {
+        dir: sitio.base,
+        // `resumen` saca de acá el timecode y la cola de relecturas. Una sesión
+        // grabada no tiene ninguna de las dos cosas pasando, pero sí una
+        // duración, que es la suma de lo que se grabó.
+        captura: { segundos: (estado.sesiones || []).reduce((s, x) => s + (x.segundos || 0), 0) },
+        cola: [],
+        // **Sin deshacer, y a propósito.** El historial de esta app vive en la
+        // sesión en memoria, y una clase grabada se abre de nuevo desde su
+        // sidecar en cada gesto: guardar una pila al lado duraría hasta que
+        // «Rehacer XML», «Regenerar» o un renombrado cambiaran el archivo por
+        // debajo, y entonces un deshacer aplicaría una foto a una toma que ya no
+        // es esa. Y sería un deshacer A MEDIAS: los pasos que `aplicar` no
+        // acepta sobre una clase cerrada —reabrir, por ejemplo— no estarían, así
+        // que el botón mentiría la mitad de las veces. Los dos botones se
+        // esconden en este modo (ver `esDeMirar` en pantalla-vivo.js); lo que sí
+        // hay es que cada cambio se ve en el acto como quedó en el archivo.
+        historia: historial.nueva(),
+        estado: { ...vivo.estadoNuevo({}), ...estado, sueltas: [] }
+    };
+    return { ...espejo.resumen(falsa), json, grabando: false, terminada: Boolean(estado.terminada) };
+}
+
+/**
  * Cambia una sesión que ya terminó, y reescribe su XML.
  *
  * **El XML se reescribe acá mismo, en el mismo gesto.** Un cambio que se queda
@@ -258,7 +313,12 @@ function editarGrabada(json, cambio) {
     ajustarBordes(estado, sitio);
     workspace.writeAtomic(sitio.xml, notasXml.xmlDeNotas(estado));
     workspace.writeJson(sitio.json, notasXml.sidecar(estado));
-    return { archivos: { xml: sitio.xml, json: sitio.json } };
+    // El estado de vuelta, releído del sidecar que se acaba de escribir: la
+    // pantalla de la clase se repinta con él, igual que en vivo se repinta con el
+    // que manda `espejo.fijar`. Releer y no devolver el de memoria es a propósito
+    // —`ajustarBordes` corrió los cortes al silencio y el sidecar es lo que de
+    // verdad quedó— así que lo que se ve es el archivo y no una intención.
+    return { archivos: { xml: sitio.xml, json: sitio.json }, estado: paraMirar(sitio.json) };
 }
 
 /**
@@ -602,6 +662,7 @@ module.exports = {
     dondeQuedoElWav,
     ajustarBordes,
     editarGrabada,
+    paraMirar,
     paraReanudar,
     renombrar,
     borrar

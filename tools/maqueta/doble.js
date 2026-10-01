@@ -134,7 +134,11 @@ window.nt = {
     grabarEditar: async c => (c && c.tipo === 'borde' && c.borde === 'in'
         ? moverInEn(Number(c.paredMs))
         : estadoEnVivo()),
-    grabarEditarGrabada: async () => ({ ok: true }),
+    // Las notas de una clase ya grabada: el mismo estado de la clase con
+    // `grabando: false`, que es lo que la pantalla usa para no dibujar el cromo
+    // de grabar (ver `paraMirar` en engine/sesiones-grabadas.js).
+    grabarAbrirGrabada: async json => ({ ok: true, estado: estadoDeNotas(json) }),
+    grabarEditarGrabada: async (json, c) => ({ ok: true, estado: conCambio(estadoDeNotas(json), c) }),
     grabarAbrirToma: async ms => abrirEn(ms),
     grabarCerrarToma: async ms => cerrarEn(ms),
     grabarDeshacer: async () => ({ ok: true, que: 'poner la toma 4 en S', estado: estadoEnVivo() }),
@@ -252,6 +256,19 @@ async function aplicar() {
         return;
     }
 
+    // Las notas de una clase ya grabada, abiertas desde la fila de Sesiones: la
+    // misma pantalla de la clase sin el cromo de grabar.
+    if (hay('notas-de-antes')) {
+        await app.irASesiones();
+        const boton = document.querySelector('#lista-sesiones [data-hace="notas"]');
+        if (boton) boton.click();
+        // Una toma desplegada, que es donde se ajusta la nota.
+        await espera(80);
+        const plegar = document.querySelector('#lista-vivo [data-hace="plegar"][data-toma="4"]');
+        if (plegar) plegar.click();
+        return;
+    }
+
     if (hay('terminada')) {
         app.irACierre(estadoEnVivo());
         return;
@@ -288,6 +305,56 @@ async function conPalmada(estado) {
  * el estado tal cual, porque ahí lo que se mira es la pantalla, no el motor.
  */
 let vivo = null;
+
+/**
+ * Las notas de una clase ya grabada, como las manda el motor.
+ *
+ * Es el estado de la clase con `grabando: false`, sin toma abierta y con el
+ * `json` de donde cuelga cada edición: lo mismo que arma `paraMirar` en
+ * `engine/sesiones-grabadas.js`. Así se puede mirar y medir la pantalla de las
+ * notas de una clase vieja sin tener una clase grabada a mano.
+ */
+let notas = null;
+
+function estadoDeNotas(json) {
+    if (!notas || notas.json !== json) {
+        const base = estadoEnVivo();
+        notas = {
+            ...base,
+            json,
+            grabando: false,
+            terminada: true,
+            abierta: null,
+            sueltas: [],
+            releyendo: 0,
+            historia: { atras: 0, adelante: 0, queAtras: '', queAdelante: '' },
+            // Todas cerradas: una clase terminada no tiene ninguna abierta.
+            tomas: base.tomas.map(t => (t.outMs == null ? { ...t, outMs: t.inMs + 60000 } : t))
+        };
+    }
+    return notas;
+}
+
+/** El cambio aplicado, para poder VER que el gesto llega al archivo. */
+function conCambio(base, c) {
+    if (!c) return base;
+    if (c.tipo === 'quitar-claqueta') {
+        notas = { ...base, claquetas: base.claquetas.filter(q => q.n !== Number(c.n)) };
+        return notas;
+    }
+    if (c.tipo === 'nota-claqueta') {
+        notas = {
+            ...base,
+            claquetas: base.claquetas.map(q => (q.n === Number(c.n) ? { ...q, comentario: c.texto } : q))
+        };
+        return notas;
+    }
+    const campo = { nota: 'comentario', vista: 'vista', descartar: 'descartada' }[c.tipo];
+    if (!campo) return base;
+    const valor = c.tipo === 'nota' ? c.texto : (c.tipo === 'vista' ? c.vista : Boolean(c.descartada));
+    notas = { ...base, tomas: base.tomas.map(t => (t.id === c.toma ? { ...t, [campo]: valor } : t)) };
+    return notas;
+}
 
 /**
  * Correr el IN de la toma abierta, con el tope de la toma anterior.

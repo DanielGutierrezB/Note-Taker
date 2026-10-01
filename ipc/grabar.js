@@ -235,6 +235,24 @@ function registrar({ ipcMain, app, send, anotar }) {
         return salida;
     });
 
+    /**
+     * Abrir una sesión ya grabada para mirarla y ajustarla.
+     *
+     * Contesta el mismo estado que la clase en curso, con `grabando: false`, para
+     * que la pantalla de la clase sea UNA (ver `paraMirar`). Puede negarse —una
+     * sesión que se está grabando ahora no se abre por acá— y el motivo se
+     * muestra tal cual.
+     */
+    ipcMain.handle('grabar-abrir-grabada', (event, json) => {
+        anotar('grabar.abrir-grabada', { json });
+        try {
+            return { ok: true, estado: grabacion.paraMirar(json) };
+        } catch (err) {
+            anotar('grabar.abrir-grabada-falla', { json, error: err.message });
+            return { ok: false, error: err.message };
+        }
+    });
+
     // Cambiar una sesión que ya terminó. Reescribe su XML en el acto, así que
     // la respuesta dice si se pudo: la ventana avisa con eso.
     ipcMain.handle('grabar-editar-grabada', (event, json, cambio) => {

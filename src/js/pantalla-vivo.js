@@ -205,6 +205,28 @@ export function ver(primerEstado, elAudio) {
     pintar();
 }
 
+/**
+ * Si lo que está en pantalla es una clase ya grabada y no la de ahora.
+ *
+ * El editor, con la lista de Sesiones delante: «en esta interfaz debería poder
+ * entrar nuevamente a mis notas anteriores como en la vista de cuando las estoy
+ * tomando. Así sea ya en un modo de solo visualización. Esto por si deseo
+ * ajustar una nota desde ahí directamente.»
+ *
+ * **Es la MISMA pantalla y no una paralela.** Una pantalla de solo lectura
+ * parecida a esta sería una copia que se va quedando atrás: la lista de tomas,
+ * el transcript con sus bordes, las vistas y las notas ya están resueltos acá, y
+ * el editor ya sabe leerlos. Lo único que cambia es por dónde salen los cambios
+ * (`grabarEditarGrabada` en vez de `grabarEditar`) y qué cromo no aplica.
+ *
+ * Lo dice el motor en el estado (`grabando`, ver `paraMirar`), no la ventana: el
+ * mismo campo que decide por dónde se escribe decide lo que se dibuja, así que
+ * no pueden discrepar.
+ */
+function esDeMirar() {
+    return Boolean(estado) && estado.grabando === false;
+}
+
 /* ─── Lo que llega del motor ─────────────────────────────────────────── */
 
 function alAviso(aviso) {
@@ -431,6 +453,18 @@ function segundosCortados() {
 
 /** Lo de arriba: timecode, estado de la sesión y nivel. Barato: va seguido. */
 function pintarBarra() {
+    // Una clase ya grabada: el timecode es su duración, «Clase cortada» lo que
+    // suman sus tomas, y los dos son números quietos. Lo demás de esta barra
+    // habla del audio que está entrando, y acá no entra nada.
+    if (esDeMirar()) {
+        $('#vivo-tc').textContent = fmt.relojCorto(estado.segundos);
+        $('#vivo-cortada').textContent = fmt.relojCorto(segundosCortados());
+        $('#vivo-estado').textContent = estado.terminada ? 'terminada' : 'sin cerrar';
+        $('#vivo-estado').title = 'Esta clase no se está grabando: se está mirando. '
+            + 'Lo que cambies acá se escribe en su XML en el acto.';
+        $('#vivo-estado').style.color = 'var(--text-secondary)';
+        return;
+    }
     const callado = !terminando && Date.now() - ultimoAvisoMs > MOTOR_CALLADO_MS;
     const conAudio = audio ? { ...audio, caido: audio.caido || callado } : (callado ? { caido: true } : null);
     const est = estados.deSesion(estado, conAudio);
@@ -483,6 +517,22 @@ function pintar() {
     pintarInterruptores(desactivadas);
     $('#vivo-donde').textContent = estado.archivos ? estado.archivos.xml : '';
 
+    // El cromo que solo tiene sentido grabando. Se esconde y no se apaga: un
+    // botón apagado dice «esto se puede, pero no ahora», y acá no se puede.
+    // Deshacer no está porque el historial vive en la sesión en memoria y una
+    // clase grabada se abre de nuevo en cada gesto (ver `paraMirar` en
+    // engine/sesiones-grabadas.js).
+    const mirando = esDeMirar();
+    // «Ahora» es el título de lo que está entrando, y acá no entra nada: la misma
+    // palabra sobre una clase de la semana pasada es justo la que haría dudar de
+    // si se está grabando.
+    $('#vivo-titulo-ahora').textContent = mirando ? 'Esta clase' : 'Ahora';
+    $('#btn-terminar').hidden = mirando;
+    $('#btn-claqueta').hidden = mirando;
+    $('#vivo-nivel').hidden = mirando;
+    $('#vivo-atajos').hidden = mirando;
+    $('#btn-deshacer').hidden = mirando;
+    $('#btn-rehacer').hidden = mirando;
     const h = estado.historia || {};
     botonHistoria($('#btn-deshacer'), h.atras, h.queAtras, 'Deshacer');
     botonHistoria($('#btn-rehacer'), h.adelante, h.queAdelante, 'Rehacer');
@@ -661,6 +711,22 @@ function sueltasLibres() {
  */
 function ahora(fps) {
     const abierta = estado.tomas.find(t => t.id === estado.abierta);
+    // En una clase grabada no hay «ahora»: ni campo de espera —no hay nada
+    // entrando que mostrar— ni toma abierta que cerrar. Lo que hay es la lista,
+    // que es donde se ajusta cada nota. Lo que sí va es un renglón que diga
+    // claramente qué se está mirando, porque esta pantalla es la de grabar y de
+    // un vistazo son iguales.
+    if (esDeMirar()) {
+        return `<div class="tarjeta" data-estado="${estado.terminada ? 'lista' : 'sin cerrar'}">
+          <div class="tarjeta-cabeza">
+            <span class="hp-ico" style="color:var(--text-secondary)">${icono('ok')}</span>
+            <span class="v1">${esc(estado.secuencia || 'Clase grabada')}</span>
+            <span class="pastilla" data-estado="${estado.terminada ? 'lista' : 'sin cerrar'}">${estado.terminada ? 'terminada' : 'sin cerrar'}</span>
+            <span class="crece"></span>
+            <span class="v3">No se está grabando. Cada cambio se escribe en su XML.</span>
+          </div>
+        </div>`;
+    }
     if (!abierta) {
         // Sin toma abierta, la acción principal de la pantalla es abrirla: es
         // lo que hay que poder hacer rápido si el profesor arrancó sin decir el
@@ -1301,9 +1367,15 @@ async function alClic(e) {
         case 'borrar-comentario':
             await editar({ tipo: 'borrar-comentario', toma, indice: Number(boton.dataset.indice) });
             break;
-        case 'quitar-claqueta':
-            await pedir(() => window.nt.grabarQuitarClaqueta(Number(boton.dataset.claqueta)));
+        case 'quitar-claqueta': {
+            const n = Number(boton.dataset.claqueta);
+            // Dos puertas, porque quitar una claqueta no es un cambio de toma: en
+            // vivo tiene la suya en el motor, y en una clase grabada entra por
+            // `editarGrabada` como los demás.
+            if (esDeMirar()) await editar({ tipo: 'quitar-claqueta', n });
+            else await pedir(() => window.nt.grabarQuitarClaqueta(n));
             break;
+        }
         case 'borde-aqui': {
             // La palabra y el texto se leyeron al abrir el menú: el texto no se
             // repintó mientras estaba abierto, pero la elección ya está tomada
@@ -1568,7 +1640,29 @@ async function bordeDeToma() {
     }
 }
 
+/**
+ * Un cambio de toma o de claqueta, por la puerta que corresponda.
+ *
+ * Es el único sitio que sabe que hay dos puertas, y por eso todo lo que cambia
+ * algo pasa por acá: los botones de vista, las notas, descartar, los
+ * comentarios. En vivo va a la sesión en curso; en una clase ya grabada va a su
+ * sidecar, que reescribe el XML en el acto —igual que «Rehacer XML»— y contesta
+ * el estado releído del archivo.
+ *
+ * Los cambios que el motor no acepta sobre una clase cerrada se niegan allá, con
+ * su motivo, y el motivo se muestra tal cual: la lista de lo que se puede vive en
+ * `vivo.aplicar` y no duplicada acá.
+ */
 async function editar(cambio) {
+    if (esDeMirar()) {
+        const json = estado.json;
+        await pedir(async () => {
+            const r = await window.nt.grabarEditarGrabada(json, cambio);
+            if (!r.ok) { avisar(r.error, 'error'); return null; }
+            return r.estado;
+        });
+        return;
+    }
     await pedir(() => window.nt.grabarEditar(cambio));
 }
 
@@ -1673,7 +1767,7 @@ async function alTeclado(e) {
     }
 
     const meta = e.metaKey || e.ctrlKey;
-    if (meta && e.key.toLowerCase() === 'z') {
+    if (meta && e.key.toLowerCase() === 'z' && !esDeMirar()) {
         e.preventDefault();
         return volver(e.shiftKey ? 'rehacer' : 'deshacer');
     }
@@ -1691,13 +1785,18 @@ async function alTeclado(e) {
     }
 
     const tecla = e.key.toLowerCase();
-    if (tecla === 'k') {
-        e.preventDefault();
-        return pedir(() => window.nt.grabarClaqueta(palmadaParaEnganchar()));
-    }
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        return bordeDeToma();
+    // Mirando una clase grabada, K y Enter no van: poner una claqueta o abrir una
+    // toma necesitan el audio que está entrando. Las letras de las vistas sí van,
+    // que es parte de «ajustar una nota desde ahí».
+    if (!esDeMirar()) {
+        if (tecla === 'k') {
+            e.preventDefault();
+            return pedir(() => window.nt.grabarClaqueta(palmadaParaEnganchar()));
+        }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            return bordeDeToma();
+        }
     }
 
     const v = (estado.vistas || []).find(x => x.nombre[0].toLowerCase() === tecla);

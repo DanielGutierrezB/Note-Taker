@@ -21,12 +21,14 @@
  * La ventana pide y dibuja; acá se decide.
  *
  * **Dos ciclos, y la separación es lo que protege el transcript.** El de señales
- * corre acá, seguido y con un modelo liviano, y su texto es descartable: solo
- * sirve para saber si alguien dijo "3, 2, 1", "Pausa" o "claqueta", y de eso
- * solo se le cree la hora. El de toma corre en `relecturas.js`, una vez por toma
- * y con el modelo grande, y ESE texto es el que queda. Así el transcript nunca
- * se arma pegando pedazos, que es de donde salen las palabras cortadas y los
- * tiempos que no cierran.
+ * corre acá, seguido, y su texto es descartable: solo sirve para saber si alguien
+ * dijo "3, 2, 1", "Pausa" o "claqueta", y de eso solo se le cree la hora. El de
+ * toma corre en `relecturas.js`, una vez por toma, y ESE texto es el que queda.
+ * Así el transcript nunca se arma pegando pedazos, que es de donde salen las
+ * palabras cortadas y los tiempos que no cierran. Los dos le preguntan al modelo
+ * grande: el de acá por el servidor residente, que lo tiene cargado y contesta una
+ * ventana de seis segundos en menos de un segundo (ver `oido-residente.js`), y el
+ * chico quedó de respaldo para cuando el servidor no está listo.
  *
  * **Qué queda acá y qué se fue.** Este archivo tiene la sesión: arrancarla, el
  * PCM que llega, el ciclo de señales, las claquetas y el cierre. Lo demás salió
@@ -772,6 +774,9 @@ module.exports = {
     quitarClaqueta,
     editar,
     editarGrabada: sesionesGrabadas.editarGrabada,
+    // Con la secuencia en curso, para que la que se está grabando no se abra por
+    // acá: esa ya tiene su pantalla, con el reloj andando.
+    paraMirar: json => sesionesGrabadas.paraMirar(json, enCurso()),
     deshacer,
     rehacer,
     abrirToma,
