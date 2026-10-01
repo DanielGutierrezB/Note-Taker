@@ -655,18 +655,29 @@ abre un menú para decir qué capturas hay y qué capturas componen cada vista.
     sincronizar cualquier captura contra la primera;
   - un marcador al principio de cada clase y uno por cada claqueta.
 - **Una vista puede llevar varias capturas.** En el menú, cada vista es una fila
-  de cajitas: las encendidas son las que la componen y el orden es el apilado —la
-  de más a la izquierda tapa a las de abajo—, que se cambia arrastrándolas.
-  Después se elige cómo van las dos juntas:
-  - **Anidadas**: las capturas van adentro de una anidación propia («Captura 1
-    sobre Captura 2») y el encuadre del recuadro se acomoda **una vez** para toda
-    la carpeta. Dos vistas pueden tener la misma pareja apilada al revés, y son
-    dos anidaciones distintas.
-  - **Sueltas**: cada captura va en **su propia pista** de la precortada y se
-    acomoda toma por toma. Las pistas se ordenan para que la de encima quede
-    arriba; si dos vistas sueltas piden apilados contrarios no hay forma de
-    cumplir las dos —las pistas son las mismas— y se avisa cuál quedó sin cumplir
-    y que la solución es anidar una de las dos.
+  de cajitas: las encendidas son las que la componen y el orden es el apilado,
+  **de abajo hacia arriba como las pistas de Premiere, así que la de más a la
+  derecha es la que tapa**. Se cambia arrastrándolas, o con las flechas si
+  llegaste con el teclado. El recuadro que las junta es cómo van las dos:
+  - **Con recuadro, anidadas**: las capturas van adentro de una anidación propia
+    («Captura 1 sobre Captura 2») y el encuadre del recuadro se acomoda **una
+    vez** para toda la carpeta. Dos vistas pueden tener la misma pareja apilada
+    al revés, y son dos anidaciones distintas.
+  - **Sin recuadro, sueltas**: cada captura va en **su propia pista** de la
+    precortada y se acomoda toma por toma. Las pistas se ordenan para que la de
+    encima quede arriba; si dos vistas sueltas piden apilados contrarios no hay
+    forma de cumplir las dos —las pistas son las mismas— y se avisa cuál quedó
+    sin cumplir y que la solución es anidar una de las dos.
+- **Y cada captura dice qué hace en las tomas de las OTRAS vistas**, con el
+  botoncito de su cajita (uno solo para la anidación entera, que es un clip en
+  una sola pista):
+  - **clip largo**: queda **puesta en todas las tomas** de la clase, apagada
+    donde no le toca, y cambiar de plano es encenderla ahí mismo. Es como trabaja
+    Class Cut, y es lo que viene puesto.
+  - **clip corto**: entra **solo en las tomas de su vista** y en las demás su
+    pista queda vacía. Línea de tiempo limpia, a cambio de que ahí ya no haya un
+    clip para encender. Si dos vistas comparten una pista y no piden lo mismo,
+    queda puesta y se avisa cuál quedó sin cumplir.
 - **Una secuencia precortada por clase**: las tomas que van al XML una detrás de
   otra, con los bordes ajustados a la onda. Hay un track de vídeo por cada
   captura o grupo que usan las vistas, y en cada toma solo está encendido el de

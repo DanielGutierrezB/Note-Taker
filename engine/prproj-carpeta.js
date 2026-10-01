@@ -73,18 +73,18 @@ function nombreDeCaptura(id) {
 /**
  * Una fuente es una captura sola o un grupo; su clave son los ids con `+`.
  *
- * **El orden es parte de la clave.** `1+2` y `2+1` son dos grupos distintos —la
- * misma pareja de capturas, apilada al revés— y una carpeta puede necesitar los
- * dos: la cámara en recuadro sobre la pantalla en una vista, y la pantalla en
- * recuadro sobre la cámara en otra.
+ * **Los ids van de abajo hacia arriba, como las pistas de Premiere**, y el
+ * orden es parte de la clave: `1+2` y `2+1` son dos grupos distintos —la misma
+ * pareja apilada al revés— y una carpeta puede necesitar los dos: la cámara en
+ * recuadro sobre la pantalla en una vista, y al revés en otra.
  */
 function claveDeFuente(ids) {
     return ids.join('+');
 }
 
-/** «Captura 1 sobre Captura 2»: el primero es el que tapa. */
+/** «Captura 2 sobre Captura 1» para `[1, 2]`: se nombra desde la que tapa. */
 function nombreDeFuente(ids) {
-    return ids.map(nombreDeCaptura).join(' sobre ');
+    return ids.slice().reverse().map(nombreDeCaptura).join(' sobre ');
 }
 
 // ─── La configuración ────────────────────────────────────────────────
@@ -97,11 +97,12 @@ function nombreDeFuente(ids) {
  * de rechazarse: una vista que nombra una captura que se quitó, o que quedó sin
  * ninguna, vuelve a la Captura 1, que siempre está.
  *
- * **El orden de cada vista se respeta tal cual viene**, porque es el apilado: la
- * primera es la que va arriba. Ordenar por número, que es lo que hacía antes,
- * perdía en silencio justo lo que el menú dejaba elegir.
+ * **El orden de cada vista se respeta tal cual viene**, porque es el apilado:
+ * van de abajo hacia arriba, así que la última es la que tapa. Ordenar por
+ * número, que es lo que hacía antes, perdía en silencio justo lo que el menú
+ * deja elegir.
  *
- * @param {object} [config] { capturas: 2, vistas: { R: { capturas: [1, 2], unidas: true } } }
+ * @param {object} [config] { capturas: 2, vistas: { R: { capturas: [1, 2], unidas: true, siempre: [1, 2] } } }
  * @param {string[]} [vistasUsadas] las vistas que aparecen en las tomas
  * @returns {{capturas: number, vistas: object}}
  */
@@ -117,13 +118,25 @@ function normalizar(config, vistasUsadas) {
 }
 
 /**
- * Una vista: qué capturas la componen, en qué orden y si van anidadas.
+ * Una vista: qué capturas la componen, apiladas de abajo hacia arriba, si van
+ * anidadas y cuáles se quedan puestas en todas las tomas.
  *
  * **Anidadas o sueltas es la diferencia entre un encuadre y doce.** Anidadas,
  * las dos capturas viven adentro de una secuencia aparte y el recuadro se
  * acomoda una vez para toda la carpeta. Sueltas, cada una va en su propia pista
  * de la precortada y se puede mover toma por toma, que es lo que hace falta
  * cuando el recuadro tapa algo distinto en cada una.
+ *
+ * **`siempre` es qué hace esa captura en las tomas de las OTRAS vistas.** Las
+ * que están ahí ocupan su pista en todas las tomas de la clase, apagadas donde
+ * no les toca: cambiar de plano es encender el clip que ya está, que es como
+ * trabaja Class Cut. Las que no están entran solo en las tomas de su vista y en
+ * las demás su pista queda vacía, que es una línea de tiempo más limpia a cambio
+ * de tener que arrastrar para cambiar de plano. Por defecto están todas, que es
+ * lo que hacía la app antes de que esto se pudiera elegir.
+ *
+ * Una anidación es un solo clip en una sola pista, así que ahí es todo o nada:
+ * `siempre` se redondea a las capturas enteras del grupo o a ninguna.
  *
  * Acepta la forma vieja —una lista pelada— porque es la que hay guardada en las
  * carpetas de antes y en los ajustes, y ahí dos capturas siempre eran una
@@ -134,7 +147,15 @@ function vistaSaneada(pedida, capturas) {
     const pedidas = Array.isArray(bruta.capturas) ? bruta.capturas : [];
     const ids = [...new Set(pedidas.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= capturas))];
     const limpias = ids.length ? ids : [1];
-    return { capturas: limpias, unidas: limpias.length > 1 && bruta.unidas !== false };
+    const unidas = limpias.length > 1 && bruta.unidas !== false;
+    const puestas = Array.isArray(bruta.siempre)
+        ? limpias.filter(id => bruta.siempre.includes(id))
+        : limpias.slice();
+    return {
+        capturas: limpias,
+        unidas,
+        siempre: unidas ? (puestas.length ? limpias.slice() : []) : puestas
+    };
 }
 
 /** Dónde guarda cada carpeta su configuración del menú. */
@@ -284,17 +305,29 @@ function planear(sesiones, config) {
     // Las fuentes que alguna toma usa. Una vista anidada enciende una sola —su
     // grupo—; una suelta enciende una por captura, y se apilan por el orden de
     // las pistas, que es lo que `ordenarFuentes` tiene que dejar bien.
+    //
+    // `siempre` viaja con la fuente, no con la vista, porque es una propiedad de
+    // la pista: ahí se decide si en las tomas de las demás vistas hay un clip
+    // apagado o no hay nada. Se anota también quién pidió qué, para poder
+    // decirlo cuando dos vistas comparten una fuente y no piden lo mismo.
     const usadas = new Map();
-    const anotar = ids => {
+    const quienPide = new Map();
+    const anotar = (ids, vista, siempre) => {
         const clave = claveDeFuente(ids);
-        if (!usadas.has(clave)) usadas.set(clave, { clave, ids, nombre: nombreDeFuente(ids) });
+        if (!usadas.has(clave)) {
+            usadas.set(clave, { clave, ids, nombre: nombreDeFuente(ids), siempre: false });
+            quienPide.set(clave, { siempre: new Set(), suya: new Set() });
+        }
+        if (siempre) usadas.get(clave).siempre = true;
+        quienPide.get(clave)[siempre ? 'siempre' : 'suya'].add(vista);
         return clave;
     };
     const fuentesDe = vista => {
-        const v = config.vistas[vista] || { capturas: [1], unidas: false };
+        const v = config.vistas[vista] || { capturas: [1], unidas: false, siempre: [1] };
+        const puestas = v.siempre || [];
         return v.unidas && v.capturas.length > 1
-            ? [anotar(v.capturas)]
-            : v.capturas.map(id => anotar([id]));
+            ? [anotar(v.capturas, vista, puestas.length > 0)]
+            : v.capturas.map(id => anotar([id], vista, puestas.includes(id)));
     };
 
     for (const clase of clases) {
@@ -386,6 +419,17 @@ function planear(sesiones, config) {
         }
     }
 
+    // Dos vistas pueden compartir una fuente —la Captura 2 sola es la misma
+    // pista para «Pantalla» y para «Mano grande»— y pedirle cosas distintas. Es
+    // una sola pista: queda puesta, que es lo que no pierde ningún plano, y se
+    // dice cuál vista quedó sin cumplir.
+    for (const [clave, pide] of quienPide) {
+        if (!pide.siempre.size || !pide.suya.size) continue;
+        avisos.push(`${[...pide.siempre].join(' y ')} deja la ${usadas.get(clave).nombre} puesta en todas las tomas`
+            + ` y ${[...pide.suya].join(' y ')} la quiere solo en las suyas.`
+            + ' Es una sola pista, así que quedó puesta en todas, apagada donde no toca.');
+    }
+
     const fuentes = ordenarFuentes([...usadas.values()], config, avisos);
     const grupos = fuentes.filter(f => f.ids.length > 1);
 
@@ -416,12 +460,13 @@ function ordenarFuentes(fuentes, config, avisos) {
     const grupos = fuentes.filter(f => f.ids.length > 1)
         .sort((a, b) => a.ids.join(',').localeCompare(b.ids.join(','), 'en', { numeric: true }));
 
-    // Lo que pide cada vista suelta, de arriba hacia abajo: «la a tapa a la b».
+    // Lo que pide cada vista suelta: sus capturas vienen de abajo hacia arriba,
+    // así que cada una tapa a la anterior.
     const pide = [];
     for (const [vista, v] of Object.entries(config.vistas || {})) {
         if (v.unidas || v.capturas.length < 2) continue;
         for (let i = 1; i < v.capturas.length; i++) {
-            pide.push({ vista, arriba: v.capturas[i - 1], abajo: v.capturas[i] });
+            pide.push({ vista, arriba: v.capturas[i], abajo: v.capturas[i - 1] });
         }
     }
     if (!pide.length) return solas.concat(grupos);
@@ -546,8 +591,9 @@ function armarCapturas(taller, plan, config, medios, bin) {
  * Van de punta a punta, sin cortar, porque el encuadre —el tamaño y el sitio del
  * recuadro— lo pone el editor una vez adentro y vale para toda la carpeta.
  *
- * **Quién tapa a quién sale del menú, no de los números.** La primera captura del
- * grupo va en el V más alto, que es donde Premiere pinta lo que queda encima.
+ * **Quién tapa a quién sale del menú, no de los números.** Las capturas del
+ * grupo vienen de abajo hacia arriba, igual que las pistas, así que la última
+ * queda en el V más alto, que es donde Premiere pinta lo que tapa a lo demás.
  * Así «Captura 1 sobre Captura 2» y «Captura 2 sobre Captura 1» son dos
  * anidaciones distintas, y una vista puede llevar la cámara en recuadro sobre la
  * pantalla mientras otra lleva lo contrario.
@@ -564,7 +610,7 @@ function armarGrupos(taller, plan, capturas, bin) {
         taller.pintarItemDelPanel(seq.itemDelPanel, ETIQUETA_DE_GRUPO);
         taller.guardarEn(bin, seq.itemDelPanel);
         if (plan.largoSeg > 0) {
-            g.ids.slice().reverse().forEach((id, i) => {
+            g.ids.forEach((id, i) => {
                 taller.colocarCorte({
                     pista: seq.pistasVideo[i], medio: capturas.get(id).comoFuente,
                     desdeSeg: 0, hastaSeg: plan.largoSeg, entradaSeg: 0,
@@ -583,11 +629,15 @@ function armarGrupos(taller, plan, capturas, bin) {
 /**
  * La precortada de una clase.
  *
- * En cada toma entran TODAS las fuentes que la carpeta usa y solo están
- * encendidas las de su vista, como hace Class Cut: cambiar de plano es encender
- * otra, y lo apagado no tapa a la buena. Son varias cuando la vista va suelta —
- * una pista por captura, apiladas por el orden de las pistas— y una sola cuando
- * va anidada.
+ * En cada toma entran las fuentes de su vista —varias cuando va suelta, una
+ * pista por captura, y una sola cuando va anidada— encendidas, y las demás
+ * apagadas: cambiar de plano es encender la que ya está, como hace Class Cut, y
+ * lo apagado no tapa a la buena.
+ *
+ * **Salvo las fuentes que el menú dejó «solo en sus tomas»**, que en las tomas
+ * de las otras vistas no ponen nada. Es la línea de tiempo limpia de quien
+ * prefiere ver solo lo que va a salir; el precio es que para cambiar de plano
+ * ahí ya no hay un clip que encender.
  *
  * Las capturas entran solo como vídeo —su audio es la referencia y la Captura 1,
  * que acá ya están en A1 y A2—; colocadas con audio, la precortada sonaría doble.
@@ -606,11 +656,13 @@ function armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bin) {
     let cortes = 0;
     for (const corte of clase.cortes) {
         for (const f of plan.fuentes) {
+            const suya = corte.fuentes.includes(f.clave);
+            if (!suya && !f.siempre) continue;
             taller.colocarCorte({
                 pista: pistaDe.get(f.clave), medio: fuentes.get(f.clave).comoFuente,
                 desdeSeg: corte.desdeSeg, hastaSeg: corte.hastaSeg, entradaSeg: corte.entradaSeg,
                 etiqueta: f.ids.length > 1 ? ETIQUETA_DE_GRUPO : ETIQUETA_DE_CAPTURA,
-                sonando: corte.fuentes.includes(f.clave)
+                sonando: suya
             });
             cortes++;
         }

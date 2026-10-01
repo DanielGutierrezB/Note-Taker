@@ -55,15 +55,24 @@ function wav(dir, nombre) {
  */
 function capturasDeLasPistas(p, secuencia) {
     const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
-    const grupo = p.refsDe(secuencia).find(k => p.clase(k) === 'VideoTrackGroup');
-    const pistas = [...p.contenido(grupo).matchAll(/<Track Index="\d+" Object(U?)Ref="([^"]+)"/g)]
-        .map(m => prproj.clave(m[1] === 'U' ? 'UID' : 'ID', m[2]));
-    return pistas.map(pista => {
+    return pistasDeVideo(p, secuencia).map(pista => {
         const fuente = p.cierre([pista], { claseFrontera: ['Sequence'] })
             .find(k => p.clase(k) === 'VideoSequenceSource');
         const dentro = fuente && p.refsDe(fuente).find(k => p.clase(k) === 'Sequence');
         return dentro ? nombre(dentro) : null;
     });
+}
+
+/** Cuántos clips quedaron en cada pista de vídeo, de V1 para arriba. */
+function clipsDeLasPistas(p, secuencia) {
+    return pistasDeVideo(p, secuencia).map(pista => p.cierre([pista], { claseFrontera: ['Sequence'] })
+        .filter(k => p.clase(k) === 'VideoClipTrackItem').length);
+}
+
+function pistasDeVideo(p, secuencia) {
+    const grupo = p.refsDe(secuencia).find(k => p.clase(k) === 'VideoTrackGroup');
+    return [...p.contenido(grupo).matchAll(/<Track Index="\d+" Object(U?)Ref="([^"]+)"/g)]
+        .map(m => prproj.clave(m[1] === 'U' ? 'UID' : 'ID', m[2]));
 }
 
 function toma(id, desdeSeg, hastaSeg, vista, cero, extra) {
@@ -103,7 +112,9 @@ module.exports = async function (t) {
     t.test('por defecto: una captura y todas las vistas en ella', () => {
         const c = carpetaPrproj.normalizar(null, []);
         t.eq(c.capturas, 1);
-        for (const v of vivo.VISTAS) t.deep(c.vistas[v.nombre], { capturas: [1], unidas: false }, v.nombre);
+        for (const v of vivo.VISTAS) {
+            t.deep(c.vistas[v.nombre], { capturas: [1], unidas: false, siempre: [1] }, v.nombre);
+        }
     });
 
     t.test('una vista que nombra una captura que ya no está vuelve a la 1', () => {
@@ -121,7 +132,7 @@ module.exports = async function (t) {
         // Es la forma de las primeras versiones, y lo que hay escrito en las
         // carpetas de entonces: ahí dos capturas eran siempre una anidación.
         const c = carpetaPrproj.normalizar({ capturas: 2, vistas: { X2: [1, 2] } });
-        t.deep(c.vistas.X2, { capturas: [1, 2], unidas: true });
+        t.deep(c.vistas.X2, { capturas: [1, 2], unidas: true, siempre: [1, 2] });
     });
 
     t.test('con una sola captura no hay nada que anidar', () => {
@@ -131,7 +142,25 @@ module.exports = async function (t) {
 
     t.test('sueltas se guarda como sueltas', () => {
         const c = carpetaPrproj.normalizar({ capturas: 2, vistas: { R: { capturas: [1, 2], unidas: false } } });
-        t.deep(c.vistas.R, { capturas: [1, 2], unidas: false });
+        t.deep(c.vistas.R, { capturas: [1, 2], unidas: false, siempre: [1, 2] });
+    });
+
+    t.test('una captura puede entrar solo en las tomas de su vista', () => {
+        const c = carpetaPrproj.normalizar({
+            capturas: 2, vistas: { R: { capturas: [1, 2], unidas: false, siempre: [2] } }
+        });
+        t.deep(c.vistas.R.siempre, [2], 'la 2 queda puesta en todas y la 1 solo en las de R');
+    });
+
+    t.test('una anidación es un clip en una pista, así que ahí es todo o nada', () => {
+        const una = carpetaPrproj.normalizar({
+            capturas: 2, vistas: { R: { capturas: [1, 2], unidas: true, siempre: [2] } }
+        });
+        t.deep(una.vistas.R.siempre, [1, 2], 'pedir una captura del grupo pone el grupo entero');
+        const ninguna = carpetaPrproj.normalizar({
+            capturas: 2, vistas: { R: { capturas: [1, 2], unidas: true, siempre: [] } }
+        });
+        t.deep(ninguna.vistas.R.siempre, [], 'y sin ninguna, la anidación entra solo en sus tomas');
     });
 
     t.test('las vistas usadas salen de las tomas que van al XML', () => {
@@ -147,12 +176,12 @@ module.exports = async function (t) {
     t.test('se guarda en la carpeta y se vuelve a leer igual', () => {
         const dir = carpeta();
         carpetaPrproj.guardarConfig(dir, {
-            capturas: 2, vistas: { PV: { capturas: [1] }, X2: { capturas: [2, 1], unidas: false } }
+            capturas: 2, vistas: { PV: { capturas: [1] }, X2: { capturas: [2, 1], unidas: false, siempre: [2] } }
         });
         t.ok(fs.existsSync(path.join(workspace.datosDir(dir), 'prproj.json')));
         const leida = carpetaPrproj.leerConfig(dir, null);
         t.eq(leida.config.capturas, 2);
-        t.deep(leida.config.vistas.X2, { capturas: [2, 1], unidas: false });
+        t.deep(leida.config.vistas.X2, { capturas: [2, 1], unidas: false, siempre: [2] });
         t.ok(leida.guardada);
     });
 
@@ -298,7 +327,7 @@ module.exports = async function (t) {
         const config = carpetaPrproj.normalizar({ capturas: 2, vistas: { PV: [1], R: [2], X2: [2, 1] } });
         const plan = carpetaPrproj.planear([s], config);
         t.deep(plan.fuentes.map(f => f.clave), ['1', '2', '2+1']);
-        t.deep(plan.grupos.map(g => g.nombre), ['Captura 2 sobre Captura 1']);
+        t.deep(plan.grupos.map(g => g.nombre), ['Captura 1 sobre Captura 2'], 'las claves van de abajo hacia arriba');
         t.deep(plan.clases[0].cortes[0].fuentes, ['2+1']);
     });
 
@@ -321,8 +350,9 @@ module.exports = async function (t) {
             capturas: 3, vistas: { R: { capturas: [1, 3, 2], unidas: false } }
         });
         const plan = carpetaPrproj.planear([s], config);
-        // `fuentes` va de abajo hacia arriba, que es como se reparten las pistas.
-        t.deep(plan.fuentes.map(f => f.clave), ['2', '3', '1']);
+        // Las dos listas van de abajo hacia arriba, que es como se reparten las
+        // pistas: la vista pide 1, después 3 y la 2 encima de todo.
+        t.deep(plan.fuentes.map(f => f.clave), ['1', '3', '2']);
         t.deep(plan.avisos, []);
     });
 
@@ -334,10 +364,38 @@ module.exports = async function (t) {
             vistas: { R: { capturas: [1, 2], unidas: false }, X2: { capturas: [2, 1], unidas: false } }
         });
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.fuentes.map(f => f.clave), ['2', '1'], 'la 1 encima, que es lo que pidió R');
+        t.deep(plan.fuentes.map(f => f.clave), ['1', '2'], 'la 2 encima, que es lo que pidió R');
         t.eq(plan.avisos.length, 1);
         t.ok(/X2|Doble/.test(plan.avisos[0]), plan.avisos[0]);
         t.ok(/anid/.test(plan.avisos[0]), 'y dice cómo arreglarlo');
+    });
+
+    t.test('cada fuente sabe si se queda puesta en todas las tomas', () => {
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'R', T0), toma(2, 30, 40, 'PV', T0)] });
+        const config = carpetaPrproj.normalizar({
+            capturas: 2,
+            vistas: { PV: { capturas: [1], siempre: [1] }, R: { capturas: [2], siempre: [] } }
+        });
+        const plan = carpetaPrproj.planear([s], config);
+        t.deep(plan.fuentes.map(f => [f.clave, f.siempre]), [['1', true], ['2', false]]);
+        t.deep(plan.avisos, []);
+    });
+
+    t.test('dos vistas que comparten una fuente y no piden lo mismo: queda puesta y se dice', () => {
+        // La Captura 2 sola es la MISMA pista para las dos vistas: no hay forma
+        // de que esté en todas las tomas para una y solo en las suyas para la otra.
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'S', T0), toma(2, 30, 40, 'MG', T0)] });
+        const config = carpetaPrproj.normalizar({
+            capturas: 2,
+            vistas: { S: { capturas: [2], siempre: [2] }, MG: { capturas: [2], siempre: [] } }
+        });
+        const plan = carpetaPrproj.planear([s], config);
+        t.deep(plan.fuentes.map(f => [f.clave, f.siempre]), [['2', true]]);
+        t.eq(plan.avisos.length, 1);
+        t.ok(/MG|Mano/.test(plan.avisos[0]), plan.avisos[0]);
+        t.ok(/una sola pista/.test(plan.avisos[0]), 'y dice por qué');
     });
 
     t.test('la misma pareja al revés es otro grupo, con otra anidación', () => {
@@ -348,7 +406,7 @@ module.exports = async function (t) {
         const config = carpetaPrproj.normalizar({ capturas: 2, vistas: { R: [1, 2], X2: [2, 1] } });
         const plan = carpetaPrproj.planear([s], config);
         t.deep(plan.grupos.map(g => g.clave), ['1+2', '2+1'], 'dos anidaciones, una por apilado');
-        t.deep(plan.grupos.map(g => g.nombre), ['Captura 1 sobre Captura 2', 'Captura 2 sobre Captura 1']);
+        t.deep(plan.grupos.map(g => g.nombre), ['Captura 2 sobre Captura 1', 'Captura 1 sobre Captura 2']);
     });
 
     t.test('solo entran a la precortada las fuentes que alguna toma usa', () => {
@@ -454,15 +512,40 @@ module.exports = async function (t) {
         t.ok(revision.ok, `sin referencias colgando, índices salteados ni GUID repetidos: ${JSON.stringify(revision).slice(0, 300)}`);
         const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
         const secuencias = p.porClase('Sequence').map(nombre);
-        for (const s of ['Captura 1', 'Captura 2', 'Captura 2 sobre Captura 1']) t.ok(secuencias.includes(s), s);
+        for (const s of ['Captura 1', 'Captura 2', 'Captura 1 sobre Captura 2']) t.ok(secuencias.includes(s), s);
         t.eq(secuencias.length, 5, 'dos capturas, un grupo y dos precortadas');
         t.deep(p.porClase('BinProjectItem').map(nombre).sort(),
             [carpetaPrproj.BIN_CAPTURAS, carpetaPrproj.BIN_PRECORTADAS, carpetaPrproj.BIN_AUDIO].sort());
 
-        // El apilado del menú, leído del archivo: la primera de la lista tiene
-        // que haber quedado en el V más alto, que es la que tapa.
-        const grupo = p.porClase('Sequence').find(k => nombre(k) === 'Captura 2 sobre Captura 1');
-        t.deep(capturasDeLasPistas(p, grupo), ['Captura 1', 'Captura 2'], 'de V1 para arriba');
+        // El apilado del menú, leído del archivo: la X2 se pidió `[2, 1]`, o sea
+        // la 2 abajo y la 1 encima, y así tienen que haber quedado las pistas.
+        const grupo = p.porClase('Sequence').find(k => nombre(k) === 'Captura 1 sobre Captura 2');
+        t.deep(capturasDeLasPistas(p, grupo), ['Captura 2', 'Captura 1'], 'de V1 para arriba');
+    });
+
+    t.test('una captura puesta solo en sus tomas no deja clips en las demás', async () => {
+        const dir = carpetaConClases(30);
+        const destino = path.join(dir, 'Proyecto', 'solo.prproj');
+        const r = await carpetaPrproj.generar({
+            carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
+            config: {
+                capturas: 2,
+                vistas: {
+                    PV: { capturas: [1], siempre: [] },
+                    R: { capturas: [2], siempre: [2] },
+                    X2: { capturas: [2, 1], siempre: [2, 1] }
+                }
+            }
+        });
+        t.ok(r.ok, r.error || '');
+
+        const p = prproj.Proyecto.leer(destino);
+        t.ok(p.verificar().ok, 'y el archivo queda sano');
+        const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
+        // La primera clase tiene tres tomas, una por vista.
+        const precortada = p.porClase('Sequence').find(k => nombre(k) === `prueba_${T0}`);
+        t.deep(capturasDeLasPistas(p, precortada), ['Captura 1', 'Captura 2', 'Captura 1 sobre Captura 2']);
+        t.deep(clipsDeLasPistas(p, precortada), [1, 3, 3], 'la Captura 1 sola, solo en la toma de PV');
     });
 
     t.test('una carpeta a otro fps que la plantilla se rechaza', async () => {

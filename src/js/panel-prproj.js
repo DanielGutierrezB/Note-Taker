@@ -5,13 +5,20 @@
  * que sea—, y qué capturas componen cada vista.
  *
  * Cada vista es una fila de cajitas. Encendidas las que la componen, y el orden
- * en que están es el apilado: la de más a la izquierda es la que tapa. Se
- * cambia arrastrándolas, o con las flechas si se llegó con el teclado.
+ * en que están es el apilado, **de abajo hacia arriba como las pistas de
+ * Premiere: la de más a la derecha es la que tapa**. Se cambia arrastrándolas,
+ * o con las flechas si se llegó con el teclado.
  *
- * Con dos o más encendidas aparece el botón de anidar, que decide algo que no
- * se ve en la fila pero cambia el proyecto entero: anidadas, las capturas van
- * adentro de una secuencia aparte y el encuadre se acomoda una vez; sueltas,
- * cada una va en su pista de la precortada y se puede mover toma por toma.
+ * Con dos o más encendidas se puede anidar, y eso cambia el proyecto entero:
+ * anidadas, las capturas van adentro de una secuencia aparte y el encuadre se
+ * acomoda una vez; sueltas, cada una va en su pista de la precortada y se puede
+ * mover toma por toma. Se ve como un recuadro que las junta, en vez de como una
+ * palabra: la pregunta es si van en la misma caja o no, y eso se dibuja.
+ *
+ * Y cada fuente —cada captura suelta, o la anidación entera— lleva su botón de
+ * qué hace en las tomas de las OTRAS vistas: quedarse puesta en todas, apagada
+ * donde no le toca, o entrar solo en las de su vista. Va adentro de la cajita
+ * porque es una decisión por captura, no por vista.
  *
  * Lo que se elige se guarda en la carpeta al generar, así que la vez siguiente
  * el menú abre como se dejó. La lógica de qué cuadra y qué no vive en el motor
@@ -65,7 +72,7 @@ export async function abrir(laCarpeta) {
     config = {
         capturas: r.config.capturas,
         vistas: Object.fromEntries(Object.entries(r.config.vistas)
-            .map(([v, suya]) => [v, { capturas: [...suya.capturas], unidas: suya.unidas }]))
+            .map(([v, suya]) => [v, { capturas: [...suya.capturas], unidas: suya.unidas, siempre: [...suya.siempre] }]))
     };
     vistas = r.vistas;
     $('#prproj-dice').textContent = r.clases
@@ -101,23 +108,29 @@ function pintar() {
             <span class="prproj-sigla">${esc(v.nombre)}</span>
             <span class="prproj-titulo">${esc(v.titulo)}${v.usada ? '' : ' <span class="v3">· sin tomas</span>'}</span>
             <span class="prproj-elige">
-              ${suya.capturas.length > 1 ? '<span class="v3 prproj-arriba">encima</span>' : ''}
-              ${suya.capturas.map(id => cajita(v, suya, id, true)).join('')}
-              ${apagadas.length && suya.capturas.length ? '<span class="prproj-corte"></span>' : ''}
+              <span class="prproj-pila ${suya.unidas ? 'es-anidada' : ''}">
+                ${suya.capturas.map(id => cajita(v, suya, id, true)).join('')}
+                ${suya.unidas ? siempre(v, suya, suya.capturas) : ''}
+              </span>
+              ${suya.capturas.length > 1 ? union(v, suya) : ''}
+              ${apagadas.length ? '<span class="prproj-corte"></span>' : ''}
               ${apagadas.map(id => cajita(v, suya, id, false)).join('')}
             </span>
-            ${suya.capturas.length > 1 ? union(v, suya) : ''}
           </div>`;
     }).join('');
 
-    // La explicación sale solo cuando hay algo apilado: con una captura por
+    // Lo del apilado sale solo cuando hay algo apilado: con una captura por
     // vista no hay nada que ordenar ni que anidar, y sería una línea de ruido.
+    // Lo del botoncito está siempre, porque el botoncito está siempre.
     const hayPilas = Object.values(config.vistas).some(v => v.capturas.length > 1);
-    $('#prproj-pilas-dice').textContent = hayPilas
-        ? 'La cajita de más a la izquierda es la que va encima: arrastralas para cambiar el apilado.'
-            + ' Anidadas van las dos adentro de una anidación, con el encuadre puesto una vez para toda la'
-            + ' carpeta; sueltas, cada una va en su pista de la precortada y se acomoda toma por toma.'
-        : '';
+    $('#prproj-pilas-dice').textContent = (hayPilas
+        ? 'Arrastrá las cajitas: la de la derecha va encima, como las pistas de Premiere.'
+            + ' Dentro del recuadro van juntas en una anidación, con el encuadre puesto una vez para'
+            + ' toda la carpeta; sin recuadro, cada una va en su pista y se acomoda toma por toma. '
+        : '')
+        + 'El botoncito dice qué pasa en las tomas de las otras vistas: con el clip largo la captura'
+        + ' queda puesta en todas, apagada donde no toca, y cambiar de plano es encenderla; con el'
+        + ' clip corto entra solo en las tomas de su vista y en las demás su pista queda vacía.';
 }
 
 /**
@@ -129,24 +142,62 @@ function pintar() {
  */
 function cajita(vista, suya, id, encendida) {
     const apilada = encendida && suya.capturas.length > 1;
-    const comoSeMueve = apilada ? ' · arrastrala o movela con ← → para cambiar el apilado' : '';
-    return `<button class="btn btn-vista ${encendida ? 'es-elegida' : ''}" type="button"
-                ${apilada ? 'draggable="true" data-arrastra="si"' : ''}
+    const donde = apilada
+        ? ` · va ${id === suya.capturas[suya.capturas.length - 1] ? 'encima' : 'debajo'}, arrastrala para cambiarlo`
+        : '';
+    const chip = `<button class="btn btn-vista ${encendida ? 'es-elegida' : ''}" type="button"
+                ${apilada ? 'draggable="true"' : ''}
                 data-hace="elegir" data-vista="${esc(vista.nombre)}" data-captura="${id}"
                 aria-pressed="${encendida}"
-                title="${encendida ? 'Sacar' : 'Sumar'} la Captura ${id} ${encendida ? 'de' : 'a'} ${esc(vista.titulo)}${comoSeMueve}"
+                title="${encendida ? 'Sacar' : 'Sumar'} la Captura ${id} ${encendida ? 'de' : 'a'} ${esc(vista.titulo)}${donde}"
                 >${id}</button>`;
+    if (!encendida) return chip;
+    // El número es el asa del arrastre y la cajita entera es el sitio donde se
+    // suelta: así soltar sobre el botoncito de al lado también cuenta.
+    return `<span class="prproj-caja" data-vista="${esc(vista.nombre)}" data-captura="${id}"
+                ${apilada ? 'data-arrastra="si"' : ''}
+                >${chip}${suya.unidas ? '' : siempre(vista, suya, [id])}</span>`;
 }
 
-/** El botón de anidar: una anidación con las dos, o cada una en su pista. */
+/**
+ * Qué hace una fuente en las tomas de las OTRAS vistas.
+ *
+ * Es una decisión de la pista, así que hay un botón por fuente: uno por cada
+ * captura suelta, y uno solo para la anidación entera, que es un clip en una
+ * sola pista y no se puede partir.
+ *
+ * El dibujo es la pista vista de lejos —el clip largo ocupa todas las tomas, el
+ * corto solo las suyas— porque es exactamente lo que el editor va a ver al
+ * abrir la precortada.
+ */
+function siempre(vista, suya, ids) {
+    const puesta = ids.every(id => suya.siempre.includes(id));
+    const quien = ids.length > 1 ? 'La anidación' : `La Captura ${ids[0]}`;
+    const donde = esc(vista.titulo);
+    return `<button class="btn btn-tenue btn-ico prproj-siempre" type="button" data-hace="siempre"
+                data-vista="${esc(vista.nombre)}" ${ids.length > 1 ? '' : `data-captura="${ids[0]}"`}
+                aria-pressed="${puesta}"
+                title="${puesta
+        ? `${quien} queda puesta en todas las tomas de la clase, encendida solo en las de ${donde}: cambiar de plano es encenderla ahí mismo. Clic para que entre solo en las tomas de ${donde}.`
+        : `${quien} entra solo en las tomas de ${donde}; en las demás su pista queda vacía. Clic para dejarla puesta en todas, apagada donde no toca.`}"
+                >${icono(puesta ? 'pistaEntera' : 'pistaPorToma')}</button>`;
+}
+
+/**
+ * El botón de anidar, que es el que dibuja o borra el recuadro.
+ *
+ * Solo el icono: lo que está pasando ya se ve en el recuadro, y una palabra al
+ * lado («Anidadas», «Sueltas») obliga a adivinar si nombra el estado de ahora o
+ * lo que va a pasar al apretarla.
+ */
 function union(vista, suya) {
-    const nombres = suya.capturas.map(id => `Captura ${id}`).join(' sobre ');
-    return `<button class="btn btn-tenue prproj-union" type="button" data-hace="unir"
-                data-vista="${esc(vista.nombre)}"
+    const nombres = suya.capturas.slice().reverse().map(id => `Captura ${id}`).join(' sobre ');
+    return `<button class="btn btn-tenue btn-ico prproj-une" type="button" data-hace="unir"
+                data-vista="${esc(vista.nombre)}" aria-pressed="${suya.unidas}"
                 title="${suya.unidas
-        ? `${nombres}, adentro de una anidación: el encuadre se acomoda una vez y vale para toda la carpeta. Clic para dejarlas sueltas.`
+        ? `${nombres}, juntas en una anidación: el encuadre se acomoda una vez y vale para toda la carpeta. Clic para separarlas.`
         : `${nombres}, cada una en su pista de la precortada: el encuadre se acomoda toma por toma. Clic para anidarlas.`}"
-                >${icono(suya.unidas ? 'enlace' : 'sinEnlace')}${suya.unidas ? 'Anidadas' : 'Sueltas'}</button>`;
+                >${icono(suya.unidas ? 'enlace' : 'sinEnlace')}</button>`;
 }
 
 function alClic(e) {
@@ -164,7 +215,7 @@ function alClic(e) {
             // les queda nada vuelven a la Captura 1, que siempre está.
             for (const [v, suya] of Object.entries(config.vistas)) {
                 const quedan = suya.capturas.filter(id => id !== fuera);
-                poner(v, quedan.length ? quedan : [1], suya.unidas);
+                poner(v, quedan.length ? quedan : [1], suya.unidas, quedan.length ? suya.siempre : [1]);
             }
             pintar();
             break;
@@ -178,17 +229,30 @@ function alClic(e) {
                 avisar('Cada vista necesita por lo menos una captura.');
                 return;
             }
-            // La que se suma entra debajo de las que ya estaban, que es lo menos
-            // sorprendente: lo que ya se veía se sigue viendo.
+            // La que se suma entra por la derecha, o sea encima: es donde está
+            // la cajita que se acaba de apretar, y de ahí se arrastra. Entra
+            // puesta en todas las tomas, que es lo que el editor espera.
             poner(v, suya.capturas.includes(id)
                 ? suya.capturas.filter(x => x !== id)
-                : [...suya.capturas, id], suya.unidas);
+                : [...suya.capturas, id], suya.unidas, [...suya.siempre, id]);
             pintar();
             break;
         }
         case 'unir': {
-            const v = boton.dataset.vista;
-            poner(v, config.vistas[v].capturas, !config.vistas[v].unidas);
+            const suya = config.vistas[boton.dataset.vista];
+            poner(boton.dataset.vista, suya.capturas, !suya.unidas, suya.siempre);
+            pintar();
+            break;
+        }
+        case 'siempre': {
+            const suya = config.vistas[boton.dataset.vista];
+            // Sin número es el botón de la anidación, que manda sobre todas las
+            // capturas del grupo: es un clip en una sola pista.
+            const cuales = boton.dataset.captura ? [Number(boton.dataset.captura)] : suya.capturas;
+            const puesta = cuales.every(id => suya.siempre.includes(id));
+            poner(boton.dataset.vista, suya.capturas, suya.unidas, puesta
+                ? suya.siempre.filter(id => !cuales.includes(id))
+                : [...suya.siempre, ...cuales]);
             pintar();
             break;
         }
@@ -204,9 +268,19 @@ function alClic(e) {
  * Con una sola captura no hay nada que anidar, así que `unidas` se apaga: dejar
  * un `true` dormido ahí haría que sumar una segunda captura anidara sin que
  * nadie lo pidiera.
+ *
+ * Y `siempre` se queda con las capturas que la vista tiene hoy, redondeado a
+ * todo o nada si van anidadas: el motor lo redondea igual (`vistaSaneada`), y lo
+ * que se dibuja tiene que ser lo que se va a generar.
  */
-function poner(vista, capturas, unidas) {
-    config.vistas[vista] = { capturas, unidas: capturas.length > 1 && unidas };
+function poner(vista, capturas, unidas, siempre) {
+    const anidada = capturas.length > 1 && unidas;
+    const puestas = capturas.filter(id => siempre.includes(id));
+    config.vistas[vista] = {
+        capturas,
+        unidas: anidada,
+        siempre: anidada ? (puestas.length ? capturas.slice() : []) : puestas
+    };
 }
 
 // ─── Mover las cajitas ───────────────────────────────────────────────
@@ -271,7 +345,7 @@ function alTecla(e) {
     if (vecina == null) return;
     e.preventDefault();
     mover(vista, id, vecina, e.key === 'ArrowRight');
-    const vuelve = document.querySelector(`[data-arrastra][data-vista="${vista}"][data-captura="${id}"]`);
+    const vuelve = document.querySelector(`[data-hace="elegir"][data-vista="${vista}"][data-captura="${id}"]`);
     if (vuelve) vuelve.focus();
 }
 
@@ -282,7 +356,7 @@ function mover(vista, id, vecina, despues) {
     const donde = capturas.indexOf(vecina);
     if (donde === -1) return;
     capturas.splice(donde + (despues ? 1 : 0), 0, id);
-    poner(vista, capturas, suya.unidas);
+    poner(vista, capturas, suya.unidas, suya.siempre);
     pintar();
 }
 

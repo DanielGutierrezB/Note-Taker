@@ -1731,9 +1731,24 @@ kbd {
   justify-content: center;
 }
 
-/* La pila de una vista: de izquierda a derecha, de arriba a abajo. */
-.prproj-arriba {
-  margin-right: 2px;
+/* La pila de una vista: de izquierda a derecha, de abajo hacia arriba.
+
+   El recuadro no es decoración: es lo único que dice si las capturas van juntas
+   adentro de una anidación, así que lleva el borde de los controles (3:1, SC
+   1.4.11) y no la hairline. El hueco de 3 px se reserva siempre, encendido o
+   no, para que al anidar no se muevan las cajitas de al lado. */
+.prproj-pila {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.prproj-pila.es-anidada {
+  border-color: var(--border-field);
+  background: var(--layer-hover);
 }
 
 /* Dónde termina la pila y empiezan las capturas que esta vista no usa. */
@@ -1744,25 +1759,32 @@ kbd {
   background: var(--hairline);
 }
 
+/* El número y su botoncito son una sola cajita: se arrastra del número, pero
+   soltar encima del botoncito cuenta igual, porque visualmente son lo mismo. */
+.prproj-caja {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
 .prproj-elige .btn-vista[draggable="true"] {
   cursor: grab;
 }
 
-.prproj-elige .btn-vista.se-arrastra {
+.prproj-elige .se-arrastra {
   opacity: 0.4;
   cursor: grabbing;
 }
 
-.prproj-union {
-  gap: var(--sp-1);
-  padding: 0 var(--sp-2);
-  font-size: 12px;
-  white-space: nowrap;
+.prproj-une svg,
+.prproj-siempre svg {
+  width: 15px;
+  height: 15px;
 }
 
-.prproj-union svg {
-  width: 14px;
-  height: 14px;
+.prproj-une[aria-pressed="true"],
+.prproj-siempre[aria-pressed="true"] {
+  color: var(--text-primary);
 }
 
 .prproj-hecho {

@@ -89,7 +89,9 @@ const DEFAULTS = {
  *
  * Una vista puede estar guardada como lista pelada (la forma de las primeras
  * versiones, donde dos capturas siempre eran una anidación) o como objeto con
- * `capturas` y `unidas`. Las dos se dejan pasar con la forma nueva.
+ * `capturas`, `unidas` y `siempre`. Las dos se dejan pasar con la forma nueva;
+ * sin `siempre` escrito no se inventa la lista, y entonces `normalizar` pone la
+ * de siempre: todas puestas en todas las tomas.
  */
 function saneada(prproj) {
     if (!prproj || typeof prproj !== 'object') return null;
@@ -98,10 +100,11 @@ function saneada(prproj) {
     for (const [vista, guardada] of Object.entries(prproj.vistas || {})) {
         const bruta = Array.isArray(guardada) ? { capturas: guardada } : guardada;
         if (!/^[A-Z0-9]{1,4}$/.test(vista) || !bruta || !Array.isArray(bruta.capturas)) continue;
-        vistas[vista] = {
-            capturas: bruta.capturas.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= capturas),
-            unidas: bruta.unidas !== false
-        };
+        const suyas = bruta.capturas.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= capturas);
+        vistas[vista] = { capturas: suyas, unidas: bruta.unidas !== false };
+        if (Array.isArray(bruta.siempre)) {
+            vistas[vista].siempre = suyas.filter(id => bruta.siempre.includes(id));
+        }
     }
     return { capturas, vistas };
 }
