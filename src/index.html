@@ -16,7 +16,8 @@
 
   <header class="topbar">
     <span class="marca" id="marca"></span>
-    <button id="btn-volver" class="btn btn-tenue" type="button" hidden>Sesiones</button>
+    <button id="btn-volver" class="btn btn-tenue" type="button" hidden
+            title="Volver a la lista de clases de la carpeta">Sesiones</button>
     <span class="crece"></span>
     <!-- La versión, siempre a la vista: es lo primero que hay que preguntarle a
          alguien que reporta algo raro. Y al lado, cuando hay una nueva, el
@@ -42,8 +43,10 @@
           <div class="tarjeta-cabeza">
             <span id="carpeta-ruta" class="fila-nombre">Todavía no elegiste ninguna</span>
             <span class="crece"></span>
-            <button id="btn-abrir-carpeta" class="btn" type="button" hidden>Mostrar en Finder</button>
-            <button id="btn-elegir-carpeta" class="btn" type="button">Elegir carpeta…</button>
+            <button id="btn-abrir-carpeta" class="btn" type="button" hidden
+                    title="Abrir esta carpeta en el Finder">Mostrar en Finder</button>
+            <button id="btn-elegir-carpeta" class="btn" type="button"
+                    title="Elegir en qué carpeta del disco van el XML, el audio y los datos de este curso">Elegir carpeta…</button>
           </div>
         </div>
         <p class="v3" style="margin-top:8px">
@@ -60,7 +63,8 @@
           <span class="crece"></span>
           <button id="btn-prproj" class="btn" type="button"
                   title="Un proyecto de Premiere con todas las clases de esta carpeta: las capturas para sincronizar y cada clase precortada">Generar .prproj</button>
-          <button id="btn-nueva" class="btn btn-primario" type="button">Nueva sesión</button>
+          <button id="btn-nueva" class="btn btn-primario" type="button"
+                  title="Empezar una clase nueva en esta carpeta: primero las comprobaciones y de ahí a grabar">Nueva sesión</button>
         </div>
         <div id="lista-sesiones" class="lista"></div>
       </div>
@@ -135,7 +139,8 @@
                 title="Anotar una claqueta: en la palmada que se oyó, si la pastilla la está señalando, y si no acá. Tecla: K"></button>
         <button id="btn-deshacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
         <button id="btn-rehacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
-        <button id="btn-terminar" class="btn" type="button">Terminar</button>
+        <button id="btn-terminar" class="btn" type="button"
+                title="Cerrar la clase: deja de grabar, termina de escribir el XML y lleva a la pantalla de cierre">Terminar</button>
       </div>
 
       <!-- Los atajos, debajo del timecode y no en un pie: es donde se mira
@@ -219,7 +224,8 @@
     <div class="panel-cabeza">
       <span class="v1">Ajustes</span>
       <span class="crece"></span>
-      <button class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-ajustes"></button>
+      <button class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-ajustes"
+              title="Cerrar Ajustes. Cada cosa se guarda al cambiarla, así que no hay nada que confirmar."></button>
     </div>
     <div class="panel-cuerpo">
       <label class="campo">
@@ -266,14 +272,17 @@
       <div class="campo">
         <span class="rotulo">Actualizaciones</span>
         <div class="campo-fila">
-          <button id="btn-buscar-update" class="btn" type="button">Buscar una versión nueva</button>
+          <button id="btn-buscar-update" class="btn" type="button"
+                  title="Preguntar ahora mismo si hay una versión publicada más nueva que esta">Buscar una versión nueva</button>
           <span id="update-dice" class="v3"></span>
         </div>
       </div>
     </div>
     <div class="panel-pie">
-      <button id="btn-log" class="btn btn-tenue" type="button">Guardar el registro</button>
-      <button class="btn" type="button" data-cerrar="telon-ajustes">Cerrar</button>
+      <button id="btn-log" class="btn btn-tenue" type="button"
+              title="Guardar en un archivo todo lo que la app anotó mientras corría, para mandarlo cuando algo salió raro">Guardar el registro</button>
+      <button class="btn" type="button" data-cerrar="telon-ajustes"
+              title="Cerrar Ajustes. Cada cosa se guarda al cambiarla, así que no hay nada que confirmar.">Cerrar</button>
     </div>
   </div>
 </div>
@@ -287,15 +296,18 @@
     <div class="panel-cabeza">
       <span class="v1" id="deps-titulo">Antes de empezar</span>
       <span class="crece"></span>
-      <button class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-dependencias"></button>
+      <button class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-dependencias"
+              title="Cerrar sin instalar nada. Lo que falta se puede instalar después, desde Ajustes."></button>
     </div>
     <div class="panel-cuerpo">
       <p class="v2" id="deps-dice"></p>
       <div id="deps-inicio"></div>
     </div>
     <div class="panel-pie">
-      <button class="btn btn-tenue" type="button" data-cerrar="telon-dependencias">Ahora no</button>
-      <button id="btn-deps-todo" class="btn btn-primario" type="button">Instalar lo que falta</button>
+      <button class="btn btn-tenue" type="button" data-cerrar="telon-dependencias"
+              title="Cerrar sin instalar nada. Lo que falta se puede instalar después, desde Ajustes.">Ahora no</button>
+      <button id="btn-deps-todo" class="btn btn-primario" type="button"
+              title="Bajar e instalar todo lo que falta, uno detrás del otro. Los modelos se bajan una sola vez.">Instalar lo que falta</button>
     </div>
   </div>
 </div>
@@ -309,7 +321,7 @@
       <span class="v1">Proyecto de Premiere</span>
       <span class="crece"></span>
       <button id="btn-prproj-cerrar" class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-prproj"
-              title="Cerrar"></button>
+              title="Cerrar sin generar nada. Lo elegido acá queda guardado en la carpeta."></button>
     </div>
     <div class="panel-cuerpo">
       <p class="v2" id="prproj-dice"></p>
@@ -328,8 +340,10 @@
       <div id="prproj-resultado"></div>
     </div>
     <div class="panel-pie">
-      <button class="btn btn-tenue" type="button" data-cerrar="telon-prproj">Cerrar</button>
-      <button id="btn-prproj-generar" class="btn btn-primario" type="button">Generar</button>
+      <button class="btn btn-tenue" type="button" data-cerrar="telon-prproj"
+              title="Cerrar sin generar nada. Lo elegido acá queda guardado en la carpeta.">Cerrar</button>
+      <button id="btn-prproj-generar" class="btn btn-primario" type="button"
+              title="Escribir el proyecto en Proyecto/, adentro de la carpeta del curso. Si ya hay uno, el nuevo queda al lado sin pisarlo.">Generar</button>
     </div>
   </div>
 </div>
@@ -343,11 +357,13 @@
     <div class="panel-cabeza">
       <span class="v1">Diagnóstico</span>
       <span class="crece"></span>
-      <button class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-diagnostico"></button>
+      <button class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-diagnostico"
+              title="Cerrar el Diagnóstico"></button>
     </div>
     <div class="panel-cuerpo" id="diagnostico-cuerpo"></div>
     <div class="panel-pie">
-      <button class="btn" type="button" data-cerrar="telon-diagnostico">Cerrar</button>
+      <button class="btn" type="button" data-cerrar="telon-diagnostico"
+              title="Cerrar el Diagnóstico">Cerrar</button>
     </div>
   </div>
 </div>
@@ -361,7 +377,7 @@
       <span class="v1" id="foto-titulo">La pantalla al poner el OUT</span>
       <span class="crece"></span>
       <button id="btn-foto-cerrar" class="btn btn-tenue btn-ico" type="button"
-              data-cerrar="telon-foto" title="Cerrar"></button>
+              data-cerrar="telon-foto" title="Cerrar la foto y volver a las tomas"></button>
     </div>
     <div class="panel-cuerpo">
       <div id="foto-marco" class="foto-marco">
@@ -370,11 +386,15 @@
       <span class="v3" id="foto-dice"></span>
     </div>
     <div class="panel-pie">
-      <button id="btn-foto-copiar" class="btn btn-primario" type="button">Copiar la imagen</button>
-      <button id="btn-foto-zoom" class="btn btn-tenue" type="button" aria-pressed="false">Ver al 100 %</button>
-      <button id="btn-foto-finder" class="btn btn-tenue" type="button">Mostrar en Finder</button>
+      <button id="btn-foto-copiar" class="btn btn-primario" type="button"
+              title="Copiar la foto al portapapeles, para pegarla en un chat o un correo">Copiar la imagen</button>
+      <button id="btn-foto-zoom" class="btn btn-tenue" type="button" aria-pressed="false"
+              title="Verla al tamaño que la guardó la cámara, para leer la letra chica">Ver al 100 %</button>
+      <button id="btn-foto-finder" class="btn btn-tenue" type="button"
+              title="Abrir el Finder con el archivo de esta foto seleccionado">Mostrar en Finder</button>
       <span class="crece"></span>
-      <button class="btn btn-tenue" type="button" data-cerrar="telon-foto">Cerrar</button>
+      <button class="btn btn-tenue" type="button" data-cerrar="telon-foto"
+              title="Cerrar la foto y volver a las tomas">Cerrar</button>
     </div>
   </div>
 </div>

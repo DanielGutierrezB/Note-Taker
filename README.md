@@ -960,6 +960,11 @@ se construyó midiendo y no eligiendo. Lo que se mantiene:
   corriendo. El hover es una capa, no un cambio de color.
 - **Retícula de 4 px, filas de 32**, que es el `sm` de Carbon y la fila más
   chica que puede contener un control de 24×24 (WCAG 2.5.8).
+- **Todo lo que se aprieta dice al pasar por encima qué va a hacer**, en el
+  `title` del sistema, y lo dice en vez de repetir su etiqueta: lo que hace
+  falta saber no es cómo se llama el botón —que ya se lee— sino qué pasa al
+  apretarlo, y si hay tecla, cuál. `medir-botones.js` falla si aparece uno sin
+  hover o con un hover que repite su rótulo.
 
 Lo que cambia respecto de allá es que un panel mide 400 px y esta ventana 1180.
 Eso habilita **un elemento grande y no más**: el timecode, que es el que hay que
@@ -979,7 +984,7 @@ exactamente la diferencia con el timecode de al lado.
 ```bash
 node tools/contrastes.js       # la tabla WCAG de los tokens
 node tools/auditar.js          # contraste real sobre el DOM, filas, cromo, blancos de clic
-node tools/medir-botones.js    # texto fuera de su caja, solapes, desbordes, paneles que no caben
+node tools/medir-botones.js    # texto fuera de su caja, solapes, desbordes, paneles que no caben, botones sin hover
 node tools/capturar.js         # las capturas de docs/capturas/
 node tools/maqueta/abrir.js    # la interfaz de verdad, con datos falsos
 ```
@@ -996,6 +1001,7 @@ lo que no los cumple sale con código 1. Hoy, sobre las seis vistas a 900, 1180 
 | controles por debajo de 24×24 | **0** de 558 |
 | texto pintado fuera de su caja | **0** |
 | solapes | **0** |
+| botones sin un hover que diga qué hacen | **0** |
 | fila de toma plegada | **32 px** |
 | cromo fijo en la pantalla más cargada | **17,2 %** |
 

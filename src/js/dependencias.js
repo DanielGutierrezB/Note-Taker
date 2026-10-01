@@ -71,12 +71,14 @@ function fila(d) {
     let accion = '';
     if (enCurso) {
         accion = d.accion && d.accion.tipo === 'descargar'
-            ? `<button class="btn btn-tenue" type="button" data-cancelar="${esc(d.clave)}">Cancelar</button>`
+            ? `<button class="btn btn-tenue" type="button" data-cancelar="${esc(d.clave)}"
+                   title="Dejar de bajar ${esc(d.nombre)}. Lo bajado hasta acá se borra.">Cancelar</button>`
             : '';
     } else if (!d.esta && d.accion && d.accion.etiqueta) {
         // Secundario: la acción principal del aviso es «Instalar lo que falta».
         accion = `<button class="btn" type="button"
-                    data-instalar="${esc(d.clave)}">${esc(d.accion.etiqueta)}</button>`;
+                    data-instalar="${esc(d.clave)}"
+                    title="Bajar ${esc(d.nombre)} y dejarlo donde la app lo busca. Se baja una sola vez.">${esc(d.accion.etiqueta)}</button>`;
     }
 
     const progreso = enCurso ? `

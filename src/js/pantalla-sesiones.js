@@ -101,7 +101,9 @@ function fila(s) {
       <span class="pastilla" data-estado="${est.clave}">${esc(est.palabra)}</span>
       <span class="crece"></span>
       ${puedeReanudar
-        ? `<button class="btn" type="button" data-hace="reanudar">Reanudar</button>` : ''}
+        ? `<button class="btn" type="button" data-hace="reanudar"
+                   title="Seguir grabando esta clase, que quedó abierta: el audio y las tomas nuevas se suman a las que ya tiene">
+             Reanudar</button>` : ''}
       <button class="btn" type="button" data-hace="notas"
               title="Abrir las notas de esta clase en la misma vista de cuando se tomaron.
 No se graba nada: lo que ajustes se escribe en su XML en el acto.">Notas</button>

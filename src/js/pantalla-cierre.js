@@ -73,12 +73,14 @@ function pintar() {
           </p>
 
           <div class="campo-fila" style="margin-top:16px">
-            <button class="btn btn-primario" type="button" data-hace="finder">
+            <button class="btn btn-primario" type="button" data-hace="finder"
+                    title="Abrir el Finder con el XML de esta clase seleccionado, listo para arrastrarlo a Premiere">
               ${icono('finder')} Mostrar el XML en el Finder</button>
             <button class="btn" type="button" data-hace="rehacer-xml"
                     title="Reescribe el XML con el formato de esta versión. No relee el audio ni toca las notas: es para cuando una versión nueva arregla algo del archivo.">
               ${icono('xml')} Rehacer el XML</button>
-            <button class="btn" type="button" data-hace="sesiones">Volver a Sesiones</button>
+            <button class="btn" type="button" data-hace="sesiones"
+                    title="Volver a la lista de clases de la carpeta">Volver a Sesiones</button>
           </div>
         </div>
       </div>`;

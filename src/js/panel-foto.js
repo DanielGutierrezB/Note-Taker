@@ -46,6 +46,9 @@ function cien(puesto) {
     $('#foto-marco').classList.toggle('es-cien', puesto);
     const btn = $('#btn-foto-zoom');
     btn.textContent = puesto ? 'Que entre entera' : 'Ver al 100 %';
+    btn.title = puesto
+        ? 'Que vuelva a entrar entera en la ventana'
+        : 'Verla al tamaño que la guardó la cámara, para leer la letra chica';
     btn.setAttribute('aria-pressed', String(puesto));
     if (!puesta) return;
     $('#foto-dice').textContent = `${puesta.ancho}×${puesta.alto} · clic en la imagen para `

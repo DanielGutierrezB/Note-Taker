@@ -835,7 +835,7 @@ function filaToma(t, fps) {
       <div class="fila guarda ${vista.elegida === t.id ? 'es-elegida' : ''}"
            role="button" tabindex="0" aria-expanded="${abierta}"
            data-estado="${est.clave}" data-toma="${t.id}" data-hace="plegar"
-           ${est.porque ? `title="${esc(est.porque)}"` : ''}>
+           title="${esc(dicePlegar(abierta, est))}">
         <span class="chevron">${icono('chevron')}</span>
         <span class="etiqueta-vista">${esc(t.vista)}</span>
         <span class="fila-nombre">Toma ${t.id}</span>
@@ -854,6 +854,21 @@ function filaToma(t, fps) {
 
 function primeras(t) {
     return (t.palabras || []).slice(0, 10).map(w => w.texto).join(' ');
+}
+
+/**
+ * Qué dice el hover de la fila de una toma.
+ *
+ * La fila entera es el botón que la abre, así que lo primero es qué se va a
+ * ver al abrirla. Si la toma además tiene algo que avisar, el aviso va debajo:
+ * la pastilla del final dice la palabra —«sin releer», «leída en chico»— y
+ * acá está el porqué, que es lo que no cabe en la pastilla.
+ */
+function dicePlegar(abierta, est) {
+    const gesto = abierta
+        ? 'Plegar la toma'
+        : 'Abrir la toma: su nota, su texto con el IN y el OUT para mover, y su vista';
+    return est.porque ? `${gesto}\n${est.porque}` : gesto;
 }
 
 /**

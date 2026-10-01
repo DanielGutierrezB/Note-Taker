@@ -119,7 +119,8 @@ function pintar() {
                 ${opciones()}
               </select>
               <div class="nivel" id="prep-nivel"><div class="nivel-barra"></div></div>
-              <button class="btn btn-tenue" type="button" data-hace="releer-entradas">
+              <button class="btn btn-tenue" type="button" data-hace="releer-entradas"
+                      title="Volver a preguntarle al sistema qué entradas hay, por si acabás de conectar el micrófono o de abrir el Zoom">
                 Buscar de nuevo</button>
               ${(audio.clase === 'microfono' || audio.clase === 'bluetooth') && !audio.aceptado
                 ? `<button class="btn" type="button" data-hace="usar-igual"
@@ -133,7 +134,8 @@ function pintar() {
             estado: w,
             dice: 'Es lo que oye el «3, 2, 1», el «Pausa» y la palabra «claqueta», y lo ' +
                 'que le escribe el texto a cada toma cuando cierra.',
-            arreglo: `<button class="btn" type="button" data-hace="diagnostico">
+            arreglo: `<button class="btn" type="button" data-hace="diagnostico"
+                        title="Abrir el Diagnóstico: dice qué modelos encontró la app, dónde los buscó y qué falta bajar">
                 Ver Diagnóstico</button>`
         }),
         check({
@@ -146,7 +148,8 @@ function pintar() {
             dice: carpeta
                 ? `El XML, el audio y los datos van a <code>${esc(carpeta)}/xml/</code>.`
                 : 'Elegí la carpeta del curso en la pantalla anterior.',
-            arreglo: `<button class="btn btn-tenue" type="button" data-hace="volver">
+            arreglo: `<button class="btn btn-tenue" type="button" data-hace="volver"
+                        title="Volver atrás para elegir la carpeta del curso">
                 Volver a Sesiones</button>`
         }),
         check({
@@ -156,7 +159,8 @@ function pintar() {
             dice: `Los marcadores se calculan a ${app.ajustes.fps} cuadros por segundo, ` +
                 'que tiene que ser el de la secuencia donde vas a cortar. El idioma de la ' +
                 `clase está en ${esc(idiomaDicho(app.ajustes.idioma))}.`,
-            arreglo: `<button class="btn btn-tenue" type="button" data-hace="ajustes">
+            arreglo: `<button class="btn btn-tenue" type="button" data-hace="ajustes"
+                        title="Abrir Ajustes para cambiar los cuadros por segundo y el idioma de la clase">
                 Cambiar en Ajustes</button>`
         }),
         reanudar ? avisoReanudar() : ''

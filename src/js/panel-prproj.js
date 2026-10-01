@@ -95,7 +95,9 @@ function pintar() {
             ? `<button class="btn btn-tenue btn-ico" type="button" data-hace="quitar-captura"
                  title="Quitar la Captura ${id}">${icono('cerrar')}</button>` : ''}</span>`).join('')
         + (config.capturas < MAX_CAPTURAS
-            ? '<button class="btn" type="button" data-hace="agregar-captura">Agregar captura</button>'
+            ? `<button class="btn" type="button" data-hace="agregar-captura"
+                 title="Sumar una cámara o una pantalla más: cada captura es otra anidación donde sincronizar su vídeo">
+                 Agregar captura</button>`
             : '');
 
     // Las que tienen tomas primero: son las que van a la precortada. Las otras
@@ -400,7 +402,8 @@ async function generar() {
             <span class="v3">${(r.cuenta || []).slice(0, 2).map(esc).join(' ')}</span>
             ${avisos ? `<ul class="prproj-avisos v3">${avisos}</ul>` : ''}
           </div>
-          <button class="btn" type="button" data-hace="mostrar" data-ruta="${esc(r.ruta)}">Mostrar en Finder</button>
+          <button class="btn" type="button" data-hace="mostrar" data-ruta="${esc(r.ruta)}"
+                  title="Abrir el Finder con el proyecto recién escrito seleccionado">Mostrar en Finder</button>
         </div>`;
     avisar('Proyecto de Premiere listo.', 'ok');
 }

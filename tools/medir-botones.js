@@ -45,7 +45,10 @@ function arg(nombre, def) {
 const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
     'sin-carpeta', 'sesiones', 'preparar', 'preparar-sin-audio', 'sin-whisper',
     'preparar-microfono', 'preparar-zoom-falso', 'sin-zoom',
-    'en-vivo', 'toma-abierta', 'palmada-vencida', 'terminada', 'notas-de-antes', 'foto', 'foto-cien', 'prproj', 'prproj-lleno', 'prproj-listo', 'ajustes', 'diagnostico'
+    'en-vivo', 'toma-abierta', 'palmada-vencida', 'terminada', 'notas-de-antes', 'foto', 'foto-cien', 'prproj', 'prproj-lleno', 'prproj-listo', 'ajustes', 'diagnostico',
+    // El aviso de lo que falta, que en una Mac nueva es lo primero que se ve y
+    // es el único sitio donde salen «Instalar lo que falta» y los «Descargar».
+    'faltan-modelos'
 ];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
 const ALTO = Number(arg('alto', 840));
@@ -100,6 +103,23 @@ async function medir(pagina) {
             }
         }
 
+        /* ── Botones sin un hover que explique qué hacen ──────────────── */
+        // El hover es `title`, el del sistema, y es la única explicación que
+        // tiene un botón de icono. Un `title` que repite la etiqueta no
+        // cuenta: lo que hace falta saber no es cómo se llama el botón, que ya
+        // se lee, sino qué va a pasar al apretarlo.
+        const llano = s => (s || '').toLowerCase().replace(/[.,:;·…]/g, '').replace(/\s+/g, ' ').trim();
+        const sinHover = [];
+        for (const el of [...document.querySelectorAll('button, [role="button"]')].filter(visible)) {
+            const rotulo = (el.textContent || '').trim().replace(/\s+/g, ' ');
+            const dice = (el.getAttribute('title') || '').trim();
+            if (dice && llano(dice) !== llano(rotulo)) continue;
+            sinHover.push({
+                quien: (rotulo || el.id || el.className).slice(0, 34),
+                repite: Boolean(dice)
+            });
+        }
+
         /* ── Solapes entre hermanos de una misma fila flex ─────────────── */
         const solapes = [];
         for (const fila of document.querySelectorAll('.fila, .tarjeta-cabeza, .topbar, .barra-sesion, .campo-fila, .pie-teclas, .check-arreglo')) {
@@ -145,6 +165,7 @@ async function medir(pagina) {
         return {
             botones: botones.length,
             desbordados,
+            sinHover,
             solapes,
             apretados,
             // El documento no puede tener scroll horizontal: si lo tiene, hay
@@ -176,15 +197,22 @@ async function main() {
                 await pagina.close();
                 mirados += m.botones;
 
-                const mal = m.desbordados.length || m.solapes.length || m.apretados.length || m.desbordeH;
+                const mal = m.desbordados.length || m.sinHover.length
+                    || m.solapes.length || m.apretados.length || m.desbordeH;
                 if (mal) fallos++;
                 console.log(`${mal ? '✗' : '·'} ${escenario} @ ${ancho} — ${m.botones} cajas` +
                     `${m.desbordados.length ? `, ${m.desbordados.length} con el texto afuera` : ''}` +
+                    `${m.sinHover.length ? `, ${m.sinHover.length} sin hover` : ''}` +
                     `${m.solapes.length ? `, ${m.solapes.length} solapes` : ''}` +
                     `${m.apretados.length ? `, ${m.apretados.length} panel(es) sin caber` : ''}` +
                     `${m.desbordeH ? ', la página se sale de ancho' : ''}`);
                 for (const d of m.desbordados.slice(0, 8)) {
                     console.log(`    «${d.texto}» tiene ${d.tiene} px y necesita ${d.necesita}`);
+                }
+                for (const b of m.sinHover.slice(0, 8)) {
+                    console.log(`    «${b.quien}» ${b.repite
+                        ? 'tiene un hover que repite su etiqueta'
+                        : 'no tiene hover que diga qué hace'}`);
                 }
                 for (const s of m.solapes.slice(0, 8)) {
                     console.log(`    «${s.a}» encima de «${s.b}»`);
