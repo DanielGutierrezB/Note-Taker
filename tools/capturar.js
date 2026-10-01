@@ -33,7 +33,7 @@ const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
     'sin-carpeta', 'sesiones', 'preparar', 'preparar-sin-audio', 'sin-whisper',
     'preparar-microfono', 'preparar-zoom-falso', 'sin-zoom',
     'en-vivo', 'en-vivo,desplegada', 'en-vivo,claqueta-abierta',
-    'toma-abierta', 'releyendo', 'sin-audio', 'terminada', 'notas-de-antes', 'foto',
+    'toma-abierta', 'releyendo', 'sin-audio', 'terminada', 'notas-de-antes', 'foto', 'foto-cien',
     'palmada', 'palmada-vencida', 'prproj', 'prproj-lleno', 'prproj-listo',
     'ajustes', 'diagnostico', 'faltan-modelos', 'iconos'
 ];

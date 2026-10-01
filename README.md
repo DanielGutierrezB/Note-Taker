@@ -417,8 +417,8 @@ justo la que no sirve.
 Así que la cámara, mientras graba, guarda **un fotograma cada medio segundo con
 la hora en que se sacó**, y conserva los últimos veinticinco segundos. Cuando
 una toma cierra, se busca el fotograma más cercano a la hora de su OUT y se
-guarda ese. Son unos cuarenta JPEG de 1280 px en memoria y un encode cada medio
-segundo: lo más barato que hace esta app mientras graba.
+guarda ese. Son unos cincuenta JPEG en memoria —veinte o treinta megas— y un
+encode cada medio segundo: lo más barato que hace esta app mientras graba.
 
 **Una foto por toma, y no se vuelve a sacar nunca.** Si después se corre el OUT,
 o se reabre y se cierra la toma, la foto sigue siendo la del momento en que la
@@ -433,6 +433,26 @@ en la tarjeta de **Ahora** mientras no hay toma abierta: es el momento en que
 esto se mira, con la clase en pausa. Un clic la abre en grande, con **Copiar la
 imagen** —que es cómo se le manda al profesor, pegándola en el chat— y
 **Mostrar en Finder**.
+
+### Que se pueda leer lo que decía la pantalla
+
+La mitad de para qué existe esta foto es **texto**: el nombre del archivo que el
+profesor dejó abierto, el renglón de código a medias, el paso del slide en que
+se quedó. Así que la foto se guarda **tal como viene de la cámara**, sin
+reescalar, y con el JPEG en calidad alta (0.92).
+
+Estuvo a 1280 px y a 0.82 «porque es una referencia, no material», y eso era
+confundir para qué sirve: una cámara de 1920 bajada a 1280 pierde un tercio de
+cada letra, el visor la vuelve a estirar a casi 1920 en pantalla Retina, y el
+JPEG a 0.82 embarra justo los bordes donde está la información. Lo único que
+queda del tope es 2560 px, para que un NDI en 4K no llene la memoria; a la
+cámara se le pide eso mismo, así que una de 1080 entrega 1080 y una virtual de
+más entrega más.
+
+Y en el visor la foto se puede ver **al 100 %** —el botón, o un clic en la
+imagen—, que es el tamaño en que el texto chico se lee. Entera es como se abre,
+porque es cómo se mira «qué quedó a medias»; al 100 % el que se desplaza es el
+marco de la imagen y no el panel.
 
 Nada de esto puede estorbar una grabación: si la cámara no abre, se dice una vez
 y la clase sigue igual, sin fotos. Si la cámara se desconecta en medio, se dice

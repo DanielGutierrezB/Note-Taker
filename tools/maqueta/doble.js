@@ -28,7 +28,9 @@ const hay = nombre => escenarios.has(nombre);
  * confundirse con una foto de una clase que pasó.
  */
 const PANTALLA_FALSA = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
+    // 1920×1080 como la cámara de verdad, para que «ver al 100 %» en la
+    // maqueta sea del tamaño que va a tener en la app.
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 320 180">
       <rect width="320" height="180" fill="#101216"/>
       <rect x="0" y="0" width="320" height="18" fill="#1b1f27"/>
       <circle cx="12" cy="9" r="3" fill="#ff5f57"/><circle cx="22" cy="9" r="3" fill="#febc2e"/>
@@ -334,7 +336,7 @@ async function aplicar() {
     }
 
     if (hay('en-vivo') || hay('toma-abierta') || hay('releyendo') || hay('sin-audio') ||
-        hay('palmada') || hay('palmada-vencida') || hay('foto')) {
+        hay('palmada') || hay('palmada-vencida') || hay('foto') || hay('foto-cien')) {
         const estado = estadoEnVivo(estadoDeLaClase());
         vivo = estado;
         app.irAVivo(estado, { abierto: true, caido: hay('sin-audio'), pico: 0.42 });
@@ -348,13 +350,19 @@ async function aplicar() {
         if (hay('palmada') || hay('palmada-vencida')) await conPalmada(estado);
         // La foto del OUT en grande, abierta desde el bloque de su toma: es lo
         // que se mira para retomar, o lo que se copia para mandarle al profesor.
-        if (hay('foto')) {
+        if (hay('foto') || hay('foto-cien')) {
             await espera(120);
             document.querySelector('#lista-vivo [data-hace="plegar"][data-toma="1"]').click();
             await espera(60);
             const mini = document.querySelector('#lista-vivo [data-hace="ver-foto"][data-toma="1"]');
             if (mini) mini.click();
             await espera(120);
+            // Y al 100 %, que es el estado en que la foto es más grande que el
+            // panel: el que se desplaza tiene que ser el marco.
+            if (hay('foto-cien')) {
+                document.querySelector('#btn-foto-zoom').click();
+                await espera(60);
+            }
         }
         return;
     }

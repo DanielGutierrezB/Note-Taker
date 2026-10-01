@@ -164,6 +164,33 @@ module.exports = function (t) {
         t.ok(/btn-foto-finder/.test(html), 'y el archivo se muestra en Finder');
     });
 
+    t.group('foto del OUT · que se pueda leer');
+
+    t.test('el fotograma se guarda como viene de la cámara', () => {
+        // Lo que se mira en esta foto es texto en la pantalla del profesor:
+        // reescalarla «porque es una referencia» era lo que lo hacía ilegible.
+        // El tope solo está para que un NDI en 4K no llene la memoria, y la
+        // escala va con `min(1, …)` para no estirar una cámara chica.
+        const tope = /const ANCHO_TOPE = (\d+)/.exec(ojo);
+        t.ok(tope && Number(tope[1]) >= 1920, 'el tope no baja de 1920');
+        t.ok(/Math\.min\(1, ANCHO_TOPE \/ video\.videoWidth\)/.test(ojo));
+        t.ok(/width: \{ ideal: ANCHO_TOPE \}/.test(ojo), 'y se le pide eso mismo a la cámara');
+    });
+
+    t.test('el JPEG va a calidad alta, que es lo que el texto chico necesita', () => {
+        const calidad = /const CALIDAD = ([\d.]+)/.exec(ojo);
+        t.ok(calidad && Number(calidad[1]) >= 0.9, `calidad ${calidad && calidad[1]}`);
+    });
+
+    t.test('el visor la puede ver al 100 %, y el que se desplaza es el marco', () => {
+        const panel = leer('src', 'js', 'panel-foto.js');
+        const css = leer('src', 'css', 'style.css');
+        t.ok(/btn-foto-zoom/.test(html), 'el botón');
+        t.ok(/function cien\(/.test(panel), 'y quien lo atiende');
+        t.ok(/cien\(false\)/.test(panel), 'cada foto se abre entera');
+        t.ok(/\.foto-marco \{[^}]*overflow: auto;/s.test(css), 'el marco se desplaza');
+    });
+
     t.test('sin foto, el bloque es el de antes', () => {
         const vivo = leer('src', 'js', 'pantalla-vivo.js');
         const laFoto = tramo(vivo, 'function laFoto(', '\n}\n');

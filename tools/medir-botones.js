@@ -45,7 +45,7 @@ function arg(nombre, def) {
 const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
     'sin-carpeta', 'sesiones', 'preparar', 'preparar-sin-audio', 'sin-whisper',
     'preparar-microfono', 'preparar-zoom-falso', 'sin-zoom',
-    'en-vivo', 'toma-abierta', 'palmada-vencida', 'terminada', 'notas-de-antes', 'foto', 'prproj', 'prproj-lleno', 'prproj-listo', 'ajustes', 'diagnostico'
+    'en-vivo', 'toma-abierta', 'palmada-vencida', 'terminada', 'notas-de-antes', 'foto', 'foto-cien', 'prproj', 'prproj-lleno', 'prproj-listo', 'ajustes', 'diagnostico'
 ];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
 const ALTO = Number(arg('alto', 840));

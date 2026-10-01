@@ -17,7 +17,7 @@
  * segundo con la hora en que se sacó, y cuando el motor dice «la toma 4 cerró a
  * tal hora» se busca el que estaba más cerca de esa hora.
  *
- * Son unos cuarenta JPEG en memoria, unos pocos megas, y un encode de 1280 px
+ * Son unos cincuenta JPEG en memoria —veinte o treinta megas— y un encode por
  * cada medio segundo. Es lo más barato que hace esta app mientras graba.
  *
  * **La cámara es de quien la pida, y se cierra cuando no la usa nadie.** La
@@ -41,9 +41,24 @@ const VENTANA_MS = 25000;
  */
 const CERCA_MS = 1500;
 
-/** Lo más ancho que se guarda. Es una referencia, no material. */
-const ANCHO = 1280;
-const CALIDAD = 0.82;
+/**
+ * El tamaño y la compresión de la foto.
+ *
+ * **Se guarda tal como viene, sin reescalar.** Estuvo a 1280 px «porque es una
+ * referencia, no material», y eso era confundir para qué sirve: lo que se mira
+ * en esta foto es la pantalla del profesor, y ahí lo que hay que leer es el
+ * nombre del archivo que dejó abierto o el renglón de código a medias. Una
+ * cámara de 1920 bajada a 1280 pierde un tercio de cada letra, y después el
+ * visor la vuelve a estirar a casi 1920 en pantalla Retina: texto chico que no
+ * se entiende. El tope solo existe para que un NDI en 4K no llene la memoria.
+ *
+ * **Y la calidad es alta.** 0.82 es lo correcto para una cara o un plano de
+ * clase; sobre texto chico el JPEG a esa calidad embarra los bordes justo donde
+ * está la información. A 0.92 un fotograma de pantalla pesa medio mega, así que
+ * el anillo son unos veinte o treinta megas mientras la clase corre.
+ */
+const ANCHO_TOPE = 2560;
+const CALIDAD = 0.92;
 
 const estado = {
     nombre: null,
@@ -104,8 +119,11 @@ export async function tomar(quien, nombre, avisos) {
 
     let stream;
     try {
+        // Se le pide lo más grande que se va a guardar: con `ideal` la cámara
+        // da el modo que más se acerque, así que una de 1080 entrega 1080 y una
+        // virtual de más entrega más, en lugar de quedar clavada en 1920.
         stream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { exact: cual.id }, width: { ideal: 1920 } }
+            video: { deviceId: { exact: cual.id }, width: { ideal: ANCHO_TOPE } }
         });
     } catch (e) {
         estado.duenos.delete(quien);
@@ -179,7 +197,7 @@ async function guardarFotograma() {
     estado.sacando = true;
     const ms = Date.now();
     try {
-        const escala = Math.min(1, ANCHO / video.videoWidth);
+        const escala = Math.min(1, ANCHO_TOPE / video.videoWidth);
         const ancho = Math.round(video.videoWidth * escala);
         const alto = Math.round(video.videoHeight * escala);
         const lienzo = estado.lienzo || (estado.lienzo = document.createElement('canvas'));
@@ -187,7 +205,10 @@ async function guardarFotograma() {
             lienzo.width = ancho;
             lienzo.height = alto;
         }
-        lienzo.getContext('2d').drawImage(video, 0, 0, ancho, alto);
+        const pincel = lienzo.getContext('2d');
+        // Solo cuenta cuando hay que bajar de 2560: a escala 1 no interpola.
+        pincel.imageSmoothingQuality = 'high';
+        pincel.drawImage(video, 0, 0, ancho, alto);
         const bytes = await comoJpeg(lienzo);
         if (bytes) estado.anillo.push({ ms, bytes });
         const viejo = Date.now() - VENTANA_MS;
