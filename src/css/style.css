@@ -1694,8 +1694,9 @@ kbd {
 
 .prproj-vista {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-3);
+  gap: var(--sp-1) var(--sp-3);
   min-height: 32px;
 }
 
@@ -1728,6 +1729,35 @@ kbd {
 .prproj-elige .btn-vista {
   min-width: 32px;
   justify-content: center;
+}
+
+/* La pila de una vista compuesta: de izquierda a derecha, de arriba a abajo. */
+.prproj-pila {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.prproj-capa {
+  gap: var(--sp-1);
+  padding: 0 var(--sp-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.prproj-capa.es-encima {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--row-xs);
+  color: var(--text-primary);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+.prproj-capa svg {
+  width: 14px;
+  height: 14px;
 }
 
 .prproj-hecho {

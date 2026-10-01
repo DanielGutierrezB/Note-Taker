@@ -153,11 +153,11 @@ window.nt = {
     grabarTerminar: async () => estadoEnVivo(),
     onGrabarAviso: cb => avisos.push(cb),
 
-    // El menú del .prproj: dos capturas y la Doble hecha de las dos, que es el
-    // caso que muestra una vista compuesta.
+    // El menú del .prproj: dos capturas, y dos vistas compuestas apiladas al
+    // revés una de la otra, que es lo que hay que poder ver de un vistazo.
     prprojConfig: async carpeta => ({
         ok: true,
-        config: { capturas: 2, vistas: { PV: [1], R: [2], S: [2], MG: [2], X2: [1, 2] } },
+        config: { capturas: 2, vistas: { PV: [1], R: [1, 2], S: [2], MG: [2], X2: [2, 1] } },
         vistas: estadoEnVivo().vistas.map(v => ({ ...v, usada: ['PV', 'R', 'X2'].includes(v.nombre) })),
         clases: 3,
         guardada: true,

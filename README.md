@@ -654,9 +654,12 @@ abre un menú para decir qué capturas hay y qué capturas componen cada vista.
   - en las capturas 2 en adelante, además la Captura 1 anidada en A1, para
     sincronizar cualquier captura contra la primera;
   - un marcador al principio de cada clase y uno por cada claqueta.
-- **Una anidación por grupo**, cuando una vista se compone de dos o más capturas
-  (por ejemplo «Doble» = Captura 1 + Captura 2). Lleva las capturas del grupo
-  apiladas; el encuadre lo ajustas tú una vez y vale para todas las tomas.
+- **Una anidación por grupo**, cuando una vista se compone de dos o más
+  capturas. En el menú se elige además **cuál va encima**: la primera de la fila
+  tapa a las de abajo, y la flecha la sube una capa. Así «Captura 1 sobre
+  Captura 2» —la cámara en recuadro sobre la pantalla— y «Captura 2 sobre
+  Captura 1» son dos anidaciones distintas, y cada vista usa la que le toca. El
+  encuadre lo ajustas tú una vez y vale para todas las tomas de esa vista.
 - **Una secuencia precortada por clase**: las tomas que van al XML una detrás de
   otra, con los bordes ajustados a la onda. Hay un track de vídeo por cada
   captura o grupo que usan las vistas, y en cada toma solo está encendido el de

@@ -149,6 +149,10 @@ const DIBUJOS = {
 
     chevron: '<path d="m9.6 5.8 6.2 6.2-6.2 6.2"/>',
     volver: '<path d="M19.4 12H5"/><path d="m10.6 5.6-5 6.4 5 6.4"/>',
+    // «Una capa más arriba», en el menú del .prproj. La flecha apunta hacia
+    // arriba aunque la pila se dibuje en fila: lo que se mueve es la capa que
+    // tapa, y eso se piensa en alto, no en izquierda.
+    subir: '<path d="M12 19V5.6"/><path d="m5.6 12 6.4-6.4 6.4 6.4"/>',
     cerrar: '<path d="m6.4 6.4 11.2 11.2M17.6 6.4 6.4 17.6"/>',
     mas: '<path d="M12 5.2v13.6M5.2 12h13.6"/>'
 };

@@ -3,7 +3,8 @@
  *
  * Dos preguntas y un botón. Cuántas capturas hay —la cámara, la pantalla, la
  * que sea—, y qué capturas componen cada vista. Una vista hecha de dos capturas
- * es una anidación que las junta (`prproj-carpeta.armarGrupos`).
+ * es una anidación que las junta (`prproj-carpeta.armarGrupos`), y el orden en
+ * que se las elige es el apilado: la primera es la que tapa a las de abajo.
  *
  * Lo que se elige se guarda en la carpeta al generar, así que la vez siguiente
  * el menú abre como se dejó. La lógica de qué cuadra y qué no vive en el motor
@@ -77,8 +78,7 @@ function pintar() {
     const orden = vistas.filter(v => v.usada).concat(vistas.filter(v => !v.usada));
     $('#prproj-vistas').innerHTML = orden.map(v => {
         const elegidas = config.vistas[v.nombre] || [1];
-        const grupo = elegidas.length > 1
-            ? `<span class="v3">anidación ${elegidas.map(id => `Captura ${id}`).join(' + ')}</span>` : '';
+        const grupo = elegidas.length > 1 ? pilaDe(v, elegidas) : '';
         return `<div class="prproj-vista ${v.usada ? '' : 'es-sin-tomas'}" style="${estiloDeVista(vistas, v.nombre)}">
             <span class="prproj-sigla">${esc(v.nombre)}</span>
             <span class="prproj-titulo">${esc(v.titulo)}${v.usada ? '' : ' <span class="v3">· sin tomas</span>'}</span>
@@ -90,6 +90,35 @@ function pintar() {
             ${grupo}
           </div>`;
     }).join('');
+
+    // La explicación del apilado sale solo cuando hay algo apilado: con una
+    // captura por vista no hay nada que ordenar y sería una línea de ruido.
+    const hayPilas = Object.values(config.vistas).some(ids => (ids || []).length > 1);
+    $('#prproj-pilas-dice').textContent = hayPilas
+        ? 'Una vista de dos capturas es una anidación con las dos: la primera va encima, tapando a la otra, y la flecha la sube una capa.'
+        : '';
+}
+
+/**
+ * Cómo se apilan las capturas de una vista compuesta, y cómo se cambia.
+ *
+ * Elegir dos capturas no alcanza: hay que decir cuál tapa a cuál, que es la
+ * diferencia entre la cámara en recuadro sobre la pantalla y la pantalla
+ * tapando la cámara. Se dibujan en orden, la de encima primero, y cada una
+ * menos esa es un botón que la sube una capa.
+ *
+ * Horizontal y no en columna porque la fila mide 32 px y hay una por vista: una
+ * pila vertical por fila haría un menú tres veces más alto para decir lo mismo.
+ * Lo que dice qué extremo es el de arriba es la palabra «encima» delante.
+ */
+function pilaDe(vista, elegidas) {
+    const capas = elegidas.map((id, i) => i === 0
+        ? `<span class="prproj-capa es-encima">Captura ${id}</span>`
+        : `<button class="btn btn-tenue prproj-capa" type="button" data-hace="subir"
+                   data-vista="${esc(vista.nombre)}" data-captura="${id}"
+                   title="Subir la Captura ${id} encima de la Captura ${elegidas[i - 1]}"
+                   >${icono('subir')}Captura ${id}</button>`).join('');
+    return `<span class="prproj-pila"><span class="v3">encima</span>${capas}</span>`;
 }
 
 function alClic(e) {
@@ -121,8 +150,22 @@ function alClic(e) {
                 avisar('Cada vista necesita por lo menos una captura.');
                 return;
             }
-            config.vistas[v] = ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id].sort((a, b) => a - b);
+            // La que se suma entra debajo de las que ya estaban: es el orden en
+            // que se apilan, y subirla es un clic más (`subir`).
+            config.vistas[v] = ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id];
             pintar();
+            break;
+        }
+        case 'subir': {
+            const v = boton.dataset.vista;
+            const id = Number(boton.dataset.captura);
+            const ids = [...(config.vistas[v] || [1])];
+            const donde = ids.indexOf(id);
+            if (donde > 0) {
+                ids.splice(donde - 1, 0, ids.splice(donde, 1)[0]);
+                config.vistas[v] = ids;
+                pintar();
+            }
             break;
         }
         case 'mostrar':

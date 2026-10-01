@@ -45,6 +45,27 @@ function wav(dir, nombre) {
     return ruta;
 }
 
+/**
+ * Qué captura hay en cada pista de vídeo de una anidación, de V1 para arriba.
+ *
+ * El apilado es lo que decide quién tapa a quién, y es lo único del menú que no
+ * se puede comprobar en el plan: ahí es una lista, y acá es en qué pista quedó
+ * cada una. Se sigue el camino que hace Premiere —pista, corte, fuente de
+ * secuencia— parando antes de entrar a la secuencia del otro lado.
+ */
+function capturasDeLasPistas(p, secuencia) {
+    const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
+    const grupo = p.refsDe(secuencia).find(k => p.clase(k) === 'VideoTrackGroup');
+    const pistas = [...p.contenido(grupo).matchAll(/<Track Index="\d+" Object(U?)Ref="([^"]+)"/g)]
+        .map(m => prproj.clave(m[1] === 'U' ? 'UID' : 'ID', m[2]));
+    return pistas.map(pista => {
+        const fuente = p.cierre([pista], { claseFrontera: ['Sequence'] })
+            .find(k => p.clase(k) === 'VideoSequenceSource');
+        const dentro = fuente && p.refsDe(fuente).find(k => p.clase(k) === 'Sequence');
+        return dentro ? nombre(dentro) : null;
+    });
+}
+
 function toma(id, desdeSeg, hastaSeg, vista, cero, extra) {
     return {
         id, vista, comentario: '', descartada: false,
@@ -88,7 +109,12 @@ module.exports = async function (t) {
     t.test('una vista que nombra una captura que ya no está vuelve a la 1', () => {
         const c = carpetaPrproj.normalizar({ capturas: 2, vistas: { R: [3], X2: [2, 2, 1] } });
         t.deep(c.vistas.R, [1], 'la 3 no existe');
-        t.deep(c.vistas.X2, [1, 2], 'sin repetidos y en orden');
+        t.deep(c.vistas.X2, [2, 1], 'sin repetidos y en el orden que se eligió');
+    });
+
+    t.test('el orden de una vista es el apilado y se respeta tal cual', () => {
+        const c = carpetaPrproj.normalizar({ capturas: 3, vistas: { R: [3, 1] } });
+        t.deep(c.vistas.R, [3, 1], 'la 3 queda encima de la 1');
     });
 
     t.test('las vistas usadas salen de las tomas que van al XML', () => {
@@ -252,9 +278,20 @@ module.exports = async function (t) {
         });
         const config = carpetaPrproj.normalizar({ capturas: 2, vistas: { PV: [1], R: [2], X2: [2, 1] } });
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.fuentes.map(f => f.clave), ['1', '2', '1+2']);
-        t.deep(plan.grupos.map(g => g.nombre), ['Captura 1 + Captura 2']);
-        t.eq(plan.clases[0].cortes[0].fuente, '1+2');
+        t.deep(plan.fuentes.map(f => f.clave), ['1', '2', '2+1']);
+        t.deep(plan.grupos.map(g => g.nombre), ['Captura 2 sobre Captura 1']);
+        t.eq(plan.clases[0].cortes[0].fuente, '2+1');
+    });
+
+    t.test('la misma pareja al revés es otro grupo, con otra anidación', () => {
+        const dir = carpeta();
+        const s = sesion(dir, {
+            cero: T0, tomas: [toma(1, 10, 20, 'R', T0), toma(2, 30, 40, 'X2', T0)]
+        });
+        const config = carpetaPrproj.normalizar({ capturas: 2, vistas: { R: [1, 2], X2: [2, 1] } });
+        const plan = carpetaPrproj.planear([s], config);
+        t.deep(plan.grupos.map(g => g.clave), ['1+2', '2+1'], 'dos anidaciones, una por apilado');
+        t.deep(plan.grupos.map(g => g.nombre), ['Captura 1 sobre Captura 2', 'Captura 2 sobre Captura 1']);
     });
 
     t.test('solo entran a la precortada las fuentes que alguna toma usa', () => {
@@ -346,7 +383,7 @@ module.exports = async function (t) {
         const destino = path.join(dir, 'Proyecto', 'prueba.prproj');
         const r = await carpetaPrproj.generar({
             carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
-            config: { capturas: 2, vistas: { PV: [1], R: [2], X2: [1, 2] } }
+            config: { capturas: 2, vistas: { PV: [1], R: [2], X2: [2, 1] } }
         });
         t.ok(r.ok, r.error || '');
         t.eq(r.clases, 2);
@@ -360,10 +397,15 @@ module.exports = async function (t) {
         t.ok(revision.ok, `sin referencias colgando, índices salteados ni GUID repetidos: ${JSON.stringify(revision).slice(0, 300)}`);
         const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
         const secuencias = p.porClase('Sequence').map(nombre);
-        for (const s of ['Captura 1', 'Captura 2', 'Captura 1 + Captura 2']) t.ok(secuencias.includes(s), s);
+        for (const s of ['Captura 1', 'Captura 2', 'Captura 2 sobre Captura 1']) t.ok(secuencias.includes(s), s);
         t.eq(secuencias.length, 5, 'dos capturas, un grupo y dos precortadas');
         t.deep(p.porClase('BinProjectItem').map(nombre).sort(),
             [carpetaPrproj.BIN_CAPTURAS, carpetaPrproj.BIN_PRECORTADAS, carpetaPrproj.BIN_AUDIO].sort());
+
+        // El apilado del menú, leído del archivo: la primera de la lista tiene
+        // que haber quedado en el V más alto, que es la que tapa.
+        const grupo = p.porClase('Sequence').find(k => nombre(k) === 'Captura 2 sobre Captura 1');
+        t.deep(capturasDeLasPistas(p, grupo), ['Captura 1', 'Captura 2'], 'de V1 para arriba');
     });
 
     t.test('una carpeta a otro fps que la plantilla se rechaza', async () => {

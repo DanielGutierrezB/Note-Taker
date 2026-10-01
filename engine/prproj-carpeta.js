@@ -70,13 +70,21 @@ function nombreDeCaptura(id) {
     return `Captura ${id}`;
 }
 
-/** Una fuente es una captura sola o un grupo; su clave son los ids con `+`. */
+/**
+ * Una fuente es una captura sola o un grupo; su clave son los ids con `+`.
+ *
+ * **El orden es parte de la clave.** `1+2` y `2+1` son dos grupos distintos —la
+ * misma pareja de capturas, apilada al revés— y una carpeta puede necesitar los
+ * dos: la cámara en recuadro sobre la pantalla en una vista, y la pantalla en
+ * recuadro sobre la cámara en otra.
+ */
 function claveDeFuente(ids) {
     return ids.join('+');
 }
 
+/** «Captura 1 sobre Captura 2»: el primero es el que tapa. */
 function nombreDeFuente(ids) {
-    return ids.map(nombreDeCaptura).join(' + ');
+    return ids.map(nombreDeCaptura).join(' sobre ');
 }
 
 // ─── La configuración ────────────────────────────────────────────────
@@ -89,7 +97,11 @@ function nombreDeFuente(ids) {
  * de rechazarse: una vista que nombra una captura que se quitó, o que quedó sin
  * ninguna, vuelve a la Captura 1, que siempre está.
  *
- * @param {object} [config] { capturas: number, vistas: { PV: [1], X2: [1, 2] } }
+ * **El orden de cada vista se respeta tal cual viene**, porque es el apilado: la
+ * primera es la que va arriba. Ordenar por número, que es lo que hacía antes,
+ * perdía en silencio justo lo que el menú dejaba elegir.
+ *
+ * @param {object} [config] { capturas: number, vistas: { PV: [1], X2: [2, 1] } }
  * @param {string[]} [vistasUsadas] las vistas que aparecen en las tomas
  * @returns {{capturas: number, vistas: object}}
  */
@@ -100,8 +112,7 @@ function normalizar(config, vistasUsadas) {
     const todas = new Set(vivo.VISTAS.map(v => v.nombre).concat(vistasUsadas || []));
     for (const vista of todas) {
         const pedidas = Array.isArray(c.vistas && c.vistas[vista]) ? c.vistas[vista] : [];
-        const ids = [...new Set(pedidas.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= capturas))]
-            .sort((a, b) => a - b);
+        const ids = [...new Set(pedidas.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= capturas))];
         vistas[vista] = ids.length ? ids : [1];
     }
     return { capturas, vistas };
@@ -429,11 +440,14 @@ function armarCapturas(taller, plan, config, medios, bin) {
 /**
  * Las anidaciones de grupo: las capturas de una vista compuesta, apiladas.
  *
- * Van de punta a punta, sin cortar, porque el encuadre —quién va de recuadro,
- * quién de fondo— lo pone el editor una vez adentro y tiene que valer para toda
- * la carpeta. La primera captura del grupo va arriba (V más alto), que es donde
- * Premiere pinta lo que tapa a lo demás: suele ser la cámara en recuadro sobre la
- * pantalla, y si no, se cambia con un arrastre.
+ * Van de punta a punta, sin cortar, porque el encuadre —el tamaño y el sitio del
+ * recuadro— lo pone el editor una vez adentro y vale para toda la carpeta.
+ *
+ * **Quién tapa a quién sale del menú, no de los números.** La primera captura del
+ * grupo va en el V más alto, que es donde Premiere pinta lo que queda encima.
+ * Así «Captura 1 sobre Captura 2» y «Captura 2 sobre Captura 1» son dos
+ * anidaciones distintas, y una vista puede llevar la cámara en recuadro sobre la
+ * pantalla mientras otra lleva lo contrario.
  */
 function armarGrupos(taller, plan, capturas, bin) {
     const grupos = new Map();
