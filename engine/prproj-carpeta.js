@@ -70,15 +70,40 @@ const ETIQUETA_DE_REFERENCIA = 'Caribbean';
  * precortada, adentro de otra anidación y en la fila del panel. Así una franja
  * de color dice qué se está viendo sin leer el nombre del clip.
  *
- * **Son cuatro y no ocho porque son los que se pueden pintar enteros.** Un
- * color de Premiere va dos veces en el archivo —el nombre y el entero cacheado
- * al lado— y de la paleta solo hay cinco enteros medidos (ver `ETIQUETAS` en
- * `prproj-moldes.js`); el quinto, el caribe, es el del audio de referencia, que
- * ya significa otra cosa. Con más de cuatro anidaciones los colores se repiten:
- * repetir el quinto es menos malo que inventar un número y que el clip salga de
- * un color en el panel y de otro en la línea de tiempo.
+ * Los tres primeros son los que el editor eligió para sus capturas; los otros
+ * siguen con lo que queda de la paleta, salteando el caribe, que es el del
+ * audio de referencia y ya significa otra cosa. Con más de siete capturas se
+ * repiten, que es lo único que se puede hacer con ocho ranuras.
  */
-const COLORES_DE_ANIDACION = ['Cerulean', 'Rose', 'Iris', 'Forest'];
+const COLORES_DE_CAPTURA = ['Cerulean', 'Lavender', 'Mango', 'Rose', 'Violet', 'Iris', 'Forest'];
+
+/**
+ * Y una anidación que es una vista se pinta del color de esa vista.
+ *
+ * Una captura es material —de ahí sale un plano— y su color es de la paleta;
+ * una anidación que se llama `X2` o `R` **es** la vista, y el editor ya conoce
+ * su color de las notas: tenerlo igual en Premiere ahorra traducir. Lo que hay
+ * acá es esa traducción, de `colorDeMarcador` a la etiqueta más cercana de la
+ * paleta de Premiere, medida en distancia RGB:
+ *
+ *   R  #E96F24 → Mango  (60)      S  #718637 → Forest (68)
+ *   MG #3B82F6 → Iris   (73)      X2 #AF8BB1 → Violet (48)
+ *
+ * **PV es la excepción y es a propósito.** Su rojo no existe en esta paleta —lo
+ * más cercano es un marrón a 83 de distancia, que no se parece a nada— así que
+ * en Premiere va cerúleo, que es además el color de la Captura 1, que es la
+ * cámara del profesor en todos los cursos que se han armado.
+ *
+ * Una anidación puede ser de dos vistas que piden la misma pareja de capturas
+ * (`MG y X2`): lleva el color de la primera, que es la que da el nombre.
+ */
+const ETIQUETA_DE_VISTA = {
+    PV: 'Cerulean',
+    R: 'Mango',
+    S: 'Forest',
+    MG: 'Iris',
+    X2: 'Violet'
+};
 
 /** Blanco, el de las claquetas en el XML (`notas-xml.BLANCO`). */
 const COLOR_DE_CLAQUETA = notasXml.BLANCO;
@@ -527,15 +552,17 @@ function planear(sesiones, config) {
         g.titulo = nombreDeAnidacion(g.vistas);
     }
 
-    // Y cada una lleva su color. Las capturas primero y los grupos después, en
-    // el orden de las pistas: dos anidaciones vecinas salen de colores
-    // distintos mientras alcancen, que es cuando mirar el color sirve.
+    // Y cada una lleva su color: las capturas de la paleta, y las que son una
+    // vista el de su vista. Si apareciera una vista sin traducción —una nueva en
+    // `notas-vivo`— sigue la paleta por detrás de las capturas, que es quedarse
+    // con un color cualquiera pero no sin ninguno.
     const colorDeCaptura = new Map();
     for (let id = 1; id <= config.capturas; id++) {
-        colorDeCaptura.set(id, COLORES_DE_ANIDACION[(id - 1) % COLORES_DE_ANIDACION.length]);
+        colorDeCaptura.set(id, COLORES_DE_CAPTURA[(id - 1) % COLORES_DE_CAPTURA.length]);
     }
     grupos.forEach((g, i) => {
-        g.color = COLORES_DE_ANIDACION[(config.capturas + i) % COLORES_DE_ANIDACION.length];
+        g.color = ETIQUETA_DE_VISTA[g.vistas[0]]
+            || COLORES_DE_CAPTURA[(config.capturas + i) % COLORES_DE_CAPTURA.length];
     });
     for (const f of fuentes) {
         if (f.ids.length === 1) f.color = colorDeCaptura.get(f.ids[0]);
@@ -971,6 +998,8 @@ module.exports = {
     BIN_PRECORTADAS,
     BIN_AUDIO,
     BINS_DEL_EDITOR,
+    COLORES_DE_CAPTURA,
+    ETIQUETA_DE_VISTA,
     COLOR_DE_CLAQUETA,
     COLOR_DE_NOTA
 };

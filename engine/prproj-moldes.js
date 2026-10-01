@@ -115,24 +115,36 @@ const FRONTERA_DEL_MEDIO = ['TranscriptClip'];
  * es 0xDEBF2F, que leído al revés da RGB(47,191,222), un celeste; 10776567 es
  * 0xA46FF7, que da RGB(247,111,164), un rosa.
  *
- * **Los cinco que están salieron de barrer los proyectos del editor buscando el
- * nombre y el entero pegados**, que es como Premiere los escribe siempre juntos.
- * Los tres que faltan no aparecen en ninguno: nadie usó todavía un clip de ese
- * color, así que no hay de dónde leerlos. Se dejan sin `entero` a propósito y
- * `pintarCorte` no pinta lo que no puede pintar entero: un corte con el nombre
- * puesto y el número inventado se vería de un color en el panel y de otro en la
- * línea de tiempo, que es peor que quedarse gris porque parece que alguien lo
- * cambió a mano.
+ * **Los ocho enteros salen de las preferencias de Premiere, que es la única
+ * fuente que no se contradice.** Barrer los proyectos del disco buscando el
+ * nombre y el entero pegados da respuestas distintas para la misma ranura —el
+ * índice 3 aparece 2351 veces con un azul y 678 con un lila— y la razón es que
+ * **el color de una ranura es una preferencia, no una constante del formato**:
+ * vive en `BE.Prefs.LabelColors.N` del archivo «Adobe Premiere Pro Prefs» y lo
+ * que el clip guarda al lado del nombre es una caché de cómo estaba esa
+ * preferencia el día en que se pintó. Un proyecto viejo, o uno que llegó de
+ * otra máquina, cachó otro número. Los de acá son los dieciséis de fábrica,
+ * leídos de ese archivo, y son los que el panel va a mostrar mientras nadie
+ * toque sus preferencias; si alguien las cambia, la fila del panel seguirá a su
+ * preferencia y el clip al entero cacheado, que es exactamente lo que pasa con
+ * cualquier clip pintado antes del cambio.
+ *
+ * Las ocho ranuras de arriba son las que se usan. Premiere 26 trae dieciséis y
+ * las otras ocho (`Purple` 9896087, `Blue` 16727100, `Teal` 8421376, `Magenta`
+ * 15151847, `Tan` 9814478, `Green` 2191389, `Brown` 1262987, `Yellow` 6611682)
+ * se dejan fuera a propósito: en los 741 proyectos del disco no hay un solo
+ * clip con un índice mayor que 7, así que de que el panel los pinte bien no hay
+ * ninguna medida, solo la esperanza.
  */
 const ETIQUETAS = {
-    Violet: { indice: 0 },
+    Violet: { indice: 0, entero: 14717094 },
     Iris: { indice: 1, entero: 13408882 },
     Caribbean: { indice: 2, entero: 10016297 },
-    Lavender: { indice: 3 },
+    Lavender: { indice: 3, entero: 14910691 },
     Cerulean: { indice: 4, entero: 14597935 },
     Forest: { indice: 5, entero: 5814353 },
     Rose: { indice: 6, entero: 10776567 },
-    Mango: { indice: 7 }
+    Mango: { indice: 7, entero: 3909357 }
 };
 
 /**

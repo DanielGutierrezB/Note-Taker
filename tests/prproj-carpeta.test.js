@@ -22,6 +22,7 @@ const paths = require('../engine/paths');
 const vivo = require('../engine/notas-vivo');
 const notasXml = require('../engine/notas-xml');
 const nidos = require('../engine/prproj-nidos');
+const moldes = require('../engine/prproj-moldes');
 const workspace = require('../engine/workspace');
 const ipcPrproj = require('../ipc/prproj');
 
@@ -434,6 +435,41 @@ module.exports = async function (t) {
         t.eq(new Set(colores).size, plan.fuentes.length, `y ninguna repetida: ${colores.join(', ')}`);
         const sola = plan.fuentes.find(f => f.clave === '2');
         t.eq(sola.color, plan.colorDeCaptura.get(2), 'la pista de una captura, del color de su anidación');
+        const anidada = plan.fuentes.find(f => f.clave === '2+1');
+        t.eq(anidada.color, carpetaPrproj.ETIQUETA_DE_VISTA.X2, 'y la que es una vista, del color de la vista');
+    });
+
+    t.test('las capturas, los colores que eligió el editor', () => {
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0)] });
+        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar({ capturas: 3, vistas: { PV: [1] } }));
+        t.deep([1, 2, 3].map(id => plan.colorDeCaptura.get(id)), ['Cerulean', 'Lavender', 'Mango']);
+    });
+
+    t.test('toda vista sabe de qué color va en Premiere, y dos no comparten', () => {
+        // Si el director de contenido agrega una vista al XML, acá falta su
+        // traducción: la anidación saldría de un color de la paleta, que es un
+        // color cualquiera. Mejor enterarse en la prueba que en el proyecto.
+        const dueno = new Map();
+        for (const v of vivo.VISTAS) {
+            const etq = carpetaPrproj.ETIQUETA_DE_VISTA[v.nombre];
+            t.ok(etq, `${v.nombre} no tiene etiqueta de Premiere`);
+            t.ok(!dueno.has(etq), `${v.nombre} y ${dueno.get(etq)} comparten ${etq}`);
+            dueno.set(etq, v.nombre);
+        }
+    });
+
+    t.test('y el color que se escribe es el que está en las preferencias', () => {
+        // El nombre y el entero van juntos en el archivo. Si no fueran el mismo
+        // color, el clip saldría de un color en el panel y de otro en la línea
+        // de tiempo: es la razón de que la tabla tenga los dos datos.
+        const todas = [...carpetaPrproj.COLORES_DE_CAPTURA,
+            ...Object.values(carpetaPrproj.ETIQUETA_DE_VISTA)];
+        for (const nombre of new Set(todas)) {
+            const etq = moldes.ETIQUETAS[nombre];
+            t.ok(etq, `${nombre} no está en ETIQUETAS`);
+            t.ok(etq.entero > 0, `${nombre} no tiene entero medido: no se puede pintar`);
+        }
     });
 
     t.test('una vista suelta enciende una fuente por captura, sin anidación', () => {

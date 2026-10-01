@@ -784,13 +784,21 @@ abre un menú para decir qué capturas hay y qué capturas componen cada vista.
   captura o grupo que usan las vistas, y en cada toma solo está encendido el de
   su vista; para cambiar de plano se enciende otro. A1 es el audio de la
   Captura 1 y A2 el WAV de referencia, con el track silenciado.
-- **Un color por anidación**, el mismo en el panel que en la línea de tiempo:
-  cada captura y cada vista compuesta tiene el suyo, así que una franja de color
-  dice qué se está viendo sin leer el nombre del clip. Son cuatro y se repiten
-  si hay más anidaciones: de la paleta de Premiere solo hay cinco colores con el
-  entero medido (el quinto es el del audio de referencia) y escribir un número
-  inventado dejaría el clip de un color en el panel y de otro en la línea de
-  tiempo.
+- **Un color por anidación**, el mismo en el panel que en la línea de tiempo,
+  así que una franja de color dice qué se está viendo sin leer el nombre del
+  clip. Las **capturas** van cerúleo, lila y mango, que son los que el editor
+  eligió, y siguen con lo que queda de la paleta; una anidación que **es una
+  vista** va del color de esa vista —el mismo que tiene en las notas— traducido
+  a la etiqueta más cercana de Premiere: `R` mango, `S` bosque, `MG` iris, `X2`
+  violeta. **`PV` es la excepción**: su rojo no existe en esta paleta —lo más
+  cercano es un marrón que no se parece a nada— y va cerúleo, que es además el
+  color de la Captura 1, que es la cámara del profesor.
+  El color de una ranura de etiqueta **es una preferencia de Premiere**
+  (`BE.Prefs.LabelColors.N`), no una constante del formato, y lo que el clip
+  guarda al lado del nombre es una caché de cómo estaba esa preferencia el día
+  en que se pintó: por eso barrer los proyectos del disco da respuestas
+  distintas para la misma ranura y los ocho enteros se leyeron del archivo de
+  preferencias, que son los de fábrica.
 - **Tres sitios para los marcadores, con tres trabajos.** Mezclarlos los arruina
   a los tres, así que cada uno lleva lo suyo y nada más:
   - **el audio de referencia**, todos los de la sesión, sin cortar y en el

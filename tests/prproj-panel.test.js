@@ -96,15 +96,28 @@ module.exports = t => {
         t.deep(indices.slice().sort((a, b) => a - b), [0, 1, 2, 3, 4, 5, 6, 7]);
     });
 
-    t.test('solo los medidos traen el entero de la línea de tiempo', () => {
-        // El nombre alcanza para el panel; la línea de tiempo quiere además
-        // el entero cacheado. Poner uno inventado dejaría el clip de un
-        // color en el panel y de otro en la línea. Los cinco que están se
-        // leyeron de proyectos de verdad; los tres que faltan no aparecen en
-        // ninguno porque nadie usó todavía un clip de ese color.
-        const conEntero = Object.keys(secuencia.ETIQUETAS)
-            .filter(n => secuencia.ETIQUETAS[n].entero != null);
-        t.deep(conEntero.sort(), ['Caribbean', 'Cerulean', 'Forest', 'Iris', 'Rose']);
+    t.test('los ocho traen el entero de la línea de tiempo', () => {
+        // El nombre alcanza para el panel; la línea de tiempo quiere además el
+        // entero cacheado, y sin él `pintarCorte` no pinta: un clip con el
+        // nombre puesto y el número inventado saldría de un color en el panel y
+        // de otro en la línea. Los ocho salen de las preferencias de Premiere
+        // —`BE.Prefs.LabelColors.N`—, que es donde vive el color de cada
+        // ranura; barrer proyectos daba respuestas distintas para la misma
+        // ranura porque lo que el clip guarda es una caché de esa preferencia.
+        const sinEntero = Object.keys(secuencia.ETIQUETAS)
+            .filter(n => !(secuencia.ETIQUETAS[n].entero > 0));
+        t.deep(sinEntero, []);
+    });
+
+    t.test('y el entero de cada ranura es el que dicen las preferencias', () => {
+        // Los dieciséis de fábrica, leídos del archivo «Adobe Premiere Pro
+        // Prefs». Están acá como números y no como lectura del archivo porque
+        // el motor tiene que escribirlos en una máquina que no es esta.
+        const PREFS = [14717094, 13408882, 10016297, 14910691,
+            14597935, 5814353, 10776567, 3909357];
+        for (const [nombre, etq] of Object.entries(secuencia.ETIQUETAS)) {
+            t.eq(etq.entero, PREFS[etq.indice], `${nombre} (ranura ${etq.indice})`);
+        }
     });
 
     t.test('el entero es BGR, o sea el RGB del color leído al revés', () => {
