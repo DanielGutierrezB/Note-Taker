@@ -161,7 +161,8 @@ function estadoNuevo(params) {
         tomas: [],
         proximaToma: 0,
         /**
-         * Lo que se oyó SIN una toma abierta, de los últimos treinta segundos.
+         * Lo que se oyó SIN una toma abierta, de los últimos minutos
+         * (`VENTANA_DE_SUELTAS_SEC`).
          *
          * Antes esto se tiraba: una palabra dicha entre dos tomas no es de
          * nadie, y para el XML sigue sin serlo. Existe por un caso concreto y
@@ -503,12 +504,24 @@ const HUECO_DE_TIRADA_SEC = 1.5;
 const RETROCESO_MAX_SEC = 20;
 
 /**
- * Cuánto se guarda en el colchón de palabras sueltas.
+ * Cuánto se guarda en el colchón de palabras sueltas, y de a cuánto se recorta.
  *
- * Treinta segundos: el tope de retroceso más un margen, que es todo lo que
- * `abrirToma` puede llegar a mirar. Guardar más sería guardar para nada.
+ * El colchón es además lo que se ve en el campo de espera, y eso decide los dos
+ * números. Con treinta segundos recortados en cada pasada, a partir del medio
+ * minuto sin toma abierta cada pasada sacaba palabras de arriba: el texto se
+ * corría bajo el ojo y la selección se perdía, que es lo que el editor reportó
+ * el 30/09 («el texto va saltando […] para que pueda seleccionar fácilmente
+ * mientras se está grabando»).
+ *
+ * Diez minutos guardados y cinco de margen antes de recortar: el recorte llega
+ * de a cinco minutos de una vez, así que el campo salta a lo sumo una vez cada
+ * cinco minutos, y solo después de un cuarto de hora sin ninguna toma. Son unas
+ * pocas miles de palabras como mucho. No cambia hasta dónde retrocede
+ * `abrirToma` sola, que tiene su propio tope (`RETROCESO_MAX_SEC`); lo que gana
+ * es el arrastre del IN sobre el texto suelto, que ahora llega más atrás.
  */
-const VENTANA_DE_SUELTAS_SEC = 30;
+const VENTANA_DE_SUELTAS_SEC = 600;
+const MARGEN_DE_SUELTAS_SEC = 300;
 
 /**
  * Cuán vieja puede ser la última palabra oída para que cuente como "el
@@ -679,6 +692,26 @@ function tomaAnterior(tomas, toma) {
 function pisoDelIn(tomas, toma) {
     const previa = toma && toma.inMs != null ? tomaAnterior(tomas, toma) : null;
     return previa ? previa.outMs : null;
+}
+
+/**
+ * Hasta dónde puede avanzar el OUT de una toma: el IN de la de después.
+ *
+ * Es `pisoDelIn` visto del otro lado, con las mismas reglas: las descartadas no
+ * cuentan, y tocarse vale (el OUT es exclusivo, así que un OUT en el IN de la
+ * siguiente no le quita ninguna palabra).
+ *
+ * @returns {number|null} el ms máximo, o `null` si no hay toma después
+ */
+function techoDelOut(tomas, toma) {
+    if (!toma || toma.inMs == null) return null;
+    let siguiente = null;
+    for (const t of tomas || []) {
+        if (t === toma || t.id === toma.id || t.descartada || t.inMs == null) continue;
+        if (t.inMs <= toma.inMs) continue;
+        if (!siguiente || t.inMs < siguiente.inMs) siguiente = t;
+    }
+    return siguiente ? siguiente.inMs : null;
 }
 
 /**
@@ -1266,8 +1299,11 @@ function aplicarSenales(estado, palabras, opciones) {
     // donde nadie abre ninguna toma acumula en memoria todas sus palabras, y
     // `abrirToma` tendría que caminar hacia atrás sobre una lista que crece
     // toda la clase para contestar lo mismo.
+    // De a mucho y pocas veces, no de a una palabra por pasada (ver
+    // `VENTANA_DE_SUELTAS_SEC`): cada recorte corre el campo de espera.
     const piso = estado.ultimaPalabraMs - VENTANA_DE_SUELTAS_SEC * 1000;
-    if (estado.sueltas.length && estado.sueltas[0].t < piso) {
+    const tope = piso - MARGEN_DE_SUELTAS_SEC * 1000;
+    if (estado.sueltas.length && estado.sueltas[0].t < tope) {
         estado.sueltas = estado.sueltas.filter(w => w.t >= piso);
     }
     return eventos;
@@ -1386,7 +1422,11 @@ function repartir(palabras, toma) {
  * —lo comprueba `tomas-que-no-se-pisan.test.js`—, así que si mañana aparece otro
  * la prueba se pone roja en vez de dejar pasar un borde pisado.
  *
- * @param {Array} [tomas] las de la sesión, para saber dónde termina la de antes
+ * Y el OUT, por lo mismo del otro lado, se frena en el IN de la toma siguiente
+ * (`techoDelOut`): un OUT corrido adentro de la que viene pisa las mismas
+ * palabras que un IN corrido adentro de la de antes.
+ *
+ * @param {Array} [tomas] las de la sesión, para saber dónde están las vecinas
  * @returns {boolean} si se pudo mover
  */
 function moverBorde(toma, cual, paredMs, tomas) {
@@ -1400,7 +1440,10 @@ function moverBorde(toma, cual, paredMs, tomas) {
         return true;
     }
     if (toma.inMs != null && paredMs <= toma.inMs) return false;
-    toma.outMs = paredMs;
+    const techo = tomas ? techoDelOut(tomas, toma) : null;
+    const donde = techo != null ? Math.min(paredMs, techo) : paredMs;
+    if (donde === toma.outMs || (toma.inMs != null && donde <= toma.inMs)) return false;
+    toma.outMs = donde;
     return true;
 }
 
@@ -1557,10 +1600,13 @@ module.exports = {
     moverInAbierta,
     tomaAnterior,
     pisoDelIn,
+    techoDelOut,
     cerrarEn,
     arranqueDeLaTirada,
     HUECO_DE_TIRADA_SEC,
     RETROCESO_MAX_SEC,
+    VENTANA_DE_SUELTAS_SEC,
+    MARGEN_DE_SUELTAS_SEC,
     FRESCURA_MAX_SEC,
     finDeToma,
     anotarClaqueta,

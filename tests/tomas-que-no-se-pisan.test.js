@@ -69,6 +69,34 @@ module.exports = async t => {
         t.eq(abierta.inMs, T0 + 10000);
     });
 
+    t.test('y del otro lado: el OUT se frena en el IN de la toma siguiente', () => {
+        // El mismo pisado entrando por el otro borde: arrastrar el OUT de la 1
+        // adentro de la 2 dejaba las palabras de la 2 en las dos.
+        const primera = toma(1, 0, 10000);
+        const segunda = toma(2, 12000, 20000);
+        const tomas = [primera, segunda];
+        t.ok(vivo.moverBorde(primera, 'out', T0 + 16000, tomas), 'se movió');
+        t.eq(primera.outMs, T0 + 12000, 'hasta el IN de la 2 y no más adelante');
+        t.ok(vivo.moverBorde(primera, 'out', T0 + 11000, tomas), 'para atrás sigue libre');
+        t.eq(primera.outMs, T0 + 11000);
+    });
+
+    t.test('una descartada después no pone techo al OUT', () => {
+        const primera = toma(1, 0, 10000);
+        const tomas = [primera, toma(2, 12000, 20000, { descartada: true })];
+        t.ok(vivo.moverBorde(primera, 'out', T0 + 16000, tomas));
+        t.eq(primera.outMs, T0 + 16000);
+    });
+
+    t.test('el OUT de una clase grabada también se frena, por `aplicar`', () => {
+        const primera = toma(1, 0, 10000);
+        const segunda = toma(2, 12000, 20000);
+        primera.despues = segunda.palabras.slice();
+        vivo.aplicar(primera, { tipo: 'borde', borde: 'out', paredMs: T0 + 16000 }, [primera, segunda]);
+        t.eq(primera.outMs, T0 + 12000);
+        t.ok(primera.palabras.every(w => w.t < T0 + 12000), 'ni una palabra de la 2 adentro de la 1');
+    });
+
     t.test('sin toma anterior el IN retrocede libre, como siempre', () => {
         const abierta = { ...toma(1, 12000, 20000), outMs: null };
         const estado = { tomas: [abierta], sueltas: [] };

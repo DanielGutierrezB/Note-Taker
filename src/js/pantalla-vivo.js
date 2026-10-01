@@ -644,8 +644,8 @@ const ANTERIOR_MAX = 300;
  * entienda visualmente. Esto para poder hacer scroll y seleccionar durante la
  * toma.»
  *
- * Antes acá solo iban las palabras sueltas —el colchón de treinta segundos del
- * motor—, y con una toma recién abierta el colchón está VACÍO: `abrirToma` le
+ * Antes acá solo iban las palabras sueltas —el colchón del motor—, y con una
+ * toma recién abierta el colchón está VACÍO: `abrirToma` le
  * pasa la tirada a la toma y el conteo lo vacía del todo. De ahí la sensación de
  * que lo anterior «se demora en cargar»: no se demoraba, no estaba. El texto que
  * el editor quería ver no vive en las sueltas sino en la toma anterior, que ya

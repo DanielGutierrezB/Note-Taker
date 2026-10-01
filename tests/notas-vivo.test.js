@@ -370,13 +370,24 @@ module.exports = function (t) {
         t.eq(e.sueltas.length, 0);
     });
 
-    t.test('el colchón no crece toda la clase', () => {
+    t.test('el colchón no crece toda la clase, y se recorta pocas veces', () => {
+        // Tres horas sin ninguna toma, de a una pasada por segundo. Recortar de a
+        // una palabra por pasada corría el campo de espera en cada segundo; de a
+        // cinco minutos lo corre una vez cada cinco minutos.
         const e = nuevo();
-        const muchas = [];
-        for (let i = 0; i < 2000; i++) muchas.push([i * 400, `p${i}`]);
-        vivo.aplicarSenales(e, palabras(muchas));
-        const abarca = (e.sueltas[e.sueltas.length - 1].t - e.sueltas[0].t) / 1000;
-        t.ok(abarca <= 31, `el colchón abarca ${abarca} s`);
+        const tope = vivo.VENTANA_DE_SUELTAS_SEC + vivo.MARGEN_DE_SUELTAS_SEC;
+        let recortes = 0;
+        let primera = null;
+        let abarcaMax = 0;
+        for (let s = 0; s < 3 * 3600; s++) {
+            vivo.aplicarSenales(e, palabras([[s * 1000, `p${s}`], [s * 1000 + 500, `q${s}`]]));
+            if (primera != null && e.sueltas[0].t !== primera) recortes++;
+            primera = e.sueltas[0].t;
+            abarcaMax = Math.max(abarcaMax, (e.sueltas[e.sueltas.length - 1].t - e.sueltas[0].t) / 1000);
+        }
+        t.ok(abarcaMax <= tope + 1, `el colchón abarca hasta ${abarcaMax} s`);
+        t.ok(recortes <= Math.ceil(3 * 3600 / vivo.MARGEN_DE_SUELTAS_SEC),
+            `${recortes} recortes en tres horas, no uno por pasada`);
     });
 
     t.group('notas-vivo · los bordes arrastrados');
