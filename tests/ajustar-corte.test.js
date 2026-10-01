@@ -79,13 +79,18 @@ function agregar(archivo, segundos, amp) {
     fs.closeSync(fd);
 }
 
-/** Los niveles de todo el archivo, como los ve el ajuste. */
+/**
+ * Los niveles de todo el archivo, como los ve el ajuste.
+ *
+ * `umbralDb` se saca igual que en producción: el piso es de la sesión y el
+ * umbral se calcula del tramo que se le va a pasar a `mejorInstante`.
+ */
 function tramoEntero(archivo) {
     const w = ajustar.abrir(archivo);
     const tramo = ajustar.nivelesDeTramo(w, 0, w.segundos);
     const umbral = ajustar.umbralDe(w);
     ajustar.cerrar(w);
-    return { tramo, umbral };
+    return { tramo, umbral, umbralDb: umbral ? ajustar.umbralLocal(tramo, umbral.pisoDb) : null };
 }
 
 /**
@@ -111,14 +116,14 @@ function cuatroPalabras(cola) {
 }
 
 module.exports = function (t) {
-    t.group('ajustar-corte · el umbral se estima de la sesión');
+    t.group('ajustar-corte · el umbral se estima del audio');
 
     t.test('el piso de ruido del micrófono no se confunde con la voz', () => {
-        const { umbral } = tramoEntero(cuatroPalabras());
+        const { umbral, umbralDb } = tramoEntero(cuatroPalabras());
         t.ok(umbral != null, 'el archivo tiene contraste');
         t.ok(umbral.pisoDb < -60, `el piso salió ${umbral.pisoDb.toFixed(1)} dB`);
-        t.ok(umbral.umbralDb > umbral.pisoDb, 'el umbral está por encima del piso');
-        t.ok(umbral.umbralDb < -30, `y bien por debajo de la voz (${umbral.umbralDb.toFixed(1)} dB)`);
+        t.ok(umbralDb > umbral.pisoDb, 'el umbral está por encima del piso');
+        t.ok(umbralDb < -30, `y bien por debajo de la voz (${umbralDb.toFixed(1)} dB)`);
     });
 
     t.test('un archivo sin contraste no se ajusta: no hay silencios que buscar', () => {
@@ -128,11 +133,37 @@ module.exports = function (t) {
         t.eq(umbral, null);
     });
 
+    t.test('un micrófono con menos ruido no mueve el umbral: la voz manda', () => {
+        // Es el bug que trajo el DJI Mic Mini. El mismo profesor, la misma sala y
+        // los mismos huecos entre palabras, con un micrófono que tiene veinte dB
+        // menos de ruido propio: el piso se fue de −65 a −85 y el umbral viejo se
+        // fue con él, veinte dB por debajo de donde están los huecos.
+        const conPiso = pisoDb => {
+            const ruido = Math.pow(10, pisoDb / 20) * Math.SQRT2;
+            const w = ajustar.abrir(wav([
+                [30, ruido], [0.3, VOZ], [0.2, ruido], [0.3, VOZ], [30, ruido]
+            ]));
+            // La ventana de un borde, del tamaño que la lee `ajustarSesion`.
+            const tramo = ajustar.nivelesDeTramo(w, 29.5, 31);
+            const piso = ajustar.umbralDe(w).pisoDb;
+            ajustar.cerrar(w);
+            return { umbral: ajustar.umbralLocal(tramo, piso), piso };
+        };
+        const airpods = conPiso(-65);
+        const dji = conPiso(-85);
+        t.ok(dji.piso < airpods.piso - 15, `el piso bajó de verdad (${dji.piso.toFixed(1)} dB)`);
+        t.near(dji.umbral, airpods.umbral, 1.5,
+            `el umbral se quedó donde la voz (${dji.umbral.toFixed(1)} vs ${airpods.umbral.toFixed(1)} dB)`);
+        // Y el hueco de 200 ms entre las dos palabras sigue encontrándose con
+        // los dos micrófonos, que es para lo que existe el umbral.
+        t.ok(dji.umbral > dji.piso + ajustar.CAIDA_DE_LA_VOZ_DB, 'sin quedar pegado al piso');
+    });
+
     t.group('ajustar-corte · el corte en mitad de una palabra se va al silencio');
 
     t.test('un IN en mitad de la palabra se corre al hueco de ANTES', () => {
-        const { tramo, umbral } = tramoEntero(cuatroPalabras());
-        const r = ajustar.mejorInstante(tramo, 30.15, umbral.umbralDb, 'in');
+        const { tramo, umbralDb } = tramoEntero(cuatroPalabras());
+        const r = ajustar.mejorInstante(tramo, 30.15, umbralDb, 'in');
         t.eq(r.porQue, 'silencio');
         // El hueco de antes es 29,8 → 30,0. Con la guarda, el IN queda pegado al
         // arranque de la palabra pero antes de él.
@@ -141,8 +172,8 @@ module.exports = function (t) {
     });
 
     t.test('un OUT en mitad de la palabra se corre al hueco de DESPUÉS', () => {
-        const { tramo, umbral } = tramoEntero(cuatroPalabras());
-        const r = ajustar.mejorInstante(tramo, 30.15, umbral.umbralDb, 'out');
+        const { tramo, umbralDb } = tramoEntero(cuatroPalabras());
+        const r = ajustar.mejorInstante(tramo, 30.15, umbralDb, 'out');
         t.eq(r.porQue, 'silencio');
         // El hueco de después es 30,3 → 30,5, y el OUT se pega a la cola.
         t.ok(r.sec > 30.3 && r.sec < 30.5, `quedó en ${r.sec.toFixed(3)} s`);
@@ -150,18 +181,18 @@ module.exports = function (t) {
     });
 
     t.test('el corte que ya cae en un silencio no se mueve ni un milisegundo', () => {
-        const { tramo, umbral } = tramoEntero(cuatroPalabras());
-        const r = ajustar.mejorInstante(tramo, 30.4, umbral.umbralDb, 'in');
+        const { tramo, umbralDb } = tramoEntero(cuatroPalabras());
+        const r = ajustar.mejorInstante(tramo, 30.4, umbralDb, 'in');
         t.eq(r.porQue, 'ya-en-silencio');
         t.eq(r.sec, 30.4);
     });
 
     t.test('el corte nunca queda pegado al ataque: siempre a más de un cuadro', () => {
-        const { tramo, umbral } = tramoEntero(cuatroPalabras());
+        const { tramo, umbralDb } = tramoEntero(cuatroPalabras());
         for (const lado of ['in', 'out']) {
             for (const t0 of [30.05, 30.15, 30.25]) {
-                const r = ajustar.mejorInstante(tramo, t0, umbral.umbralDb, lado);
-                const distancias = ajustar.silencios(tramo, umbral.umbralDb)
+                const r = ajustar.mejorInstante(tramo, t0, umbralDb, lado);
+                const distancias = ajustar.silencios(tramo, umbralDb)
                     .filter(h => r.sec >= h.desde && r.sec <= h.hasta)
                     .map(h => Math.min(r.sec - h.desde, h.hasta - r.sec));
                 t.ok(distancias.length, `${lado} en ${t0}: el punto cae en un silencio`);
@@ -177,9 +208,9 @@ module.exports = function (t) {
         // Diez segundos de voz sin un hueco: no hay adónde correr el corte, y
         // moverlo a cualquier parte sería peor que dejarlo.
         const archivo = wav([[30, RUIDO], [10, VOZ], [30, RUIDO]]);
-        const { tramo, umbral } = tramoEntero(archivo);
+        const { tramo, umbralDb } = tramoEntero(archivo);
         for (const lado of ['in', 'out']) {
-            const r = ajustar.mejorInstante(tramo, 35, umbral.umbralDb, lado);
+            const r = ajustar.mejorInstante(tramo, 35, umbralDb, lado);
             t.eq(r.porQue, 'sin-silencio', lado);
             t.eq(r.sec, 35, `${lado}: el tiempo quedó tal cual`);
         }
@@ -195,14 +226,14 @@ module.exports = function (t) {
             [0.3, VOZ], [0.06, RUIDO], [0.3, VOZ],
             [30, RUIDO]
         ]);
-        const { tramo, umbral } = tramoEntero(archivo);
-        t.eq(ajustar.silencios(tramo, umbral.umbralDb)
+        const { tramo, umbralDb } = tramoEntero(archivo);
+        t.eq(ajustar.silencios(tramo, umbralDb)
             .filter(h => h.desde > 30.1 && h.hasta < 30.6).length, 0,
         'la oclusiva no figura como silencio');
         // El IN cae en 30,2. La oclusiva está a 100 ms y el silencio de verdad a
         // 240: si la oclusiva contara, ganaría por cercanía y el corte quedaría
         // en mitad de la palabra.
-        const r = ajustar.mejorInstante(tramo, 30.2, umbral.umbralDb, 'in');
+        const r = ajustar.mejorInstante(tramo, 30.2, umbralDb, 'in');
         t.eq(r.porQue, 'silencio');
         t.ok(r.sec < 30.0, `se fue al hueco de antes de la palabra (${r.sec.toFixed(3)} s)`);
     });
@@ -211,8 +242,8 @@ module.exports = function (t) {
         // Un hueco a dos segundos es otro punto del discurso. La ventana es de
         // unos cientos de milisegundos justamente para que eso no pase.
         const archivo = wav([[30, RUIDO], [2, VOZ], [1, RUIDO], [2, VOZ], [30, RUIDO]]);
-        const { tramo, umbral } = tramoEntero(archivo);
-        const r = ajustar.mejorInstante(tramo, 31, umbral.umbralDb, 'out');
+        const { tramo, umbralDb } = tramoEntero(archivo);
+        const r = ajustar.mejorInstante(tramo, 31, umbralDb, 'out');
         t.eq(r.porQue, 'sin-silencio');
         t.eq(r.sec, 31);
     });

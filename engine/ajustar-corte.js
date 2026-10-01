@@ -6,11 +6,13 @@
  * marcas no son milimétricas: el modelo pone el final de una palabra una o dos
  * décimas antes o después de donde de verdad terminó. En el XML eso no se nota,
  * pero en Premiere sí: el montajista corta por el marcador y el corte parte la
- * palabra por la mitad. Medido sobre las dos clases que había en el disco: de
- * los 72 bordes de la del 29/09 (dos horas y media, 36 tomas), 58 caían sobre
+ * palabra por la mitad. Medido sobre las dos clases largas que había en el
+ * disco, 136 bordes entre las dos: sin mirar la onda, 52 de los 72 de la del
+ * 29/09 (dos horas y media, 36 tomas) y 49 de los 64 de la del 30/09 caían sobre
  * energía de voz clara —varios en −15 dBFS, o sea el medio de una sílaba—.
- * Ninguno de esos 58 se puede cortar donde está. Con esto quedan 8, y los 8 son
- * los que no tienen ningún silencio cerca.
+ * Ninguno de esos se puede cortar donde está. Con esto quedan 0 y 13, y los que
+ * quedan son los que no tienen ningún silencio cerca: un corte en mitad de un
+ * párrafo seguido, donde el hueco más próximo ya es otro momento de la clase.
  *
  * Lo que hace este archivo es mirar la ONDA, que es el único dato que no se
  * puede inventar, y correr el borde al silencio más cercano. Nada más: no
@@ -23,11 +25,13 @@
  * contestan la misma pregunta y por eso no comparten el corte. Allá la pregunta
  * es binaria y por palabra —¿sonó ALGO alrededor de esto, o lo inventó
  * Whisper?—, y se responde con un piso que se sigue sobre la marcha y un margen
- * ancho a propósito, +24 dB, que es el que separa lo dicho de lo inventado. Acá
- * la pregunta es más fina y es del archivo entero: ¿dónde está el hueco ENTRE
- * dos palabras? Con el +24 de allá, en la clase del 30/09 el corte caería en
- * −43 y no en −54, once dB por encima del valle del histograma: una frase dicha
- * bajito contaría como hueco y el OUT podría caer justo en medio de ella.
+ * ancho a propósito, +24 dB sobre el piso, que es el que separa lo dicho de lo
+ * inventado. Acá la pregunta es más fina: ¿dónde está el hueco ENTRE dos
+ * palabras? Y la respuesta no se cuelga del piso de ruido, justamente, sino de
+ * la voz: con el +24 de allá, un micrófono silencioso pone el umbral veinte dB
+ * por debajo de donde está el hueco y no encuentra ninguno; con un micrófono
+ * ruidoso lo pone por encima de una frase dicha bajito, y el OUT podría caer en
+ * mitad de ella.
  *
  * Y un número fijo tampoco sirve, para ninguno de los dos. Medido en esa misma
  * clase, con AirPods por Bluetooth: el piso de ruido está en −67 dBFS y hay un
@@ -36,14 +40,16 @@
  * otro micrófono el piso se mueve diez dB y el número elegido a mano quedaría
  * mal para el otro lado.
  *
- * Así que el umbral se ESTIMA por sesión, de la distribución del propio archivo:
- * el piso es el percentil 10 de todo, la voz el 90 de lo que suena por encima de
- * él, y el silencio es lo que está en el primer tercio de ese recorrido
- * (`umbralDe`). En esa clase da −54 dBFS, que es justo el valle del histograma
- * —la franja de −55 a −45 tiene tres veces menos material que la de −65 a −60—,
- * o sea el hueco natural entre "sala" y "voz". Y el resultado no es frágil:
- * barriendo el umbral a mano entre el piso+9 y el piso+20 sobre los 72 bordes
- * reales, la cuenta de cortes rescatados no se mueve.
+ * Así que el umbral se ESTIMA, y en dos pasos. Del archivo entero sale el piso
+ * de ruido: el percentil 10 de todo, que es el micrófono y la sala y no cambia
+ * en tres horas (`umbralDe`). Y de la VENTANA de cada borde sale el umbral con
+ * que se busca el hueco: quince dB por debajo de la voz que hay alrededor de ese
+ * corte, sin bajar nunca del piso (`umbralLocal`). El piso solo pone el suelo.
+ *
+ * Que el umbral sea local y no de la sesión es la parte que se aprendió
+ * midiendo, y está contada en `CAIDA_DE_LA_VOZ_DB`: con un umbral colgado del
+ * piso, un micrófono con menos ruido movía el umbral hacia abajo y dejaba de
+ * encontrar los huecos, que no se habían movido.
  *
  * ── Por qué el IN y el OUT no se tratan igual ─────────────────────────────
  *
@@ -162,24 +168,48 @@ const PERCENTIL_VOZ = 90;
 const SOBRE_EL_PISO_DB = 6;
 
 /**
- * Dónde cae el umbral entre el piso y la voz: en el primer tercio.
+ * Cuánto por debajo de la voz de ALREDEDOR empieza el hueco.
  *
- * Con el piso en −67 y la voz en −24 da −54, que es el valle del histograma de
- * la clase medida. Un tercio y no la mitad porque la distribución no es
- * simétrica: el ruido de sala se apelotona justo encima del piso y la voz se
- * reparte en veinte dB, así que la frontera está más abajo del medio.
+ * Esta es la corrección del primer diseño, y vale contarla porque el primero
+ * parecía bien y estaba mal. Ahí el umbral se colgaba del PISO: piso más un
+ * tercio del recorrido hasta la voz, con techo de quince dB. Con los AirPods
+ * —piso en −67— eso daba −54 y acertaba. Con el DJI Mic Mini, que es un
+ * micrófono mejor, el piso se fue a −88 y el umbral con él, a −73: un hueco
+ * entre dos palabras no baja de −59, así que ningún hueco calificaba. Medido en
+ * la clase del 30/09: de 64 bordes, 29 llegaron a Premiere sin mover, con −26
+ * dBFS de promedio, o sea en mitad de una palabra. El bug no era el umbral, era
+ * de dónde se colgaba: **un micrófono con menos ruido no hace que el profesor
+ * calle más fuerte.**
+ *
+ * El silencio entre palabras no es una propiedad del piso de ruido sino de la
+ * voz que lo rodea, y es relativo: quince dB por debajo de lo que se está
+ * hablando AHÍ. Así el umbral viaja con el pasaje —un párrafo dicho bajito tiene
+ * sus huecos más abajo que uno gritado— y no con el micrófono.
+ *
+ * Quince y no veinte ni diez, barriendo sobre los 136 bordes reales de las dos
+ * clases que había en el disco (DJI Mic Mini y AirPods, los dos extremos):
+ *
+ *     umbral              30/09 DJI          29/09 AirPods
+ *     piso+15 (el viejo)  31 de 64           64 de 72
+ *     voz−20 global       50 de 64           69 de 72
+ *     voz−18 local        51 de 64           69 de 72
+ *     voz−15 local        53 de 64           70 de 72
+ *
+ * Y no se paga con cortes que se van lejos: el mayor corrimiento quedó en 344
+ * ms, igual que antes (350).
  */
-const FRACCION_DEL_RANGO = 0.30;
+const CAIDA_DE_LA_VOZ_DB = 15;
 
 /**
- * El techo de ese margen, en dB sobre el piso.
+ * Qué se llama "la voz de alrededor": el percentil 90 de la ventana.
  *
- * Es el freno para una sesión muy fuerte: con la voz en −6 dBFS, un tercio del
- * recorrido pondría el umbral en −47 y empezaría a contar como silencio una
- * palabra dicha bajito. Quince dB sobre el piso de ruido no es voz en ningún
- * micrófono que se haya visto acá.
+ * El 90 y no el máximo porque un golpe en la mesa o una sílaba acentuada subiría
+ * el umbral entero; el 90 de una ventana de segundo y medio es el nivel al que
+ * se está hablando ahí. Cuando la ventana no tiene voz —un borde en mitad de una
+ * pausa larga— el percentil es ruido de sala y el umbral se iría por debajo del
+ * piso: de eso se encarga el mínimo de `umbralLocal`.
  */
-const MARGEN_MAXIMO_DB = 15;
+const PERCENTIL_VOZ_LOCAL = 90;
 
 /**
  * Cuánto contraste hace falta para creerle al análisis.
@@ -326,11 +356,15 @@ function percentil(orden, p) {
 }
 
 /**
- * El piso de ruido, la voz y el umbral de silencio de un WAV.
+ * El piso de ruido y la voz de un WAV.
  *
- * @returns {{pisoDb:number, vozDb:number, umbralDb:number}|null} null cuando el
- *   archivo no tiene contraste para distinguir un silencio (ver
- *   `CONTRASTE_MINIMO_DB`)
+ * Es la medida de la SESIÓN —el micrófono y la sala—, y de ella sale una sola
+ * cosa que se usa después: el suelo por debajo del cual un umbral no tiene
+ * sentido. Dónde cae el umbral de cada corte lo decide `umbralLocal`, con la
+ * voz que haya alrededor de ese corte.
+ *
+ * @returns {{pisoDb:number, vozDb:number}|null} null cuando el archivo no tiene
+ *   contraste para distinguir un silencio (ver `CONTRASTE_MINIMO_DB`)
  */
 function umbralDe(w) {
     const total = w.muestras / w.tasa;
@@ -356,8 +390,27 @@ function umbralDe(w) {
     if (fuertes.length < 10) return null; // no suena nada: no hay voz que separar
     const vozDb = percentil(fuertes, PERCENTIL_VOZ);
     if (vozDb - pisoDb < CONTRASTE_MINIMO_DB) return null;
-    const umbralDb = pisoDb + Math.min(MARGEN_MAXIMO_DB, (vozDb - pisoDb) * FRACCION_DEL_RANGO);
-    return { pisoDb, vozDb, umbralDb };
+    return { pisoDb, vozDb };
+}
+
+/**
+ * El umbral de silencio para UN borde: quince dB por debajo de la voz que suena
+ * a su alrededor, y nunca por debajo del piso de la sala.
+ *
+ * Los dos extremos se dan en el material real y los dos están cubiertos acá. Una
+ * ventana con voz a −20 da −35, y los huecos de ese pasaje —que están entre −59
+ * y −45— caen todos del lado del silencio. Una ventana que es toda pausa da un
+ * percentil de ruido de sala, y ahí manda el suelo: seis dB sobre el piso, que
+ * es lo mismo que `umbralDe` llama "algo que suena".
+ *
+ * @param {{db:Float32Array}} tramo los dB de la ventana del borde
+ * @param {number} pisoDb el piso de ruido de la sesión
+ */
+function umbralLocal(tramo, pisoDb) {
+    if (!tramo || !tramo.db.length) return pisoDb + SOBRE_EL_PISO_DB;
+    const orden = Array.from(tramo.db).sort((a, b) => a - b);
+    const vozDeAca = percentil(orden, PERCENTIL_VOZ_LOCAL);
+    return Math.max(pisoDb + SOBRE_EL_PISO_DB, vozDeAca - CAIDA_DE_LA_VOZ_DB);
 }
 
 /**
@@ -517,19 +570,34 @@ function outAjustado(toma) {
 }
 
 /**
+ * Con qué versión de esta cuenta se hizo un ajuste guardado.
+ *
+ * Sin esto, arreglar el umbral no arregla ninguna clase ya grabada: el ajuste
+ * viejo sigue coincidiendo con sus `deInMs`/`deOutMs`, `haceFalta` dice que no
+ * hace falta, y «Rehacer XML» escribe otra vez los mismos cortes malos. El
+ * sello sube cuando cambia la CUENTA, y lo único que hace es invalidar lo
+ * guardado: un XML rehecho vuelve a mirar la onda.
+ *
+ * 1. el umbral colgado del piso de ruido de la sesión.
+ * 2. el umbral colgado de la voz de alrededor (ver `CAIDA_DE_LA_VOZ_DB`).
+ */
+const VERSION = 2;
+
+/**
  * ¿Hay que volver a calcular el ajuste de esta toma?
  *
  * Se recalcula cuando el editor movió un borde a mano —el ajuste viejo mira otro
- * sitio— y cuando el de antes se hizo sin todo el audio que necesitaba. Eso
- * último pasa siempre en vivo: una toma se cierra en el instante en que el
- * profesor dice "pausa", y los 850 ms de cola que la ventana quiere mirar
- * todavía no están escritos en el WAV. Se ajusta con lo que hay, se marca
- * `provisional`, y la escritura siguiente —un segundo después— lo rehace con el
- * audio completo.
+ * sitio—, cuando el de antes se hizo con otra versión de la cuenta, y cuando se
+ * hizo sin todo el audio que necesitaba. Eso último pasa siempre en vivo: una
+ * toma se cierra en el instante en que el profesor dice "pausa", y los 850 ms de
+ * cola que la ventana quiere mirar todavía no están escritos en el WAV. Se
+ * ajusta con lo que hay, se marca `provisional`, y la escritura siguiente —un
+ * segundo después— lo rehace con el audio completo.
  */
 function haceFalta(toma) {
     const a = toma.ajuste;
     if (!a) return true;
+    if (Number(a.v || 1) !== VERSION) return true;
     if (Number(a.deInMs) !== Number(toma.inMs)) return true;
     if (Number(a.deOutMs) !== Number(toma.outMs)) return true;
     if (a.provisional) return true;
@@ -595,6 +663,7 @@ function ajustarSesion(estado, opciones) {
     function rehacer(toma) {
         cuenta.rehechos++;
         const ajuste = {
+            v: VERSION,
             deInMs: toma.inMs,
             deOutMs: toma.outMs,
             inMs: toma.inMs,
@@ -622,7 +691,7 @@ function ajustarSesion(estado, opciones) {
             const hastaLeyo = tramo.desdeSec + tramo.db.length * tramo.hopSec;
             if (puedeCrecer && hastaLeyo < hastaQueria - tramo.hopSec) ajuste.provisional = true;
 
-            const r = mejorInstante(tramo, donde.sec, umbral.umbralDb, cual);
+            const r = mejorInstante(tramo, donde.sec, umbralLocal(tramo, umbral.pisoDb), cual);
             // Se redondea el CORRIMIENTO y no el tiempo. Los bordes vienen con
             // fracción de milisegundo —salen de dividir muestras por la tasa— y
             // redondear el tiempo entero le movía un tercio de milisegundo a un
@@ -662,10 +731,13 @@ module.exports = {
     MARGEN_MINIMO_SEC,
     VENTAJA_DEL_LADO_BUENO,
     CONTRASTE_MINIMO_DB,
+    CAIDA_DE_LA_VOZ_DB,
+    VERSION,
     abrir,
     cerrar,
     nivelesDeTramo,
     umbralDe,
+    umbralLocal,
     olvidar,
     silencios,
     mejorInstante,
