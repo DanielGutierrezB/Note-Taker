@@ -63,6 +63,21 @@ function capturasDeLasPistas(p, secuencia) {
     });
 }
 
+/**
+ * De qué color quedaron los clips de cada pista de vídeo, de V1 para arriba.
+ *
+ * El color va dos veces en el archivo y acá se lee el nombre, que es el que
+ * Premiere muestra. Una pista sin clips, o con clips sin pintar, da `null`.
+ */
+function coloresDeLasPistas(p, secuencia) {
+    return pistasDeVideo(p, secuencia).map(pista => {
+        const clip = p.cierre([pista], { claseFrontera: ['Sequence'] })
+            .filter(k => p.clase(k) === 'VideoClip')[0];
+        const m = clip && /BE\.Prefs\.LabelColors\.(\d+)/.exec(p.contenido(clip));
+        return m ? m[1] : null;
+    });
+}
+
 /** Cuántos clips quedaron en cada pista de vídeo, de V1 para arriba. */
 function clipsDeLasPistas(p, secuencia) {
     return pistasDeVideo(p, secuencia).map(pista => p.cierre([pista], { claseFrontera: ['Sequence'] })
@@ -294,20 +309,42 @@ module.exports = async function (t) {
         t.deep(plan.clases[0].cortes.map(c => c.toma), [1]);
     });
 
-    t.test('el IN de cada toma lleva su marcador al principio del corte', () => {
+    t.test('una toma con nota lleva un marcador que dura el bloque entero', () => {
+        // En la precortada el plano ya se ve —la pista encendida, con su
+        // color—, así que el marcador solo está donde hay algo que leer, y
+        // abarca la toma porque la nota es de la toma.
         const dir = carpeta();
-        const s = sesion(dir, {
-            cero: T0, tomas: [toma(1, 10, 15, 'R', T0, { comentarios: [{ desdeMs: T0 + 12000, hastaMs: T0 + 13000, comentario: 'ojo' }] })]
-        });
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 15, 'R', T0, { comentario: 'repetir el final' })] });
         const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar(null, []));
-        const [entrada, nota] = plan.clases[0].marcadores;
+        const [entrada] = plan.clases[0].marcadores;
         t.eq(entrada.nombre, 'Toma 1 · R');
         t.eq(entrada.desdeSeg, 0);
-        t.eq(entrada.hastaSeg, 5, 'no más largo que la toma');
+        t.eq(entrada.hastaSeg, 5, 'de punta a punta de la toma');
+        t.ok(entrada.comentario.startsWith('repetir el final'), entrada.comentario);
         t.eq(entrada.color, notasXml.colorDeVista('R'));
+    });
+
+    t.test('una toma sin nota no lleva marcador', () => {
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 15, 'R', T0)] });
+        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar(null, []));
+        t.deep(plan.clases[0].marcadores, []);
+    });
+
+    t.test('una nota sobre un pedazo dura lo que dura ese pedazo', () => {
+        const dir = carpeta();
+        const s = sesion(dir, {
+            cero: T0,
+            tomas: [toma(1, 10, 15, 'R', T0, {
+                comentarios: [{ desdeMs: T0 + 12000, hastaMs: T0 + 13000, comentario: 'ojo' }]
+            })]
+        });
+        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar(null, []));
+        const [nota] = plan.clases[0].marcadores;
         t.eq(nota.nombre, 'Nota');
         t.eq(nota.desdeSeg, 2, 'en el sitio de la precortada donde quedó ese pedazo');
         t.eq(nota.hastaSeg, 3);
+        t.eq(nota.color, notasXml.BLANCO);
     });
 
     t.test('una clase sin tomas no lleva precortada, y se dice', () => {
@@ -328,7 +365,36 @@ module.exports = async function (t) {
         const plan = carpetaPrproj.planear([s], config);
         t.deep(plan.fuentes.map(f => f.clave), ['1', '2', '2+1']);
         t.deep(plan.grupos.map(g => g.nombre), ['Captura 1 sobre Captura 2'], 'las claves van de abajo hacia arriba');
+        t.deep(plan.grupos.map(g => g.titulo), ['X2'], 'la anidación se llama como su vista');
         t.deep(plan.clases[0].cortes[0].fuentes, ['2+1']);
+    });
+
+    t.test('dos vistas con la misma anidación la comparten, y lleva los dos nombres', () => {
+        // Es una sola secuencia: tocarle el encuadre a una le toca el encuadre a
+        // la otra, y el nombre tiene que decirlo antes de que pase.
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'X2', T0), toma(2, 30, 40, 'MG', T0)] });
+        const config = carpetaPrproj.normalizar({
+            capturas: 2,
+            vistas: { X2: { capturas: [2, 1], unidas: true }, MG: { capturas: [2, 1], unidas: true } }
+        });
+        const plan = carpetaPrproj.planear([s], config);
+        t.eq(plan.grupos.length, 1, 'una sola anidación para las dos');
+        t.eq(plan.grupos[0].titulo, 'MG y X2', 'en el orden de las vistas');
+    });
+
+    t.test('cada anidación lleva su color, y las vecinas no repiten', () => {
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'X2', T0), toma(2, 30, 40, 'R', T0)] });
+        const config = carpetaPrproj.normalizar({
+            capturas: 2, vistas: { R: [2], X2: { capturas: [2, 1], unidas: true } }
+        });
+        const plan = carpetaPrproj.planear([s], config);
+        const colores = plan.fuentes.map(f => f.color);
+        t.eq(colores.filter(Boolean).length, plan.fuentes.length, 'todas pintadas');
+        t.eq(new Set(colores).size, plan.fuentes.length, `y ninguna repetida: ${colores.join(', ')}`);
+        const sola = plan.fuentes.find(f => f.clave === '2');
+        t.eq(sola.color, plan.colorDeCaptura.get(2), 'la pista de una captura, del color de su anidación');
     });
 
     t.test('una vista suelta enciende una fuente por captura, sin anidación', () => {
@@ -512,15 +578,22 @@ module.exports = async function (t) {
         t.ok(revision.ok, `sin referencias colgando, índices salteados ni GUID repetidos: ${JSON.stringify(revision).slice(0, 300)}`);
         const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
         const secuencias = p.porClase('Sequence').map(nombre);
-        for (const s of ['Captura 1', 'Captura 2', 'Captura 1 sobre Captura 2']) t.ok(secuencias.includes(s), s);
+        for (const s of ['Captura 1', 'Captura 2', 'X2']) t.ok(secuencias.includes(s), s);
         t.eq(secuencias.length, 5, 'dos capturas, un grupo y dos precortadas');
         t.deep(p.porClase('BinProjectItem').map(nombre).sort(),
             [carpetaPrproj.BIN_CAPTURAS, carpetaPrproj.BIN_PRECORTADAS, carpetaPrproj.BIN_AUDIO].sort());
 
         // El apilado del menú, leído del archivo: la X2 se pidió `[2, 1]`, o sea
         // la 2 abajo y la 1 encima, y así tienen que haber quedado las pistas.
-        const grupo = p.porClase('Sequence').find(k => nombre(k) === 'Captura 1 sobre Captura 2');
+        const grupo = p.porClase('Sequence').find(k => nombre(k) === 'X2');
         t.deep(capturasDeLasPistas(p, grupo), ['Captura 2', 'Captura 1'], 'de V1 para arriba');
+
+        // Y cada pista de la precortada, del color de su anidación: es lo que
+        // deja leer de un vistazo qué plano es cada bloque.
+        const precortada = p.porClase('Sequence').find(k => nombre(k) === `prueba_${T0}`);
+        const colores = coloresDeLasPistas(p, precortada);
+        t.eq(colores.filter(Boolean).length, 3, `las tres pistas pintadas: ${colores.join(', ')}`);
+        t.eq(new Set(colores).size, 3, 'y las tres de distinto color');
     });
 
     t.test('una captura puesta solo en sus tomas no deja clips en las demás', async () => {
@@ -544,7 +617,7 @@ module.exports = async function (t) {
         const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
         // La primera clase tiene tres tomas, una por vista.
         const precortada = p.porClase('Sequence').find(k => nombre(k) === `prueba_${T0}`);
-        t.deep(capturasDeLasPistas(p, precortada), ['Captura 1', 'Captura 2', 'Captura 1 sobre Captura 2']);
+        t.deep(capturasDeLasPistas(p, precortada), ['Captura 1', 'Captura 2', 'X2']);
         t.deep(clipsDeLasPistas(p, precortada), [1, 3, 3], 'la Captura 1 sola, solo en la toma de PV');
     });
 

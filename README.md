@@ -724,9 +724,13 @@ abre un menú para decir qué capturas hay y qué capturas componen cada vista.
   derecha es la que tapa**. Se cambia arrastrándolas, o con las flechas si
   llegaste con el teclado. El recuadro que las junta es cómo van las dos:
   - **Con recuadro, anidadas**: las capturas van adentro de una anidación propia
-    («Captura 1 sobre Captura 2») y el encuadre del recuadro se acomoda **una
-    vez** para toda la carpeta. Dos vistas pueden tener la misma pareja apilada
-    al revés, y son dos anidaciones distintas.
+    y el encuadre del recuadro se acomoda **una vez** para toda la carpeta. Dos
+    vistas pueden tener la misma pareja apilada al revés, y son dos anidaciones
+    distintas. **La anidación se llama como la vista** —`X2`, `R`— y no como su
+    composición: en la precortada ese nombre es el del clip, y ahí lo que hace
+    falta leer es qué plano es, no de qué capturas está hecho. Si dos vistas
+    comparten una, lleva los dos nombres (`PV y R`), porque tocar su encuadre
+    las cambia a las dos.
   - **Sin recuadro, sueltas**: cada captura va en **su propia pista** de la
     precortada y se acomoda toma por toma. Las pistas se ordenan para que la de
     encima quede arriba; si dos vistas sueltas piden apilados contrarios no hay
@@ -751,6 +755,21 @@ abre un menú para decir qué capturas hay y qué capturas componen cada vista.
   captura o grupo que usan las vistas, y en cada toma solo está encendido el de
   su vista; para cambiar de plano se enciende otro. A1 es el audio de la
   Captura 1 y A2 el WAV de referencia, con el track silenciado.
+- **Un color por anidación**, el mismo en el panel que en la línea de tiempo:
+  cada captura y cada vista compuesta tiene el suyo, así que una franja de color
+  dice qué se está viendo sin leer el nombre del clip. Son cuatro y se repiten
+  si hay más anidaciones: de la paleta de Premiere solo hay cinco colores con el
+  entero medido (el quinto es el del audio de referencia) y escribir un número
+  inventado dejaría el clip de un color en el panel y de otro en la línea de
+  tiempo.
+- **Marcadores solo donde hay algo que leer.** En la precortada el plano ya se
+  ve —la pista encendida, con su color—, así que las tomas sin nota no llevan
+  marcador: uno por toma diciendo «Toma 4 · PV» era repetir en una tira de
+  colores lo que la línea de tiempo ya dice, y tapaba los pocos que traen algo
+  escrito. El de una toma con nota **abarca el bloque entero**, porque la nota
+  es de la toma y no de su principio; los de un pedazo comentado siguen durando
+  lo que dura ese pedazo. En el XML siguen estando todos: ahí no hay pistas que
+  mirar.
 
 Como las precortadas cortan SOBRE las anidaciones, en cuanto sincronizas una
 captura adentro de su anidación, todos los cortes de todas las clases la

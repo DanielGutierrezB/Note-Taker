@@ -198,7 +198,7 @@ function union(vista, suya) {
     return `<button class="btn btn-tenue btn-ico prproj-une" type="button" data-hace="unir"
                 data-vista="${esc(vista.nombre)}" aria-pressed="${suya.unidas}"
                 title="${suya.unidas
-        ? `${nombres}, juntas en una anidación: el encuadre se acomoda una vez y vale para toda la carpeta. Clic para separarlas.`
+        ? `${nombres}, juntas en una anidación llamada «${esc(vista.nombre)}»: el encuadre se acomoda una vez y vale para toda la carpeta. Clic para separarlas.`
         : `${nombres}, cada una en su pista de la precortada: el encuadre se acomoda toma por toma. Clic para anidarlas.`}"
                 >${icono(suya.unidas ? 'enlace' : 'sinEnlace')}</button>`;
 }

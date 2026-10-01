@@ -47,10 +47,26 @@ const BIN_CAPTURAS = '01 Capturas';
 const BIN_PRECORTADAS = '02 Precortadas';
 const BIN_AUDIO = '03 Audio de referencia';
 
-/** Las anidaciones de captura, en el panel y en la línea de tiempo. */
-const ETIQUETA_DE_CAPTURA = 'Cerulean';
-const ETIQUETA_DE_GRUPO = 'Iris';
+/** El audio de referencia, en el panel y en la línea de tiempo. */
 const ETIQUETA_DE_REFERENCIA = 'Caribbean';
+
+/**
+ * Un color por anidación, para poder leer la precortada de un vistazo.
+ *
+ * Cada anidación —cada captura y cada vista compuesta— se pinta de un color, y
+ * sus clips llevan ese mismo color donde aparezcan: en su pista de la
+ * precortada, adentro de otra anidación y en la fila del panel. Así una franja
+ * de color dice qué se está viendo sin leer el nombre del clip.
+ *
+ * **Son cuatro y no ocho porque son los que se pueden pintar enteros.** Un
+ * color de Premiere va dos veces en el archivo —el nombre y el entero cacheado
+ * al lado— y de la paleta solo hay cinco enteros medidos (ver `ETIQUETAS` en
+ * `prproj-moldes.js`); el quinto, el caribe, es el del audio de referencia, que
+ * ya significa otra cosa. Con más de cuatro anidaciones los colores se repiten:
+ * repetir el quinto es menos malo que inventar un número y que el clip salga de
+ * un color en el panel y de otro en la línea de tiempo.
+ */
+const COLORES_DE_ANIDACION = ['Cerulean', 'Rose', 'Iris', 'Forest'];
 
 /** Blanco, el de las claquetas en el XML (`notas-xml.BLANCO`). */
 const COLOR_DE_CLAQUETA = notasXml.BLANCO;
@@ -61,9 +77,6 @@ const COLOR_DE_CLAQUETA = notasXml.BLANCO;
  * clase, así que tiene que distinguirse del blanco de las claquetas.
  */
 const COLOR_DE_CLASE = 0xFF51B858;
-
-/** Cuánto dura el marcador de entrada de una toma, como en el XML. */
-const SEGUNDOS_DEL_MARCADOR_IN = 10;
 
 /** El nombre de una captura sola. */
 function nombreDeCaptura(id) {
@@ -85,6 +98,29 @@ function claveDeFuente(ids) {
 /** «Captura 2 sobre Captura 1» para `[1, 2]`: se nombra desde la que tapa. */
 function nombreDeFuente(ids) {
     return ids.slice().reverse().map(nombreDeCaptura).join(' sobre ');
+}
+
+/**
+ * La anidación de una vista compuesta se llama como la vista: `PV`, `R`, `X2`.
+ *
+ * No como su composición. En la precortada, el clip de esa pista lleva el
+ * nombre de la anidación, y lo que hace falta leer ahí es qué plano es, no de
+ * qué capturas está hecho: eso se decide una vez en el menú y después estorba.
+ * La composición sigue nombrada en los avisos, que es donde importa.
+ *
+ * Dos vistas pueden compartir una anidación —la misma pareja apilada igual— y
+ * entonces lleva los dos nombres: es una sola secuencia y esconder que la
+ * comparten haría que tocar el encuadre de una cambiara la otra sin avisar.
+ */
+function nombreDeAnidacion(vistas) {
+    const orden = vivo.VISTAS.map(v => v.nombre);
+    return vistas.slice()
+        .sort((a, b) => {
+            const ia = orden.indexOf(a);
+            const ib = orden.indexOf(b);
+            return (ia === -1 ? orden.length : ia) - (ib === -1 ? orden.length : ib) || (a < b ? -1 : 1);
+        })
+        .join(' y ');
 }
 
 // ─── La configuración ────────────────────────────────────────────────
@@ -366,13 +402,23 @@ function planear(sesiones, config) {
                 referencia
             });
 
-            clase.marcadores.push({
-                nombre: `${notasXml.nombreDeToma(toma)} · ${vista}`,
-                comentario: vivo.comentarioDeEntrada(toma),
-                desdeSeg: cursor,
-                hastaSeg: cursor + Math.min(SEGUNDOS_DEL_MARCADOR_IN, largo),
-                color: notasXml.colorDeVista(vista)
-            });
+            // **Solo las tomas que tienen algo escrito llevan marcador, y dura
+            // lo que dura la toma.** En la precortada el plano ya se ve —es la
+            // pista que quedó encendida, con el color de su anidación— así que
+            // un marcador por toma diciendo «Toma 4 · PV» era repetir en una
+            // tira de colores lo que ya dice la línea de tiempo, y tapaba los
+            // pocos que sí traen algo que leer. El que queda abarca el bloque
+            // entero porque la nota es de la toma entera, no de su principio.
+            // En el XML siguen estando todos: ahí no hay pistas que mirar.
+            if (vivo.limpio(toma.comentario)) {
+                clase.marcadores.push({
+                    nombre: `${notasXml.nombreDeToma(toma)} · ${vista}`,
+                    comentario: vivo.comentarioDeEntrada(toma),
+                    desdeSeg: cursor,
+                    hastaSeg: cursor + largo,
+                    color: notasXml.colorDeVista(vista)
+                });
+            }
             // Las notas sobre un pedazo del texto, en el sitio de la precortada
             // donde quedó ese pedazo. Las que caen fuera de la toma —un borde que
             // se corrió después de escribirlas— se quedan afuera: en la precortada
@@ -433,7 +479,28 @@ function planear(sesiones, config) {
     const fuentes = ordenarFuentes([...usadas.values()], config, avisos);
     const grupos = fuentes.filter(f => f.ids.length > 1);
 
-    return { clases, largoSeg, fuentes, grupos, marcadoresDeCaptura, avisos };
+    // Cada anidación de vista se llama como la vista o las vistas que la usan.
+    for (const g of grupos) {
+        const pide = quienPide.get(g.clave);
+        g.vistas = [...new Set([...pide.siempre, ...pide.suya])];
+        g.titulo = nombreDeAnidacion(g.vistas);
+    }
+
+    // Y cada una lleva su color. Las capturas primero y los grupos después, en
+    // el orden de las pistas: dos anidaciones vecinas salen de colores
+    // distintos mientras alcancen, que es cuando mirar el color sirve.
+    const colorDeCaptura = new Map();
+    for (let id = 1; id <= config.capturas; id++) {
+        colorDeCaptura.set(id, COLORES_DE_ANIDACION[(id - 1) % COLORES_DE_ANIDACION.length]);
+    }
+    grupos.forEach((g, i) => {
+        g.color = COLORES_DE_ANIDACION[(config.capturas + i) % COLORES_DE_ANIDACION.length];
+    });
+    for (const f of fuentes) {
+        if (f.ids.length === 1) f.color = colorDeCaptura.get(f.ids[0]);
+    }
+
+    return { clases, largoSeg, fuentes, grupos, colorDeCaptura, marcadoresDeCaptura, avisos };
 }
 
 /**
@@ -552,7 +619,7 @@ function armarCapturas(taller, plan, config, medios, bin) {
             pistasAudio: primera ? 2 : 3,
             duracionSeg: plan.largoSeg
         });
-        taller.pintarItemDelPanel(seq.itemDelPanel, ETIQUETA_DE_CAPTURA);
+        taller.pintarItemDelPanel(seq.itemDelPanel, plan.colorDeCaptura.get(id));
         taller.guardarEn(bin, seq.itemDelPanel);
 
         const pistaRef = seq.pistasAudio[1];
@@ -574,7 +641,7 @@ function armarCapturas(taller, plan, config, medios, bin) {
             taller.colocarCorte({
                 pista: seq.pistasAudio[0], medio: c1.comoFuente,
                 desdeSeg: 0, hastaSeg: plan.largoSeg, entradaSeg: 0,
-                etiqueta: ETIQUETA_DE_CAPTURA, sonando: true
+                etiqueta: plan.colorDeCaptura.get(1), sonando: true
             });
             taller.mutearPista(seq.pistasAudio[0]);
         }
@@ -602,19 +669,19 @@ function armarGrupos(taller, plan, capturas, bin) {
     const grupos = new Map();
     for (const g of plan.grupos) {
         const seq = taller.crearSecuencia({
-            nombre: g.nombre,
+            nombre: g.titulo || g.nombre,
             pistasVideo: g.ids.length,
             pistasAudio: 1,
             duracionSeg: plan.largoSeg
         });
-        taller.pintarItemDelPanel(seq.itemDelPanel, ETIQUETA_DE_GRUPO);
+        taller.pintarItemDelPanel(seq.itemDelPanel, g.color);
         taller.guardarEn(bin, seq.itemDelPanel);
         if (plan.largoSeg > 0) {
             g.ids.forEach((id, i) => {
                 taller.colocarCorte({
                     pista: seq.pistasVideo[i], medio: capturas.get(id).comoFuente,
                     desdeSeg: 0, hastaSeg: plan.largoSeg, entradaSeg: 0,
-                    etiqueta: ETIQUETA_DE_CAPTURA, sonando: true
+                    etiqueta: plan.colorDeCaptura.get(id), sonando: true
                 });
             });
         }
@@ -661,7 +728,7 @@ function armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bin) {
             taller.colocarCorte({
                 pista: pistaDe.get(f.clave), medio: fuentes.get(f.clave).comoFuente,
                 desdeSeg: corte.desdeSeg, hastaSeg: corte.hastaSeg, entradaSeg: corte.entradaSeg,
-                etiqueta: f.ids.length > 1 ? ETIQUETA_DE_GRUPO : ETIQUETA_DE_CAPTURA,
+                etiqueta: f.color,
                 sonando: suya
             });
             cortes++;
@@ -669,7 +736,7 @@ function armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bin) {
         taller.colocarCorte({
             pista: seq.pistasAudio[0], medio: c1.comoFuente,
             desdeSeg: corte.desdeSeg, hastaSeg: corte.hastaSeg, entradaSeg: corte.entradaSeg,
-            etiqueta: ETIQUETA_DE_CAPTURA, sonando: true
+            etiqueta: plan.colorDeCaptura.get(1), sonando: true
         });
         cortes++;
         const ref = corte.referencia;
