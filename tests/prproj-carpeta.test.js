@@ -347,6 +347,28 @@ module.exports = async function (t) {
         t.eq(nota.color, notasXml.BLANCO);
     });
 
+    t.test('el audio de referencia lleva los marcadores de toda la sesión', () => {
+        // Es lo único que el editor tiene para ubicarse mientras sincroniza: dos
+        // horas de onda. Son los mismos que el XML le pone al clip maestro, y
+        // medidos desde el arranque DEL ARCHIVO, que no es el cero de la clase
+        // cuando el dispositivo se cayó y el audio siguió en otro WAV.
+        const dir = carpeta();
+        const s = sesion(dir, {
+            cero: T0,
+            wavs: [{ desdeSeg: 0, segundos: 100 }, { desdeSeg: 200, segundos: 100 }],
+            tomas: [toma(1, 10, 20, 'PV', T0), toma(2, 210, 220, 'R', T0)],
+            claquetas: [{ n: 1, ms: T0 + 5000, confirmada: true }]
+        });
+        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar(null, []));
+        const [uno, dos] = plan.clases[0].wavs;
+        t.deep(uno.marcadores.map(m => m.nombre), ['Claqueta 1', 'Toma 1 · PV', 'Toma 1 · OUT']);
+        t.eq(uno.marcadores[1].desdeSeg, 10);
+        // El segundo WAV arrancó a los 200 s de la clase: su toma está en el 10.
+        t.deep(dos.marcadores.map(m => m.nombre), ['Toma 2 · R', 'Toma 2 · OUT']);
+        t.eq(dos.marcadores[0].desdeSeg, 10, 'medido desde el arranque de ESE archivo');
+        t.eq(dos.marcadores[0].color, notasXml.colorDeVista('R'));
+    });
+
     t.test('una clase sin tomas no lleva precortada, y se dice', () => {
         const dir = carpeta();
         const plan = carpetaPrproj.planear([sesion(dir, { cero: T0 })], carpetaPrproj.normalizar(null, []));
@@ -503,6 +525,19 @@ module.exports = async function (t) {
         t.ok(claquetas[1].comentario.includes('sin confirmar'), 'también las sin confirmar, marcadas');
     });
 
+    t.test('y TODAS las tomas, tengan nota o no: el nido es donde se sincroniza', () => {
+        // Al contrario de la precortada, donde el marcador solo está si hay algo
+        // que leer: ahí el plano se ve en la pista encendida, y acá no hay más
+        // que la onda del audio de referencia.
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, segundos: 600, tomas: [toma(1, 10, 20, 'PV', T0)] });
+        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar(null, []));
+        t.deep(plan.clases[0].marcadores, [], 'en la precortada no, que no tiene nota');
+        const toma1 = plan.marcadoresDeCaptura.filter(m => m.nombre.startsWith('Toma 1'));
+        t.deep(toma1.map(m => [m.nombre, m.desdeSeg, m.hastaSeg]),
+            [['Toma 1 · PV', 10, 20], ['Toma 1 · OUT', 20, 20]]);
+    });
+
     t.group('prproj de la carpeta · dónde se escribe');
 
     t.test('en Proyecto/, con el nombre de la carpeta', () => {
@@ -594,6 +629,20 @@ module.exports = async function (t) {
         const colores = coloresDeLasPistas(p, precortada);
         t.eq(colores.filter(Boolean).length, 3, `las tres pistas pintadas: ${colores.join(', ')}`);
         t.eq(new Set(colores).size, 3, 'y las tres de distinto color');
+
+        // Los marcadores del audio, que es la parte que no se puede comprobar en
+        // el plan: que hayan quedado en el contenedor DEL MEDIO, que es el que
+        // miran el clip maestro —el monitor de origen— y todos los cortes de ese
+        // archivo donde aparezcan.
+        const wavMaestro = p.porClase('MasterClip').find(k => /\.wav$/.test(nombre(k) || ''));
+        const clip = p.refsDe(wavMaestro).find(k => p.clase(k) === 'AudioClip');
+        const marcas = p.refsDe(clip).find(k => p.clase(k) === 'Markers');
+        t.ok(marcas, 'el clip maestro del WAV tiene su contenedor de marcadores');
+        const cuantos = (p.contenido(marcas).match(/<Marker Version/g) || []).length;
+        // La primera clase: una claqueta y tres tomas, con su IN y su OUT.
+        t.eq(cuantos, 7, 'con los marcadores de toda la sesión');
+        t.ok(p.quienReferencia(marcas).filter(k => p.clase(k) === 'AudioClip').length > 1,
+            'y es el mismo que usan los cortes de ese audio en las capturas');
     });
 
     t.test('una captura puesta solo en sus tomas no deja clips en las demás', async () => {

@@ -341,6 +341,10 @@ class Taller {
             clipProjectItem: cpi,
             masterClip: master,
             medio,
+            // El contenedor de marcadores del archivo, que el clonado trajo con
+            // el clip maestro. Viene vacío —el del molde habla de otro archivo— y
+            // se llena con `marcarMedio`.
+            marcas: this._deClase(clonados, 'Markers')[0] || null,
             fuenteVideo: this._deClase(clonados, 'VideoMediaSource')[0] || null,
             fuenteAudio: this._deClase(clonados, 'AudioMediaSource')[0] || null,
             canales: ficha.canales,
@@ -662,9 +666,12 @@ class Taller {
             .replace(/<Name>[^<]*<\/Name>/, `<Name>${xmlSeguro(medio.nombre)}</Name>`));
         // Los marcadores del clip son los del medio de ORIGEN: los del molde
         // hablan de otro archivo. Se repuntan a los del medio nuevo, que el
-        // clonado del medio ya trajo vacíos. Una secuencia usada de fuente no
-        // tiene `medio`, y ahí el clip maestro es el único lugar donde mirar.
-        const marcasDelMedio = p.refsDe(medio.masterClip).find(k => p.clase(k) === 'Markers')
+        // clonado del medio ya trajo vacíos y `marcarMedio` puede llenar. Una
+        // secuencia usada de fuente no tiene `marcas` ni `medio`, y ahí el clip
+        // maestro es el único lugar donde mirar: los marcadores de una secuencia
+        // anidada son los suyos, que es lo que Premiere muestra encima del clip.
+        const marcasDelMedio = medio.marcas
+            || p.refsDe(medio.masterClip).find(k => p.clase(k) === 'Markers')
             || (medio.medio ? p.refsDe(medio.medio).find(k => p.clase(k) === 'Markers') : null);
         if (marcasDelMedio) this.repuntar(clip, 'Markers', marcasDelMedio);
 
@@ -912,24 +919,16 @@ class Taller {
     // ── marcadores ──
 
     /**
-     * Le cuelga a una secuencia su lista de marcadores.
+     * Los marcadores como objetos del formato: la lista que va adentro de un
+     * contenedor y los `Marker` que la lista nombra.
      *
-     * Dos cosas que no se adivinan. Una: **la lista va ordenada alfabéticamente
-     * por GUID**, no por tiempo. El contenedor lo declara con
-     * `<ByGUID>byGUID</ByGUID>` y los marcadores reales del editor están así,
-     * verificados uno por uno. Dos: el color va como un entero adentro de un
-     * JSON, que es lo que hace que este formato valga la pena — el XML de
-     * intercambio degradaba el color al más parecido de once nombres fijos, y
-     * acá viaja el número exacto. Quedó confirmado abriendo la PRUEBA-B: el
-     * marcador salió del naranja pedido, o sea que el entero llega intacto.
+     * Está aparte porque los dos sitios donde van marcadores —una secuencia y un
+     * medio— se diferencian solo en el contenedor: la secuencia estrena uno y el
+     * medio ya trae el suyo, vacío, del clonado. Lo de adentro es idéntico.
      *
-     * @param {{nombre:string, comentario:string, desdeSeg:number, hastaSeg:number, color:number}[]} marcadores
+     * @param {number} desdeId el primer `ObjectID` libre para los `Marker`
      */
-    ponerMarcadores(seq, marcadores) {
-        if (!marcadores || !marcadores.length) return null;
-        const p = this.proyecto;
-        const id = () => String(++this._ultimoId || (this._ultimoId = p.maxId() + 1));
-
+    _marcasSueltas(marcadores, desdeId) {
         const piezas = marcadores.map(m => {
             const llave = this.uid();
             const cuerpo = {
@@ -946,31 +945,97 @@ class Taller {
             return { llave, json: JSON.stringify({ DVAMarker: cuerpo }) };
         }).sort((a, b) => (a.llave < b.llave ? -1 : 1));
 
-        const idContenedor = p.maxId() + 1;
-        const cuerpos = piezas.map((pieza, i) => {
-            const idMarcador = idContenedor + 1 + i;
-            return { ...pieza, id: idMarcador };
-        });
-
-        const contenedor = [
-            `\t<Markers ObjectID="${idContenedor}" ClassID="${CLASE_MARKERS}" Version="4">`,
-            '\t\t<Markers Version="1">',
-            ...cuerpos.flatMap((c, i) => ([
-                `\t\t\t<Marker Version="1" Index="${i}">`,
-                `\t\t\t\t<First>${c.llave}</First>`,
-                `\t\t\t\t<Second ObjectRef="${c.id}"/>`,
-                '\t\t\t</Marker>'
-            ])),
-            '\t\t</Markers>',
-            '\t\t<ByGUID>byGUID</ByGUID>',
-            '\t</Markers>',
-            ...cuerpos.flatMap(c => ([
+        const cuerpos = piezas.map((pieza, i) => ({ ...pieza, id: desdeId + i }));
+        return {
+            lista: [
+                '\t\t<Markers Version="1">',
+                ...cuerpos.flatMap((c, i) => ([
+                    `\t\t\t<Marker Version="1" Index="${i}">`,
+                    `\t\t\t\t<First>${c.llave}</First>`,
+                    `\t\t\t\t<Second ObjectRef="${c.id}"/>`,
+                    '\t\t\t</Marker>'
+                ])),
+                '\t\t</Markers>'
+            ],
+            objetos: cuerpos.flatMap(c => ([
                 `\t<Marker ObjectID="${c.id}" ClassID="${CLASE_MARKER}" Version="3">`,
                 `\t\t<DVAMarker>${xmlSeguro(c.json)}</DVAMarker>`,
                 '\t</Marker>'
             ]))
-        ].join('\n');
-        p.agregar(contenedor);
+        };
+    }
+
+    /**
+     * Los marcadores DEL ARCHIVO de un medio importado.
+     *
+     * Son los que se ven al abrir el medio en el monitor de origen y los que
+     * cada clip de ese archivo lleva encima en cualquier secuencia, y por eso
+     * son los que de verdad hacían falta: el WAV de referencia de una clase son
+     * dos horas de onda sin un solo hito, y la sesión tiene setenta y cinco.
+     *
+     * No se cuelgan del clip maestro ni del medio sino del contenedor que el
+     * clonado del medio ya trajo —vacío, porque el del molde habla de otro
+     * archivo—, y ahí está la gracia: **a ese contenedor apuntan ya el clip
+     * maestro y todos los cortes de ese archivo** (`colocarCorte` los repunta),
+     * así que llenarlo una vez los marca todos, incluidos los que se coloquen
+     * después.
+     *
+     * @param {object} medio lo que devolvió `importarMedio`
+     * @param {{nombre:string, comentario:string, desdeSeg:number, hastaSeg:number, color:number}[]} marcadores
+     *   medidos DESDE EL ARRANQUE DEL ARCHIVO, no desde el cero de la sesión
+     */
+    marcarMedio(medio, marcadores) {
+        if (!marcadores || !marcadores.length || !medio || !medio.marcas) return null;
+        const p = this.proyecto;
+        const { lista, objetos } = this._marcasSueltas(marcadores, p.maxId() + 1);
+        p.agregar(objetos.join('\n'));
+
+        // `LastMetadataState` y `LastContentState` son la huella del XMP del
+        // archivo de ORIGEN: la misma mentira que `ModificationState` en
+        // `importarMedio`, y acá además es la huella de unos marcadores que no
+        // son estos. Se sacan y que Premiere resuelva contra el archivo real.
+        const texto = p.contenido(medio.marcas)
+            .replace(/\n\t*<LastMetadataState>[\s\S]*?<\/LastMetadataState>/g, '')
+            .replace(/\n\t*<LastContentState>[\s\S]*?<\/LastContentState>/g, '');
+
+        const vieja = ubicarLista(texto, 'Markers');
+        if (vieja) {
+            p.escribir(medio.marcas, texto.slice(0, vieja.ini) + lista.join('\n') + texto.slice(vieja.fin));
+        } else {
+            const donde = texto.indexOf('\n\t\t<ByGUID>');
+            if (donde === -1) throw new Error(`el contenedor de marcas de ${medio.nombre} no tiene <ByGUID>`);
+            p.escribir(medio.marcas, texto.slice(0, donde) + '\n' + lista.join('\n') + texto.slice(donde));
+        }
+        return medio.marcas;
+    }
+
+    /**
+     * Le cuelga a una secuencia su lista de marcadores.
+     *
+     * Dos cosas que no se adivinan. Una: **la lista va ordenada alfabéticamente
+     * por GUID**, no por tiempo. El contenedor lo declara con
+     * `<ByGUID>byGUID</ByGUID>` y los marcadores reales del editor están así,
+     * verificados uno por uno. Dos: el color va como un entero adentro de un
+     * JSON, que es lo que hace que este formato valga la pena — el XML de
+     * intercambio degradaba el color al más parecido de once nombres fijos, y
+     * acá viaja el número exacto. Quedó confirmado abriendo la PRUEBA-B: el
+     * marcador salió del naranja pedido, o sea que el entero llega intacto.
+     *
+     * @param {{nombre:string, comentario:string, desdeSeg:number, hastaSeg:number, color:number}[]} marcadores
+     */
+    ponerMarcadores(seq, marcadores) {
+        if (!marcadores || !marcadores.length) return null;
+        const p = this.proyecto;
+        const idContenedor = p.maxId() + 1;
+        const { lista, objetos } = this._marcasSueltas(marcadores, idContenedor + 1);
+
+        p.agregar([
+            `\t<Markers ObjectID="${idContenedor}" ClassID="${CLASE_MARKERS}" Version="4">`,
+            ...lista,
+            '\t\t<ByGUID>byGUID</ByGUID>',
+            '\t</Markers>',
+            ...objetos
+        ].join('\n'));
 
         // El `MarkerOwner` va pegado al cierre del `</Node>` de la secuencia, que
         // es donde lo pone Premiere (comprobado en la PRUEBA-B, que abrió bien).

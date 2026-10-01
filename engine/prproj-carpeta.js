@@ -293,6 +293,24 @@ function wavQueContiene(wavs, ms) {
 }
 
 /**
+ * Un marcador del XML dicho como los nombra este módulo.
+ *
+ * Los dos formatos llevan lo mismo —nombre, comentario, desde, hasta y el
+ * entero de color de Premiere— con otros nombres de campo, así que el juego de
+ * marcadores de una sesión se arma UNA vez, en `notas-xml.js`, y acá se
+ * traduce. Un marcador de punto llega sin `endSec` y en este formato dura cero.
+ */
+function deXml(m) {
+    return {
+        nombre: m.name,
+        comentario: m.comment,
+        desdeSeg: m.startSec,
+        hastaSeg: m.endSec == null ? m.startSec : m.endSec,
+        color: m.color
+    };
+}
+
+/**
  * Todo lo que va al proyecto, sin tocar todavía el formato.
  *
  * **Las clases van por hora de inicio, no por nombre.** Class Cut ordena por
@@ -325,6 +343,15 @@ function planear(sesiones, config) {
             avisos.push(`${sesion.secuencia} quedó sin terminar: entra con lo que tenía guardado.`);
         }
         const largoSeg = largoDe(sesion, wavs);
+        // Lo que lleva cada WAV encima: los mismos marcadores que el XML le pone
+        // al clip maestro, medidos desde el arranque del archivo. Es el juego
+        // completo de la sesión —tomas, claquetas y notas— porque un WAV de dos
+        // horas es lo único que el editor tiene para ubicarse mientras
+        // sincroniza, y ahí no hay pistas de colores que mirar.
+        const marcas = notasXml.marcadores(sesion);
+        for (const w of wavs) {
+            w.marcadores = notasXml.marcadoresDelClip(marcas, w, sesion.ceroMs).map(deXml);
+        }
         clases.push({
             sesion,
             nombre: sesion.secuencia,
@@ -370,6 +397,7 @@ function planear(sesiones, config) {
         let cursor = 0;
         clase.cortes = [];
         clase.marcadores = [];
+        clase.marcadoresDelNido = [];
         const tomas = vivo.tomasQueQuedan(clase.sesion).slice().sort((a, b) => a.inMs - b.inMs);
         for (const toma of tomas) {
             const vista = vivo.vistaLeida(toma.vista) || vivo.VISTA_POR_DEFECTO;
@@ -402,6 +430,26 @@ function planear(sesiones, config) {
                 referencia
             });
 
+            // **En el nido van todas las tomas y en la precortada solo las que
+            // traen algo escrito.** Son dos sitios con dos trabajos: el nido es
+            // donde el editor sincroniza su material contra la onda del audio de
+            // referencia, y ahí cada toma es un hito que hace falta; la
+            // precortada ya muestra el plano en la pista encendida.
+            clase.marcadoresDelNido.push({
+                nombre: `${notasXml.nombreDeToma(toma)} · ${vista}`,
+                comentario: vivo.comentarioDeEntrada(toma),
+                desdeSeg: enNido(clase, inMs),
+                hastaSeg: enNido(clase, outMs),
+                color: notasXml.colorDeVista(vista)
+            });
+            clase.marcadoresDelNido.push({
+                nombre: `${notasXml.nombreDeToma(toma)} · OUT`,
+                comentario: `OUT: ${vivo.cueDeSalida(toma)}`,
+                desdeSeg: enNido(clase, outMs),
+                hastaSeg: enNido(clase, outMs),
+                color: notasXml.colorDeVista(vista)
+            });
+
             // **Solo las tomas que tienen algo escrito llevan marcador, y dura
             // lo que dura la toma.** En la precortada el plano ya se ve —es la
             // pista que quedó encendida, con el color de su anidación— así que
@@ -424,7 +472,17 @@ function planear(sesiones, config) {
             // se corrió después de escribirlas— se quedan afuera: en la precortada
             // ese audio no está.
             for (const c of toma.comentarios || []) {
-                if (c.desdeMs == null || c.desdeMs < inMs || c.desdeMs >= outMs) continue;
+                if (c.desdeMs == null) continue;
+                const enElNido = enNido(clase, c.desdeMs);
+                clase.marcadoresDelNido.push({
+                    nombre: 'Nota',
+                    comentario: vivo.limpio(c.comentario),
+                    desdeSeg: enElNido,
+                    hastaSeg: c.hastaMs != null
+                        ? Math.max(enElNido, enNido(clase, c.hastaMs)) : enElNido,
+                    color: notasXml.BLANCO
+                });
+                if (c.desdeMs < inMs || c.desdeMs >= outMs) continue;
                 const desde = cursor + (c.desdeMs - inMs) / 1000;
                 const hasta = c.hastaMs != null ? cursor + (Math.min(c.hastaMs, outMs) - inMs) / 1000 : desde;
                 clase.marcadores.push({
@@ -441,7 +499,8 @@ function planear(sesiones, config) {
         if (!clase.cortes.length) avisos.push(`${clase.nombre} no tiene tomas que vayan al XML: no lleva precortada.`);
     }
 
-    // Los marcadores de las anidaciones: dónde empieza cada clase y cada claqueta.
+    // Los marcadores de las anidaciones: dónde empieza cada clase, sus claquetas
+    // y sus tomas.
     const marcadoresDeCaptura = [];
     for (const clase of clases) {
         marcadoresDeCaptura.push({
@@ -463,6 +522,7 @@ function planear(sesiones, config) {
                 color: COLOR_DE_CLAQUETA
             });
         }
+        marcadoresDeCaptura.push(...clase.marcadoresDelNido);
     }
 
     // Dos vistas pueden compartir una fuente —la Captura 2 sola es la misma
@@ -819,6 +879,18 @@ async function generar(opciones) {
         };
     }
 
+    // **Los cortes se ajustan contra la onda antes de planear.** El sidecar ya
+    // trae el ajuste, pero puede ser de una versión anterior de esa cuenta
+    // (`ajustar-corte.VERSION`), y entonces el proyecto saldría con los cortes
+    // viejos mientras el XML de la misma clase —rehecho— sale con los nuevos:
+    // dos versiones del mismo corte, que es justo lo que el editor no puede
+    // tener. Se ajusta en memoria; el sidecar lo reescribe «Rehacer XML».
+    decir(0, sesiones.length, 'Mirando la onda de cada clase…');
+    for (const s of sesiones) {
+        if (!s.archivos || !s.archivos.json) continue;
+        sesionesGrabadas.ajustarBordes(s, workspace.sesionDelSidecar(s.archivos.json));
+    }
+
     const plan = planear(sesiones, config);
     const avisos = plan.avisos.slice();
     const total = plan.clases.length;
@@ -844,6 +916,7 @@ async function generar(opciones) {
                     canales: w.canales === 2 ? 2 : 1,
                     conVideo: false
                 });
+                taller.marcarMedio(medio, w.marcadores);
                 taller.guardarEn(bins[2], medio.clipProjectItem);
                 medios.set(w.ruta, medio);
             }
