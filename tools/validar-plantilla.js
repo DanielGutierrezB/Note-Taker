@@ -32,6 +32,7 @@ const carpetaPrproj = require('../engine/prproj-carpeta');
 const vivo = require('../engine/notas-vivo');
 const notasXml = require('../engine/notas-xml');
 const workspace = require('../engine/workspace');
+const { CARPETA: CARPETA_NEUTRA } = require('./limpiar-plantilla');
 
 const RAIZ = path.join(__dirname, '..');
 
@@ -84,12 +85,15 @@ async function main() {
     console.log(`Plantilla: ${ruta}`);
     console.log(`  cuadros por segundo: ${fps == null ? 'no se pudo leer' : Math.round(fps * 1000) / 1000}`);
     console.log(`  trae ${secuencias} secuencia(s) y ${medios.length} archivo(s) de material`);
-    // Nada de esto llega al proyecto generado, pero viaja en el instalador.
+    // Nada de esto llega al proyecto generado, pero viaja en el instalador: una
+    // plantilla armada sobre un proyecto real lleva adentro las rutas de su
+    // material. Las que `tools/limpiar-plantilla.js` ya dejó neutras no cuentan.
     const carpetas = [...new Set(medios.map(m => path.dirname(m)))];
     for (const c of carpetas.slice(0, 5)) console.log(`    ${c}/`);
     if (carpetas.length > 5) console.log(`    … y ${carpetas.length - 5} carpeta(s) más`);
-    if (medios.length > 4) {
-        console.log('  ! trae mucho material: si es un proyecto real, sus rutas viajarían en el instalador');
+    const ajenas = carpetas.filter(c => !c.startsWith(CARPETA_NEUTRA));
+    if (ajenas.length) {
+        console.log('  ! trae rutas de material real: pasala por tools/limpiar-plantilla.js');
     }
     if (faltan.length) {
         console.log(`  ✗ le falta: ${faltan.join('; ')}`);

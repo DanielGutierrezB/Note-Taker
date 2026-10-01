@@ -681,8 +681,19 @@ porque el formato cambia entre versiones y la plantilla trae todo correcto
 (ver la cabecera de `engine/prproj.js`). La app lleva la suya adentro, en
 `plantillas/`, así que en otra Mac no hay que buscar nada.
 
-Para armarla, en Premiere, con un proyecto nuevo y material de prueba
-cualquiera:
+La que viaja hoy salió del proyecto con el que se probó Class Cut, pasada por
+`tools/limpiar-plantilla.js`: un proyecto real trae también el curso con el que
+se armó, y eso no puede instalarse en otra Mac. La herramienta le saca la
+transcripción de esa clase —1,4 de sus 1,8 MB— y cambia todas las rutas y
+nombres de archivo por unos neutros que no existen en ninguna máquina. De 516 KB
+queda en 33, y lo que queda son las piezas y sus medidas.
+
+```
+node tools/limpiar-plantilla.js <proyecto.prproj> /tmp/Plantilla.prproj
+node tools/validar-plantilla.js /tmp/Plantilla.prproj --instalar
+```
+
+Para hacer una desde cero, en Premiere, con material de prueba cualquiera:
 
 1. Secuencia nueva a **30 fps**, 1920×1080. Los cuadros por segundo de todas las
    secuencias que se generen salen de acá.
@@ -695,9 +706,11 @@ cualquiera:
 6. Guardar. Nada de lo que tenga adentro llega al proyecto generado: la app
    descuelga todo y lo usa solo como molde.
 
-La app comprueba al generar que no falte nada de esto y dice qué falta. Ojo con
-una cosa: quien abra el proyecto necesita **la misma versión de Premiere o una
-más nueva** que la que guardó la plantilla.
+`tools/validar-plantilla.js` revisa que no falte ninguna de esas piezas, dice a
+cuántos cuadros por segundo está, genera un proyecto de juguete con ella y lo
+vuelve a leer antes de instalarla. Ojo con una cosa: quien abra el proyecto
+necesita **la misma versión de Premiere o una más nueva** que la que guardó la
+plantilla.
 
 ## Las dos lecturas de Whisper
 
