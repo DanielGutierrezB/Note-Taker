@@ -14,6 +14,16 @@ Zoom / interfaz ──► Note Taker ──► xml/clase.xml ──► Premiere
                        └─► xml/Audio/clase-1.wav
 ```
 
+Y tiene un segundo modo, para otra persona y otro trabajo: **grabarse
+explicando lo que se hizo en la semana y salir con el vídeo ya cortado**, con
+la pantalla de fondo y la cámara en la esquina. Las mismas palabras abren y
+cierran las tomas; lo que cambia es que no hay editor al final del camino, sino
+un MP4 (ver **El otro modo**).
+
+```
+cámara + pantalla + voz ──► Note Taker ──► semana.mp4
+```
+
 ---
 
 ## El escenario
@@ -50,6 +60,65 @@ audio grabado y no contra el reloj de pared (ver **Un solo reloj**).
 
 Ajustes y Diagnóstico son paneles: se abren encima de cualquier pantalla,
 porque la pregunta que contestan aparece en cualquier momento.
+
+## El otro modo: un vídeo por semana
+
+Hay un segundo uso de la misma máquina, y se elige en Ajustes
+(**Para qué usás Note Taker**). En vez de tomar notas de un rodaje para que
+otro lo corte, acá una persona **se graba explicando lo que hizo en la semana y
+sale con el vídeo cortado**. Sin editor, sin XML, sin Premiere.
+
+Es una sola pantalla con cuatro momentos: elegir cámara, micrófono y pantalla;
+grabar; cortar; y el MP4 listo con su botón de **Mostrar en Finder**. Se graban
+las tres cosas a la vez —la cámara, la pantalla y la voz—, las tomas se abren
+diciendo **«3, 2, 1»** y se cierran con **«Pausa»** igual que en una clase, y al
+apretar **Terminar** la app corta las tomas, pone la pantalla de fondo con la
+cámara en la esquina inferior derecha, y exporta. No pregunta nada.
+
+Lo que hace que esto sea barato es que **casi todo ya estaba**: el micrófono va
+por el mismo camino que en una clase, así que el «3, 2, 1», la «Pausa», el
+cierre de toma y el ajuste de los bordes al silencio son el mismo código y el
+mismo `ajustar-corte.js`. Lo nuevo son tres piezas: grabar los dos vídeos
+(`engine/video-crudo.js`), cortarlos (`engine/exportar-video.js`) y la pantalla
+(`src/js/pantalla-semanal.js`). Del modo de clase no se tocó nada.
+
+**Tres relojes que hay que cruzar bien.** El audio, la cámara y la pantalla
+empiezan en instantes distintos y cada archivo guarda su hora de arranque. Dos
+medidas, hechas en el Electron de esta app con un vídeo sintético que cambia de
+color cada segundo:
+
+- la hora buena es la de llamar a `start()`, no la del aviso `onstart`: el
+  primer fotograma del archivo cae a 43 ms de `start()`, mientras que `onstart`
+  llega 294 ms tarde en un grabador y 339 ms en el otro —y con 45 ms de
+  diferencia entre los dos, que es desfase puro;
+- los bordes de las tomas viven en el **reloj del audio** y los vídeos en el
+  **reloj de pared**, así que si el dispositivo entrega más o menos muestras de
+  las que declara, el corte se desliza. Se corrige con la deriva medida del
+  propio WAV (`derivaDe` en `engine/exportar-video.js`). Con un micrófono normal
+  da 1,00x y no hace nada; lo encontró la corrida de punta a punta con el
+  micrófono falso de Chromium, que escribe audio a 1,88x y dejaba la segunda
+  toma fuera del vídeo.
+
+**Los labios cuadran por construcción.** La cámara se graba con la pista del
+micrófono adentro, así que la voz y la imagen las muxea Chromium (medido: unos
+70 ms de desfase dentro del archivo) y el vídeo exportado usa ese audio. Si la
+cámara no tiene audio, se cae al WAV.
+
+El MP4 sale en la raíz de la carpeta del modo, con el nombre de la sesión, y
+**nunca pisa uno que ya exista** —puede ser el que la persona ya mandó—. Los
+brutos sin cortar se quedan en `xml/Video/` y `xml/Audio/` por si hay que
+rehacerlo. En `xml/` queda además el XML de siempre, que acá nadie va a abrir:
+es el motor haciendo lo que hace, y sale gratis dejarlo —si alguna vez un corte
+automático no alcanza, ese archivo abre las mismas tomas en Premiere.
+
+```bash
+npx electron . --use-fake-device-for-media-stream \
+    --guion=tools/semanal-de-punta-a-punta.js
+```
+
+Eso graba, corta y exporta sin tocar nada, y después mide lo único que
+importa: que el vídeo dure lo que duran las tomas. En la última corrida, 6,36 s
+esperados y 6,37 s obtenidos.
 
 ## Lo que se dice y lo que pasa
 
@@ -1033,7 +1102,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 237 pruebas, sin red y sin abrir nada
+npm test           # 702 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```
@@ -1076,6 +1145,23 @@ velocidad porque los tiempos no salen de `Date.now()` sino de la posición en el
 audio: seis minutos de clase se pasan en dos minutos de reloj y los timecodes
 que salen son los que habrían salido en vivo.
 
+**El modo semanal se prueba grabando de verdad.** Las pruebas de `tests/`
+cubren el reparto y el grafo de ffmpeg, que es lo que se puede comprobar sin
+medios —incluida una que corta un vídeo de verdad y mira el píxel de la esquina
+para saber si la cámara cayó donde tenía que caer—. Lo que no se puede
+comprobar así es que lo que graba la ventana sea lo que ffmpeg puede abrir, y
+para eso está la corrida entera:
+
+```bash
+npx electron . --use-fake-device-for-media-stream \
+    --guion=tools/semanal-de-punta-a-punta.js [--segundos=12]
+```
+
+Graba con la cámara falsa de Chromium, abre y cierra dos tomas con un hueco en
+medio, corta, exporta, y después mide lo único que lo dice todo: que el vídeo
+dure lo que duran las tomas —cruzando antes los dos relojes, porque el
+micrófono falso escribe audio a 1,88x—. De ahí salió la corrección de deriva.
+
 **La cámara de referencia se prueba con la cámara falsa de Chrome.** Lo que
 `src/js/grabar/ojo.js` hace —abrir una cámara, guardar un fotograma cada medio
 segundo y devolver el de una hora dada— no se puede leer en el código: se corre
@@ -1092,6 +1178,7 @@ toma, fuera del XML, la ruta comprobada antes de abrirla— están en
 main.js · preload.js     Electron (el motor corre en el proceso principal)
 ipc/grabar.js            el puente de la grabación
 ipc/referencias.js       el de las fotos del OUT
+ipc/semanal.js           el del modo semanal: los dos vídeos y el corte
 engine/
   grabacion.js           la sesión: los relojes, el ciclo de señales, las claquetas
   espejo.js              lo que se ve de la sesión: el disco y la pantalla
@@ -1100,6 +1187,8 @@ engine/
   ajustar-corte.js       correr el IN y el OUT al silencio de al lado
   fcp-xml.js             el formato FCP7, con marcadores de secuencia y de clip
   captura.js             el WAV que se escribe mientras entra
+  video-crudo.js         los dos vídeos del modo semanal, mientras entran
+  exportar-video.js      el MP4 cortado, con la cámara en la esquina
   aplausos.js            la palmada de la claqueta, en el PCM
   golpe.js               un pico corto y fuerte (lo que usaba antes)
   oir.js · transcribe.js Whisper local, por pedazos
@@ -1114,12 +1203,13 @@ engine/
   paths.js               dónde están ffmpeg y whisper en esta máquina
 src/js/
   app.js                 el cableado: qué pantalla sigue a cuál
-  pantalla-*.js          Sesiones · Preparar · En vivo · Cierre
+  pantalla-*.js          Sesiones · Preparar · En vivo · Cierre · Semanal
   estados.js             el vocabulario de estados, en un solo sitio
   formato.js             el timecode, que tiene que dar lo mismo que el XML
   iconos.js              SVG de trazo, un dibujo por concepto
   grabar/oido.js         getUserMedia y el worklet que manda el PCM
   grabar/ojo.js          la cámara de referencia y el anillo de fotogramas
+  grabar/filmar.js       grabar la cámara y la pantalla (modo semanal)
   fotos.js               cuándo se guarda la foto de una toma
 tools/                   maqueta, auditoría, simulación, build
 tests/                   corredor propio: node tests/run.js

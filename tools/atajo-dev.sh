@@ -121,7 +121,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>NSMicrophoneUsageDescription</key>
     <string>Note Taker escucha la entrada de audio de la clase para medir el nivel y para reconocer el conteo y la pausa mientras se toman las notas.</string>
     <key>NSCameraUsageDescription</key>
-    <string>Note Taker muestra en pantalla lo que está entrando por una cámara, para ver qué se está filmando mientras se toman las notas. Ese video no se graba ni se guarda.</string>
+    <string>Note Taker muestra en pantalla lo que está entrando por una cámara. Tomando notas de una clase saca una foto al cerrarse cada toma y no guarda el video; en el modo de video semanal graba la cámara, porque es la que sale en la esquina del video que exporta.</string>
     <key>NSAudioCaptureUsageDescription</key>
     <string>Note Taker escucha el sonido de Zoom para grabar la clase que llega por la llamada y reconocer el conteo y la pausa. Solo escucha a Zoom: no graba nada más de la Mac.</string>
 </dict>

@@ -208,6 +208,27 @@
       </div>
     </div>
   </section>
+
+  <!-- ── El modo semanal ──────────────────────────────────────────────
+       Una pantalla para las tres cosas, porque son tres momentos de lo mismo
+       y no tres sitios: preparar, grabar y el vídeo listo. Lo que cambia es
+       qué tarjeta está puesta, y lo decide `pantalla-semanal.js`.
+
+       No comparte nada con las cuatro de arriba a propósito: quien usa este
+       modo no tiene por qué ver una lista de clases, ni una checklist de
+       rodaje, ni un XML. -->
+  <section class="vista" id="vista-semanal">
+    <div class="scroll">
+      <div class="seccion">
+        <div class="seccion-titulo">
+          <span id="semanal-titulo">Tu vídeo de la semana</span>
+          <span class="crece"></span>
+          <span id="semanal-reloj" class="grande-tc" hidden>00:00:00</span>
+        </div>
+        <div id="semanal-cuerpo"></div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <!-- ── El menú del clic derecho sobre una palabra ─────────────────────
@@ -228,6 +249,18 @@
               title="Cerrar Ajustes. Cada cosa se guarda al cambiarla, así que no hay nada que confirmar."></button>
     </div>
     <div class="panel-cuerpo">
+      <!-- El modo va primero porque es lo que decide si el resto de este panel
+           significa algo: con «vídeo semanal» no hay secuencia, ni XML, ni
+           editor. Es un ajuste y no un botón en la barra porque una persona usa
+           uno de los dos y no los alterna. -->
+      <label class="campo">
+        <span class="rotulo">Para qué usás Note Taker</span>
+        <select id="aj-modo">
+          <option value="clase">Tomar notas de una clase, para el editor</option>
+          <option value="semanal">Grabar mi vídeo de la semana, cortado y listo</option>
+        </select>
+        <span class="v3" id="aj-modo-dice"></span>
+      </label>
       <label class="campo">
         <span class="rotulo">Cuadros por segundo de la secuencia</span>
         <select id="aj-fps"></select>

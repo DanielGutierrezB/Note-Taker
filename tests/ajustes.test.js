@@ -19,6 +19,27 @@ module.exports = function (t) {
         t.eq(a.idioma, 'es');
         t.eq(a.carpeta, null);
         t.deep(a.carpetas, []);
+        t.eq(a.modo, 'clase', 'la app abre tomando notas, como siempre');
+        t.deep(a.semanal, { carpeta: null });
+    });
+
+    t.test('el modo se guarda, y uno inventado abre la app como siempre', () => {
+        // Que un ajuste roto no pueda dejar a nadie en una pantalla que no
+        // entiende: `clase` es el modo que no graba vídeo ni exporta nada.
+        t.eq(ajustes.sanear({ modo: 'semanal' }).modo, 'semanal');
+        t.eq(ajustes.sanear({ modo: 'clase' }).modo, 'clase');
+        t.eq(ajustes.sanear({ modo: 'cualquiera' }).modo, 'clase');
+        t.eq(ajustes.sanear({ modo: 7 }).modo, 'clase');
+    });
+
+    t.test('el modo semanal tiene su propia carpeta, aparte de la del curso', () => {
+        // Aparte a propósito: así la lista de clases del editor no se llena de
+        // vídeos de la semana ni la carpeta de un curso de MP4.
+        const a = ajustes.sanear({ carpeta: '/Cursos/React', semanal: { carpeta: '/Users/x/Movies/Semanal' } });
+        t.eq(a.carpeta, '/Cursos/React');
+        t.eq(a.semanal.carpeta, '/Users/x/Movies/Semanal');
+        t.deep(a.carpetas, ['/Cursos/React'], 'y la del modo semanal no entra en las recientes');
+        t.eq(ajustes.sanear({ semanal: 'una cadena' }).semanal.carpeta, null);
     });
 
     t.test('un fps de la lista se respeta', () => {

@@ -45,7 +45,11 @@ const ALTO = Number(arg('alto', 840));
 /** Los escenarios que se auditan, y a qué anchos. */
 const ESCENARIOS = arg('escenario', null)
     ? [arg('escenario')]
-    : ['sesiones', 'preparar', 'en-vivo', 'toma-abierta', 'palmada', 'palmada-vencida', 'terminada', 'notas-de-antes', 'foto', 'prproj', 'prproj-lleno', 'prproj-listo', 'diagnostico'];
+    : ['sesiones', 'preparar', 'en-vivo', 'toma-abierta', 'palmada', 'palmada-vencida', 'terminada',
+        'notas-de-antes', 'foto', 'prproj', 'prproj-lleno', 'prproj-listo', 'diagnostico',
+        // El modo semanal: lo miran personas que no son el editor y que no van a
+        // aprender esta interfaz, así que la vara es la misma o más estricta.
+        'semanal', 'semanal-grabando', 'semanal-hecho'];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
 
 /**

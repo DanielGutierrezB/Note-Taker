@@ -45,6 +45,7 @@
  */
 
 const captura = require('./captura');
+const videoCrudo = require('./video-crudo');
 const registro = require('./registro');
 const aplausos = require('./aplausos');
 const vivo = require('./notas-vivo');
@@ -125,6 +126,39 @@ function activa() {
 /** La sesión que se está grabando, para que el disco la deje fuera de la lista. */
 function enCurso() {
     return sesion ? sesion.estado.secuencia : null;
+}
+
+/**
+ * Dónde está escribiendo la sesión viva, para quien tenga que escribir al lado.
+ *
+ * Lo usa el modo semanal: los dos vídeos van a una carpeta de ESTA sesión y con
+ * SU nombre, y quien los graba es la ventana, que no sabe ni una cosa ni la
+ * otra. Devolver el objeto entero dejaría a cualquiera tocar la sesión por
+ * dentro; esto es una copia de los tres datos que hacen falta.
+ */
+function dondeVa() {
+    if (!sesion) return null;
+    return { dir: sesion.dir, secuencia: sesion.estado.secuencia, ceroMs: sesion.estado.ceroMs };
+}
+
+/**
+ * Apunta en la sesión los vídeos que se grabaron al lado del audio.
+ *
+ * Van al estado —y de ahí al sidecar— porque son el material del corte: con el
+ * archivo y su hora de arranque se puede volver a exportar el MP4 más tarde sin
+ * grabar nada otra vez. Si un `cual` ya estaba apuntado se reemplaza, que es lo
+ * que pasa al reanudar: el vídeo nuevo es el que vale.
+ */
+function anotarVideos(videos) {
+    if (!sesion || !videos || !videos.length) return [];
+    const puestos = sesion.estado.videos || [];
+    for (const v of videos) {
+        if (!v || !v.cual) continue;
+        const i = puestos.findIndex(x => x.cual === v.cual);
+        if (i === -1) puestos.push(v); else puestos[i] = v;
+    }
+    sesion.estado.videos = puestos;
+    return puestos;
 }
 
 /**
@@ -673,6 +707,10 @@ function cerrarLoAbierto() {
         if (cerrada) sesion.estado.sesiones.push(cerrada);
         sesion.captura = null;
     }
+    // Y los vídeos del modo semanal, si los había. Cerrarlos acá y no solo
+    // cuando la ventana avisa es lo que hace que cerrar la app a mitad de una
+    // grabación deje dos archivos que se abren: lo que llegó, llegó.
+    anotarVideos(videoCrudo.cerrarTodo());
     return abierta ? abierta.id : null;
 }
 
@@ -768,6 +806,8 @@ module.exports = {
     MARGEN_CLAQUETA_MS,
     activa,
     enCurso,
+    dondeVa,
+    anotarVideos,
     iniciar,
     pcm,
     claqueta,

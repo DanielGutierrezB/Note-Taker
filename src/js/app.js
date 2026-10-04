@@ -12,6 +12,12 @@
  * MISMA pantalla de En vivo, para mirarla y ajustarle las notas (`irANotas`). No
  * es una pantalla más: es la misma con otro estado.
  *
+ * **Y hay un segundo recorrido que no se cruza con este.** Con el modo
+ * `semanal` en Ajustes, la app abre una sola pantalla —grabarse explicando la
+ * semana y salir con un MP4 cortado— y ninguna de las cuatro de arriba se
+ * monta. Son dos usos distintos de la misma máquina: el editor nunca ve el
+ * modo semanal y quien se graba la semana nunca ve una lista de clases.
+ *
  * Ajustes y Diagnóstico son paneles y no pantallas: se abren encima de
  * cualquiera de las cuatro, porque la pregunta que contestan —«¿a cuántos
  * cuadros va esto?», «¿encontró Whisper?»— aparece en cualquier momento.
@@ -23,6 +29,7 @@ import * as sesiones from './pantalla-sesiones.js';
 import * as preparar from './pantalla-preparar.js';
 import * as vivo from './pantalla-vivo.js';
 import * as cierre from './pantalla-cierre.js';
+import * as semanal from './pantalla-semanal.js';
 import * as dependencias from './dependencias.js';
 import * as ojo from './grabar/ojo.js';
 
@@ -70,6 +77,17 @@ const app = {
         cierre.ver(salida);
     },
 
+    /**
+     * El otro modo, que es una pantalla y no un recorrido.
+     *
+     * Se llega acá por el ajuste y no por un botón: quien lo usa abre la app y
+     * ya está dentro. Las cuatro pantallas de clase se quedan sin montar.
+     */
+    irASemanal() {
+        $('#btn-volver').hidden = true;
+        return semanal.ver();
+    },
+
     // Pintar es parte de abrir: los ajustes se leen del archivo y la lista de
     // cámaras del sistema, y las dos cosas cambian mientras la app está abierta.
     verAjustes() {
@@ -108,11 +126,13 @@ async function arrancar() {
     preparar.conectar(app);
     vivo.conectar(app);
     cierre.conectar(app);
+    semanal.conectar(app);
 
     conectarAjustes();
     conectarActualizaciones();
 
-    await sesiones.ver();
+    // El modo decide qué pantalla abre la app, y es lo único que decide.
+    await (app.ajustes.modo === 'semanal' ? app.irASemanal() : sesiones.ver());
     await revisarDependencias();
 
     const info = await window.nt.appInfo();
@@ -185,6 +205,31 @@ function conectarAjustes() {
         else avisar(r.error, 'error');
     };
 
+    // Cambiar de modo lleva a su pantalla en el acto, con el panel abierto por
+    // encima: así se ve que el cambio hizo algo. Grabando no se cambia, que
+    // sería dejar una grabación en una pantalla que ya no está.
+    $('#aj-modo').addEventListener('change', async e => {
+        const modo = e.target.value;
+        // Quien sabe si hay algo grabando es el motor: `grabar-estado` contesta
+        // null cuando no hay sesión viva. La pantalla guarda el último estado
+        // que vio, que no es lo mismo.
+        const viva = await window.nt.grabarEstado();
+        if (viva || semanal.grabando()) {
+            e.target.value = app.ajustes.modo;
+            avisar('Estás grabando: terminá antes de cambiar de modo.', 'error');
+            return;
+        }
+        await guardar({ modo });
+        pintarAjustes();
+        if (modo === 'semanal') {
+            preparar.salir();
+            vivo.salir();
+            await app.irASemanal();
+        } else {
+            await semanal.salir();
+            await app.irASesiones();
+        }
+    });
     $('#aj-fps').addEventListener('change', e => guardar({ fps: Number(e.target.value) }));
     $('#aj-idioma').addEventListener('change', e => guardar({ idioma: e.target.value }));
     $('#aj-curso').addEventListener('change', e => guardar({ curso: e.target.value }));
@@ -204,6 +249,21 @@ function esNtsc(f) {
 }
 
 function pintarAjustes() {
+    $('#aj-modo').value = app.ajustes.modo;
+    $('#aj-modo-dice').textContent = app.ajustes.modo === 'semanal'
+        ? 'Grabás cámara, pantalla y voz; abrís cada toma diciendo «3, 2, 1» y la cerrás con '
+          + '«Pausa», y al terminar sale un MP4 ya cortado con tu cámara en la esquina. '
+          + (app.ajustes.semanal && app.ajustes.semanal.carpeta
+              ? `Los vídeos van a ${app.ajustes.semanal.carpeta}.`
+              : 'La primera vez te va a preguntar dónde guardarlos.')
+        : 'Tomás notas de un rodaje en vivo y la app escribe el XML que el editor importa '
+          + 'en Premiere. Lo de abajo es de este modo.';
+    for (const campo of ['#aj-fps', '#aj-idioma', '#aj-curso']) {
+        // En el modo semanal no hay secuencia ni curso: el fps lo fija el modo
+        // y el nombre lo pone la app. Se dejan a la vista pero apagados, que
+        // dice más que esconderlos.
+        $(campo).disabled = app.ajustes.modo === 'semanal';
+    }
     $('#aj-fps').value = String(app.ajustes.fps);
     $('#aj-idioma').value = app.ajustes.idioma;
     $('#aj-curso').value = app.ajustes.curso || '';

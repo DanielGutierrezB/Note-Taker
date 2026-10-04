@@ -85,8 +85,33 @@ const DEFAULTS = {
      * (`prproj-carpeta.leerConfig`); esta es el punto de partida de una carpeta
      * que todavía no tiene ninguna.
      */
-    prproj: null
+    prproj: null,
+    /**
+     * En qué modo abre la app.
+     *
+     * `clase` es tomar notas de un rodaje en vivo y dejarle el XML al editor, o
+     * sea todo lo que había hasta ahora. `semanal` es grabarse explicando lo que
+     * se hizo en la semana y salir con un MP4 cortado: otra pantalla, otra
+     * carpeta y ningún XML que nadie vaya a abrir.
+     *
+     * Es un ajuste y no un botón en la barra a propósito: una persona usa uno de
+     * los dos y no los va alternando. El editor lo deja en `clase` y no vuelve a
+     * verlo; en la empresa se pone en `semanal` el primer día.
+     */
+    modo: 'clase',
+    /**
+     * Lo del modo semanal, aparte de lo del modo de clase.
+     *
+     * La carpeta es otra a propósito: así la lista de clases del editor no se
+     * llena de vídeos de la semana, y la carpeta de un curso no se llena de
+     * MP4. Lo que se comparte son la cámara y el micrófono, que son de la
+     * máquina y no del modo.
+     */
+    semanal: { carpeta: null }
 };
+
+/** Los dos modos. Cualquier otra cosa escrita en el archivo es `clase`. */
+const MODOS = ['clase', 'semanal'];
 
 /**
  * La configuración del .prproj con la forma de siempre, o null si no sirve.
@@ -148,7 +173,13 @@ function sanear(crudo) {
         // Lo que haya guardado que no sea un nombre —el `false` de la versión en
         // la que esto era un sí o un no— se lee como «ninguna».
         camara: (typeof c.camara === 'string' && c.camara) || null,
-        prproj: saneada(c.prproj)
+        prproj: saneada(c.prproj),
+        // Un modo que no existe se lee como `clase`: es el que no graba vídeo ni
+        // exporta nada, o sea el que menos sorprende a quien abra la app.
+        modo: MODOS.includes(c.modo) ? c.modo : DEFAULTS.modo,
+        semanal: {
+            carpeta: (c.semanal && typeof c.semanal.carpeta === 'string' && c.semanal.carpeta) || null
+        }
     };
 }
 
@@ -192,5 +223,5 @@ function recordarCarpeta(ruta) {
 
 module.exports = {
     leer, guardar, recordarCarpeta,
-    sanear, archivo, DEFAULTS, RECIENTES, FPS_POSIBLES
+    sanear, archivo, DEFAULTS, RECIENTES, FPS_POSIBLES, MODOS
 };

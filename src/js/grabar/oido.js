@@ -166,6 +166,19 @@ export function dejarDeMandar() { estado.mandando = false; }
 
 export function escuchando() { return Boolean(estado.contexto); }
 
+/**
+ * La pista del micrófono, para quien necesite grabarla además de oírla.
+ *
+ * La usa el modo semanal: la misma pista entra al worklet —que es de donde sale
+ * el WAV y todo el oído— y al grabador del vídeo de la cámara, y así Chromium
+ * muxea la voz junto con la cara y los labios quedan cuadrados por
+ * construcción. Una pista puede estar en dos sitios a la vez sin abrir el
+ * dispositivo dos veces; abrirlo dos veces es lo que no se puede.
+ */
+export function laPista() {
+    return estado.stream ? estado.stream.getAudioTracks()[0] || null : null;
+}
+
 /** Con qué se está capturando, que es lo que el WAV tiene que declarar. */
 export function comoSuena() {
     return {

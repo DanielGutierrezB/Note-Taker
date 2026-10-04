@@ -35,7 +35,10 @@ const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
     'en-vivo', 'en-vivo,desplegada', 'en-vivo,claqueta-abierta',
     'toma-abierta', 'releyendo', 'sin-audio', 'terminada', 'notas-de-antes', 'foto', 'foto-cien',
     'palmada', 'palmada-vencida', 'prproj', 'prproj-lleno', 'prproj-listo',
-    'ajustes', 'diagnostico', 'faltan-modelos', 'iconos'
+    'ajustes', 'diagnostico', 'faltan-modelos',
+    // El modo semanal, en sus cuatro momentos.
+    'semanal', 'semanal-grabando', 'semanal-cortando', 'semanal-hecho',
+    'iconos'
 ];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
 const ALTO = Number(arg('alto', 840));

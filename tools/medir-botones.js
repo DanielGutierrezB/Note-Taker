@@ -48,7 +48,9 @@ const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
     'en-vivo', 'toma-abierta', 'palmada-vencida', 'terminada', 'notas-de-antes', 'foto', 'foto-cien', 'prproj', 'prproj-lleno', 'prproj-listo', 'ajustes', 'diagnostico',
     // El aviso de lo que falta, que en una Mac nueva es lo primero que se ve y
     // es el único sitio donde salen «Instalar lo que falta» y los «Descargar».
-    'faltan-modelos'
+    'faltan-modelos',
+    // El modo semanal, en sus cuatro momentos.
+    'semanal', 'semanal-grabando', 'semanal-cortando', 'semanal-hecho'
 ];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
 const ALTO = Number(arg('alto', 840));

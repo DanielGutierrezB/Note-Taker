@@ -44,6 +44,15 @@ const DATOS_DIR = 'Datos';
 const REFERENCIAS_DIR = 'Referencias';
 
 /**
+ * `Video` es de los brutos del modo semanal: la cámara y la pantalla tal como
+ * salieron de la grabación, sin cortar. Van al lado del audio porque son lo
+ * mismo que el audio —material que se grabó y no se puede repetir— y van con
+ * mayúscula por lo mismo que `Audio`. Lo que la persona se lleva es el MP4
+ * cortado, que queda arriba, en la raíz de su carpeta; esto es de dónde salió.
+ */
+const VIDEO_DIR = 'Video';
+
+/**
  * Cómo termina el archivo con la hora del día, que es lo que hace visible a una
  * sesión: la lista se arma buscando este sufijo (`sesiones-grabadas.js`).
  */
@@ -59,6 +68,10 @@ function audioDir(base) {
 
 function datosDir(base) {
     return path.join(xmlDir(base), DATOS_DIR);
+}
+
+function videoDir(base) {
+    return path.join(xmlDir(base), VIDEO_DIR);
 }
 
 /** Las fotos de referencia van en una subcarpeta por clase, con su nombre. */
@@ -196,10 +209,12 @@ module.exports = {
     AUDIO_DIR,
     DATOS_DIR,
     REFERENCIAS_DIR,
+    VIDEO_DIR,
     SUFIJO_SIDECAR,
     xmlDir,
     audioDir,
     datosDir,
+    videoDir,
     referenciasDir,
     archivosDeSesion,
     sesionDelSidecar,

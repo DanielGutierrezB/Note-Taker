@@ -85,6 +85,21 @@ contextBridge.exposeInMainWorld('nt', {
         ipcRenderer.on('prproj-aviso', (_event, payload) => callback(payload));
     },
 
+    // El modo semanal (`ipc/semanal.js`): los dos vídeos mientras se graban, y
+    // el corte al final. Los trozos van por `send` por lo mismo que el PCM, y
+    // `empezoMs` lo pone la ventana porque es la que llama a `start()`: es la
+    // hora que alinea el vídeo con el audio (ver `engine/video-crudo.js`).
+    semanalAbrir: pedido => ipcRenderer.invoke('semanal-abrir', pedido),
+    semanalTrozo: (cual, trozo) => ipcRenderer.send('semanal-trozo', cual, trozo),
+    semanalCerrar: () => ipcRenderer.invoke('semanal-cerrar'),
+    semanalExportar: json => ipcRenderer.invoke('semanal-exportar', json),
+    onSemanalProgreso: callback => {
+        ipcRenderer.on('semanal-progreso', (_event, payload) => callback(payload));
+    },
+    onSemanalAviso: callback => {
+        ipcRenderer.on('semanal-aviso', (_event, payload) => callback(payload));
+    },
+
     // Las fotos del OUT (`ipc/referencias.js`). El JPEG cruza como bytes y las
     // imágenes vuelven como `data:`, que es lo único que la ventana puede
     // dibujar con su CSP.

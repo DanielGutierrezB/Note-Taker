@@ -2088,3 +2088,30 @@ kbd {
   background-clip: content-box;
   border-radius: 999px;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   EL MODO SEMANAL
+
+   Una sola tarjeta con sus campos, y nada propio más: los campos, el medidor,
+   la vista previa y los contadores son los mismos de las otras pantallas. Lo
+   único que hace falta es separarlos entre sí, porque esta tarjeta no tiene
+   cabeza y los campos cuelgan directamente de su cuerpo.
+
+   La medida es la del cuerpo de un panel de Ajustes (`--sp-5`): son el mismo
+   gesto —una lista de cosas que se eligen antes de empezar— y tienen que
+   leerse con el mismo ritmo.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.semanal-campos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding-top: var(--sp-4);
+}
+
+/* La vista previa de la pantalla elegida es más ancha que la de la cámara: lo
+   que hay que reconocer ahí es una ventana con su contenido, no una cara. */
+.semanal-pantalla-previa {
+  width: 168px;
+  height: 94px;
+}

@@ -172,7 +172,11 @@ export const AJUSTES = {
     // Sin cámara de referencia: es como arranca la app, y es lo que deja que la
     // maqueta corra en una máquina sin ninguna cámara. Las fotos que se ven en
     // los bloques son las que el doble dice que ya están en el disco.
-    camara: null
+    camara: null,
+    // En modo de clase, que es el que tienen que ver todos los escenarios menos
+    // los del modo semanal: ese se pide por la URL.
+    modo: 'clase',
+    semanal: { carpeta: '/Users/daniel/Movies/Semanal' }
 };
 
 // Los nombres son los de verdad de una Mac con Zoom instalado: es la lista

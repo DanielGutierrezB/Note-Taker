@@ -12,7 +12,8 @@
  * motor se puede probar entero sin abrir la app (`node tests/run.js`).
  */
 
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, clipboard,
+    session, desktopCapturer } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -24,6 +25,7 @@ const dependencias = require('./engine/dependencias');
 const ipcGrabar = require('./ipc/grabar');
 const ipcPrproj = require('./ipc/prproj');
 const ipcReferencias = require('./ipc/referencias');
+const ipcSemanal = require('./ipc/semanal');
 const devShot = require('./dev-shot');
 
 let mainWindow = null;
@@ -66,11 +68,40 @@ function createWindow() {
         }
     });
 
+    permitirPedirLaPantalla();
     mainWindow.once('ready-to-show', () => mainWindow.show());
     mainWindow.loadFile('src/index.html');
     // El arnés de desarrollo (capturas, JS inyectado) vive en `dev-shot.js` y
     // sin sus flags no hace nada.
     mainWindow.webContents.once('did-finish-load', () => devShot.correr(mainWindow));
+}
+
+/**
+ * Deja que la ventana pueda pedir la pantalla (el modo semanal la graba).
+ *
+ * En Electron, `navigator.mediaDevices.getDisplayMedia` no hace nada hasta que
+ * el proceso principal dice quién elige la fuente. Con `useSystemPicker` la
+ * elige el selector de macOS —el mismo que sale al compartir pantalla en
+ * cualquier app— y entonces este handler ni se llama. Es lo que se quiere: la
+ * persona ve las ventanas y las pantallas de verdad, con sus miniaturas, sin
+ * que esta app tenga que dibujar un selector propio.
+ *
+ * El selector del sistema es de macOS 15 en adelante, y esta app corre desde la
+ * 14.2 (la tiene como mínimo el ayudante de audio). Por eso el handler está
+ * puesto igual: en una Mac más vieja no hay selector, así que se graba la
+ * pantalla principal, que es lo que esa persona iba a elegir de todos modos.
+ */
+function permitirPedirLaPantalla() {
+    session.defaultSession.setDisplayMediaRequestHandler(async (pedido, contestar) => {
+        try {
+            const fuentes = await desktopCapturer.getSources({ types: ['screen'] });
+            anotar('semanal.pantalla-sin-selector', { cuantas: fuentes.length });
+            contestar(fuentes.length ? { video: fuentes[0] } : {});
+        } catch (err) {
+            anotar('semanal.pantalla-falla', { error: err.message });
+            contestar({});
+        }
+    }, { useSystemPicker: true });
 }
 
 // Un fallo suelto no puede dejar la app viva pero muda: se registra y sigue.
@@ -325,3 +356,4 @@ ipcMain.handle('open-path', async (event, target) => {
 ipcGrabar.registrar({ ipcMain, app, send, anotar });
 ipcPrproj.registrar({ ipcMain, dialog, ventana: () => mainWindow, send, anotar });
 ipcReferencias.registrar({ ipcMain, nativeImage, clipboard, anotar });
+ipcSemanal.registrar({ ipcMain, send, anotar });

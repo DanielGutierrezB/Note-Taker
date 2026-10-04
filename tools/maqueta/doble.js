@@ -65,6 +65,8 @@ if (hay('preparar-sin-audio') || hay('sin-zoom')) ajustes = { ...ajustes, dispos
 
 const progresoUpdate = [];
 const listaUpdate = [];
+const progresoSemanal = [];
+const avisosSemanal = [];
 let oyenteDependencias = null;
 const DEPENDENCIAS = [
     ['modelo-grande', 'Modelo de Whisper (large-v3-turbo)', 'Relee cada toma cerrada y escribe el texto que va al XML. También es el que oye el texto en vivo.', true, 'Descargar (1,6 GB)'],
@@ -247,6 +249,48 @@ window.nt = {
     fotoCopiar: async () => ({ ok: true }),
 
     anotar: async () => true,
+    /* ─── El modo semanal ──────────────────────────────────────────────
+     *
+     * Lo mismo que el resto del puente: se contesta lo que contestaría Node,
+     * sin escribir nada. El progreso del corte se empuja en escalones para que
+     * la barra se vea moverse, que es lo único que esa tarjeta tiene que
+     * mostrar bien.
+     */
+    semanalAbrir: async pedido => ({
+        ok: true, id: 1, cual: pedido.cual, tipo: pedido.tipo, empezoMs: pedido.empezoMs,
+        archivo: `/Users/daniel/Movies/Semanal/xml/Video/semana-${pedido.cual}.mp4`
+    }),
+    semanalTrozo: () => {},
+    semanalCerrar: async () => ({
+        ok: true, enLaSesion: 2,
+        videos: [
+            { cual: 'camara', bytes: 48_000_000, segundos: 214 },
+            { cual: 'pantalla', bytes: 96_000_000, segundos: 214 }
+        ]
+    }),
+    semanalExportar: async () => {
+        for (const pct of [8, 24, 51, 78, 96]) {
+            for (const cb of progresoSemanal) cb({ pct, segundos: pct * 1.6, total: 162 });
+            await espera(hay('semanal-cortando') ? 4000 : 120);
+        }
+        if (hay('semanal-sin-tomas')) {
+            return {
+                ok: false, tomas: 0,
+                error: 'No se abrió ninguna toma: no hay nada que cortar. '
+                    + 'Los vídeos y el audio quedaron guardados.'
+            };
+        }
+        return {
+            ok: true, tomas: 4, segundos: 162, bytes: 41_300_000,
+            ruta: '/Users/daniel/Movies/Semanal/semana_2026-10-03_09-12-40.mp4',
+            avisos: hay('semanal-con-aviso')
+                ? ['La toma 3 va sin la cámara: ese trozo no está grabado.']
+                : []
+        };
+    },
+    onSemanalProgreso: cb => progresoSemanal.push(cb),
+    onSemanalAviso: cb => avisosSemanal.push(cb),
+
     registroDescargar: async () => ({ ok: true, archivo: '/tmp/log.md' }),
     onUpdateProgress: cb => progresoUpdate.push(cb),
     onUpdateReady: cb => listaUpdate.push(cb)
@@ -268,13 +312,47 @@ window.nt = {
 Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
     value: {
-        getUserMedia: async () => ({ getTracks: () => [] }),
+        // Un `MediaStream` vacío de verdad y no un objeto parecido: la
+        // pantalla del modo semanal lo pega en un `<video>`, y `srcObject`
+        // solo acepta uno de verdad. Vacío quiere decir sin fotogramas, que es
+        // lo que la maqueta no puede inventar.
+        getUserMedia: async () => new MediaStream(),
         enumerateDevices: async () => [
             ...ENTRADAS.map(d => ({ kind: 'audioinput', deviceId: d.id, label: d.nombre })),
             ...CAMARAS.map(d => ({ kind: 'videoinput', deviceId: d.id, label: d.nombre }))
         ]
     }
 });
+
+/**
+ * La pantalla y el grabador de vídeo, falseados por el mismo motivo que el
+ * `AudioContext`: sin un `MediaStream` de verdad no se pueden armar.
+ *
+ * El selector de pantalla de macOS no se puede contestar desde una maqueta, y
+ * `MediaRecorder` necesita una pista real. Lo que la maqueta no puede probar
+ * sigue siendo lo mismo que con el micrófono: que la captura abra. Lo que sí
+ * prueba —y es para lo que está— es que la pantalla del modo semanal recorra
+ * sus cuatro momentos por el camino de verdad.
+ */
+navigator.mediaDevices.getDisplayMedia = async () => ({
+    getTracks: () => [{ label: 'Pantalla 1 · Studio Display', stop: () => {} }],
+    getVideoTracks: () => [{
+        label: 'Pantalla 1 · Studio Display',
+        getSettings: () => ({ width: 3008, height: 1692 }),
+        stop: () => {},
+        set onended(_fn) { /* la maqueta no suelta la pantalla sola */ }
+    }]
+});
+
+window.MediaRecorder = class {
+    static isTypeSupported() { return true; }
+    constructor() { this.state = 'inactive'; this.ondataavailable = null; this.onstop = null; }
+    start() { this.state = 'recording'; }
+    stop() {
+        this.state = 'inactive';
+        if (this.onstop) this.onstop();
+    }
+};
 
 // Y el grafo de audio, que sin un `MediaStream` de verdad no se puede armar.
 // Es la última cosa que la maqueta falsea, y la que más claramente marca su
@@ -394,6 +472,36 @@ async function aplicar() {
             document.querySelector('#btn-prproj-generar').click();
             await espera(80);
         }
+        return;
+    }
+
+    /* ── El modo semanal, en sus cuatro momentos ───────────────────────
+     *
+     * Se recorre apretando los botones de verdad, igual que los demás
+     * escenarios: elegir la pantalla, Grabar, y Terminar. Lo único puesto a
+     * mano es el estado de la grabación que el motor devolvería, que es lo que
+     * dibuja el contador de tomas.
+     */
+    if (hay('semanal') || hay('semanal-grabando') || hay('semanal-cortando')
+        || hay('semanal-hecho') || hay('semanal-sin-tomas') || hay('semanal-con-aviso')) {
+        await app.irASemanal();
+        await espera(120);
+        if (!hay('semanal-sin-pantalla')) {
+            document.querySelector('[data-hace="elegir-pantalla"]').click();
+            await espera(120);
+        }
+        if (hay('semanal')) return;
+
+        document.querySelector('[data-hace="grabar"]').click();
+        await espera(200);
+        if (hay('semanal-grabando')) {
+            // Dos tomas cerradas y una abierta: es el estado en el que esta
+            // pantalla se mira de verdad, hablando a la cámara.
+            await espera(400);
+            return;
+        }
+
+        document.querySelector('[data-hace="terminar"]').click();
         return;
     }
 

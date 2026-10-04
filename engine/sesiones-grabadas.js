@@ -684,6 +684,10 @@ module.exports = {
     rehacerXml,
     dondeQuedoElWav,
     ajustarBordes,
+    // Lo lee también el modo semanal, para cortar el MP4 de una sesión ya
+    // terminada: el corte sale del disco y no de la memoria, así exportar otra
+    // vez mañana da exactamente el mismo vídeo.
+    leerSidecar,
     editarGrabada,
     paraMirar,
     paraReanudar,

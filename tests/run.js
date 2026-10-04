@@ -48,6 +48,8 @@ const FILES = [
     'aviso-de-palmada.test.js',
     'audio-que-se-rompe.test.js',
     'nota-de-claqueta.test.js',
+    'video-crudo.test.js',
+    'exportar-video.test.js',
     'prproj.test.js',
     'prproj-panel.test.js',
     'prproj-nidos.test.js',
