@@ -132,3 +132,52 @@ export function conElTexto(plan, grabadas) {
         return texto ? { ...texto, ...t } : t;
     });
 }
+
+/* ── Que se oiga donde se ve ────────────────────────────────────────────
+ *
+ * El montaje son dos `<video>` sueltos: uno trae la imagen que se mira y el
+ * otro el sonido. Hay que mantenerlos juntos, y cuánto se admite que se
+ * separen no es una opinión: la EBU R37 pide el sonido entre 60 ms detrás y
+ * 20 ms delante de la imagen, y la ITU-R BT.1359 mide que se empieza a notar a
+ * los 45 ms si va delante y a los 125 ms si va detrás.
+ *
+ * Esto vive acá y no en `montaje.js` porque es una decisión y no un gesto: con
+ * un número entra y con dos sale, sin tocar un elemento. Así se puede probar
+ * sin navegador, que es donde se vio que el signo estaba al revés.
+ */
+
+/** Por debajo de esto ya están juntos y no hay nada que corregir. */
+export const JUNTOS_SEC = 0.02;
+
+/** Por encima de esto no se alcanza estirando: hay que buscar. */
+export const SALTO_SEC = 0.5;
+
+/** Lo más que se le estira al mudo. Un error grande no se arregla a cámara rápida. */
+export const ESTIRON_MAX = 0.25;
+
+/**
+ * Qué hacerle al que NO suena para que alcance al que suena.
+ *
+ * @param {number} error segundos que el mudo le lleva al que suena. Positivo es
+ *   que el mudo va ADELANTE y hay que frenarlo.
+ * @returns {{buscar: boolean, velocidad: number}}
+ *
+ * Se estira en vez de buscar porque un `currentTime` deja el vídeo en negro
+ * mientras rearma, y hacerlo cada 60 ms para perseguir 100 ms se ve mucho peor
+ * que los 100 ms.
+ *
+ * El estirón es el DOBLE del error, que es lo que hace que no haya que elegir
+ * entre converger rápido y pasarse de largo: el error decae con una constante
+ * de medio segundo, sea grande o chico. Pero solo mientras el techo no muerda.
+ * Por encima de 125 ms el estirón se queda en `ESTIRON_MAX` y lo que queda baja
+ * en línea recta, así que desde 200 ms tarda 1,2 s y no 0,5. Lo escribí al
+ * revés primero y lo encontró su propia prueba. Desde los 100 ms que da el caso
+ * de verdad son 0,8 s, que es lo que se mide en el navegador.
+ */
+export function comoAlcanzar(error) {
+    const cuanto = Math.abs(error);
+    if (cuanto > SALTO_SEC) return { buscar: true, velocidad: 1 };
+    if (cuanto <= JUNTOS_SEC) return { buscar: false, velocidad: 1 };
+    const estiron = Math.min(ESTIRON_MAX, cuanto * 2);
+    return { buscar: false, velocidad: 1 + (error < 0 ? estiron : -estiron) };
+}

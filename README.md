@@ -1160,7 +1160,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 800 pruebas, sin red y sin abrir nada
+npm test           # 807 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```
@@ -1247,6 +1247,34 @@ segundo MP4 dure menos y que el primero siga en su sitio: 15 huecos quitados,
 sostiene esa parte es `tests/quitar-silencios.test.js`, que no depende de la
 suerte que haya tenido la corrida.
 
+Y que **se oiga donde se ve**, que es lo único del editor que no se puede mirar
+en una captura ni contar en una prueba sin medios:
+
+```bash
+npx electron . --guion=tools/medir-sincronia.js --sesion=/ruta/a/una/copia
+```
+
+Carga el montaje de verdad con una grabación de verdad, aprieta Reproducir y
+anota cada 100 ms en qué segundo va cada uno de los dos `<video>`. La vara son
+números de norma y no gusto: la EBU R37 pide el sonido entre 60 ms detrás y
+20 ms delante de la imagen, y la ITU-R BT.1359 mide que se nota a los 45 ms si
+va delante y a los 125 ms si va detrás.
+
+De ahí salió un desfase que llevaba puesto desde el principio. El montaje
+admitía 0,25 s de separación —el doble de lo que se oye— y como los dos
+`<video>` arrancan con dos `play()` sueltos y el de la cámara tarda más en dar
+el primer fotograma, la distancia que se abría al arrancar se quedaba ahí toda
+la reproducción: **108 ms de media, sin una sola corrección en 10 s**. Y cuando
+corregía, corregía el vídeo que trae el sonido en vez del mudo, que es lo
+contrario de lo que decía su propia cabecera. Ahora son 11 ms de media y 22 de
+pico ya en marcha; al arrancar llega a 100 ms y el lazo los junta en 0,8 s, lo
+que la herramienta mide aparte para que no crezca sin que nadie mire.
+
+Los umbrales y la cuenta viven en `semanal/corte.js` y no en el reproductor: con
+un número entran y con dos salen, así que `tests/corte-del-editor.test.js` los
+prueba sin navegador. Es ahí donde se ve que el signo importa — y la prueba de
+cuánto tarda en juntarlos desmintió el comentario que yo mismo había escrito.
+
 El editor por dentro —que clicar una ficha no rebobine el montaje, que las
 desactivadas se salten, que «Ocultar desactivadas» esconda, que la barra
 espaciadora reproduzca— se prueba más rápido sobre la maqueta, con
@@ -1312,8 +1340,11 @@ src/js/
   grabar/filmar.js       grabar la cámara y la pantalla (modo semanal)
   grabar/lista-tomas.js  las fichas de abajo, compartidas por las dos pantallas
   semanal/tarjetas.js    lo que SE VE en el modo semanal: estado → HTML, sin DOM
-  semanal/corte.js       las decisiones del editor: qué toma sigue, cuánto mide
+  semanal/corte.js       las decisiones del editor: qué toma sigue, cuánto mide,
+                         y cuánto se corrige para que se oiga donde se ve
   semanal/montaje.js     los dos <video> del editor, puestos donde dice el motor
+                         y mantenidos juntos: el que suena manda, al mudo se lo
+                         acomoda estirándolo
   fotos.js               cuándo se guarda la foto de una toma
 tools/                   maqueta, auditoría, simulación, build
 tests/                   corredor propio: node tests/run.js

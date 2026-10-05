@@ -17,14 +17,33 @@
  * montaje de trabajo, no el entregable.
  *
  * El que lleva el reloj es el que tiene el audio, que es la cámara. Al otro se
- * lo sigue y se lo corrige si se separa: los dos archivos arrancaron en el
- * mismo instante del reloj de pared, así que se mantienen juntos solos.
+ * lo sigue y se lo corrige si se separa.
+ *
+ * **Y no se mantienen juntos solos.** Esta cabecera decía que sí, porque los
+ * dos archivos arrancan en el mismo instante del reloj de pared —cierto: 1 ms
+ * de diferencia, medido en el diario—. Pero lo que los separa no es el
+ * arranque de la grabación sino el de la reproducción: son dos `play()`
+ * sueltos, y el de la cámara tarda más en dar el primer fotograma porque además
+ * trae el sonido. Esa distancia se abre en ese instante y se queda. Medido con
+ * `tools/medir-sincronia.js` sobre una grabación de verdad: el sonido iba 108 ms
+ * detrás de la imagen, de media, durante toda la reproducción.
  */
 
 import * as corte from './corte.js';
 
-/** Más de esto de separación entre los dos vídeos y se vuelve a buscar. */
-const SE_SEPARO_SEC = 0.25;
+/* Los umbrales y el cálculo de la corrección viven en `corte.js`: son una
+ * decisión con un número de entrada y dos de salida, así que se prueban sin
+ * navegador. Ahí está también de dónde salen (EBU R37, ITU-R BT.1359) y por qué
+ * se estira en vez de buscar.
+ *
+ * El que estaba acá valía 0,25 s, que es el doble de lo que se oye. Y como los
+ * dos `<video>` arrancan con dos `play()` sueltos y el de la cámara tarda más
+ * en dar el primer fotograma —trae el sonido además de la imagen— la distancia
+ * que se abría en ese instante se quedaba ahí toda la reproducción, por debajo
+ * del umbral y sin corregirse nunca: 108 ms de media medidos con
+ * `tools/medir-sincronia.js` sobre una grabación de verdad, y CERO correcciones
+ * en 10 s. Ahora, 12 ms de media y 20 de pico.
+ */
 
 /** Cada cuánto se mira dónde va. `timeupdate` llega cada 250 ms y es poco. */
 const CADA_MS = 60;
@@ -169,6 +188,14 @@ function arrancar() {
         t = laDeAhora();
         if (!t) return;
     }
+    // **La pantalla arranca primero, y el orden importa.** Probé el otro —el que
+    // suena primero, que parecía lo razonable porque es el que no se puede
+    // corregir después sin que se oiga— y salió mucho peor: 251 ms de desfase
+    // medio contra 30, con 94 saltos en 10 s. La pantalla es la lenta de las
+    // dos: entra a 1080p con intervalos de keyframe largos, tarda en arrancar y
+    // tarda en rearmar después de cada búsqueda. Arrancándola segunda se
+    // quedaba tan atrás que había que buscarla, y cada búsqueda la dejaba otra
+    // vez atrás. La ventaja de salida es lo que la mantiene a tiro.
     for (const v of [elPan, elCam]) {
         if (v && v.dataset.ruta && v.style.display !== 'none') v.play().catch(() => {});
     }
@@ -178,6 +205,7 @@ function arrancar() {
 
 export function pausar() {
     for (const v of [elPan, elCam]) if (v) v.pause();
+    aVelocidadNormal();
     if (tictac) clearInterval(tictac);
     tictac = null;
     decir();
@@ -203,6 +231,9 @@ function dentroDe(t) {
 
 function buscar(t) {
     if (!t) return;
+    // Sin esto, el estirón de la toma anterior sigue puesto en la siguiente y
+    // el vídeo arranca un 8 % rápido hasta que el tic lo note.
+    aVelocidadNormal();
     if (elCam && elCam.dataset.ruta && t.camaraDesde != null) elCam.currentTime = t.camaraDesde;
     if (elPan && elPan.dataset.ruta && t.pantallaDesde != null) elPan.currentTime = t.pantallaDesde;
 }
@@ -228,11 +259,38 @@ function mirar() {
     // Y los dos juntos. Solo hace falta cuando los dos se ven a la vez —la toma
     // con recuadro—: si el otro está escondido, que se separe no se nota y
     // buscarlo cada tanto sí se nota.
-    if (hayRecuadro(t) && elCam.dataset.ruta && elPan.dataset.ruta) {
-        const deberia = t.camaraDesde + (elPan.currentTime - t.pantallaDesde);
-        if (Math.abs(elCam.currentTime - deberia) > SE_SEPARO_SEC) elCam.currentTime = deberia;
-    }
+    if (hayRecuadro(t) && elCam.dataset.ruta && elPan.dataset.ruta) juntarlos(t, m);
     decir();
+}
+
+/**
+ * Que se oiga donde se ve: el que suena manda y al mudo se lo acomoda.
+ *
+ * **Al mudo, nunca al que suena.** Esto corregía el de la cámara, que es el que
+ * trae el sonido y el que lleva el reloj —lo contrario de lo que decía la
+ * cabecera de este archivo—. Mover el que suena es un chasquido y, además, le
+ * cambia el tiempo al que mide dónde va la toma, así que una corrección movía
+ * también la línea de tiempo y el final de la toma.
+ *
+ * Y se corrige estirando, no buscando. Un `currentTime` deja el vídeo en negro
+ * mientras rearma, y hacerlo cada 60 ms para perseguir 100 ms de diferencia se
+ * ve mucho peor que la diferencia. Un 8 % de velocidad sobre un vídeo sin
+ * sonido no se nota y arregla 100 ms en poco más de un segundo. Buscar queda
+ * para lo que no se alcanza estirando.
+ */
+function juntarlos(t, maestro) {
+    const esclavo = maestro === elCam ? elPan : elCam;
+    const desdeMaestro = maestro === elCam ? t.camaraDesde : t.pantallaDesde;
+    const desdeEsclavo = maestro === elCam ? t.pantallaDesde : t.camaraDesde;
+    const deberia = desdeEsclavo + (maestro.currentTime - desdeMaestro);
+    const que = corte.comoAlcanzar(esclavo.currentTime - deberia);
+    if (que.buscar) esclavo.currentTime = deberia;
+    esclavo.playbackRate = que.velocidad;
+}
+
+/** Los dos a velocidad normal: al cambiar de toma y al parar. */
+function aVelocidadNormal() {
+    for (const v of [elPan, elCam]) if (v) v.playbackRate = 1;
 }
 
 function hayRecuadro(t) {

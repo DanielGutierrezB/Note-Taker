@@ -145,4 +145,82 @@ module.exports = async t => {
         t.eq(corte.conElTexto(p, []).map(x => x.id).join(','), '1,2,3,4');
         t.eq(corte.lasQueVan(p).map(x => x.id).join(','), '1,3,4');
     });
+
+    t.group('el corte del editor · que se oiga donde se ve');
+
+    // El signo es TODO acá, y es lo que estaba mal: el montaje corregía el
+    // vídeo que trae el sonido en vez del mudo, o sea movía el audio para
+    // perseguir a la imagen. Probar esto sin navegador es la razón de que la
+    // cuenta viva en este módulo y no dentro del reproductor.
+    t.test('el mudo adelantado se frena y el atrasado se apura', () => {
+        const adelante = corte.comoAlcanzar(0.2);
+        t.ok(adelante.velocidad < 1, `va delante: hay que frenarlo (${adelante.velocidad})`);
+        const detras = corte.comoAlcanzar(-0.2);
+        t.ok(detras.velocidad > 1, `va detrás: hay que apurarlo (${detras.velocidad})`);
+        t.ok(!adelante.buscar && !detras.buscar, 'y sin buscar, que se vería');
+    });
+
+    t.test('juntos no se toca nada', () => {
+        for (const error of [0, 0.01, -0.01, corte.JUNTOS_SEC, -corte.JUNTOS_SEC]) {
+            const que = corte.comoAlcanzar(error);
+            t.eq(que.velocidad, 1, `${error} s`);
+            t.eq(que.buscar, false, `${error} s, sin buscar`);
+        }
+    });
+
+    // Lo que se admite tiene que quedar por debajo de lo que se oye, y eso son
+    // números de norma y no gusto: EBU R37 pide el sonido entre 60 ms detrás y
+    // 20 ms delante. El umbral que había, 250 ms, era el doble del peor de los
+    // dos, así que el desfase se quedaba puesto sin que nada lo corrigiera.
+    t.test('lo que se deja pasar está por debajo de lo que se nota', () => {
+        t.ok(corte.JUNTOS_SEC * 1000 <= 20, `${corte.JUNTOS_SEC * 1000} ms contra los 20 de la EBU`);
+        t.eq(corte.comoAlcanzar(0.25).velocidad === 1, false,
+            'un cuarto de segundo NO puede darse por bueno');
+    });
+
+    // Cuánto tarda en ponerlos juntos, corriendo la cuenta en vez de leyéndola.
+    //
+    // Los límites son los medidos, no los que me parecían: el estirón es el
+    // doble del error, lo que da medio segundo de constante, pero el techo de
+    // `ESTIRON_MAX` muerde por encima de 125 ms y a partir de ahí baja en línea
+    // recta. Puse «medio segundo siempre» y esta prueba lo desmintió: desde
+    // 200 ms son 1,2 s. Lo que importa es que el caso de verdad —los 100 ms que
+    // se midieron en el navegador— se cierre por debajo del segundo.
+    t.test('los junta en menos de un segundo desde donde pasa de verdad', () => {
+        for (const desde of [0.05, 0.1, 0.12]) {
+            let error = desde;
+            let t_ = 0;
+            const paso = 0.06;
+            while (Math.abs(error) > corte.JUNTOS_SEC && t_ < 3) {
+                error -= (corte.comoAlcanzar(error).velocidad - 1) * -paso;
+                t_ += paso;
+            }
+            t.ok(t_ <= 1, `desde ${desde * 1000} ms tardó ${Math.round(t_ * 1000)} ms`);
+        }
+    });
+
+    t.test('y desde muy lejos tarda más, porque el estirón tiene techo', () => {
+        let error = 0.45;
+        let t_ = 0;
+        const paso = 0.06;
+        while (Math.abs(error) > corte.JUNTOS_SEC && t_ < 5) {
+            error -= (corte.comoAlcanzar(error).velocidad - 1) * -paso;
+            t_ += paso;
+        }
+        t.ok(t_ > 1 && t_ < 3, `desde 450 ms tardó ${Math.round(t_ * 1000)} ms`);
+    });
+
+    t.test('una diferencia que no se alcanza estirando se busca', () => {
+        const lejos = corte.comoAlcanzar(1.2);
+        t.eq(lejos.buscar, true, 'buscar');
+        t.eq(lejos.velocidad, 1, 'y a velocidad normal, no estirando además');
+    });
+
+    t.test('el estirón tiene techo: nada se arregla a cámara rápida', () => {
+        for (const error of [0.3, 0.49, -0.3, -0.49]) {
+            const v = corte.comoAlcanzar(error).velocidad;
+            t.ok(Math.abs(v - 1) <= corte.ESTIRON_MAX + 1e-9,
+                `${error} s da ${v.toFixed(3)}`);
+        }
+    });
 };
