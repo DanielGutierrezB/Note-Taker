@@ -65,16 +65,32 @@ function prefijoEnElNombre(prefijo) {
 }
 
 /**
+ * La fecha y la hora, como se escriben en un nombre: `2026-10-05_10-27-28`.
+ *
+ * Está aparte porque lo usan dos cosas que TIENEN que coincidir: el nombre de
+ * los archivos de la sesión y el de la carpeta que los contiene en el modo
+ * semanal. Son el mismo instante —el cero de la grabación— y si se formatearan
+ * en dos sitios podrían separarse por un segundo justo al cruzar el minuto, y
+ * entonces la carpeta diría una hora y los archivos de adentro otra.
+ *
+ * Sin `Z` ni desfase: es la hora de esta máquina, que es la que la persona
+ * reconoce. `leer` la vuelve a interpretar igual.
+ */
+function sello(cuandoMs) {
+    const cuando = new Date(cuandoMs != null ? cuandoMs : Date.now());
+    const fecha = `${cuando.getFullYear()}-${dos(cuando.getMonth() + 1)}-${dos(cuando.getDate())}`;
+    const hora = `${dos(cuando.getHours())}-${dos(cuando.getMinutes())}-${dos(cuando.getSeconds())}`;
+    return `${fecha}_${hora}`;
+}
+
+/**
  * @param {object} params { curso, cuandoMs, prefijo } — `prefijo` va delante
  *   del nombre de siempre, separado por `_`; vacío, el nombre es el de siempre
  * @returns {string} el nombre, sin extensión
  */
 function armar(params) {
     const p = params || {};
-    const cuando = new Date(p.cuandoMs != null ? p.cuandoMs : Date.now());
-    const fecha = `${cuando.getFullYear()}-${dos(cuando.getMonth() + 1)}-${dos(cuando.getDate())}`;
-    const hora = `${dos(cuando.getHours())}-${dos(cuando.getMinutes())}-${dos(cuando.getSeconds())}`;
-    const base = `${cursoEnElNombre(p.curso)}_${fecha}_${hora}`;
+    const base = `${cursoEnElNombre(p.curso)}_${sello(p.cuandoMs)}`;
     const prefijo = prefijoEnElNombre(p.prefijo);
     return prefijo ? `${prefijo}_${base}` : base;
 }
@@ -98,4 +114,4 @@ function leer(nombre) {
     };
 }
 
-module.exports = { armar, leer, cursoEnElNombre, prefijoEnElNombre };
+module.exports = { armar, sello, leer, cursoEnElNombre, prefijoEnElNombre };

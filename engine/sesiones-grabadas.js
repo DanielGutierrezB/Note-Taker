@@ -51,13 +51,50 @@ function listar(dirs, enCurso) {
     const sesiones = [];
     const vistas = new Set();
     for (const dir of dirs || []) {
-        for (const s of sidecaresDe(workspace.datosDir(dir), dir)) {
-            if (s.secuencia === enCurso || vistas.has(s.secuencia)) continue;
-            vistas.add(s.secuencia);
-            sesiones.push(s);
+        for (const base of dondeBuscar(dir)) {
+            for (const s of sidecaresDe(workspace.datosDir(base), base)) {
+                if (s.secuencia === enCurso || vistas.has(s.secuencia)) continue;
+                vistas.add(s.secuencia);
+                sesiones.push(s);
+            }
         }
     }
     return sesiones.sort((a, b) => (b.ceroMs || 0) - (a.ceroMs || 0));
+}
+
+/**
+ * Las carpetas donde puede haber sesiones, dada una que eligió la persona.
+ *
+ * Son dos formas y hay que leer las dos. La carpeta misma, que es como escribe
+ * el modo de clase —un curso con muchas clases compartiendo `xml/`— y como
+ * escribía el modo semanal hasta que cada grabación pasó a tener su carpeta. Y
+ * un piso más abajo, que es la forma nueva.
+ *
+ * Mirar el piso de abajo no es por completitud: es lo que hace que **lo que ya
+ * está en el disco no desaparezca de la app**. El día del cambio hay grabaciones
+ * de las dos formas en la misma carpeta, y una lista que solo entendiera la
+ * nueva las habría escondido sin borrarlas, que es la peor de las dos cosas.
+ *
+ * Se mira cualquier subcarpeta y no solo las que se llaman `Grabación-...`:
+ * renombrar una carpeta es lo primero que hace cualquiera, y no es razón para
+ * que la app deje de verla. Lo que la hace una grabación es tener el archivo con
+ * la hora del día adentro, no cómo se llame.
+ */
+function dondeBuscar(dir) {
+    const sitios = [dir];
+    let hijos = [];
+    try {
+        hijos = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (e) {
+        return sitios; // una carpeta que no está no tiene subcarpetas
+    }
+    for (const h of hijos) {
+        // `xml` es la de esta misma carpeta, ya contada: entrar dentro buscaría
+        // `xml/xml/Datos`.
+        if (!h.isDirectory() || h.name === workspace.XML_DIR) continue;
+        sitios.push(path.join(dir, h.name));
+    }
+    return sitios;
 }
 
 /**

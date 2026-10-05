@@ -77,6 +77,38 @@ que van quedando **caen abajo como fichas**, con su texto, para leerlas,
 corregirles el IN y el OUT o descartarlas sin esperar al final. Al apretar
 **Terminar** se cae directo en el editor.
 
+### Una grabación, una carpeta
+
+En la carpeta que se elige no cae nada suelto: cada grabación se lleva **su
+propia carpeta `Grabación-<fecha>_<hora>`** con todo adentro —el MP4, los dos
+vídeos crudos, el WAV y el XML—. Así mandar o borrar una grabación es mandar o
+borrar una carpeta, en vez de reconocer cuáles de los veinte archivos que hay
+eran los del martes. El nombre sale del **mismo instante** que nombra los
+archivos (`nombre-de-sesion.sello`), así que la carpeta y lo que tiene adentro
+dicen la misma hora. Reanudar una grabación **no** abre otra carpeta: sigue en
+la suya.
+
+La clase sigue como estaba, con todo en la carpeta del curso: ahí lo normal es
+grabar muchas clases del mismo curso al mismo sitio, y el `.prproj` y la
+plantilla de Premiere esperan encontrarlas juntas.
+
+Y lo grabado se puede **volver a abrir**: la pantalla de inicio del modo
+semanal ofrece arriba **lo último que se grabó** con su fecha y cuántas tomas
+tiene, y abre el editor donde se dejó. Al abrir la app lo normal no es grabar
+otro vídeo sino terminar el de ayer, y antes eso no tenía puerta: lo único que
+quedaba era el Finder, que es donde no sirve, porque ahí hay archivos y no un
+proyecto. Volver a cortar **no pisa** el vídeo que ya se sacó: escribe otro al
+lado. Las dos entradas al editor —terminar de grabar y abrir la de ayer— son
+**la misma función**: una grabación recién cerrada y una de anteayer no se
+distinguen en nada una vez escritas, y tenerlo dos veces quería decir que la de
+ayer se iba a abrir un poco distinto que la de hace un minuto.
+
+Leer el disco busca **las dos formas**, la carpeta propia y lo que estaba
+suelto de antes, así que las grabaciones hechas con la versión anterior no
+desaparecen. Y cualquier subcarpeta cuenta: una carpeta renombrada a mano sigue
+siendo una grabación, porque lo que la hace una es el sidecar que tiene adentro
+y no cómo se llama.
+
 ### El editor del corte final
 
 No es un reproductor de lo exportado: es un **montaje en vivo** del corte que
@@ -1128,13 +1160,15 @@ node tools/maqueta/abrir.js    # la interfaz de verdad, con datos falsos
 ```
 
 Los criterios de aceptación están escritos como números en `tools/auditar.js`, y
-lo que no los cumple sale con código 1. **Sobre los 39 escenarios** a 900, 1180
+lo que no los cumple sale con código 1. **Sobre los 41 escenarios** a 900, 1180
 y 1440 px, que es todo lo que una persona puede llegar a ver: también los
 vacíos y los de error, que son los que se escriben con menos cuidado y los que
 más se leen cuando algo salió mal. La lista salía a mano en cada herramienta y
 tenía 19 de 39; ahora las cuatro la sacan del mismo catálogo
 (`SE_HACEN` en `tools/maqueta/doble.js`), y `tests/maqueta.test.js` comprueba
-que ninguna se la invente aparte.
+que ninguna se la invente aparte —y que cada escenario tenga su propia parada en
+el guion, porque uno que no se nombra en ningún sitio sigue de largo y la
+herramienta fotografía, mide y audita otra pantalla creyendo que es esa.
 
 | | |
 |---|---|
@@ -1142,7 +1176,7 @@ que ninguna se la invente aparte.
 | el peor contraste | **4.6:1** |
 | controles apagados, exentos de AA | **15**, declarados uno por uno |
 | tamaños de letra pintados a la vez | **5** (13/12/11 + los dos grandes) |
-| controles por debajo de 24×24 | **0** de 2655 |
+| controles por debajo de 24×24 | **0** de 2649 |
 | texto pintado fuera de su caja | **0** |
 | solapes | **0** |
 | botones sin un hover que diga qué hacen | **0** |
@@ -1160,7 +1194,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 807 pruebas, sin red y sin abrir nada
+npm test           # 817 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```

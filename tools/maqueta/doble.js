@@ -13,7 +13,7 @@
  * recorre es el mismo que recorre la app de verdad.
  */
 
-import { estadoEnVivo, estadoSemanal, SESIONES, AJUSTES, ENTRADAS, CAMARAS, DOCTOR } from './datos.js';
+import { estadoEnVivo, estadoSemanal, SESIONES, SEMANALES, AJUSTES, ENTRADAS, CAMARAS, DOCTOR } from './datos.js';
 
 /**
  * Todos los escenarios que este doble sabe armar, dicho de una vez.
@@ -37,7 +37,7 @@ export const SE_HACEN = [
     'palmada', 'palmada-vencida',
     'prproj', 'prproj-lleno', 'prproj-listo',
     'ajustes', 'ajustes-semanal', 'diagnostico', 'iconos',
-    'semanal', 'semanal-sin-pantalla', 'semanal-grabando', 'semanal-sin-tomas',
+    'semanal', 'semanal-primera-vez', 'semanal-sin-pantalla', 'semanal-grabando', 'semanal-sin-tomas',
     'semanal-con-aviso', 'semanal-ficha', 'semanal-revisar', 'semanal-revisar-fuera',
     'semanal-cortando', 'semanal-hecho'
 ];
@@ -153,9 +153,21 @@ const doctor = hay('sin-whisper')
     }
     : DOCTOR;
 
+/**
+ * Lo que hay grabado en una carpeta.
+ *
+ * El modo semanal y el de clase no comparten material, y acá tampoco: se
+ * contesta según el modo que esté puesto. Antes esto devolvía siempre las
+ * clases, así que la tarjeta de «lo último que grabaste» del modo semanal
+ * aparecía con el nombre de un curso, que es algo que no puede pasar.
+ *
+ * `semanal-primera-vez` es la carpeta recién elegida: no hay nada de antes y la
+ * tarjeta no está. Es el estado en el que entra alguien el primer día, y el que
+ * no se mira nunca si no se lo nombra.
+ */
 function sesiones() {
-    if (hay('vacio') || hay('sin-carpeta')) return [];
-    return SESIONES;
+    if (hay('vacio') || hay('sin-carpeta') || hay('semanal-primera-vez')) return [];
+    return esLaSemana() ? SEMANALES : SESIONES;
 }
 
 window.nt = {
@@ -673,7 +685,8 @@ async function aplicar() {
         if (hay('semanal-sin-pantalla')) return;
         await apretar('[data-hace="elegir-pantalla"]', 'Elegir pantalla');
         await espera(120);
-        if (hay('semanal')) return;
+        // La pantalla de inicio, con la tarjeta de lo último grabado y sin ella.
+        if (hay('semanal') || hay('semanal-primera-vez')) return;
 
         // Arrancar tarda: antes de grabar se comprueba que el codificador
         // acepte cada fuente (`aguanta` en `src/js/grabar/filmar.js`), y son

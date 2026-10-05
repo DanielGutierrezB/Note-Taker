@@ -36,8 +36,8 @@ const leer = (...partes) => fs.readFileSync(path.join(RAIZ, ...partes), 'utf8');
  * comprobaciones de acá miran el texto del código y no les importa en cuál de
  * los dos cayó cada función, así que se leen juntos.
  *
- * Donde se pueda llamar a la función en vez de leerla, mejor: eso está en
- * `tarjetas-semanal.test.js` y en `corte-del-editor.test.js`, que importan los
+ * Donde se pueda llamar a la función en vez de leerla, mejor: para eso está
+ * `cargarTarjetas()` acá abajo, y `corte-del-editor.test.js`, que importan los
  * módulos y comprueban lo que devuelven.
  */
 const laPantalla = () => leer('src', 'js', 'pantalla-semanal.js')
@@ -412,6 +412,82 @@ module.exports = function (t) {
         });
         t.ok(sinPantalla.includes('semanal-escena-llena'),
             'y sin pantalla la cámara llena el cuadro aunque la vista sea R');
+    });
+
+    t.group('modo semanal · volver a lo último que se grabó');
+
+    /** Lo mínimo que `tarjetaListo` necesita para dibujarse. */
+    const paraEmpezar = extra => ({
+        audio: { abierto: true, pico: 0, error: null },
+        camara: { id: 'c', nombre: 'Cámara' }, camaras: [], entradas: [], micro: null,
+        pantalla: { nombre: 'Pantalla 1', ancho: 1920, alto: 1080 },
+        vistas: [], avisos: [], ultima: null, ...extra
+    });
+
+    const grabadaAyer = {
+        json: '/x/Grabación-2026-10-04_19-29-01/xml/Datos/semana_notas-en-vivo.json',
+        nombre: 'semana_2026-10-04_19-29-01',
+        cuandoMs: new Date('2026-10-04T19:29:01').getTime(),
+        tomas: 4, segundos: 162
+    };
+
+    t.test('la pantalla de inicio ofrece seguir con la de antes', async () => {
+        const tarjetas = await cargarTarjetas();
+        const html = tarjetas.tarjetaListo(paraEmpezar({ ultima: grabadaAyer }));
+        t.ok(html.includes('data-hace="abrir-ultima"'), 'hay por dónde volver a ella');
+        t.ok(html.includes('4 tomas'), 'y dice qué es, para reconocerla');
+        t.ok(html.indexOf('abrir-ultima') < html.indexOf('data-hace="grabar"'),
+            'va arriba de Grabar: al abrir la app lo normal es terminar el de ayer');
+    });
+
+    t.test('el primer día no hay nada que ofrecer, y no se finge', async () => {
+        const tarjetas = await cargarTarjetas();
+        const html = tarjetas.tarjetaListo(paraEmpezar());
+        t.ok(!html.includes('abrir-ultima'), 'sin grabación previa no hay tarjeta');
+        t.ok(!html.includes('Lo último que grabaste'), 'ni el título solo');
+        t.ok(html.includes('data-hace="grabar"'), 'pero se puede grabar igual');
+    });
+
+    t.test('una sola toma se dice en singular', async () => {
+        const tarjetas = await cargarTarjetas();
+        const html = tarjetas.tarjetaListo(paraEmpezar({
+            ultima: { ...grabadaAyer, tomas: 1 }
+        }));
+        t.ok(html.includes('1 toma<') || html.includes('1 toma '), 'no «1 tomas»');
+        t.ok(!html.includes('1 tomas'));
+    });
+
+    t.test('si no se puede leer el disco, se puede grabar igual', () => {
+        // Que no se lea lo de antes no es razón para no poder grabar lo de hoy:
+        // la carpeta puede estar en un disco desconectado y la app se abre.
+        const s = leer('src', 'js', 'pantalla-semanal.js');
+        const cuerpo = s.slice(s.indexOf('async function buscarLaUltima()'));
+        t.ok(/^[\s\S]*?catch \(err\) \{\s*estado\.ultima = null;/.test(cuerpo),
+            'el fallo deja la pantalla sin tarjeta, no sin pantalla');
+        t.ok(/if \(hace === 'abrir-ultima'\) return abrirLaUltima\(boton\);/.test(s),
+            'y el botón está conectado');
+    });
+
+    t.test('las dos puertas al editor son la misma', () => {
+        // Terminar de grabar y abrir la de ayer llevan al mismo sitio: una
+        // grabación recién cerrada y una de anteayer no se distinguen en nada
+        // una vez escritas. Tenerlo dos veces quería decir que la de ayer se
+        // iba a abrir un poco distinto que la de hace un minuto.
+        const s = leer('src', 'js', 'pantalla-semanal.js');
+        t.ok(/async function irAlEditor\(json\)/.test(s), 'hay una sola entrada');
+        t.eq((s.match(/await irAlEditor\(/g) || []).length, 2,
+            'y la usan los dos caminos');
+        t.ok(/estado\.paso = 'revisar';/.test(s), 'que dejan la pantalla en revisar');
+    });
+
+    t.test('«Ver lo que se grabó» abre la carpeta de ESA grabación', () => {
+        // Al reabrir una de ayer no hay cierre que diga dónde están los brutos,
+        // y el respaldo de `dondeEstanLosBrutos` es la carpeta elegida, que
+        // ahora es la madre de todas las grabaciones. Sin esto el Finder abría
+        // un nivel más arriba y había que buscar cuál de todas era.
+        const s = leer('src', 'js', 'pantalla-semanal.js');
+        t.ok(/if \(!estado\.brutos\.length\) \{\s*estado\.brutos = \[m\.archivos\.camara, m\.archivos\.pantalla\]/
+            .test(s), 'los saca del montaje, que leyó el disco');
     });
 
     t.group('modo semanal · revisar antes de cortar');

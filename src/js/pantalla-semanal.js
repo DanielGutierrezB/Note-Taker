@@ -68,6 +68,8 @@ const estado = {
     vistaHasta: 0,           // hasta qué toma ya se le puso la vista elegida
     vistas: [],              // las del motor, con el color de su marcador
     json: null,              // el sidecar de lo que se acaba de grabar
+    ultima: null,            // la última grabación que hay en la carpeta, para
+                             // poder volver a ella al abrir la app
     montaje: null,           // dónde cae cada toma en los dos vídeos crudos
     enVivo: null,            // dónde va el montaje: { toma, montado, total, … }
     ocultarFuera: false,     // si la línea de tomas esconde las desactivadas
@@ -136,8 +138,53 @@ export async function ver() {
     estado.cortes = 0;
     estado.vistaHasta = 0;
     pintar();
-    await mirarQueHay();
-    pintar();
+    // Las dos en paralelo: mirar qué micrófonos y cámaras hay tarda —hay que
+    // abrir los elegidos para poder verlos— y leer el disco no tiene por qué
+    // esperar a eso. La pantalla ya está pintada y cada una repinta al llegar.
+    await Promise.all([
+        mirarQueHay().then(pintar),
+        buscarLaUltima().then(pintar)
+    ]);
+}
+
+/**
+ * La última grabación que hay en la carpeta, para poder volver a ella.
+ *
+ * Es lo primero que hace falta al abrir la app: lo normal no es grabar otro
+ * vídeo sino terminar el de ayer —mirarlo, sacarle una toma, volver a
+ * cortarlo—. Antes eso no tenía puerta: la pantalla arrancaba siempre en
+ * «listo» y lo grabado solo se podía abrir desde el Finder, que es donde no
+ * sirve de nada porque lo que hay ahí son cinco archivos y no un proyecto.
+ *
+ * Si falla, no pasa nada: se queda sin la tarjeta y se puede grabar igual. Que
+ * no se pueda leer lo de antes no es razón para no poder grabar lo de hoy.
+ */
+async function buscarLaUltima() {
+    estado.ultima = null;
+    const casa = app.ajustes.semanal && app.ajustes.semanal.carpeta;
+    if (!casa) return;
+    try {
+        // Vienen ordenadas, la última primero (`sesiones-grabadas.listar`).
+        const lista = await window.nt.grabarListar([casa]);
+        const ultima = (lista || [])[0];
+        if (!ultima || !ultima.archivos || !ultima.archivos.json) return;
+        const resumen = ultima.resumen || {};
+        estado.ultima = {
+            json: ultima.archivos.json,
+            nombre: ultima.secuencia,
+            cuandoMs: ultima.ceroMs || null,
+            // Las descartadas CUENTAN acá. `resumen.tomas` son las que iban en
+            // el vídeo, y la tarjeta tiene que decir qué se va a encontrar al
+            // abrirla: el editor las abre todas, con las de fuera marcadas. Decir
+            // «2 tomas» y abrir tres es hacer dudar de si es la grabación buena.
+            tomas: (resumen.tomas || 0) + (resumen.descartadas || 0),
+            fuera: resumen.descartadas || 0,
+            segundos: resumen.segundos || 0,
+            carpeta: ultima.carpeta
+        };
+    } catch (err) {
+        estado.ultima = null;
+    }
 }
 
 export async function salir() {
@@ -569,6 +616,7 @@ async function alClic(e) {
     if (hace === 'abrir') return window.nt.openPath(estado.hecho.ruta);
     if (hace === 'ver-brutos') return window.nt.reveal(dondeEstanLosBrutos());
     if (hace === 'otro') return ver();
+    if (hace === 'abrir-ultima') return abrirLaUltima(boton);
     return undefined;
 }
 
@@ -735,6 +783,10 @@ async function grabar(boton) {
         const como = fuente.comoSuena();
         const r = await window.nt.grabarIniciar({
             dir: carpeta,
+            // Una carpeta por grabación adentro de la que eligió, con el vídeo
+            // y los brutos juntos: así mandar o borrar una grabación es mandar
+            // o borrar una carpeta (ver `workspace.carpetaDeGrabacion`).
+            carpetaPropia: true,
             curso: 'semana',
             fps: 30,
             // El de este modo, que de fábrica es `auto`: acá el idioma cambia a
@@ -872,36 +924,77 @@ async function terminar(boton) {
             pintar();
             return;
         }
-        estado.json = salida.archivos.json;
-
-        const m = await window.nt.semanalMontaje(estado.json);
-        if (!m.ok || !m.tomas.length) {
-            estado.hecho = {
-                ok: false,
-                brutos: dondeEstanLosBrutos(),
-                error: m.error || 'No se abrió ninguna toma: no hay nada que cortar. '
-                    + 'Los vídeos y el audio quedaron guardados.'
-            };
-            estado.paso = 'hecho';
-            pintar();
-            return;
-        }
-        estado.montaje = conUrls(m);
-        for (const a of m.avisos || []) avisar(a, 'aviso');
-        // Y el texto de cada toma, que es con lo que se edita: el montaje dice
-        // qué se ve y las palabras dicen dónde empieza y dónde termina. Si no
-        // se pudiera leer, el editor sigue andando sin texto antes que no haber
-        // editor.
-        const grabada = await window.nt.grabarAbrirGrabada(estado.json);
-        estado.grabada = grabada && grabada.ok ? grabada.estado : null;
-        estado.ficha = null;
-        estado.enVivo = null;
-        estado.paso = 'revisar';
-        pintar();
+        await irAlEditor(salida.archivos.json);
     } catch (err) {
         estado.hecho = { ok: false, error: err.message, brutos: dondeEstanLosBrutos() };
         estado.paso = 'hecho';
         pintar();
+    }
+}
+
+/**
+ * Abrir el editor de una grabación que está en el disco.
+ *
+ * Lo usan los dos caminos que llevan ahí: terminar de grabar, y abrir la última
+ * del inicio. Son el mismo: una grabación recién cerrada y una de ayer se
+ * distinguen en nada una vez escritas, y tener esto dos veces quería decir que
+ * la de ayer se iba a abrir un poco distinto que la de hace un minuto.
+ *
+ * @param {string} json el sidecar, que es de donde cuelga todo lo demás
+ */
+async function irAlEditor(json) {
+    estado.json = json;
+    const m = await window.nt.semanalMontaje(json);
+    if (!m.ok || !m.tomas.length) {
+        estado.hecho = {
+            ok: false,
+            brutos: dondeEstanLosBrutos(),
+            error: m.error || 'No se abrió ninguna toma: no hay nada que cortar. '
+                + 'Los vídeos y el audio quedaron guardados.'
+        };
+        estado.paso = 'hecho';
+        pintar();
+        return;
+    }
+    estado.montaje = conUrls(m);
+    // «Ver lo que se grabó» necesita un archivo de la grabación para abrir SU
+    // carpeta. Al terminar de grabar lo pone el cierre; al abrir una de ayer no
+    // hay cierre, y sin esto se caía al respaldo —la carpeta que se eligió, que
+    // ahora es la madre de todas— y abría el Finder en el sitio equivocado.
+    if (!estado.brutos.length) {
+        estado.brutos = [m.archivos.camara, m.archivos.pantalla].filter(Boolean);
+    }
+    for (const a of m.avisos || []) avisar(a, 'aviso');
+    // Y el texto de cada toma, que es con lo que se edita: el montaje dice
+    // qué se ve y las palabras dicen dónde empieza y dónde termina. Si no
+    // se pudiera leer, el editor sigue andando sin texto antes que no haber
+    // editor.
+    const grabada = await window.nt.grabarAbrirGrabada(json);
+    estado.grabada = grabada && grabada.ok ? grabada.estado : null;
+    estado.ficha = null;
+    estado.enVivo = null;
+    estado.paso = 'revisar';
+    pintar();
+}
+
+/**
+ * Abrir la última grabación, desde el inicio.
+ *
+ * El vídeo que sale de acá no se pisa nunca: «Cortar y exportar» escribe al
+ * lado con otro nombre (ver `alLado` en `engine/exportar-video.js`), así que
+ * volver sobre una grabación de la semana pasada no puede perder la que ya se
+ * había mandado.
+ */
+async function abrirLaUltima(boton) {
+    if (!estado.ultima) return;
+    boton.disabled = true;
+    try {
+        estado.cortes = 0;
+        estado.brutos = [];
+        await irAlEditor(estado.ultima.json);
+    } catch (err) {
+        avisar(`No pude abrir «${estado.ultima.nombre}»: ${err.message}`, 'error');
+        boton.disabled = false;
     }
 }
 

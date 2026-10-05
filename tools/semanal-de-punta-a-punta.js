@@ -42,6 +42,22 @@ const workspace = require('../engine/workspace');
 
 const espera = ms => new Promise(r => setTimeout(r, ms));
 
+/**
+ * Preguntarle a la ventana hasta que conteste algo, o rendirse.
+ *
+ * Devuelve `null` si no contestó nunca, y el que pregunta decide si eso es un
+ * fallo. Dormir un rato fijo y mirar una vez es lo que hace que una corrida
+ * pase en esta máquina y falle en otra más lenta.
+ */
+async function esperarA(js, expresion, cuanto = 8000) {
+    for (let i = 0; i < Math.ceil(cuanto / 200); i++) {
+        const r = await js(expresion);
+        if (r !== null && r !== undefined && r !== false) return r;
+        await espera(200);
+    }
+    return null;
+}
+
 /** Lo que la ventana tiene que contar de vuelta en cada paso. */
 const EN_LA_VENTANA = {
     async preparar(carpeta) {
@@ -93,6 +109,18 @@ async function laPasada({ win, arg }) {
         console.log('  ', ...x);
     };
 
+    /**
+     * Rendirse a mitad del camino. Se TIRA, no se devuelve.
+     *
+     * Cortar con `return` se saltaba también el recuento del final, así que la
+     * corrida imprimía su «✗» y salía con cero: en una consola se ve, en una
+     * tubería o en CI no se ve nada y parece que fue bien. Lo que se tira acá lo
+     * recoge `dev-shot.js`, que sale con uno.
+     */
+    const rendirse = porque => {
+        throw new Error(mal ? `${porque} · y ${mal} comprobación(es) mal antes` : porque);
+    };
+
     console.log(`\n── El modo semanal, de punta a punta · ${carpeta}\n`);
 
     decir(await js(await EN_LA_VENTANA.preparar(carpeta)));
@@ -105,8 +133,7 @@ async function laPasada({ win, arg }) {
         types: ['screen'], thumbnailSize: { width: 1, height: 1 }
     });
     if (!fuentes.length) {
-        console.log('\n✗ No hay ninguna pantalla que capturar.\n');
-        return;
+        return rendirse('No hay ninguna pantalla que capturar.');
     }
     // El selector se contesta en la capa de Electron y NO reemplazando
     // `getDisplayMedia` en la página.
@@ -142,8 +169,8 @@ async function laPasada({ win, arg }) {
     })()`);
     decir('cámara:', listo.camara || '(ninguna)', '· micrófono:', listo.micro || '(ninguno)');
     if (!listo.puedeGrabar) {
-        console.log('\n✗ El botón de grabar está apagado: sin micrófono no hay nada que medir.\n');
-        return;
+        return rendirse('El botón de grabar está apagado:'
+            + ' sin micrófono no hay nada que medir.');
     }
 
     decir('apretando Grabar…');
@@ -242,8 +269,7 @@ async function laPasada({ win, arg }) {
         if (cuantas) break;
     }
     if (!cuantas) {
-        console.log('\n✗ El editor no llegó a dibujarse.\n');
-        return;
+        return rendirse('El editor no llegó a dibujarse.');
     }
 
     // Lo que la maqueta no puede contestar: que los dos `<video>` apunten a los
@@ -377,11 +403,37 @@ async function laPasada({ win, arg }) {
 
     /* ── Y ahora lo que quedó en el disco ─────────────────────────────── */
     console.log('\n── Lo que quedó en el disco\n');
-    const mp4 = fs.readdirSync(carpeta).filter(f => f.endsWith('.mp4'));
-    const brutos = fs.existsSync(workspace.videoDir(carpeta))
-        ? fs.readdirSync(workspace.videoDir(carpeta)) : [];
-    const audios = fs.existsSync(workspace.audioDir(carpeta))
-        ? fs.readdirSync(workspace.audioDir(carpeta)) : [];
+
+    /* ── Una grabación, una carpeta ───────────────────────────────────────
+     *
+     * En la carpeta que se elige no cae nada suelto: cae UNA carpeta
+     * «Grabación-<fecha>_<hora>» con el vídeo, los brutos, el audio y el xml
+     * adentro. Así mandar o borrar una grabación es mandar o borrar una
+     * carpeta, en vez de reconocer qué cinco archivos de los veinte que hay
+     * eran de la del martes.
+     *
+     * Esto se comprueba acá y no solo en las pruebas porque es lo único que
+     * mira dónde caen los archivos DE VERDAD: las pruebas miran la función que
+     * arma el nombre, no el disco después de grabar.
+     */
+    const dentro = fs.readdirSync(carpeta, { withFileTypes: true })
+        .filter(d => d.isDirectory() && workspace.esCarpetaDeGrabacion(d.name))
+        .map(d => d.name);
+    if (dentro.length !== 1) {
+        return rendirse(`esperaba UNA carpeta «${workspace.CARPETA_GRABACION}-…»`
+            + ` en la elegida y hay ${dentro.length}.`
+            + ` Lo que hay: ${fs.readdirSync(carpeta).join(', ') || '(nada)'}`);
+    }
+    const casa = path.join(carpeta, dentro[0]);
+    const suelto = fs.readdirSync(carpeta).filter(f => f !== dentro[0]);
+    if (suelto.length) decir(`✗ quedó algo fuera de la carpeta: ${suelto.join(', ')}`);
+    decir(`carpeta ${dentro[0]}`);
+
+    const mp4 = fs.readdirSync(casa).filter(f => f.endsWith('.mp4'));
+    const brutos = fs.existsSync(workspace.videoDir(casa))
+        ? fs.readdirSync(workspace.videoDir(casa)) : [];
+    const audios = fs.existsSync(workspace.audioDir(casa))
+        ? fs.readdirSync(workspace.audioDir(casa)) : [];
 
     const mide = ruta => {
         const salida = execFileSync(paths.ffprobe().path, ['-v', 'error',
@@ -398,19 +450,18 @@ async function laPasada({ win, arg }) {
     };
 
     for (const f of brutos) {
-        const r = mide(path.join(workspace.videoDir(carpeta), f));
+        const r = mide(path.join(workspace.videoDir(casa), f));
         decir(`bruto  ${f.padEnd(44)} ${r.segundos} s · ${r.pistas} · ${r.tamano}`);
     }
     for (const f of audios) {
-        const r = mide(path.join(workspace.audioDir(carpeta), f));
+        const r = mide(path.join(workspace.audioDir(casa), f));
         decir(`audio  ${f.padEnd(44)} ${r.segundos} s · ${r.pistas}`);
     }
     if (!mp4.length) {
-        console.log('\n✗ No salió ningún MP4.\n');
-        return;
+        return rendirse(`No salió ningún MP4 en ${casa}.`);
     }
     for (const f of mp4) {
-        const ruta = path.join(carpeta, f);
+        const ruta = path.join(casa, f);
         const r = mide(ruta);
         const megas = (fs.statSync(ruta).size / 1e6).toFixed(1);
         decir(`VÍDEO  ${f.padEnd(44)} ${r.segundos} s · ${r.pistas} · ${r.tamano} · ${megas} MB`);
@@ -425,8 +476,8 @@ async function laPasada({ win, arg }) {
      * exactamente el cruce que hace `exportar-video.js`, y por eso se repite
      * acá: si esta cuenta no cuadra, el corte está mal.
      */
-    const json = fs.readdirSync(workspace.datosDir(carpeta))[0];
-    const estado = JSON.parse(fs.readFileSync(path.join(workspace.datosDir(carpeta), json), 'utf8'));
+    const json = fs.readdirSync(workspace.datosDir(casa))[0];
+    const estado = JSON.parse(fs.readFileSync(path.join(workspace.datosDir(casa), json), 'utf8'));
     const wav = (estado.sesiones || [])[0];
     const deriva = wav && wav.segundos > 0 ? (wav.hastaMs - wav.desdeMs) / (wav.segundos * 1000) : 1;
     // La descartada no cuenta: dejarla fuera en la revisión tiene que sacarla
@@ -434,7 +485,7 @@ async function laPasada({ win, arg }) {
     const van = (estado.tomas || []).filter(t => !t.descartada);
     const suma = van.reduce((s, t) => s + (t.outMs - t.inMs), 0) / 1000;
     const esperada = suma * deriva;
-    const dur = Number(mide(path.join(carpeta, mp4[0])).segundos);
+    const dur = Number(mide(path.join(casa, mp4[0])).segundos);
     const pared = (estado.terminada - estado.ceroMs) / 1000;
 
     console.log(`\n   la grabación duró ${pared.toFixed(1)} s de reloj de pared`);
@@ -479,11 +530,11 @@ async function laPasada({ win, arg }) {
     const dichos = await js(`[...document.querySelectorAll('.prproj-avisos li')]
         .map(l => l.textContent.trim())`);
     for (const a of dichos || []) decir(a);
-    const nuevos = fs.readdirSync(carpeta).filter(f => f.endsWith('.mp4') && !mp4.includes(f));
+    const nuevos = fs.readdirSync(casa).filter(f => f.endsWith('.mp4') && !mp4.includes(f));
     if (!nuevos.length) {
-        console.log('\n✗ el segundo corte no dejó ningún MP4\n');
+        decir('✗ el segundo corte no dejó ningún MP4');
     } else {
-        const r = mide(path.join(carpeta, nuevos[0]));
+        const r = mide(path.join(casa, nuevos[0]));
         decir(`VÍDEO  ${nuevos[0].padEnd(44)} ${r.segundos} s · ${r.pistas} · ${r.tamano}`);
         const menos = dur - Number(r.segundos);
         console.log(`\n   ${menos > 0
@@ -491,7 +542,39 @@ async function laPasada({ win, arg }) {
             : '· no había silencios de más de 0,7 s que quitar, así que dura lo mismo'}`);
     }
 
-    console.log(`   todo en ${carpeta}\n`);
+    /* ── Volver a lo último grabado ────────────────────────────────────────
+     *
+     * La otra mitad de «una grabación, una carpeta»: si lo grabado no se puede
+     * volver a abrir, haberlo guardado ordenado no sirve de nada. Se vuelve al
+     * inicio como lo haría cualquiera —«Grabar otro»— y se comprueba que la
+     * grabación que se acaba de hacer esté ahí ofrecida, y que abra el editor
+     * con las tomas puestas.
+     *
+     * Esto es lo único que recorre el camino entero: escribir la carpeta,
+     * encontrarla de nuevo leyendo el disco, y releer su sidecar. Las pruebas
+     * miran cada tramo por separado.
+     */
+    console.log('\n── Volver a lo último que se grabó\n');
+    await js(`document.querySelector('[data-hace="otro"]').click()`);
+    const ultima = await esperarA(js, `(() => {
+        const b = document.querySelector('[data-hace="abrir-ultima"]');
+        return b ? b.closest('.tarjeta').textContent.replace(/\\s+/g, ' ').trim() : null;
+    })()`);
+    if (!ultima) {
+        decir('✗ la pantalla de inicio no ofrece la grabación que se acaba de hacer');
+    } else {
+        decir(`la ofrece: «${ultima}»`);
+        await js(`document.querySelector('[data-hace="abrir-ultima"]').click()`);
+        const volvio = await esperarA(js, `(() => {
+            const n = document.querySelectorAll('[data-hace="parar-en"]').length;
+            return n ? n : null;
+        })()`);
+        decir(volvio
+            ? `abrió el editor con ${volvio} toma(s): se puede seguir cortándola`
+            : '✗ abrió, pero sin tomas: la grabación de antes no se releyó');
+    }
+
+    console.log(`\n   todo en ${casa}\n`);
 
     if (mal) {
         console.log(`✗ ${mal} comprobación(es) mal\n`);

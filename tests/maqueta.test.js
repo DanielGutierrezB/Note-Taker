@@ -79,6 +79,29 @@ module.exports = function (t) {
         }
     });
 
+    // Un escenario que está en el catálogo pero que el guion no nombra en
+    // ningún `hay(…)` no se para en su pantalla: sigue de largo hasta el final
+    // del recorrido y la herramienta fotografía, mide y audita OTRA pantalla
+    // creyendo que es esa. Pasó al agregar `semanal-primera-vez`: la captura
+    // salió del vídeo ya exportado.
+    //
+    // Las tres excepciones son de verdad y están contadas una por una, que es
+    // la diferencia entre una excepción y un agujero.
+    t.test('cada escenario se para en su pantalla', () => {
+        const CAMINO_POR_DESCARTE = {
+            sesiones: 'es la pantalla de arranque: se llega sin pedir nada',
+            'faltan-modelos': 'se lee con URLSearchParams y no con hay(…)',
+            'semanal-hecho': 'es el final del recorrido semanal: se llega por descarte'
+        };
+        const s = fs.readFileSync(path.join(RAIZ, 'tools', 'maqueta', 'doble.js'), 'utf8');
+        const nombrados = new Set((s.match(/hay\('[^']+'\)/g) || [])
+            .map(x => x.slice(5, -2)));
+        const sueltos = lasQueSabeHacer()
+            .filter(x => !nombrados.has(x) && !CAMINO_POR_DESCARTE[x]);
+        t.eq(sueltos.join(', '), '',
+            'sin una parada propia, la foto sale de la pantalla equivocada');
+    });
+
     t.test('el modo semanal entra entero, también cuando algo sale mal', () => {
         // Son los que se escriben con menos cuidado y los que más se leen
         // cuando algo falló.

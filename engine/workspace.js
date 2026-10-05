@@ -58,6 +58,46 @@ const VIDEO_DIR = 'Video';
  */
 const SUFIJO_SIDECAR = '_notas-en-vivo.json';
 
+/**
+ * En el modo semanal, UNA CARPETA POR GRABACIÓN.
+ *
+ *   <la carpeta que eligió>/
+ *     Grabación-2026-10-05_10-27-28/
+ *       semana_2026-10-05_10-27-28.mp4     el vídeo, que es lo que se lleva
+ *       xml/...                            de dónde salió: los brutos y los datos
+ *     Grabación-2026-10-05_18-04-11/
+ *       ...
+ *
+ * Y no todo junto en la carpeta elegida, que es como estaba. La diferencia es
+ * quién se tiene que acordar: con una carpeta por grabación, mover, mandar o
+ * borrar una es mover, mandar o borrar una carpeta; sin ella, hay que saber que
+ * el vídeo está arriba, la cámara y la pantalla en `xml/Video`, el audio en
+ * `xml/Audio` y la hora del día en `xml/Datos`, y juntar cinco archivos de
+ * cuatro sitios sin olvidarse de ninguno.
+ *
+ * En el modo de clase NO: ahí la carpeta es un curso con muchas clases, el XML
+ * de cada una se importa a mano desde `xml/`, y las fotos y el audio se
+ * comparten entre todas. Partirlo por clase rompería justamente eso.
+ *
+ * La carpeta lleva la fecha y la hora del CERO de la grabación, el mismo
+ * instante con el que se nombran los archivos de adentro (`nombre-de-sesion.sello`),
+ * así que la carpeta y lo que contiene dicen siempre lo mismo.
+ */
+const CARPETA_GRABACION = 'Grabación';
+
+/**
+ * @param {string} casa la carpeta que eligió la persona
+ * @param {string} sello la fecha y la hora, de `nombre-de-sesion.sello`
+ */
+function carpetaDeGrabacion(casa, sello) {
+    return path.join(casa, `${CARPETA_GRABACION}-${sello}`);
+}
+
+/** Si una carpeta tiene la forma de las que hace el modo semanal. */
+function esCarpetaDeGrabacion(nombre) {
+    return String(nombre || '').startsWith(`${CARPETA_GRABACION}-`);
+}
+
 function xmlDir(base) {
     return path.join(base, XML_DIR);
 }
@@ -211,6 +251,9 @@ module.exports = {
     REFERENCIAS_DIR,
     VIDEO_DIR,
     SUFIJO_SIDECAR,
+    CARPETA_GRABACION,
+    carpetaDeGrabacion,
+    esCarpetaDeGrabacion,
     xmlDir,
     audioDir,
     datosDir,

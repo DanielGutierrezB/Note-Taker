@@ -92,10 +92,48 @@ export function escena(estado, vista) {
       </div>`;
 }
 
+/**
+ * La última grabación que hay en la carpeta, para volver a ella.
+ *
+ * Va ARRIBA de todo y no al pie, porque al abrir la app lo normal no es grabar
+ * otro vídeo: es terminar el de ayer. Mirarlo, sacarle una toma que no iba,
+ * volver a cortarlo. Antes eso no tenía puerta en ninguna pantalla y lo único
+ * que quedaba era el Finder, donde lo que hay son cinco archivos sueltos y no
+ * un proyecto.
+ *
+ * No es un botón primario: el primario de esta pantalla es Grabar, y sigue
+ * siendo uno solo.
+ *
+ * Y es UNA línea, no una tarjeta con cabeza y cuerpo como las demás. La hice
+ * así primero y a 840 px de alto empujaba Grabar abajo del borde: una pantalla
+ * donde no se ve el botón de grabar es peor que una sin este atajo. Lo que se
+ * perdió al apretarla —que se abre donde se dejó, que el vídeo ya exportado no
+ * se pisa— está en el `title` del botón, que es donde se lee si hace falta.
+ */
+function tarjetaDeLaUltima(estado) {
+    const u = estado.ultima;
+    if (!u) return '';
+    const cuantas = `${u.tomas} toma${u.tomas === 1 ? '' : 's'}`;
+    const fuera = u.fuera ? ` (${u.fuera} fuera)` : '';
+    const cuanto = u.segundos ? ` · ${esc(fmt.duracion(u.segundos))} grabados` : '';
+    return `
+      <div class="tarjeta semanal-ultima">
+        <div class="campo-fila">
+          ${icono('camara')}
+          <span class="v2">Lo último que grabaste</span>
+          <span class="v3 crece">${esc(fmt.cuando(u.cuandoMs))} · ${cuantas}${fuera}${cuanto}</span>
+          <button class="btn" type="button" data-hace="abrir-ultima"
+                  title="Vuelve al editor de esa grabación: qué toma va, qué se ve en cada una, y cortarla nueva. Se abre donde se dejó, y el vídeo que ya sacaste no se pisa.">
+            Seguir con esa</button>
+        </div>
+      </div>`;
+}
+
 /** Antes de grabar: qué se va a grabar, y el botón. */
 export function tarjetaListo(estado) {
     const puede = estado.audio.abierto && (estado.pantalla || estado.camara);
     return `
+      ${tarjetaDeLaUltima(estado)}
       <div class="tarjeta">
         <div class="tarjeta-cuerpo semanal-campos">
           <div class="campo">

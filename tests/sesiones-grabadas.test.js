@@ -31,17 +31,21 @@ function sembrar(dir, opciones) {
     workspace.ensureDir(path.dirname(wav));
     fs.writeFileSync(wav, Buffer.alloc(1024));
 
-    const estado = vivo.estadoNuevo({ secuencia, curso: o.curso || 'curso', ceroMs: T0, fps: 30 });
-    estado.sesiones = [{ archivo: wav, desdeMs: T0, segundos: 600, sampleRate: 48000, canales: 1 }];
+    // Todo cuelga del cero, que por defecto es `T0`: así una sesión sembrada con
+    // otra hora queda coherente —el WAV, las tomas y la claqueta se mueven con
+    // ella— y el orden de la lista se puede probar de verdad.
+    const cero = o.ceroMs != null ? o.ceroMs : T0;
+    const estado = vivo.estadoNuevo({ secuencia, curso: o.curso || 'curso', ceroMs: cero, fps: 30 });
+    estado.sesiones = [{ archivo: wav, desdeMs: cero, segundos: 600, sampleRate: 48000, canales: 1 }];
     estado.tomas = o.tomas || [{
         id: 1, vista: 'PV', comentario: 'Una', cuenta: '3, 2, 1.',
-        inMs: T0 + 20000, outMs: T0 + 80000, descartada: false,
-        palabras: [{ t: T0 + 20000, texto: 'Hola' }], comentarios: []
+        inMs: cero + 20000, outMs: cero + 80000, descartada: false,
+        palabras: [{ t: cero + 20000, texto: 'Hola' }], comentarios: []
     }];
     if (o.claquetas !== false) {
-        vivo.anotarClaqueta(estado, { ms: T0 + 12000, confirmada: true, origen: 'golpe' });
+        vivo.anotarClaqueta(estado, { ms: cero + 12000, confirmada: true, origen: 'golpe' });
     }
-    if (o.terminada !== false) estado.terminada = T0 + 600000;
+    if (o.terminada !== false) estado.terminada = cero + 600000;
 
     const archivos = workspace.archivosDeSesion(dir, secuencia);
     workspace.writeAtomic(archivos.xml, notasXml.xmlDeNotas(estado));
@@ -51,6 +55,40 @@ function sembrar(dir, opciones) {
 
 module.exports = function (t) {
     t.group('sesiones-grabadas · listar');
+
+    // El modo semanal pasó a darle una carpeta a cada grabación. Lo que estas
+    // dos pruebas cuidan es el día del cambio: en la misma carpeta hay
+    // grabaciones de las dos formas, y una lista que solo entendiera la nueva
+    // las habría escondido sin borrarlas, que es peor que borrarlas.
+    t.test('encuentra una grabación con su carpeta propia', () => {
+        const casa = carpeta();
+        const suya = workspace.carpetaDeGrabacion(casa, '2026-09-29_10-00-00');
+        sembrar(suya, { secuencia: 'semana_2026-09-29_10-00-00' });
+        const lista = sesiones.listar([casa]);
+        t.eq(lista.length, 1, 'la encuentra un piso más abajo');
+        t.eq(lista[0].secuencia, 'semana_2026-09-29_10-00-00');
+        t.eq(lista[0].carpeta, suya, 'y dice la carpeta de la grabación, no la de arriba');
+    });
+
+    t.test('las de antes y las de ahora salen juntas, sin repetirse', () => {
+        const casa = carpeta();
+        sembrar(casa, { secuencia: 'semana_2026-09-28_09-00-00', ceroMs: T0 - 86400000 });
+        sembrar(workspace.carpetaDeGrabacion(casa, '2026-09-29_10-00-00'),
+            { secuencia: 'semana_2026-09-29_10-00-00', ceroMs: T0 });
+        const lista = sesiones.listar([casa]);
+        t.eq(lista.length, 2);
+        t.eq(lista.map(x => x.secuencia).join(' '),
+            'semana_2026-09-29_10-00-00 semana_2026-09-28_09-00-00', 'la última primero');
+    });
+
+    // Una carpeta renombrada a mano sigue siendo una grabación: lo que la hace
+    // una es tener el archivo con la hora del día adentro, no cómo se llame.
+    t.test('una carpeta renombrada a mano se sigue viendo', () => {
+        const casa = carpeta();
+        sembrar(path.join(casa, 'La semana que hablé del precio'),
+            { secuencia: 'semana_2026-09-29_10-00-00' });
+        t.eq(sesiones.listar([casa]).length, 1);
+    });
 
     t.test('encuentra lo que hay y lo resume', () => {
         const dir = carpeta();

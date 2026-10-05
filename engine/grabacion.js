@@ -188,7 +188,7 @@ function soltar() {
  * con su timecode, que es exactamente lo que él necesita para correlacionar.
  *
  * @param {object} params { dir, curso, fps, idioma, dispositivo, sampleRate,
- *   canales, avisar, sinReloj, reanudar }
+ *   canales, avisar, sinReloj, reanudar, carpetaPropia }
  */
 function iniciar(params) {
     const p = params || {};
@@ -203,6 +203,21 @@ function iniciar(params) {
     const previa = p.reanudar || null;
     const ceroMs = previa ? previa.ceroMs : Date.now();
 
+    // `carpetaPropia` es el modo semanal: una carpeta por grabación dentro de
+    // la que eligió la persona (ver `workspace.carpetaDeGrabacion`). Se decide
+    // ACÁ y no en la ventana por dos razones: la ventana no tiene `path`, y
+    // sobre todo el nombre de la carpeta tiene que salir del MISMO `ceroMs` que
+    // nombra los archivos de adentro, que se acaba de fijar dos líneas arriba.
+    // Mandándolo ya armado desde la ventana serían dos relojes y podrían
+    // separarse por un segundo justo al cruzar el minuto.
+    //
+    // Al reanudar no se toca: la sesión previa ya tiene su carpeta, y hacerle
+    // otra con la hora de ahora dejaría la mitad del audio en una y la mitad en
+    // la otra.
+    const dir = p.carpetaPropia && !previa
+        ? workspace.carpetaDeGrabacion(p.dir, nombreDeSesion.sello(ceroMs))
+        : p.dir;
+
     sesion = {
         // Mientras esté en pie. Lo mira todo lo que vuelve de un `await`, que es
         // la única forma de saber que la sesión se cerró mientras se esperaba.
@@ -215,7 +230,7 @@ function iniciar(params) {
             idioma: p.idioma,
             dispositivo: p.dispositivo
         }),
-        dir: p.dir,
+        dir,
         captura: null,
         // El piso de esta sala y cuándo fue la última palmada (`aplausos.js`).
         // Lo arma `abrirEscucha`, acá abajo, que es donde se sabe la tasa.

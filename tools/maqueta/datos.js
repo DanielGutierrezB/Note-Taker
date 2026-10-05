@@ -201,6 +201,26 @@ export function estadoEnVivo(extra) {
 }
 
 /** Las sesiones que hay en la carpeta, como las manda `sesiones-grabadas.listar`. */
+/**
+ * Las grabaciones del modo semanal, que son otra cosa que las clases.
+ *
+ * Una por carpeta (`Grabación-...`), con el nombre y el resumen que la pantalla
+ * de inicio usa para ofrecer «Seguir con esa».
+ */
+export const SEMANALES = [
+    {
+        secuencia: 'semana_2026-10-04_19-29-01',
+        curso: 'semana',
+        ceroMs: new Date('2026-10-04T19:29:01').getTime(),
+        carpeta: '/Users/vos/Vídeos/Grabación-2026-10-04_19-29-01',
+        archivos: {
+            xml: '/Users/vos/Vídeos/Grabación-2026-10-04_19-29-01/xml/semana.xml',
+            json: '/Users/vos/Vídeos/Grabación-2026-10-04_19-29-01/xml/Datos/semana_notas-en-vivo.json'
+        },
+        resumen: { tomas: 3, descartadas: 1, claquetas: 0, segundos: 162, sinReleer: 0, estado: 'terminada' }
+    }
+];
+
 export const SESIONES = [
     {
         secuencia: 'curso-de-automatizaciones_2026-09-28_09-02-11',

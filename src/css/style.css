@@ -2132,6 +2132,19 @@ kbd {
   padding-top: var(--sp-4);
 }
 
+/* Lo último que se grabó: una sola línea, con el botón al final. No lleva
+   cabeza ni cuerpo como las demás tarjetas porque no es un paso de la
+   grabación sino una salida lateral, y porque ocupando tres filas dejaba
+   Grabar abajo del borde de la ventana. */
+.semanal-ultima {
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.semanal-ultima .v3 {
+  /* La fecha y el recuento, que se leen si se los busca y no cuando no. */
+  text-align: left;
+}
+
 /* La vista previa de la pantalla elegida es más ancha que la de la cámara: lo
    que hay que reconocer ahí es una ventana con su contenido, no una cara. */
 .semanal-pantalla-previa {

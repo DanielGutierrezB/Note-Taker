@@ -161,7 +161,7 @@ const ESCENARIOS = [
     // El modo semanal, momento por momento, más los tres que se salen del
     // camino felíz: sin pantalla compartida, sin ninguna toma, y con el aviso
     // de que un vídeo se rompió a mitad.
-    'semanal', 'semanal-sin-pantalla', 'semanal-grabando', 'semanal-sin-tomas',
+    'semanal', 'semanal-primera-vez', 'semanal-sin-pantalla', 'semanal-grabando', 'semanal-sin-tomas',
     'semanal-con-aviso', 'semanal-ficha', 'semanal-revisar',
     'semanal-revisar-fuera', 'semanal-cortando', 'semanal-hecho',
     'iconos'
