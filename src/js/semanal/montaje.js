@@ -21,6 +21,8 @@
  * mismo instante del reloj de pared, así que se mantienen juntos solos.
  */
 
+import * as corte from './corte.js';
+
 /** Más de esto de separación entre los dos vídeos y se vuelve a buscar. */
 const SE_SEPARO_SEC = 0.25;
 
@@ -40,7 +42,7 @@ let donde = -1;
 let sola = false;
 let tictac = null;
 let avisar = null;
-let huellaPuesta = null;
+let planPuesto = null;
 
 /**
  * Pone los dos vídeos dentro de un elemento, una sola vez.
@@ -84,14 +86,18 @@ export function montar(hueco, alCambio) {
  *   URL por quien lo llama (en la app son `file:` y en la maqueta `http:`)
  */
 export function poner(m) {
-    // Si el plan es el mismo, no se toca nada. Hace falta decirlo porque la
-    // pantalla llama acá en CADA repintado —es la forma de que los dos `<video>`
+    // Si es el MISMO plan, no se toca nada. Hace falta decirlo porque la
+    // pantalla llama acá en cada repintado —es la forma de que los dos `<video>`
     // sobrevivan al `innerHTML`— y volver a buscar el principio de la toma en
-    // cada uno dejaba el reloj clavado en cero: el vídeo arrancaba, repintaba al
-    // cambiar el botón a «Pausa», y el repintado lo devolvía al principio.
-    const nuevo = huella(m);
-    if (nuevo === huellaPuesta) return;
-    huellaPuesta = nuevo;
+    // cada uno dejaba el reloj clavado en cero.
+    //
+    // «El mismo» es el mismo objeto, y alcanza porque el plan solo cambia
+    // cuando el motor contesta otro: la pantalla lo guarda tal cual lo recibe y
+    // nunca lo edita en el sitio. Antes esto comparaba una huella de siete
+    // campos por toma, que era tanta máquina como hacía falta mientras la
+    // pantalla fabricaba una copia nueva en cada pintado.
+    if (m === planPuesto) return;
+    planPuesto = m;
 
     const antes = laDeAhora();
     const iba = reproduciendo();
@@ -101,27 +107,13 @@ export function poner(m) {
     apuntar(elCam, archivos.camara);
     apuntar(elPan, archivos.pantalla);
     const sigue = antes ? plan.findIndex(t => t.id === antes.id) : -1;
-    irAlIndice(sigue === -1 ? primera() : sigue, { reproducir: iba });
-}
-
-/** Lo que distingue un plan de otro: todo lo que cambia qué hay que reproducir. */
-function huella(m) {
-    const a = m.archivos || {};
-    return [a.camara, a.pantalla].concat((m.tomas || []).map(t =>
-        [t.id, t.segundos, t.fondo, t.camaraDesde, t.pantallaDesde,
-            t.descartada ? 1 : 0, t.conAudio ? 1 : 0].join(':'))).join('|');
+    irAlIndice(sigue === -1 ? corte.primera(plan) : sigue, { reproducir: iba });
 }
 
 function apuntar(v, ruta) {
     if (!v || !ruta || v.dataset.ruta === ruta) return;
     v.dataset.ruta = ruta;
     v.src = ruta;
-}
-
-/** La primera que va al vídeo, o la primera de todas si no queda ninguna. */
-function primera() {
-    const i = plan.findIndex(t => !t.descartada);
-    return i === -1 ? (plan.length ? 0 : -1) : i;
 }
 
 export function laDeAhora() {
@@ -155,14 +147,6 @@ function irAlIndice(i, o) {
     else decir();
 }
 
-/** Al final de la toma, la siguiente que vaya al vídeo. */
-function laQueSigue() {
-    for (let i = donde + 1; i < plan.length; i++) {
-        if (!plan[i].descartada) return i;
-    }
-    return -1;
-}
-
 export function alternar() {
     if (reproduciendo()) pausar();
     else arrancar();
@@ -173,8 +157,8 @@ export function arrancar() {
     if (!t) return;
     // Al final de todo, volver al principio en vez de no hacer nada: apretar
     // play y que no pase nada no se distingue de que esté roto.
-    if (!sola && laQueSigue() === -1 && dentroDe(t) >= t.segundos - 0.05) {
-        irAlIndice(primera(), {});
+    if (!sola && corte.laQueSigue(plan, donde) === -1 && dentroDe(t) >= t.segundos - 0.05) {
+        irAlIndice(corte.primera(plan), {});
         t = laDeAhora();
         if (!t) return;
     }
@@ -222,7 +206,7 @@ function mirar() {
     const m = elMaestro(t);
     if (!t || !m) return;
     if (dentroDe(t) >= t.segundos - AL_FILO) {
-        const sigue = sola ? -1 : laQueSigue();
+        const sigue = sola ? -1 : corte.laQueSigue(plan, donde);
         if (sigue === -1) {
             pausar();
             // Clavado en el final y no pasado de largo: si el elemento se queda
@@ -290,24 +274,15 @@ function decir() {
         toma: t ? t.id : null,
         dentro,
         dura: t ? t.segundos : 0,
-        montado: antesDeAhora() + (t && !t.descartada ? dentro : 0),
+        montado: corte.loMontadoHasta(plan, donde) + (t && !t.descartada ? dentro : 0),
         total: elTotal(),
         sola,
         reproduciendo: reproduciendo()
     });
 }
 
-/** Cuánto del corte final va antes de la toma de ahora. */
-function antesDeAhora() {
-    let s = 0;
-    for (let i = 0; i < donde && i < plan.length; i++) {
-        if (!plan[i].descartada) s += plan[i].segundos;
-    }
-    return s;
-}
-
 export function elTotal() {
-    return plan.filter(t => !t.descartada).reduce((s, t) => s + t.segundos, 0);
+    return corte.elTotal(plan);
 }
 
 export function elPlan() {
@@ -327,7 +302,7 @@ export function soltar() {
     elCam = null;
     elPan = null;
     plan = [];
-    huellaPuesta = null;
+    planPuesto = null;
     donde = -1;
     sola = false;
     avisar = null;

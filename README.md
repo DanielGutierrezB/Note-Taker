@@ -1218,20 +1218,25 @@ esperados y 14,59 s obtenidos, con 4 ms de diferencia.
 
 Del editor comprueba lo que la maqueta no puede contestar: que los dos
 `<video>` apunten a los archivos que se acaban de grabar y **carguen desde
-`file:` con la CSP de la app puesta** (1920x1080 y 3840x2160, 33,4 s), que cada
-toma busque su propio segundo dentro de lo que dura el archivo (0,22 · 13,07 ·
-23,34) y no más allá, que una toma en vista «Yo» muestre solo la cámara y las
+`file:` con la CSP de la app puesta** (1920x1080 y 3840x2160, 33,3 s), que cada
+toma busque su propio segundo dentro de lo que dura el archivo (2,67 · 12,94 ·
+23,21) y no más allá, que una toma en vista «Yo» muestre solo la cámara y las
 de «Mi pantalla» la pantalla con el recuadro, que el reloj del montaje se mueva
 al apretar Reproducir, y que dejar una fuera se vea en la línea de tomas.
 Después exporta dos veces, la segunda con «Quitar silencios», y mira que el
-segundo MP4 dure menos y que el primero siga en su sitio: 15 huecos quitados,
-10,57 s contra 14,59 s.
+segundo MP4 dure menos y que el primero siga en su sitio: 13 huecos quitados,
+8,83 s contra 12,37 s.
 
 El editor por dentro —que clicar una ficha no rebobine el montaje, que las
 desactivadas se salten, que «Ocultar desactivadas» esconda, que la barra
 espaciadora reproduzca— se prueba más rápido sobre la maqueta, con
 `node tools/probar-editor.js`, que además cuenta los errores de JavaScript de
-la pasada. Los tres MP4 que la maqueta sirve son sintéticos y se rehacen con
+la pasada y **sale con error si alguna comprobación falla**: imprimir el fallo y
+salir con cero no es una red, es un informe que nadie lee. Lo que SÍ se puede
+probar sin navegador se prueba sin navegador: `semanal/corte.js` y
+`semanal/tarjetas.js` no tocan el DOM, así que `tests/corte-del-editor.test.js`
+los importa, los llama y comprueba lo que devuelven.
+Los tres MP4 que la maqueta sirve son sintéticos y se rehacen con
 `node tools/maqueta/hacer-videos.js`: dos «crudos» de 40 s, de distinto tamaño
 y color y con una barra que viaja como reloj, y uno corto que hace de
 exportado.
@@ -1286,6 +1291,8 @@ src/js/
   grabar/ojo.js          la cámara de referencia y el anillo de fotogramas
   grabar/filmar.js       grabar la cámara y la pantalla (modo semanal)
   grabar/lista-tomas.js  las fichas de abajo, compartidas por las dos pantallas
+  semanal/tarjetas.js    lo que SE VE en el modo semanal: estado → HTML, sin DOM
+  semanal/corte.js       las decisiones del editor: qué toma sigue, cuánto mide
   semanal/montaje.js     los dos <video> del editor, puestos donde dice el motor
   fotos.js               cuándo se guarda la foto de una toma
 tools/                   maqueta, auditoría, simulación, build

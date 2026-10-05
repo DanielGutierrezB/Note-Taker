@@ -482,13 +482,36 @@ function alLado(ruta) {
  * @param {string} json el sidecar
  * @returns {object} { ok, tomas, camara, pantalla }
  */
-function montajeDeSesion(json) {
+/**
+ * Una sesión abierta: los bordes ya corridos al silencio y las fuentes a mano.
+ *
+ * Lo usan las dos puntas —el montaje que se mira y el vídeo que sale— y por eso
+ * está acá y no escrito dos veces. La promesa del modo es que lo que se mira
+ * ES lo que sale, y mientras los dos lados se abrían la sesión por su cuenta
+ * eso dependía de que nadie tocara uno sin tocar el otro. Ahora no se puede
+ * separar: hay un solo sitio donde se decide con qué se trabaja.
+ *
+ * `ajustarBordes` es la misma llamada que hacen el XML y el proyecto de
+ * Premiere, así que el corte también es el mismo que ve el editor.
+ */
+function abrirLaSesion(json) {
     const sitio = workspace.sesionDelSidecar(json);
     const estado = sesionesGrabadas.leerSidecar(json);
     sesionesGrabadas.ajustarBordes(estado, sitio);
 
-    const videos = videosDe(estado, sitio).videos;
+    const { videos, vacios } = videosDe(estado, sitio);
     const camara = videoCrudo.de(videos, 'camara');
+    return {
+        sitio, estado, vacios,
+        camara,
+        pantalla: videoCrudo.de(videos, 'pantalla'),
+        camaraConAudio: Boolean(camara) && tieneAudio(camara.ruta),
+        wavs: wavsDe(estado, sitio)
+    };
+}
+
+function montajeDeSesion(json) {
+    const { estado, camara, pantalla, camaraConAudio, wavs } = abrirLaSesion(json);
 
     // Todas las tomas cerradas, también las descartadas. `tomasDe` no sirve acá
     // justamente porque deja fuera las descartadas, y el editor tiene que poder
@@ -510,15 +533,8 @@ function montajeDeSesion(json) {
     // montaje que se mira y el vídeo que sale eligen fondo, recuadro y encuadre
     // con la misma regla, incluidos los repuestos —la toma que pedía la cámara
     // y no la tiene— y lo que se ve es de verdad lo que va a salir.
-    const { trozos, avisos } = repartir({
-        tomas,
-        pantalla: videoCrudo.de(videos, 'pantalla'),
-        camara,
-        camaraConAudio: Boolean(camara) && tieneAudio(camara.ruta),
-        wavs: wavsDe(estado, sitio)
-    });
+    const { trozos, avisos } = repartir({ tomas, pantalla, camara, camaraConAudio, wavs });
 
-    const pantalla = videoCrudo.de(videos, 'pantalla');
     // Dos archivos y, por toma, dónde cae en cada uno: es lo único que la
     // ventana necesita para buscar con `currentTime`. Mandar la ruta en cada
     // toma la obligaría a deducir cuál es cuál en cada cambio de vista.
@@ -605,12 +621,8 @@ function wavsDe(estado, sitio) {
  */
 async function deSesion(json, opciones) {
     const o = opciones || {};
-    const sitio = workspace.sesionDelSidecar(json);
-    const estado = sesionesGrabadas.leerSidecar(json);
-
-    // Los bordes al silencio, con el WAV donde esté hoy. Es la misma llamada que
-    // hacen el XML y el proyecto de Premiere, así que el corte es el mismo.
-    sesionesGrabadas.ajustarBordes(estado, sitio);
+    const { sitio, estado, vacios, pantalla, camara, camaraConAudio, wavs }
+        = abrirLaSesion(json);
 
     let tomas = tomasDe(estado);
     if (!tomas.length) {
@@ -621,10 +633,6 @@ async function deSesion(json, opciones) {
         };
     }
 
-    const { videos, vacios } = videosDe(estado, sitio);
-
-    const pantalla = videoCrudo.de(videos, 'pantalla');
-    const camara = videoCrudo.de(videos, 'camara');
     if (!pantalla && !camara) {
         return {
             ok: false,
@@ -635,8 +643,6 @@ async function deSesion(json, opciones) {
                 : 'No encontré los vídeos de esta grabación.'
         };
     }
-
-    const wavs = wavsDe(estado, sitio);
 
     // Y si se pidió, cada toma partida por sus silencios largos. Va acá —entre
     // las tomas y el reparto— porque un pedazo es una toma más corta y todo lo
@@ -665,13 +671,7 @@ async function deSesion(json, opciones) {
         tomas = r.tomas;
     }
 
-    const reparto = repartir({
-        tomas,
-        pantalla,
-        camara,
-        camaraConAudio: Boolean(camara) && tieneAudio(camara.ruta),
-        wavs
-    });
+    const reparto = repartir({ tomas, pantalla, camara, camaraConAudio, wavs });
     const trozos = reparto.trozos;
     // Lo que faltó va primero: es la causa de todo lo que venga detrás.
     const avisos = vacios.concat(reparto.avisos, quitados);

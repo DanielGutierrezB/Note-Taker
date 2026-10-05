@@ -82,12 +82,11 @@ const PEDAZO_MIN_SEC = 0.5;
  * @param {object[]} tomas `{id, vista, desdeMs, hastaMs}`, en el reloj del audio
  * @param {object} estado la sesión leída del sidecar
  * @param {object} [opciones] `resolver(rutaGuardada)` → dónde está el WAV hoy
- * @returns {{tomas:object[], quitadosSec:number, huecos:number}}
+ * @returns {{tomas:object[], huecos:number}}
  */
 function partir(tomas, estado, opciones) {
     const o = opciones || {};
     const salida = [];
-    let quitadosSec = 0;
     let huecos = 0;
 
     const abiertos = new Map();
@@ -108,9 +107,6 @@ function partir(tomas, estado, opciones) {
                 salida.push(toma);
                 continue;
             }
-            const entera = toma.hastaMs - toma.desdeMs;
-            const suma = pedazos.reduce((s, p) => s + (p.hastaMs - p.desdeMs), 0);
-            quitadosSec += (entera - suma) / 1000;
             huecos += pedazos.length - 1;
             for (const p of pedazos) salida.push(p);
         }
@@ -118,7 +114,13 @@ function partir(tomas, estado, opciones) {
         for (const w of abiertos.values()) ajustar.cerrar(w);
     }
 
-    return { tomas: salida, quitadosSec: Math.round(quitadosSec * 10) / 10, huecos };
+    // Cuánto se quitó NO se contesta acá a propósito. Saldría en el reloj del
+    // audio, que es el de los bordes, y a una persona hay que decirle segundos
+    // de los que va a ver pasar en el reproductor. Quien lo cuenta es
+    // `deSesion`, que pasa los dos extremos por `enLosDosRelojes` antes de
+    // restar. Un número en el reloj equivocado es peor que ninguno: nadie puede
+    // mirarlo y darse cuenta de que está mal.
+    return { tomas: salida, huecos };
 }
 
 /** Los pedazos de UNA toma, o null si no se pudo mirar su onda. */

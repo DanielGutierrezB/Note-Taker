@@ -21,7 +21,20 @@ const maqueta = require('./maqueta/abrir');
 const CHROME = process.env.NT_CHROME
     || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
-const decir = (...x) => console.log('  ', ...x);
+/**
+ * Lo que se dice por el camino, y lo que estaba mal.
+ *
+ * Las dos cosas por la misma puerta, y las que empiezan con «✗» se cuentan: de
+ * esto dependen las comprobaciones que NO se pueden hacer sin un navegador —que
+ * clicar una toma no rebobine el vídeo, que lo de abajo siga al reproductor— y
+ * un sondeo que las imprime pero sale con cero no las garantiza. Antes salía
+ * con cero y por eso no servía de red.
+ */
+let mal = 0;
+const decir = (...x) => {
+    if (String(x[0] || '').startsWith('✗')) mal++;
+    console.log('  ', ...x);
+};
 const espera = ms => new Promise(r => setTimeout(r, ms));
 
 async function main() {
@@ -172,11 +185,11 @@ async function main() {
 
     console.log(malo.length ? `\n✗ ${malo.length} error(es) de JS:` : '\n✓ ni un error de JS');
     for (const m of malo) console.log(`   ${m}`);
-    console.log('');
+    console.log(mal ? `✗ ${mal} comprobación(es) mal\n` : '✓ todas las comprobaciones bien\n');
 
     await nav.close();
     await sitio.bajar();
-    if (malo.length) process.exit(1);
+    if (malo.length || mal) process.exit(1);
 }
 
 main().catch(err => {

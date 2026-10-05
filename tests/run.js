@@ -52,6 +52,7 @@ const FILES = [
     'video-crudo.test.js',
     'exportar-video.test.js',
     'semanal-captura.test.js',
+    'corte-del-editor.test.js',
     'prproj.test.js',
     'prproj-panel.test.js',
     'prproj-nidos.test.js',

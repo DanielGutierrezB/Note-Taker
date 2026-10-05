@@ -13,6 +13,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const ajustar = require('../engine/ajustar-corte');
 const silencios = require('../engine/quitar-silencios');
@@ -112,7 +113,6 @@ module.exports = function (t) {
         const suma = r.tomas.reduce((s, p) => s + (p.hastaMs - p.desdeMs), 0);
         const quitado = (LA_TOMA.hastaMs - LA_TOMA.desdeMs - suma) / 1000;
         t.ok(cerca(quitado * 1000, 2700, 250), `se esperaban 2,7 s y se quitaron ${quitado}`);
-        t.ok(Math.abs(r.quitadosSec - quitado) < 0.11, 'y es lo que contesta');
     });
 
     t.group('quitar silencios · lo que no se parte');
@@ -123,7 +123,8 @@ module.exports = function (t) {
             [{ id: 1, vista: 'R', desdeMs: 30000, hastaMs: 36000 }], sesionDe(archivo));
         t.eq(r.tomas.length, 1);
         t.eq(r.huecos, 0);
-        t.eq(r.quitadosSec, 0);
+        t.eq(r.tomas[0].desdeMs, 30000, 'y sale con sus bordes intactos');
+        t.eq(r.tomas[0].hastaMs, 36000);
     });
 
     t.test('sin WAV, la toma sale tal cual en vez de tirar', () => {
@@ -145,14 +146,22 @@ module.exports = function (t) {
         t.eq(r.huecos, 0);
     });
 
-    t.test('los números son los que se le prometen a la persona', () => {
-        // La pantalla dice «los huecos de más de 0,7 s quedan en 0,3». Si
-        // estos cambian, ese texto pasa a ser mentira.
+    t.test('los números son los que se le prometen a la persona', async () => {
+        // La casilla de la revisión dice «los huecos de más de 0,7 s quedan en
+        // 0,3». Son los dos números del motor escritos en una frase, y nadie
+        // los iba a mantener a mano: se dibuja la tarjeta de verdad y se le
+        // busca lo que el motor dice HOY. Cambiar una constante y no el texto
+        // pone esto rojo, que es justo lo que no pasaba cuando la prueba
+        // buscaba «0,7» a secas.
         t.eq(silencios.LARGO_MIN_SEC, 0.7);
         t.eq(silencios.AIRE_SEC, 0.3);
-        const pantalla = fs.readFileSync(
-            path.join(__dirname, '..', 'src', 'js', 'pantalla-semanal.js'), 'utf8');
-        t.ok(/más de 0,7 s/.test(pantalla), 'y la pantalla dice 0,7');
-        t.ok(/quedan en 0,3/.test(pantalla), 'y dice 0,3');
+        const coma = n => String(n).replace('.', ',');
+        const tarjetas = await import(pathToFileURL(
+            path.join(__dirname, '..', 'src', 'js', 'semanal', 'tarjetas.js')).href);
+        const html = tarjetas.tarjetaRevisar({ paso: 'revisar', silencios: false });
+        t.ok(html.includes(`más de ${coma(silencios.LARGO_MIN_SEC)} s`),
+            'y la casilla dice el largo mínimo del motor');
+        t.ok(html.includes(`quedan en ${coma(silencios.AIRE_SEC)}`),
+            'y el aire que les deja');
     });
 };

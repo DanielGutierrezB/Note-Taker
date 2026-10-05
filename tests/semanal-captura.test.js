@@ -21,11 +21,37 @@
 
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const exportar = require('../engine/exportar-video');
 
 const RAIZ = path.join(__dirname, '..');
 const leer = (...partes) => fs.readFileSync(path.join(RAIZ, ...partes), 'utf8');
+
+/**
+ * La pantalla semanal, que son dos archivos.
+ *
+ * `pantalla-semanal.js` hace que pasen cosas y `semanal/tarjetas.js` dice lo
+ * que se ve; se partieron cuando el primero pasó de las 1.500 líneas. Las
+ * comprobaciones de acá miran el texto del código y no les importa en cuál de
+ * los dos cayó cada función, así que se leen juntos.
+ *
+ * Donde se pueda llamar a la función en vez de leerla, mejor: eso está en
+ * `tarjetas-semanal.test.js` y en `corte-del-editor.test.js`, que importan los
+ * módulos y comprueban lo que devuelven.
+ */
+const laPantalla = () => leer('src', 'js', 'pantalla-semanal.js')
+    + '\n' + leer('src', 'js', 'semanal', 'tarjetas.js');
+
+/**
+ * Las tarjetas, para dibujarlas acá sin navegador.
+ *
+ * Es un módulo de la ventana, pero no toca el DOM ni espera uno: recibe
+ * `estado` y devuelve texto. Por eso se puede llamar desde Node y comprobar lo
+ * que SALE, que vale bastante más que comprobar cómo está escrito.
+ */
+const cargarTarjetas = () => import(
+    pathToFileURL(path.join(RAIZ, 'src', 'js', 'semanal', 'tarjetas.js')).href);
 
 module.exports = function (t) {
     t.group('modo semanal · la captura de pantalla');
@@ -69,7 +95,7 @@ module.exports = function (t) {
     });
 
     t.test('un grabador que se rompe a mitad llega a la pantalla', () => {
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         t.ok(/if \(a\.tipo === 'roto'\) seRompio\(a\);/.test(semanal),
             'el aviso de la ventana se atiende');
         t.ok(/if \(aviso && aviso\.tipo === 'roto'\) seRompio\(aviso\);/.test(semanal),
@@ -143,7 +169,7 @@ module.exports = function (t) {
     t.group('modo semanal · elegir la vista');
 
     t.test('cada vista lleva el color del marcador que va a tener en Premiere', () => {
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         t.ok(/import \{ estiloDeVista \} from '\.\/colores\.js';/.test(semanal),
             'el color sale del mismo sitio que en una clase');
         t.ok(/window\.nt\.grabarVistas\(\)\.then/.test(semanal),
@@ -153,7 +179,7 @@ module.exports = function (t) {
     });
 
     t.test('los dos botones llevan su tecla escrita, y la tecla sale del nombre', () => {
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         t.ok(/const teclaDe = vista => vista\.nombre\[0\];/.test(semanal),
             'R y P salen de «R» y «PV»: una tabla aparte se desincronizaría');
         t.ok(/<kbd>\$\{esc\(teclaDe\(v\)\)\}<\/kbd>/.test(semanal), 'y están escritas en el botón');
@@ -161,7 +187,7 @@ module.exports = function (t) {
     });
 
     t.test('las teclas solo valen donde la elección significa algo', () => {
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         t.ok(/if \(estado\.paso !== 'listo' && estado\.paso !== 'grabando'\) return;/.test(semanal),
             'en la revisión cada toma tiene la suya y una tecla sola no sabría a cuál');
         t.ok(/foco\.matches\('input, textarea, select, \[contenteditable="true"\]'\)/.test(semanal),
@@ -175,7 +201,7 @@ module.exports = function (t) {
     t.test('el grupo de vistas no usa el estado gris de `.estados-toma`', () => {
         // `.estados-toma .btn[aria-pressed=true]` gana por especificidad y pinta
         // de gris, o sea que taparía justo el color que se quiere mostrar.
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         const css = leer('src', 'css', 'style.css');
         t.ok(/class="semanal-vistas"/.test(semanal), 'el grupo tiene su propia clase');
         t.ok(!/class="estados-toma"/.test(semanal), 'y no la que pinta de gris');
@@ -190,7 +216,7 @@ module.exports = function (t) {
     // cuidan: no que el HTML diga tal cosa, sino que no haya dos.
     t.test('la ficha de una toma la dibuja un solo módulo, usado por las dos pantallas', () => {
         const vivo = leer('src', 'js', 'pantalla-vivo.js');
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         for (const [cual, src] of [['la clase', vivo], ['el semanal', semanal]]) {
             t.ok(/import \* as fichas from '\.\/grabar\/lista-tomas\.js';/.test(src),
                 `${cual} importa el módulo`);
@@ -203,7 +229,7 @@ module.exports = function (t) {
     });
 
     t.test('una ficha abierta trae el texto con sus dos bordes', () => {
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         t.ok(/data-texto="cerrada" data-toma="\$\{t\.id\}"/.test(semanal),
             'el hueco del texto de esa toma');
         t.ok(/pista-in">IN<[\s\S]{0,120}pista-out">OUT</.test(semanal),
@@ -214,7 +240,7 @@ module.exports = function (t) {
 
     t.test('la ficha del semanal no trae nada del XML', () => {
         // Ni nota, ni comentarios, ni claquetas: no hay nadie editando después.
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         t.ok(!/data-campo="nota"/.test(semanal), 'sin nota de toma');
         t.ok(!/data-hace="guardar-comentario"/.test(semanal), 'sin comentarios');
         t.ok(!/data-hace="plegar-claqueta"/.test(semanal), 'sin claquetas');
@@ -223,7 +249,7 @@ module.exports = function (t) {
     t.test('la toma abierta se arregla arriba y no en su ficha', () => {
         // Dos textos movibles de la misma toma serían dos líneas de IN que se
         // pisan, así que la ficha de la abierta manda arriba. Igual que en clase.
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         t.ok(/if \(t\.outMs == null\) \{\n\s+return '<p class="v3">Es la toma de ahora/.test(semanal));
     });
 
@@ -232,7 +258,7 @@ module.exports = function (t) {
     t.test('la sesión semanal arranca con el idioma de su modo', () => {
         // Y no con el de la clase: son dos ajustes porque son dos preguntas
         // distintas, y este viene en `auto` de fábrica.
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         t.ok(/idioma: \(app\.ajustes\.semanal && app\.ajustes\.semanal\.idioma\) \|\| 'auto'/
             .test(semanal));
     });
@@ -250,7 +276,7 @@ module.exports = function (t) {
     t.group('modo semanal · verlo y ajustarlo');
 
     t.test('el vídeo cortado se ve en la misma pantalla', () => {
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         const hecho = semanal.slice(semanal.indexOf('function tarjetaHecho'),
             semanal.indexOf('const megas ='));
         t.ok(/<video class="semanal-visor" controls/.test(hecho), 'con sus controles');
@@ -263,13 +289,13 @@ module.exports = function (t) {
         // sea que su propia dirección ya es un `file:`, y resolver contra ella
         // además escapa los espacios y los acentos de una carpeta de Descargas.
         // Medido en la app: carga y busca sin que la CSP se queje.
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         t.ok(/new URL\(String\(ruta \|\| ''\), location\.href\)\.href/.test(semanal));
         t.ok(!/['"]file:\/\//.test(semanal), 'sin «file://» a mano en ninguna parte');
     });
 
     t.test('y se puede volver a la revisión y cortar de nuevo', () => {
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         t.ok(/data-hace="ajustar"/.test(semanal), 'hay botón');
         t.ok(/function ajustar\(\) \{\n\s+estado\.paso = 'revisar';/.test(semanal),
             'que lleva a la revisión que ya estaba, sin releer el disco');
@@ -293,7 +319,7 @@ module.exports = function (t) {
         // decir «1» hasta que la toma abre pasan unos 3 s, y quien graba su
         // vídeo se queda esperando en silencio. En ese audio el «3, 2, 1» está
         // dicho a los 4,8 s y repetido a los 13,5 s.
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         t.ok(/if \(e\.key === 'Enter'\) \{[\s\S]{0,160}return bordeDeToma\(\);/.test(semanal),
             'la tecla llama al borde');
         t.ok(/if \(estado\.paso !== 'grabando'\) return;/.test(semanal),
@@ -302,7 +328,7 @@ module.exports = function (t) {
     });
 
     t.test('abrir y cerrar son el mismo botón, y no se pisan entre sí', () => {
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         t.ok(/\? await window\.nt\.grabarCerrarToma\(\)\n\s+: await window\.nt\.grabarAbrirToma\(\)/
             .test(semanal), 'cierra si hay una abierta y abre si no');
         t.ok(/const previo = bordeEnVuelo;\n\s+if \(previo\) await previo\.catch/.test(semanal),
@@ -314,7 +340,7 @@ module.exports = function (t) {
     t.test('grabando, el único botón primario es el borde', () => {
         // La tarjeta tiene que gritar una sola cosa, y mientras se graba esa
         // cosa no es «Terminar».
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const semanal = laPantalla();
         const tarjeta = semanal.slice(semanal.indexOf('function tarjetaGrabando'),
             semanal.indexOf('function elegirVista'));
         t.eq((tarjeta.match(/btn-primario/g) || []).length, 1, 'uno y nada más');
@@ -360,17 +386,37 @@ module.exports = function (t) {
             'y la cámara sola llena recortando, como el `crop`');
     });
 
-    t.test('la escena sigue a la vista de la toma que se está grabando', () => {
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
-        t.ok(/\$\{escena\(abierta \? \(abierta\.vista \|\| estado\.vista\) : estado\.vista\)\}/.test(semanal),
-            'con una toma abierta manda la suya; entre tomas, la elegida');
-        t.ok(/const llena = vista === 'PV' \|\| !estado\.pantalla;/.test(semanal),
-            'y sin pantalla la cámara llena el cuadro, igual que en el corte');
+    t.test('la escena sigue a la vista de la toma que se está grabando', async () => {
+        // Dibujando de verdad, porque lo que importa no es cómo está escrito
+        // sino qué se ve: con una toma abierta manda SU vista —aunque entre
+        // tanto se haya elegido otra para la siguiente— y entre tomas manda la
+        // elegida. Y sin pantalla la cámara llena el cuadro, igual que decide
+        // `repartir` en el corte.
+        const tarjetas = await cargarTarjetas();
+        const base = {
+            paso: 'grabando', vista: 'PV', vistas: [], avisos: [],
+            pantalla: { nombre: 'Pantalla', ancho: 1920, alto: 1080 }
+        };
+        const abierta = { id: 1, vista: 'R', inMs: 1000, outMs: null, palabras: [] };
+
+        const conToma = tarjetas.tarjetaGrabando({ ...base, sesion: { tomas: [abierta], sueltas: [] } });
+        t.ok(conToma.includes('semanal-escena-fondo'),
+            'con la toma abierta en R se ve la pantalla de fondo');
+
+        const entreTomas = tarjetas.tarjetaGrabando({ ...base, sesion: { tomas: [], sueltas: [] } });
+        t.ok(entreTomas.includes('semanal-escena-llena'),
+            'y entre tomas manda la elegida, que es PV: la cámara sola');
+
+        const sinPantalla = tarjetas.tarjetaGrabando({
+            ...base, vista: 'R', pantalla: null, sesion: { tomas: [], sueltas: [] }
+        });
+        t.ok(sinPantalla.includes('semanal-escena-llena'),
+            'y sin pantalla la cámara llena el cuadro aunque la vista sea R');
     });
 
     t.group('modo semanal · revisar antes de cortar');
 
-    const semanal = leer('src', 'js', 'pantalla-semanal.js');
+    const semanal = laPantalla();
 
     t.test('Terminar lleva a la revisión, y no a exportar', () => {
         t.ok(/estado\.paso = 'revisar';/.test(semanal), 'hay un paso de revisión');
@@ -401,30 +447,6 @@ module.exports = function (t) {
         t.ok(!/semanal-visor/.test(editor), 'y sin el visor del archivo ya cortado');
     });
 
-    t.test('el montaje elige el fondo con el MISMO reparto que el corte', () => {
-        // Sin esto serían dos tablas diciendo qué se ve en cada toma, y el día
-        // que una fuente no cubra una toma dirían cosas distintas: lo que se
-        // mira dejaría de ser lo que sale.
-        const motor = leer('engine', 'exportar-video.js');
-        const montaje = motor.slice(motor.indexOf('function montajeDeSesion'),
-            motor.indexOf('function videosDe'));
-        t.ok(/const \{ trozos, avisos \} = repartir\(\{/.test(montaje), 'llama a `repartir`');
-        t.ok(/fondo: t\.fondo\.llenar \? 'camara' : 'pantalla'/.test(montaje),
-            'y el fondo sale de lo que contestó, no de una cuenta propia');
-        t.ok(/function vistaReal\(t\) \{\n\s+if \(!t\.fondo\) return t\.vista;/.test(semanal),
-            'y la pantalla lee ese fondo en vez de adivinarlo');
-    });
-
-    t.test('el montaje no se vuelve a buscar en cada repintado', () => {
-        // Pasó: el vídeo arrancaba, el repintado del botón «Pausa» llamaba a
-        // `poner`, y `poner` lo devolvía al principio de la toma. El reloj
-        // quedaba clavado en cero.
-        const mod = leer('src', 'js', 'semanal', 'montaje.js');
-        t.ok(/const nuevo = huella\(m\);\n\s+if \(nuevo === huellaPuesta\) return;/.test(mod));
-        t.ok(/if \(caja\.parentNode !== hueco\) hueco\.replaceChildren\(caja\);/.test(mod),
-            'y los dos `<video>` se mueven al hueco nuevo, no se rehacen');
-    });
-
     t.test('el recuadro del montaje cae donde el del corte', () => {
         // Los números no se escriben acá: los manda el motor en partes del
         // ancho, sacados de las mismas constantes que usa el filtro de ffmpeg.
@@ -437,45 +459,23 @@ module.exports = function (t) {
         t.ok(/border-radius:\$\{recuadro\.redondeo \* 100\}%/.test(mod));
     });
 
-    t.test('abajo hay una sola toma: la que se está mirando', () => {
-        t.ok(/function tarjetaDeLaToma\(t\)/.test(semanal));
-        t.ok(/\$\{t \? tarjetaDeLaToma\(t\) :/.test(semanal), 'una, no una lista');
-        const editor = semanal.slice(semanal.indexOf('function tarjetaDeLaToma'),
-            semanal.indexOf('function lasDeLaRevision'));
-        t.ok(/\$\{textoDeFicha\(t\)\}/.test(editor), 'con su texto para mover los bordes');
-        t.ok(/\$\{vistasDeFicha\(t, sale\)\}/.test(editor), 'y los dos botones de vista');
-        t.ok(/\$\{botonFuera\(t\)\}/.test(editor), 'y dejarla fuera');
-    });
-
-    t.test('la línea de tomas mide lo que dura cada toma, y es donde se elige', () => {
-        const linea = semanal.slice(semanal.indexOf('function lineaDeTomas'),
-            semanal.indexOf('function laParada'));
-        t.ok(/style="flex:\$\{anchoDe\(x\) \/ total\}/.test(linea), 'cada trozo, lo que dura');
-        t.ok(/data-hace="parar-en"/.test(linea), 'y se aprieta para pararse ahí');
-        t.ok(/estado\.ocultarFuera \? todas\.filter\(t => !t\.descartada\) : todas/.test(linea),
-            'y «Ocultar desactivadas» la deja con el corte final y nada más');
-        t.ok(/Math\.max\(2\.5,/.test(semanal),
-            'con un mínimo, o una toma de un segundo no se podría tocar');
-    });
-
-    t.test('lo de abajo sigue al reproductor, pero repintar es lo último que se hace', () => {
-        // Sesenta avisos por segundo: si cada uno repintara la pantalla, el
-        // vídeo de arriba se caería. Solo repinta cuando cambia la toma.
-        t.ok(/const cambioLaToma = !estado\.enVivo \|\| estado\.enVivo\.toma !== info\.toma;/
-            .test(semanal));
-        t.ok(/if \(cambioLaToma && info\.toma != null\) \{\n\s+estado\.ficha = info\.toma;\n\s+pintar\(\);/
-            .test(semanal));
-        t.ok(/function aguja\(info\)/.test(semanal), 'el resto se escribe a mano');
-    });
-
-    t.test('la reproducción salta las tomas que quedaron fuera', () => {
-        const mod = leer('src', 'js', 'semanal', 'montaje.js');
-        t.ok(/function laQueSigue\(\) \{[\s\S]{0,200}if \(!plan\[i\]\.descartada\) return i;/
-            .test(mod), 'al terminar una toma va a la siguiente que SÍ va al vídeo');
-        t.ok(/sola = Boolean\(t && t\.descartada\);/.test(mod),
-            'y una desactivada se reproduce sola, para poder oírla antes de decidir');
-        t.ok(/const sigue = sola \? -1 : laQueSigue\(\);/.test(mod),
-            'así que al terminar no sigue con la que viene');
+    t.test('abajo hay una sola toma: la que se está mirando', async () => {
+        // Dibujando dos tomas y parándose en la segunda: abajo tiene que
+        // aparecer esa y nada más. Una lista de todas era lo de la pantalla de
+        // clase, y acá el editor es el vídeo arriba y la toma de abajo.
+        const tarjetas = await cargarTarjetas();
+        const html = tarjetas.tarjetaDeLaToma({ vistas: [] }, {
+            id: 2, vista: 'R', fondo: 'pantalla', segundos: 4,
+            palabras: [{ w: 'hola', t: 1000 }], antes: [], despues: []
+        });
+        t.ok(html.includes('data-toma="2"'), 'es la toma donde estoy parado');
+        t.ok(!html.includes('data-toma="1"'), 'y no viene ninguna otra');
+        t.ok(html.includes('data-texto='), 'con su texto para mover los bordes');
+        t.eq((html.match(/data-hace="vista-ficha"/g) || []).length, 2,
+            'y los dos botones de vista');
+        t.ok(/data-vista="R"[^>]*aria-pressed="true"/s.test(html),
+            'con la que SE VE marcada, no la que se pidió');
+        t.ok(html.includes('data-hace="fuera"'), 'y dejarla fuera');
     });
 
     t.test('el espacio reproduce y pausa, y solo en el editor', () => {
