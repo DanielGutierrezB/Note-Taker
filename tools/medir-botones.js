@@ -42,18 +42,15 @@ function arg(nombre, def) {
     return i === -1 ? def : process.argv[i + 1];
 }
 
-const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
-    'sin-carpeta', 'sesiones', 'preparar', 'preparar-sin-audio', 'sin-whisper',
-    'preparar-microfono', 'preparar-zoom-falso', 'sin-zoom',
-    'en-vivo', 'toma-abierta', 'palmada-vencida', 'terminada', 'notas-de-antes', 'foto', 'foto-cien', 'prproj', 'prproj-lleno', 'prproj-listo', 'ajustes', 'ajustes-semanal', 'diagnostico',
-    // El aviso de lo que falta, que en una Mac nueva es lo primero que se ve y
-    // es el único sitio donde salen «Instalar lo que falta» y los «Descargar».
-    'faltan-modelos',
-    // El modo semanal, momento por momento. La revisión es la que más controles
-    // tiene de todo el modo —dos por toma, más el de dejarla fuera— y por eso
-    // es la que de verdad hay que medir.
-    'semanal', 'semanal-grabando', 'semanal-ficha', 'semanal-revisar', 'semanal-revisar-fuera', 'semanal-cortando', 'semanal-hecho'
-];
+const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : maqueta.escenariosMenos({
+    // Los que no agregan ni un botón sobre el escenario del que salen: medirlos
+    // otra vez son los mismos rectángulos con otro nombre.
+    'en-vivo,desplegada': 'los mismos botones que en-vivo',
+    'en-vivo,claqueta-abierta': 'los mismos botones que toma-abierta',
+    releyendo: 'los mismos que en-vivo, con otro texto',
+    'sin-audio': 'los mismos que en-vivo, con un aviso',
+    iconos: 'no es una pantalla: es la hoja de los dibujos'
+});
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
 const ALTO = Number(arg('alto', 840));
 
@@ -197,8 +194,11 @@ async function main() {
                 await pagina.goto(`${sitio.url}?e=${escenario}`, { waitUntil: 'networkidle0' });
                 // Esperar a que el escenario esté puesto, y no un rato fijo: los
                 // del modo semanal tardan segundos en armarse.
-                await pagina.evaluate('window.maquetaPuesta').catch(() => {});
-                await new Promise(r => setTimeout(r, 300));
+                const puesta = await pagina.evaluate('window.maquetaPuesta');
+                if (!puesta.ok) {
+                    console.log(`✗ ${escenario} no se pudo armar: ${puesta.error}`);
+                    fallos++;
+                }
 
                 const m = await medir(pagina);
                 await pagina.close();

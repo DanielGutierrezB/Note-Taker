@@ -55,19 +55,45 @@ const EN_LA_VENTANA = {
     }
 };
 
-async function correr({ win, arg }) {
+async function correr(contexto) {
+    // **Los ajustes de quien corre esto no se tocan**, y no por cuidado sino
+    // por construcción: esta corrida escribe en otro archivo.
+    //
+    // Hace falta escribir ajustes —modo semanal, una carpeta de /tmp— y además
+    // la app guarda por su cuenta, mientras graba, el micrófono y la cámara que
+    // usó, que acá son los falsos de Chromium. El primer intento fue leerlos al
+    // empezar y devolverlos en un `finally`. Funciona cuando todo va bien, que
+    // es cuando no hace falta. Cuando no: la ventana no se cerraba sola al
+    // terminar, hubo que matarla, el `finally` no corrió, y los ajustes de
+    // verdad quedaron con `Fake Default Audio Input` de micrófono y la carpeta
+    // semanal apuntando a un /tmp borrado. Pasó de verdad, en esta misma
+    // máquina.
+    //
+    // `NT_AJUSTES` lo mueve antes de que exista la ventana (`engine/ajustes.js`).
+    // Un archivo que no se toca no se puede romper, por mal que salga esto.
+    if (!process.env.NT_AJUSTES) {
+        throw new Error('esto escribe ajustes: hay que correrlo con NT_AJUSTES'
+            + ' apuntando a un archivo de prueba, o `dev-shot.js` no lo desvió');
+    }
+    console.log(`   ajustes de esta corrida: ${process.env.NT_AJUSTES}`);
+    return laPasada(contexto);
+}
+
+async function laPasada({ win, arg }) {
     const segundos = Number(arg('segundos')) || 12;
     const carpeta = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-semanal-punta-'));
     const js = texto => win.webContents.executeJavaScript(texto);
-    const decir = (...x) => console.log('  ', ...x);
+
+    // Lo que se dice por el camino, y lo que estaba mal. Las que empiezan con
+    // «✗» se cuentan y hacen que la corrida salga con error: imprimir un fallo
+    // y salir con cero no es una red, es un informe que nadie mira.
+    let mal = 0;
+    const decir = (...x) => {
+        if (String(x[0] || '').startsWith('✗')) mal++;
+        console.log('  ', ...x);
+    };
 
     console.log(`\n── El modo semanal, de punta a punta · ${carpeta}\n`);
-
-    // **Los ajustes de quien corre esto se dejan como estaban.** Esta corrida
-    // pone la app en modo semanal con una carpeta temporal, y son los ajustes
-    // de verdad: sin devolverlos, al editor le queda la app abriendo una
-    // pantalla que no es la suya y apuntando a una carpeta de /tmp.
-    const comoEstaban = await js('window.nt.ajustesLeer()');
 
     decir(await js(await EN_LA_VENTANA.preparar(carpeta)));
     await espera(2500);                       // que abra el micro y la cámara
@@ -82,16 +108,19 @@ async function correr({ win, arg }) {
         console.log('\n✗ No hay ninguna pantalla que capturar.\n');
         return;
     }
-    await js(`(() => {
-        navigator.mediaDevices.getDisplayMedia = () => navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: { mandatory: {
-                chromeMediaSource: 'desktop',
-                chromeMediaSourceId: ${JSON.stringify(fuentes[0].id)}
-            } }
-        });
-        return true;
-    })()`);
+    // El selector se contesta en la capa de Electron y NO reemplazando
+    // `getDisplayMedia` en la página.
+    //
+    // Es la diferencia entre probar y no probar. La app llama con
+    // `{ video: { width: { max: MAX_ANCHO }, height: { max: MAX_ALTO } } }`, y un
+    // doble puesto en la página que no recibe argumentos tira esas condiciones a
+    // la basura: lo que se medía después era solo lo que hace `acotar()` con
+    // `applyConstraints`, y el tope del `getDisplayMedia` —la primera defensa
+    // contra el fallo que costó una grabación entera— no se ejecutaba nunca.
+    // Contestando acá, la llamada de la app corre tal como está escrita.
+    win.webContents.session.setDisplayMediaRequestHandler((_pedido, contestar) => {
+        contestar({ video: fuentes[0] });
+    }, { useSystemPicker: false });
     decir('eligiendo la pantalla…');
     const pantalla = await js(`(async () => {
         document.querySelector('[data-hace="elegir-pantalla"]').click();
@@ -464,15 +493,12 @@ async function correr({ win, arg }) {
 
     console.log(`   todo en ${carpeta}\n`);
 
-    // Enteros, y no solo el modo y la carpeta. Mientras graba, la app guarda
-    // por su cuenta el micrófono y la cámara que usó, y acá son los falsos de
-    // Chromium: devolviendo solo lo que esta corrida puso a propósito, al
-    // editor le queda la app apuntando a un micrófono que no existe. Como
-    // `ajustes-guardar` es un parche sobre lo que hay, mandar todo lo de antes
-    // deja el archivo igual que estaba.
-    await js(`window.nt.ajustesGuardar(${JSON.stringify(comoEstaban)})`);
-    console.log(`   ajustes devueltos a «${comoEstaban.modo}»`
-        + ` · micrófono «${comoEstaban.dispositivo || 'ninguno'}»\n`);
+    if (mal) {
+        console.log(`✗ ${mal} comprobación(es) mal\n`);
+        process.exitCode = 1;
+    } else {
+        console.log('✓ todas las comprobaciones bien\n');
+    }
 }
 
 module.exports = { correr };

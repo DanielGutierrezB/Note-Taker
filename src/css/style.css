@@ -2139,39 +2139,6 @@ kbd {
   height: 94px;
 }
 
-/* La revisión: una fila por toma, y las dos fotos como selector.
-
-   Las fotos son el gesto, no un adorno: se elige qué se ve apretando lo que se
-   quiere ver. De ahí que sean botones de verdad —con foco, con `aria-pressed`
-   y con su borde de elegido— y no imágenes con un `onclick` encima. */
-
-.semanal-tomas {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-4);
-  margin-top: var(--sp-4);
-}
-
-.semanal-toma {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-}
-
-/* Una toma que se dejó fuera se distingue por el borde y por su pastilla.
-
-   NO se apaga con `opacity` sobre la fila entera, que es lo primero que se
-   intentó: medio canal de opacidad le quita la mitad del contraste a cada
-   texto y los dejaba todos por debajo de AA (2.4:1 medido por
-   `tools/auditar.js`). Hay que poder leer una toma descartada: es el requisito
-   para decidir volver a meterla. */
-.semanal-toma[data-fuera="true"] {
-  border-style: dashed;
-}
-
 /* La casilla de «Quitar silencios», que es la única de la app.
 
    Va con la casilla del sistema y no con una dibujada: el estado marcado /
@@ -2182,7 +2149,7 @@ kbd {
   display: flex;
   gap: var(--sp-2);
   align-items: center;
-  min-height: 24px;
+  min-height: var(--target-min);
   cursor: pointer;
   font-size: 12px;
   color: var(--text-primary);
@@ -2352,7 +2319,16 @@ kbd {
 }
 
 /* Las dejadas fuera: rayadas y apagadas. Siguen ahí para poder recuperarlas,
-   y «Ocultar desactivadas» las saca cuando ya se decidió. */
+   y «Ocultar desactivadas» las saca cuando ya se decidió.
+
+   El rayado es lo que hace el trabajo y la opacidad solo acompaña. Apagar una
+   toma descartada SOLO con `opacity` fue lo primero que se intentó, sobre la
+   fila entera de la revisión vieja: medio canal de opacidad le quita la mitad
+   del contraste a cada texto y los dejaba todos por debajo de AA —2,4:1 medido
+   con `tools/auditar.js`—. Acá el 0,55 va sobre un trozo de la línea y no sobre
+   texto que haya que leer, y la auditoría lo mide en cada pasada. Hay que poder
+   distinguir una toma descartada: es el requisito para decidir volver a
+   meterla. */
 .linea-toma[data-fuera="si"] {
   background:
     repeating-linear-gradient(135deg,

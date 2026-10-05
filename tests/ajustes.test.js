@@ -8,9 +8,51 @@
  * número que después nadie sabe de dónde salió.
  */
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
 const ajustes = require('../engine/ajustes');
 
 module.exports = function (t) {
+    t.group('ajustes · dónde se escriben');
+
+    // El banco de pruebas de punta a punta necesita escribir ajustes —modo
+    // semanal, carpeta de /tmp— y además la app, mientras graba, guarda sola el
+    // micrófono y la cámara, que ahí son los falsos de Chromium. Que eso no
+    // pueda caer sobre la configuración de quien usa la app es una propiedad, no
+    // una buena costumbre: el intento anterior fue devolverlos en un `finally`,
+    // y el `finally` no corrió el día que hubo que matar la ventana.
+    t.test('con NT_AJUSTES no se toca el archivo de verdad', () => {
+        const antes = process.env.NT_AJUSTES;
+        const carpeta = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-ajustes-prueba-'));
+        const aparte = path.join(carpeta, 'ajustes.json');
+        process.env.NT_AJUSTES = aparte;
+        try {
+            ajustes.guardar({ modo: 'semanal', curso: 'solo de prueba' });
+            t.ok(fs.existsSync(aparte), 'escribió donde se le dijo');
+            t.eq(JSON.parse(fs.readFileSync(aparte, 'utf8')).curso, 'solo de prueba');
+            t.eq(ajustes.leer().curso, 'solo de prueba', 'y lee de ahí también');
+        } finally {
+            if (antes === undefined) delete process.env.NT_AJUSTES;
+            else process.env.NT_AJUSTES = antes;
+            fs.rmSync(carpeta, { recursive: true, force: true });
+        }
+    });
+
+    t.test('sin la variable, el archivo es el de siempre', () => {
+        const antes = process.env.NT_AJUSTES;
+        delete process.env.NT_AJUSTES;
+        try {
+            // Se mira la ruta, no se escribe: esto corre en la máquina de alguien.
+            const suya = path.join(os.homedir(), 'Library', 'Application Support',
+                'Note Taker', 'ajustes.json');
+            t.eq(ajustes.dondeViven(), suya);
+        } finally {
+            if (antes !== undefined) process.env.NT_AJUSTES = antes;
+        }
+    });
+
     t.group('ajustes · sanear');
 
     t.test('un archivo vacío da lo de fábrica', () => {

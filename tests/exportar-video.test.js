@@ -72,7 +72,7 @@ module.exports = function (t) {
             { id: 2, vista: 'PV', inMs: T0 + 8000, outMs: T0 + 9000, palabras: [], comentarios: [], descartada: true },
             { id: 3, vista: 'PV', inMs: T0 + 12000, outMs: null, palabras: [], comentarios: [] }
         ];
-        const tomas = exportar.tomasDe(estado);
+        const tomas = exportar.tomasDe(vivo.tomasQueQuedan(estado));
         t.eq(tomas.length, 1, 'la descartada y la que quedó sin OUT no entran');
         t.eq(tomas[0].desdeMs, T0 + 1800, 'y el borde es el ajustado, no el dicho');
         t.eq(tomas[0].hastaMs, T0 + 5200);
@@ -83,7 +83,7 @@ module.exports = function (t) {
         estado.tomas = [{
             id: 1, vista: 'PV', inMs: T0 + 2000, outMs: T0 + 2100, palabras: [], comentarios: []
         }];
-        t.eq(exportar.tomasDe(estado).length, 0, `menos de ${exportar.MINIMO_SEC} s no es una toma`);
+        t.eq(exportar.tomasDe(vivo.tomasQueQuedan(estado)).length, 0, `menos de ${exportar.MINIMO_SEC} s no es una toma`);
     });
 
     t.group('exportar vídeo · de qué archivo sale cada trozo');
@@ -114,7 +114,7 @@ module.exports = function (t) {
         t.eq(r.avisos.length, 0, r.avisos.join(' · '));
         t.ok(/camara/.test(r.trozos[0].fondo.ruta), 'el fondo es la cámara');
         t.eq(r.trozos[0].encima, null, 'y no hay nada encima: no se superpone a sí misma');
-        t.eq(r.trozos[0].fondo.llenar, true, 'una cara llena el cuadro en vez de quedar con bandas');
+        t.eq(r.trozos[0].fondo.cual, 'camara', 'una cara llena el cuadro en vez de quedar con bandas');
     });
 
     t.test('la vista de cada toma manda, toma por toma', () => {
@@ -151,7 +151,7 @@ module.exports = function (t) {
         });
         t.eq(r.trozos.length, 1, 'la toma entra igual');
         t.ok(/pantalla/.test(r.trozos[0].fondo.ruta), 'con la otra fuente');
-        t.eq(r.trozos[0].fondo.llenar, false, 'y una pantalla no se recorta');
+        t.eq(r.trozos[0].fondo.cual, 'pantalla', 'y una pantalla no se recorta');
         t.ok(r.avisos.some(a => /pedía tu cámara/.test(a)), r.avisos.join(' · '));
     });
 

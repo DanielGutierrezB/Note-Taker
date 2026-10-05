@@ -34,20 +34,17 @@ import { estiloDeVista } from '../colores.js';
  *   elegida    si es la que se lleva las teclas
  *   vistas     las vistas con su color, o null si la pantalla no las usa
  *   tc         cómo se escribe el momento de la toma (timecode o reloj)
- *   dura       cuántos segundos dura, si no es la resta de sus bordes
- *   siempre    lo que se ve con la ficha plegada, debajo de la fila
  *   cuerpo     lo que va dentro al abrirla, sin la caja
  *   alAbrir    qué se va a ver al abrirla, para el hover de la fila
  */
 export function ficha(t, o) {
     const est = estados.deToma(t, o.sesion);
-    const siempre = o.siempre ? o.siempre(t) : '';
     return `<div class="bloque-toma ${o.vistas ? 'con-vista' : ''} ${o.abierta ? 'es-abierta' : ''}"
         data-estado="${est.clave}" data-toma="${t.id}"
         style="${o.vistas ? estiloDeVista(o.vistas, t.vista) : ''}">
       ${fila(t, o, est)}
-      ${siempre || o.abierta
-        ? `<div class="cuerpo-toma">${siempre}${o.abierta ? o.cuerpo(t) : ''}</div>`
+      ${o.abierta
+        ? `<div class="cuerpo-toma">${o.cuerpo(t)}</div>`
         : ''}
     </div>`;
 }
@@ -66,10 +63,7 @@ export function lista(tomas, deCadaUna) {
  * veinte sin scrollear.
  */
 function fila(t, o, est) {
-    // `dura` existe para la revisión del vídeo semanal: ahí los segundos que
-    // valen son los que calculó el exportador, con los bordes ya corridos al
-    // silencio, y no la resta de los dos bordes pedidos.
-    const dur = o.dura != null ? o.dura : (t.outMs != null ? (t.outMs - t.inMs) / 1000 : null);
+    const dur = t.outMs != null ? (t.outMs - t.inMs) / 1000 : null;
     return `<div class="fila guarda ${o.elegida ? 'es-elegida' : ''}"
            role="button" tabindex="0" aria-expanded="${o.abierta}"
            data-estado="${est.clave}" data-toma="${t.id}" data-hace="plegar"
@@ -89,7 +83,7 @@ function fila(t, o, est) {
 }
 
 /** Lo que la toma empieza diciendo, que es con lo que se la reconoce. */
-export function primeras(t) {
+function primeras(t) {
     return (t.palabras || []).slice(0, 10).map(w => w.texto).join(' ');
 }
 

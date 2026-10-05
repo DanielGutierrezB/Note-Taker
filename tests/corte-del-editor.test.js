@@ -121,15 +121,19 @@ module.exports = async t => {
     });
 
     t.test('el texto de cada toma se pega al plan sin pisarle los bordes', () => {
-        // Son dos fuentes: el montaje dice qué se ve, la sesión qué se dijo. Los
-        // bordes los manda la sesión, porque es lo que el arrastre escribe.
+        // Son dos fuentes y el plan manda: trae lo que hay que reproducir, y la
+        // toma grabada pone encima lo que el plan no tiene —las palabras—. Donde
+        // los dos dicen algo, gana el plan.
         const p = plan([7, 3]);
-        const grabadas = [{ id: 1, inMs: 1000, outMs: 8000, palabras: [{ texto: 'hola' }] }];
+        const grabadas = [{
+            id: 1, inMs: 1000, outMs: 8000, vista: 'PV', palabras: [{ texto: 'hola' }]
+        }];
         const [una, dos] = corte.conElTexto(p, grabadas);
-        t.eq(una.inMs, 1000, 'los bordes son los de la sesión');
+        t.eq(una.palabras.length, 1, 'el texto sale de la sesión');
+        t.eq(una.inMs, 1000, 'y los bordes también, que el plan no los trae');
         t.eq(una.outMs, 8000);
-        t.eq(una.segundos, 7, 'y lo que se ve es lo del montaje');
-        t.eq(una.palabras.length, 1);
+        t.eq(una.segundos, 7, 'lo que se reproduce es lo del montaje');
+        t.eq(una.vista, 'R', 'y donde los dos opinan, gana el montaje');
         t.eq(dos.palabras, undefined, 'una toma sin texto pasa tal cual');
         t.eq(dos.segundos, 3);
     });

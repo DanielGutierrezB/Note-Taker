@@ -529,6 +529,34 @@ function mejorInstante(tramo, tSec, umbralDb, lado) {
 
 /* ─── De la sesión a los bordes ajustados ──────────────────────────────────── */
 
+/**
+ * El WAV que contiene una toma ENTERA, de punta a punta.
+ *
+ * Distinto de `dondeCae`, que busca un instante: una toma tiene dos extremos y
+ * los dos tienen que caer dentro del mismo archivo. La holgura de medio segundo
+ * al final es porque el último trozo se cierra cuando se suelta el botón, y el
+ * borde ajustado puede quedar unas decenas de milisegundos más allá de lo que
+ * el WAV llegó a escribir.
+ *
+ * **Y es UNA regla, no dos.** Antes había dos: el exportador pedía los dos
+ * extremos dentro con esta holgura, y «quitar silencios» se buscaba el WAV por
+ * su cuenta con `dondeCae`, que solo mira el principio. Una toma que se pasaba
+ * del final de un archivo quedaba partida contra ese WAV por un lado y medida
+ * sin WAV por el otro —o sea, con la deriva en 1 cuando el micrófono había
+ * escrito a 0,51x—. Dos respuestas a «qué WAV es este» en el mismo camino es
+ * justo lo que no puede pasar acá.
+ *
+ * @param {object[]} wavs los de la sesión, ya con su ruta y comprobados
+ * @returns {object|null} el WAV, o null si la toma no cabe entera en ninguno
+ */
+function elWavDe(wavs, desdeMs, hastaMs) {
+    return (wavs || []).find(w => w
+        && desdeMs >= w.desdeMs
+        && hastaMs <= w.desdeMs + (w.segundos || 0) * 1000 + HOLGURA_FINAL_MS) || null;
+}
+
+const HOLGURA_FINAL_MS = 500;
+
 /** En qué WAV de la sesión cae esta hora del día, y en qué segundo de él. */
 function dondeCae(sesiones, ms, resolver) {
     for (const s of sesiones || []) {
@@ -742,6 +770,7 @@ module.exports = {
     silencios,
     mejorInstante,
     dondeCae,
+    elWavDe,
     bordeAjustado,
     inAjustado,
     outAjustado,

@@ -24,12 +24,35 @@
  */
 
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { app, ipcMain } = require('electron');
 
 function argValue(flag) {
     const hit = process.argv.find(a => a.startsWith(`--${flag}=`));
     return hit ? hit.slice(flag.length + 3) : null;
 }
+
+/**
+ * Con `--guion=`, los ajustes van a un archivo aparte.
+ *
+ * Un recorrido escribe ajustes para poder correr —el modo, una carpeta de
+ * /tmp— y la app, mientras graba, guarda por su cuenta el micrófono y la cámara
+ * que usó, que con `--use-fake-device-for-media-stream` son los falsos de
+ * Chromium. Escribir eso encima de la configuración de quien trabaja con la app
+ * no es aceptable ni aunque se prometa devolverla después: la promesa es un
+ * `finally`, y un `finally` no corre si hay que matar la ventana.
+ *
+ * Se hace acá y no dentro del recorrido porque tiene que pasar ANTES de que
+ * nada lea los ajustes, y esto se carga antes que la ventana. Cada corrida
+ * estrena archivo, así que tampoco arrastra lo de la corrida anterior.
+ */
+function ajustesAparte() {
+    if (!argValue('guion') || process.env.NT_AJUSTES) return;
+    const carpeta = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-ajustes-'));
+    process.env.NT_AJUSTES = path.join(carpeta, 'ajustes.json');
+}
+ajustesAparte();
 
 /** Las medidas de `--size`, en orden. `[]` si no vino la bandera. */
 function medidas() {
@@ -206,9 +229,22 @@ async function pase(win, shot, medida) {
 async function guion(win) {
     const ruta = argValue('guion');
     if (!ruta) return false;
-    const recorrido = require(require('path').resolve(ruta));
+    const recorrido = require(path.resolve(ruta));
     win.webContents.on('console-message', (_e, _nivel, texto) => console.log(texto));
-    await recorrido.correr({ win, arg: argValue });
+    try {
+        await recorrido.correr({ win, arg: argValue });
+    } catch (e) {
+        console.error(`\n✗ el recorrido tiró: ${(e && e.stack) || e}`);
+        process.exitCode = 1;
+    }
+    // Un recorrido termina y la app se cierra, con el código que haya quedado.
+    //
+    // Antes no se cerraba: la ventana quedaba abierta para siempre después del
+    // ✓ final y había que matarla a mano. Eso es molesto y además es una
+    // trampa, porque un `kill` se saltea lo que el recorrido deje en un
+    // `finally` —y porque un recorrido que no termina nunca no puede correr en
+    // ningún lado automáticamente, por verde que salga.
+    app.quit();
     return true;
 }
 

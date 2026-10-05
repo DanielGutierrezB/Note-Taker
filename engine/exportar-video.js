@@ -99,8 +99,8 @@ const CALIDAD = ['-preset', 'veryfast', '-crf', '20'];
  * fuera las descartadas y las que no tienen OUT), con los bordes corridos al
  * silencio. Sin esto, cada corte caería encima de una palabra.
  */
-function tomasDe(estado) {
-    return vivo.tomasQueQuedan(estado)
+function tomasDe(crudas) {
+    return (crudas || [])
         .slice()
         .sort((a, b) => a.inMs - b.inMs)
         .map(t => ({
@@ -171,14 +171,12 @@ function aPared(ms, wav) {
  *
  * Los bordes nacen en el reloj del audio y los vídeos viven en el de pared, así
  * que todo lo que vaya a buscar algo dentro de un vídeo tiene que pasar por
- * acá. Es una función y no dos líneas repetidas porque la usan el reparto y las
- * fotos, y que las dos crucen el reloj de la misma manera es justamente lo que
- * hace que la foto que se elige en la revisión sea del trozo que se exporta.
+ * acá. Es una función y no dos líneas repetidas porque la usan el reparto del
+ * corte y el montaje que se mira, y que las dos crucen el reloj de la misma
+ * manera es justamente lo que hace que lo que se mira sea lo que sale.
  */
 function enLosDosRelojes(toma, wavs) {
-    const wav = (wavs || []).find(w => w
-        && toma.desdeMs >= w.desdeMs
-        && toma.hastaMs <= w.desdeMs + (w.segundos || 0) * 1000 + 500) || null;
+    const wav = ajustar.elWavDe(wavs, toma.desdeMs, toma.hastaMs);
     return {
         wav,
         enElAudio: toma,
@@ -271,10 +269,7 @@ function repartir(p) {
             // Lo que va a durar el trozo lo manda el vídeo, que es la imagen: el
             // audio se recorta al mismo largo y `concat` no admite discrepancias.
             segundos: (enLaPared.hastaMs - enLaPared.desdeMs) / 1000,
-            // Una cara se recorta para llenar el cuadro y una pantalla no: a la
-            // cara le sobra fondo por los lados y recortarla la mejora, mientras
-            // que recortar una pantalla se come justo lo que se está explicando.
-            fondo: { ...enArchivo(fondo, enLaPared), llenar: fondo === camara },
+            fondo: enArchivo(fondo, enLaPared),
             encima: encima ? enArchivo(encima, enLaPared) : null,
             audio: enArchivo(audio.archivo, audio.tramo)
         });
@@ -293,6 +288,10 @@ function repartir(p) {
 function enArchivo(archivo, toma) {
     const arranque = archivo.empezoMs != null ? archivo.empezoMs : archivo.desdeMs;
     return {
+        // Cuál de las tres fuentes es. Lo trae `video-crudo` en cada vídeo desde
+        // que se graba, y tirarlo acá obligaba a adivinarlo después comparando
+        // rutas; el WAV no lo tiene porque no es un vídeo.
+        cual: archivo.cual || 'wav',
         ruta: archivo.ruta || archivo.archivo,
         desdeSec: Math.max(0, (toma.desdeMs - arranque) / 1000),
         hastaSec: Math.max(0, (toma.hastaMs - arranque) / 1000)
@@ -300,6 +299,29 @@ function enArchivo(archivo, toma) {
 }
 
 const tres = n => Math.round(n * 1000) / 1000;
+
+/** Con coma decimal, que es como se escribe un número en castellano. */
+const conComa = n => String(n).replace('.', ',');
+
+/**
+ * Lo que dura una lista de tomas en el reloj de PARED.
+ *
+ * El único reloj que se le puede enseñar a nadie. Los bordes de una toma viven
+ * en el del audio, y si el micrófono escribió a otra velocidad —el falso de
+ * Chromium va a 0,51x— restar ahí da un número que no se parece a nada de lo
+ * que la persona va a ver pasar en el reproductor.
+ *
+ * Está acá, al lado de `aPared` y `enLosDosRelojes`, y no dentro de quien la
+ * usa: es la cuenta más sensible al reloj de todo el módulo, y estaba metida en
+ * un `if` dentro de otro `if` dentro del exportador, donde no se podía probar y
+ * donde nadie que viniera a auditar los relojes la iba a encontrar.
+ */
+function duracionEnPared(tomas, wavs) {
+    return (tomas || []).reduce((suma, t) => {
+        const { enLaPared } = enLosDosRelojes(t, wavs);
+        return suma + enLaPared.hastaMs - enLaPared.desdeMs;
+    }, 0);
+}
 
 /**
  * El grafo de ffmpeg, armado y nada más: ninguna llamada, ningún archivo.
@@ -348,7 +370,11 @@ function grafo(p) {
         const fondo = indiceDe(t.fondo.ruta);
         // Llenar el cuadro (escalar de más y recortar) o entrar entero (escalar
         // de menos y rellenar con negro). Ver el comentario de `repartir`.
-        const encuadre = t.fondo.llenar
+        //
+        // Una cara se recorta para llenar el cuadro y una pantalla no: a la cara
+        // le sobra fondo por los lados y recortarla la mejora, mientras que
+        // recortar una pantalla se come justo lo que se está explicando.
+        const encuadre = t.fondo.cual === 'camara'
             ? `scale=${ANCHO}:${ALTO}:force_original_aspect_ratio=increase,crop=${ANCHO}:${ALTO}`
             : `scale=${ANCHO}:${ALTO}:force_original_aspect_ratio=decrease,`
                 + `pad=${ANCHO}:${ALTO}:(ow-iw)/2:(oh-ih)/2`;
@@ -394,12 +420,31 @@ function grafo(p) {
 }
 
 /** Si un archivo de vídeo trae audio dentro. */
+/**
+ * Recordado por ruta, porque es una propiedad del archivo y no de la pregunta.
+ *
+ * Y porque el editor pregunta MUCHO: `montajeDeSesion` lo llama en cada clic
+ * —cada borde que se mueve, cada vista que se cambia, cada toma que se deja
+ * fuera—, y esto es un `spawnSync` en el proceso principal, que es el que
+ * atiende todos los demás canales y las dos ventanas. Un vídeo ya grabado no le
+ * va a crecer una pista de audio, así que preguntarlo una vez alcanza. Es el
+ * mismo truco que `umbralDe` con el piso de ruido del WAV.
+ *
+ * La clave lleva el tamaño además de la ruta: un archivo que se está grabando
+ * todavía crece, y el nombre se puede reciclar entre sesiones.
+ */
+const audioSabido = new Map();
+
 function tieneAudio(ruta) {
     const ffprobe = paths.ffprobe();
     if (!ffprobe.path || !ruta || !fs.existsSync(ruta)) return false;
+    const clave = `${ruta}:${fs.statSync(ruta).size}`;
+    if (audioSabido.has(clave)) return audioSabido.get(clave);
     const r = spawnSync(ffprobe.path, ['-v', 'error', '-select_streams', 'a',
         '-show_entries', 'stream=index', '-of', 'csv=p=0', ruta], { encoding: 'utf8' });
-    return r.status === 0 && String(r.stdout || '').trim().length > 0;
+    const hay = r.status === 0 && String(r.stdout || '').trim().length > 0;
+    audioSabido.set(clave, hay);
+    return hay;
 }
 
 /**
@@ -476,11 +521,12 @@ function alLado(ruta) {
  * Lo único que la ventana no puede hacer por su cuenta es cruzar los relojes:
  * los bordes de las tomas están en el reloj del audio y los vídeos viven en el
  * de pared. Así que acá se cruzan una vez y se entregan segundos ya buenos
- * para `currentTime`, que es exactamente lo que hacen las fotos de al lado y
+ * para `currentTime`. Los cruza `enLosDosRelojes`, la misma que usa el corte, y
  * por eso el montaje y el export caen en el mismo fotograma.
  *
  * @param {string} json el sidecar
- * @returns {object} { ok, tomas, camara, pantalla }
+ * @returns {object} `{ ok, avisos, archivos: {camara, pantalla}, tomas, recuadro }`
+ *   o `{ ok: false, avisos, error }` si no hay ni un vídeo que mirar
  */
 /**
  * Una sesión abierta: los bordes ya corridos al silencio y las fuentes a mano.
@@ -511,23 +557,30 @@ function abrirLaSesion(json) {
 }
 
 function montajeDeSesion(json) {
-    const { estado, camara, pantalla, camaraConAudio, wavs } = abrirLaSesion(json);
+    const { estado, vacios, camara, pantalla, camaraConAudio, wavs } = abrirLaSesion(json);
+    if (!pantalla && !camara) {
+        // El mismo fallo que da el corte, y no un editor vacío con `ok: true`.
+        // Eran dos contratos distintos para la misma entrada en el mismo módulo.
+        return {
+            ok: false,
+            avisos: vacios,
+            error: vacios.length
+                ? 'Los dos vídeos salieron vacíos: no hay imagen que mirar.'
+                : 'No encontré los vídeos de esta grabación.'
+        };
+    }
 
-    // Todas las tomas cerradas, también las descartadas. `tomasDe` no sirve acá
-    // justamente porque deja fuera las descartadas, y el editor tiene que poder
-    // mostrarlas: sin verlas no se puede deshacer un descarte.
+    // Todas las tomas cerradas, también las descartadas: el editor tiene que
+    // poder mostrarlas, porque sin verlas no se puede deshacer un descarte. El
+    // corte en cambio pide `vivo.tomasQueQuedan`, que las deja fuera.
+    //
+    // Es la única diferencia entre las dos puntas, y por eso `tomasDe` recibe la
+    // lista ya elegida en vez de un interruptor: la que se queda a la vista es
+    // la decisión, y el ordenar-mapear-filtrar de abajo es el mismo para las
+    // dos. Antes estaba copiado acá entero, con una línea cambiada.
     const fuera = new Set((estado.tomas || []).filter(t => t.descartada).map(t => t.id));
-    const tomas = (estado.tomas || [])
-        .filter(t => t.inMs != null && t.outMs != null)
-        .slice()
-        .sort((a, b) => a.inMs - b.inMs)
-        .map(t => ({
-            id: t.id,
-            vista: t.vista || vivo.VISTA_POR_DEFECTO,
-            desdeMs: ajustar.inAjustado(t),
-            hastaMs: ajustar.outAjustado(t)
-        }))
-        .filter(t => t.hastaMs - t.desdeMs >= MINIMO_SEC * 1000);
+    const tomas = tomasDe((estado.tomas || [])
+        .filter(t => t.inMs != null && t.outMs != null));
 
     // Y el MISMO reparto que hace el export, no una segunda tabla: así el
     // montaje que se mira y el vídeo que sale eligen fondo, recuadro y encuadre
@@ -538,18 +591,28 @@ function montajeDeSesion(json) {
     // Dos archivos y, por toma, dónde cae en cada uno: es lo único que la
     // ventana necesita para buscar con `currentTime`. Mandar la ruta en cada
     // toma la obligaría a deducir cuál es cuál en cada cambio de vista.
+    //
+    // Solo el fondo y lo de encima, nunca el audio. Si el audio sale de la
+    // cámara, la cámara ya está en uno de esos dos —`repartir` solo la elige
+    // para el sonido cuando la tiene grabada, y entonces es el fondo o va en la
+    // esquina—, así que mirarlo no agrega nada. Y si sale del WAV, sus segundos
+    // están en el reloj del AUDIO: antes esto lo recorría igual y lo único que
+    // evitaba que un número del reloj equivocado acabara en un `currentTime` era
+    // que una ruta `.wav` nunca es igual a una `.mp4`. Un límite de relojes no
+    // se sostiene con una comparación de texto.
     const enCual = (t, cual) => {
-        const ruta = cual === 'camara' ? (camara && camara.ruta) : (pantalla && pantalla.ruta);
-        if (!ruta) return null;
-        for (const x of [t.fondo, t.encima, t.audio]) {
-            if (x && x.ruta === ruta) return tres(x.desdeSec);
+        for (const x of [t.fondo, t.encima]) {
+            if (x && x.cual === cual) return tres(x.desdeSec);
         }
         return null;
     };
 
     return {
         ok: true,
-        avisos,
+        // Lo que faltó va primero, igual que en el corte: una pantalla que salió
+        // de cero bytes hacía que el montaje se viera solo con la cámara sin
+        // decir por qué, y el corte de después sí lo explicaba.
+        avisos: vacios.concat(avisos),
         archivos: {
             camara: camara ? camara.ruta : null,
             pantalla: pantalla ? pantalla.ruta : null
@@ -560,13 +623,13 @@ function montajeDeSesion(json) {
             descartada: fuera.has(t.toma),
             segundos: tres(t.segundos),
             // Cuál se ve entera. La otra, si está, va en la esquina.
-            fondo: t.fondo.llenar ? 'camara' : 'pantalla',
+            fondo: t.fondo.cual,
             camaraDesde: enCual(t, 'camara'),
             pantallaDesde: enCual(t, 'pantalla'),
             // El sonido solo si sale de la cámara. Cuando sale del WAV el
             // montaje va mudo: sincronizar un tercer archivo en una vista
             // previa no paga lo que cuesta, y para eso está el aviso.
-            conAudio: Boolean(t.audio && camara && t.audio.ruta === camara.ruta)
+            conAudio: t.audio.cual === 'camara'
         })),
         // La esquina donde va la cámara, en partes del ancho del cuadro, para
         // que la ventana la ponga donde la va a poner ffmpeg sin repetir los
@@ -574,7 +637,11 @@ function montajeDeSesion(json) {
         recuadro: {
             lado: CAMARA_LADO / ANCHO,
             margen: MARGEN / ANCHO,
-            redondeo: CAMARA_REDONDEO / CAMARA_LADO
+            redondeo: CAMARA_REDONDEO / CAMARA_LADO,
+            // El margen va en partes del ANCHO, y abajo hay que medirlo contra
+            // el alto: la proporción del cuadro viaja con él para que la ventana
+            // tampoco tenga que saber que es 16:9.
+            proporcion: ANCHO / ALTO
         }
     };
 }
@@ -616,7 +683,7 @@ function wavsDe(estado, sitio) {
  * Corta y exporta el vídeo de una sesión ya terminada.
  *
  * @param {string} json el sidecar de la sesión
- * @param {object} [opciones] { alProgreso, salida }
+ * @param {object} [opciones] `{ alProgreso, salida, quitarSilencios }`
  * @returns {Promise<object>} { ok, ruta, segundos, tomas, avisos }
  */
 async function deSesion(json, opciones) {
@@ -624,7 +691,7 @@ async function deSesion(json, opciones) {
     const { sitio, estado, vacios, pantalla, camara, camaraConAudio, wavs }
         = abrirLaSesion(json);
 
-    let tomas = tomasDe(estado);
+    const tomas = tomasDe(vivo.tomasQueQuedan(estado));
     if (!tomas.length) {
         return {
             ok: false, tomas: 0,
@@ -647,31 +714,28 @@ async function deSesion(json, opciones) {
     // Y si se pidió, cada toma partida por sus silencios largos. Va acá —entre
     // las tomas y el reparto— porque un pedazo es una toma más corta y todo lo
     // de abajo ya sabía trabajar con varios trozos.
+    //
+    // `pedazos` es otro nombre y no `tomas` otra vez: a partir de acá las dos
+    // listas existen y quieren decir cosas distintas. Mientras esto reasignaba
+    // `tomas`, el `tomas.length` de los dos caminos de error de abajo contestaba
+    // una cuenta de PEDAZOS con el nombre de las tomas —tres tomas partidas en
+    // once decían «11»— mientras el camino bueno se tomaba el trabajo de contar
+    // `new Set(trozos.map(t => t.toma)).size` justamente para no hacer eso.
     const quitados = [];
-    if (o.quitarSilencios) {
-        const r = silencios.partir(tomas, estado, {
-            resolver: x => sesionesGrabadas.dondeQuedoElWav(sitio, x)
-        });
-        if (r.huecos) {
-            // En segundos de VÍDEO y no de audio: `partir` mide en el reloj del
-            // audio, que es donde viven los bordes, y si los dos relojes se
-            // separaron el número que se le dice a la persona tiene que ser el
-            // que va a ver en el reproductor.
-            const pared = lista => lista.reduce((s, t) => {
-                const { enLaPared } = enLosDosRelojes(t, wavs);
-                return s + enLaPared.hastaMs - enLaPared.desdeMs;
-            }, 0);
-            const menos = (pared(tomas) - pared(r.tomas)) / 1000;
-            quitados.push(`Se quitaron ${r.huecos} silencio(s) de más de `
-                + `${silencios.LARGO_MIN_SEC} s: ${menos.toFixed(1)} s menos de vídeo.`);
-        } else {
-            quitados.push('No había ningún silencio de más de '
-                + `${silencios.LARGO_MIN_SEC} s que quitar.`);
-        }
-        tomas = r.tomas;
+    const partidas = o.quitarSilencios ? silencios.partir(tomas, wavs) : null;
+    const pedazos = partidas ? partidas.tomas : tomas;
+    if (partidas) {
+        const menos = (duracionEnPared(tomas, wavs)
+            - duracionEnPared(pedazos, wavs)) / 1000;
+        quitados.push(partidas.huecos
+            ? `Se quitaron ${partidas.huecos} silencio(s) de más de `
+                + `${conComa(silencios.LARGO_MIN_SEC)} s: ${conComa(menos.toFixed(1))} s `
+                + 'menos de vídeo.'
+            : 'No había ningún silencio de más de '
+                + `${conComa(silencios.LARGO_MIN_SEC)} s que quitar.`);
     }
 
-    const reparto = repartir({ tomas, pantalla, camara, camaraConAudio, wavs });
+    const reparto = repartir({ tomas: pedazos, pantalla, camara, camaraConAudio, wavs });
     const trozos = reparto.trozos;
     // Lo que faltó va primero: es la causa de todo lo que venga detrás.
     const avisos = vacios.concat(reparto.avisos, quitados);

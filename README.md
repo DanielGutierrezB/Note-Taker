@@ -1128,20 +1128,26 @@ node tools/maqueta/abrir.js    # la interfaz de verdad, con datos falsos
 ```
 
 Los criterios de aceptación están escritos como números en `tools/auditar.js`, y
-lo que no los cumple sale con código 1. Hoy, sobre las seis vistas a 900, 1180 y
-1440 px:
+lo que no los cumple sale con código 1. **Sobre los 39 escenarios** a 900, 1180
+y 1440 px, que es todo lo que una persona puede llegar a ver: también los
+vacíos y los de error, que son los que se escriben con menos cuidado y los que
+más se leen cuando algo salió mal. La lista salía a mano en cada herramienta y
+tenía 19 de 39; ahora las cuatro la sacan del mismo catálogo
+(`SE_HACEN` en `tools/maqueta/doble.js`), y `tests/maqueta.test.js` comprueba
+que ninguna se la invente aparte.
 
 | | |
 |---|---|
 | textos por debajo de AA | **0** |
-| el peor contraste | **4.83:1** |
+| el peor contraste | **4.6:1** |
+| controles apagados, exentos de AA | **15**, declarados uno por uno |
 | tamaños de letra pintados a la vez | **5** (13/12/11 + los dos grandes) |
-| controles por debajo de 24×24 | **0** de 558 |
+| controles por debajo de 24×24 | **0** de 2655 |
 | texto pintado fuera de su caja | **0** |
 | solapes | **0** |
 | botones sin un hover que diga qué hacen | **0** |
 | fila de toma plegada | **32 px** |
-| cromo fijo en la pantalla más cargada | **17,2 %** |
+| cromo fijo en la pantalla más cargada | **16,8 %** |
 
 La maqueta (`tools/maqueta/`) es el HTML y el CSS de verdad con datos falsos:
 acá adentro no hay ni una línea de interfaz duplicada. Lo único que se falsea
@@ -1154,7 +1160,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 702 pruebas, sin red y sin abrir nada
+npm test           # 800 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```
@@ -1213,8 +1219,19 @@ Graba con la cámara falsa de Chromium, abre y cierra tres tomas con huecos en
 medio, abre una ficha mientras graba y le corre el IN sobre una palabra, cae en
 el editor, y mide lo único que lo dice todo: que el vídeo dure lo que duran las
 tomas —cruzando antes los dos relojes, porque el micrófono falso escribe audio
-a 0,51x—. De ahí salió la corrección de deriva. En la última corrida, 14,59 s
-esperados y 14,59 s obtenidos, con 4 ms de diferencia.
+a 0,51x—. De ahí salió la corrección de deriva, y no es un número fijo: en dos
+corridas seguidas el micrófono falso escribió a 0,51x y a 1,01x, y las dos
+cayeron donde se pidió —127 ms y 3 ms de diferencia— porque la deriva se mide
+en cada corrida en vez de darse por sabida.
+
+**Escribe los ajustes en un archivo aparte**, que `dev-shot.js` le estrena en
+`/tmp` con cada corrida (`NT_AJUSTES`). Antes los leía al empezar y los
+devolvía en un `finally`, que es lo que uno escribe y que funciona exactamente
+cuando no hace falta: la ventana no se cerraba sola al terminar, hubo que
+matarla, el `finally` no corrió, y los ajustes de verdad quedaron con
+`Fake Default Audio Input` de micrófono. Pasó. Ahora la ventana sale sola al
+terminar el guion, con el código que haya quedado, y aun así los ajustes no
+dependen de eso: un archivo que no se toca no se puede romper.
 
 Del editor comprueba lo que la maqueta no puede contestar: que los dos
 `<video>` apunten a los archivos que se acaban de grabar y **carguen desde
@@ -1224,8 +1241,11 @@ toma busque su propio segundo dentro de lo que dura el archivo (2,67 · 12,94 ·
 de «Mi pantalla» la pantalla con el recuadro, que el reloj del montaje se mueva
 al apretar Reproducir, y que dejar una fuera se vea en la línea de tomas.
 Después exporta dos veces, la segunda con «Quitar silencios», y mira que el
-segundo MP4 dure menos y que el primero siga en su sitio: 13 huecos quitados,
-8,83 s contra 12,37 s.
+segundo MP4 dure menos y que el primero siga en su sitio: 15 huecos quitados,
+11,28 s contra 15,40 s. Cuando el micrófono falso no deja silencios que quitar
+—a 1,01x el pitido es continuo— lo dice y no lo cuenta como comprobado: lo que
+sostiene esa parte es `tests/quitar-silencios.test.js`, que no depende de la
+suerte que haya tenido la corrida.
 
 El editor por dentro —que clicar una ficha no rebobine el montaje, que las
 desactivadas se salten, que «Ocultar desactivadas» esconda, que la barra

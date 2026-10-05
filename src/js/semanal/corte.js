@@ -122,6 +122,13 @@ export function conElTexto(plan, grabadas) {
     const conTexto = grabadas || [];
     return (plan || []).map(t => {
         const texto = conTexto.find(x => x.id === t.id);
-        return texto ? { ...texto, ...t, inMs: texto.inMs, outMs: texto.outMs } : t;
+        // El plan manda. Trae lo que hay que REPRODUCIR —qué se ve, dónde cae en
+        // cada archivo, cuánto dura ya ajustado— y la toma grabada solo pone
+        // encima lo que el plan no tiene: las palabras, y el antes y el después.
+        //
+        // Antes esto terminaba en `inMs: texto.inMs, outMs: texto.outMs`, como si
+        // el plan los pisara. No los pisa: el plan no los trae. Dos líneas que no
+        // hacían nada y que decían lo contrario de lo que pasa.
+        return texto ? { ...texto, ...t } : t;
     });
 }

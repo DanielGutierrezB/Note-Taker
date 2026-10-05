@@ -79,13 +79,19 @@ const PEDAZO_MIN_SEC = 0.5;
  * WAV, con uno que no se entiende o sin contraste para distinguir un silencio,
  * la toma sale entera. Nunca tira.
  *
+ * **Los WAV entran hechos.** No el sidecar ni un `resolver` para ir a buscarlos:
+ * la lista que el exportador ya armó, con la ruta de hoy y comprobada. Mientras
+ * esto recibía `estado` se buscaba el WAV por su cuenta con `dondeCae`, que es
+ * otra regla —solo mira el principio de la toma y no comprueba que el archivo
+ * esté— y discrepaba con la del exportador justo en el caso que importa: una
+ * toma que se pasa del final de un archivo quedaba partida contra ese WAV y
+ * medida sin él. Ahora las dos puntas preguntan lo mismo a `elWavDe`.
+ *
  * @param {object[]} tomas `{id, vista, desdeMs, hastaMs}`, en el reloj del audio
- * @param {object} estado la sesión leída del sidecar
- * @param {object} [opciones] `resolver(rutaGuardada)` → dónde está el WAV hoy
+ * @param {object[]} wavs los de la sesión, con `{ruta, desdeMs, segundos}`
  * @returns {{tomas:object[], huecos:number}}
  */
-function partir(tomas, estado, opciones) {
-    const o = opciones || {};
+function partir(tomas, wavs) {
     const salida = [];
     let huecos = 0;
 
@@ -102,7 +108,7 @@ function partir(tomas, estado, opciones) {
 
     try {
         for (const toma of tomas || []) {
-            const pedazos = deUnaToma(toma, estado, o, dameWav, damePiso);
+            const pedazos = deUnaToma(toma, wavs, dameWav, damePiso);
             if (!pedazos) {
                 salida.push(toma);
                 continue;
@@ -124,16 +130,17 @@ function partir(tomas, estado, opciones) {
 }
 
 /** Los pedazos de UNA toma, o null si no se pudo mirar su onda. */
-function deUnaToma(toma, estado, o, dameWav, damePiso) {
-    const donde = ajustar.dondeCae(estado.sesiones, toma.desdeMs, o.resolver);
-    if (!donde) return null;
-    const w = dameWav(donde.archivo);
+function deUnaToma(toma, wavs, dameWav, damePiso) {
+    const wav = ajustar.elWavDe(wavs, toma.desdeMs, toma.hastaMs);
+    if (!wav) return null;
+    const w = dameWav(wav.ruta);
     if (!w) return null;
-    const piso = damePiso(donde.archivo, w);
+    const piso = damePiso(wav.ruta, w);
     if (!piso) return null;
 
     const largoSec = (toma.hastaMs - toma.desdeMs) / 1000;
-    const tramo = ajustar.nivelesDeTramo(w, donde.sec, donde.sec + largoSec);
+    const desdeSec = (toma.desdeMs - wav.desdeMs) / 1000;
+    const tramo = ajustar.nivelesDeTramo(w, desdeSec, desdeSec + largoSec);
     if (!tramo) return null;
 
     const umbralDb = ajustar.umbralLocal(tramo, piso.pisoDb);
@@ -142,9 +149,9 @@ function deUnaToma(toma, estado, o, dameWav, damePiso) {
     if (!largos.length) return null;
 
     // De segundos dentro del WAV a milisegundos del reloj del audio, que es en
-    // el que vienen los bordes de la toma. Es la misma cuenta que `dondeCae`
-    // al revés, así que el pedazo cae donde se midió.
-    const aMs = sec => toma.desdeMs + (sec - donde.sec) * 1000;
+    // el que vienen los bordes de la toma. Es `desdeSec` al revés, así que el
+    // pedazo cae donde se midió.
+    const aMs = sec => toma.desdeMs + (sec - desdeSec) * 1000;
     const mitad = AIRE_SEC / 2;
 
     const pedazos = [];

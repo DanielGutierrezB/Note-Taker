@@ -65,11 +65,18 @@ function conUnHueco() {
     ]);
 }
 
-function sesionDe(archivo) {
+/**
+ * El WAV como se lo pasa el exportador: con su ruta de hoy y su largo medido.
+ *
+ * Es lo que `partir` recibe de verdad —una lista, no el sidecar— así que acá se
+ * arma igual. Antes esto fabricaba un `estado` falso con un `sesiones` dentro,
+ * que era una forma que la función ya no necesita conocer.
+ */
+function wavsDe(archivo) {
     const w = ajustar.abrir(archivo);
     const segundos = w ? w.segundos : 0;
     ajustar.cerrar(w);
-    return { sesiones: [{ archivo, desdeMs: 0, segundos }] };
+    return [{ ruta: archivo, desdeMs: 0, segundos }];
 }
 
 const LA_TOMA = { id: 1, vista: 'R', desdeMs: 30000, hastaMs: 39500 };
@@ -79,8 +86,8 @@ module.exports = function (t) {
     t.group('quitar silencios · el hueco largo se acorta y el corto se queda');
 
     t.test('una toma con un silencio de 3 s sale en dos pedazos', () => {
-        const estado = sesionDe(conUnHueco());
-        const r = silencios.partir([LA_TOMA], estado);
+        const wavs = wavsDe(conUnHueco());
+        const r = silencios.partir([LA_TOMA], wavs);
         t.eq(r.tomas.length, 2, 'un hueco largo, dos pedazos');
         t.eq(r.huecos, 1);
         t.eq(r.tomas[0].id, 1, 'los dos siguen siendo la toma 1');
@@ -89,8 +96,8 @@ module.exports = function (t) {
     });
 
     t.test('el corte cae donde está el silencio, con su aire a cada lado', () => {
-        const estado = sesionDe(conUnHueco());
-        const [uno, dos] = silencios.partir([LA_TOMA], estado).tomas;
+        const wavs = wavsDe(conUnHueco());
+        const [uno, dos] = silencios.partir([LA_TOMA], wavs).tomas;
         // El hueco va de 32,0 a 35,0 y quedan 0,3 s: 0,15 de cada lado.
         t.ok(uno.desdeMs === 30000, 'el primero empieza donde empieza la toma');
         t.ok(cerca(uno.hastaMs, 32150), `cierra en 32,15 s y cerró en ${uno.hastaMs / 1000}`);
@@ -101,15 +108,15 @@ module.exports = function (t) {
     t.test('el medio segundo de pausa no se toca', () => {
         // Es el que hace que la persona hable como habla: quitarlo deja el
         // vídeo atropellado, y por eso el umbral son 0,7 s y no cualquiera.
-        const estado = sesionDe(conUnHueco());
-        const r = silencios.partir([LA_TOMA], estado);
+        const wavs = wavsDe(conUnHueco());
+        const r = silencios.partir([LA_TOMA], wavs);
         const dentro = r.tomas.some(p => p.desdeMs < 37000 && p.hastaMs > 37500);
         t.ok(dentro, 'la pausa de 37,0 a 37,5 queda dentro de un pedazo');
     });
 
     t.test('se quita lo que se dice que se quitó', () => {
-        const estado = sesionDe(conUnHueco());
-        const r = silencios.partir([LA_TOMA], estado);
+        const wavs = wavsDe(conUnHueco());
+        const r = silencios.partir([LA_TOMA], wavs);
         const suma = r.tomas.reduce((s, p) => s + (p.hastaMs - p.desdeMs), 0);
         const quitado = (LA_TOMA.hastaMs - LA_TOMA.desdeMs - suma) / 1000;
         t.ok(cerca(quitado * 1000, 2700, 250), `se esperaban 2,7 s y se quitaron ${quitado}`);
@@ -120,7 +127,7 @@ module.exports = function (t) {
     t.test('una toma hablada de punta a punta sale entera', () => {
         const archivo = wav([[30, RUIDO], [6, VOZ], [30, RUIDO]]);
         const r = silencios.partir(
-            [{ id: 1, vista: 'R', desdeMs: 30000, hastaMs: 36000 }], sesionDe(archivo));
+            [{ id: 1, vista: 'R', desdeMs: 30000, hastaMs: 36000 }], wavsDe(archivo));
         t.eq(r.tomas.length, 1);
         t.eq(r.huecos, 0);
         t.eq(r.tomas[0].desdeMs, 30000, 'y sale con sus bordes intactos');
@@ -130,10 +137,25 @@ module.exports = function (t) {
     t.test('sin WAV, la toma sale tal cual en vez de tirar', () => {
         // Es el modo de fallar correcto: una carpeta movida, un disco sin
         // montar. Mejor el vídeo con sus silencios que ningún vídeo.
-        const r = silencios.partir([LA_TOMA], { sesiones: [] });
+        const r = silencios.partir([LA_TOMA], []);
         t.eq(r.tomas.length, 1);
         t.eq(r.tomas[0], LA_TOMA, 'la misma toma, sin tocar');
         t.eq(r.huecos, 0);
+    });
+
+    t.test('una toma que se pasa del final del WAV sale entera', () => {
+        // Y sale entera porque el exportador tampoco va a encontrarle WAV: si
+        // acá se partiera contra un archivo que allá no cuenta, los pedazos se
+        // medirían con la deriva en 1 —o sea, en el reloj equivocado— y el vídeo
+        // saldría cortado donde no se dijo. Las dos puntas preguntan a `elWavDe`.
+        const archivo = wav([[30, RUIDO], [6, VOZ], [3, RUIDO], [6, VOZ]]);
+        const wavs = wavsDe(archivo);
+        const seSale = { id: 1, vista: 'R', desdeMs: 30000, hastaMs: 60000 };
+        t.eq(ajustar.elWavDe(wavs, seSale.desdeMs, seSale.hastaMs), null,
+            'el exportador no le encuentra WAV');
+        const r = silencios.partir([seSale], wavs);
+        t.eq(r.huecos, 0, 'así que esto tampoco lo parte');
+        t.eq(r.tomas[0], seSale);
     });
 
     t.test('un pedazo que quedaría de dos décimas no se corta', () => {
@@ -141,7 +163,7 @@ module.exports = function (t) {
         // deja un parpadeo con media sílaba. Se deja el hueco.
         const archivo = wav([[30, RUIDO], [0.3, VOZ], [2, RUIDO], [4, VOZ], [30, RUIDO]]);
         const r = silencios.partir(
-            [{ id: 1, vista: 'R', desdeMs: 30000, hastaMs: 36300 }], sesionDe(archivo));
+            [{ id: 1, vista: 'R', desdeMs: 30000, hastaMs: 36300 }], wavsDe(archivo));
         t.eq(r.tomas.length, 1, 'sale entera');
         t.eq(r.huecos, 0);
     });

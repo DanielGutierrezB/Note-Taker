@@ -169,8 +169,24 @@ function saneada(prproj) {
     return { capturas, vistas };
 }
 
+/**
+ * Dónde viven los ajustes.
+ *
+ * `NT_AJUSTES` lo desvía a otro archivo, y existe por una sola razón: el banco
+ * de pruebas de punta a punta necesita el modo semanal, una carpeta en `/tmp` y
+ * los dispositivos falsos de Chromium, y eso no puede escribirse encima de la
+ * configuración de quien trabaja con la app.
+ *
+ * Antes se arreglaba leyendo los ajustes al empezar y devolviéndolos en un
+ * `finally`. Eso tapa el caso bueno y falla justo en el malo: un `kill` —o
+ * cerrar la ventana, o que Electron no salga y haya que matarlo— se salta el
+ * `finally` y deja el micrófono apuntando a `Fake Default Audio Input` y la
+ * carpeta semanal a un `/tmp` que ya no existe. Medido: pasó. Un archivo
+ * aparte no se puede corromper porque no se toca.
+ */
 function archivo() {
-    return path.join(os.homedir(), 'Library', 'Application Support', 'Note Taker', 'ajustes.json');
+    return process.env.NT_AJUSTES
+        || path.join(os.homedir(), 'Library', 'Application Support', 'Note Taker', 'ajustes.json');
 }
 
 /** Un objeto con TODAS las claves, venga lo que venga del disco. */
@@ -272,6 +288,6 @@ function conParche(previos, parche) {
 }
 
 module.exports = {
-    leer, guardar, recordarCarpeta, conParche,
+    leer, guardar, recordarCarpeta, conParche, dondeViven: archivo,
     sanear, archivo, DEFAULTS, RECIENTES, FPS_POSIBLES, MODOS
 };

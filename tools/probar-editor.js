@@ -143,7 +143,10 @@ async function main() {
         .map(b => ({ dice: b.textContent.trim(), puesta: b.getAttribute('aria-pressed') }))`);
     decir('la 3 sale con:', vistas.filter(v => v.puesta === 'true').map(v => v.dice).join(', ') || 'nada');
     const dice = await js(`(document.querySelector('.tarjeta-cuerpo .campo-fila .v3') || {}).textContent`);
-    decir('y lo dice:', String(dice || '').replace(/\\s+/g, ' ').trim());
+    // `\s` y no `\\s`: esta línea corre en Node y no dentro de una plantilla
+    // que haya que escapar. Con la barra doble buscaba una barra invertida
+    // seguida de una «s», que no aparece nunca, y el texto salía sin colapsar.
+    decir('y lo dice:', String(dice || '').replace(/\s+/g, ' ').trim());
 
     /* ── Clicar una desactivada la reproduce sola ────────────────────── */
     decir('\nclicando la toma 2, que está fuera del vídeo…');

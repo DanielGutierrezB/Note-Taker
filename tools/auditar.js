@@ -43,13 +43,13 @@ function arg(nombre, def) {
 const ALTO = Number(arg('alto', 840));
 
 /** Los escenarios que se auditan, y a qué anchos. */
+// Todo lo que una persona puede llegar a ver, también los estados vacíos y los
+// de error: son los que se escriben con menos cuidado y los que más se leen
+// cuando algo salió mal. Antes esta lista tenía 21 de 37 y los del modo semanal
+// que se salen del camino felíz no los miraba nadie.
 const ESCENARIOS = arg('escenario', null)
     ? [arg('escenario')]
-    : ['sesiones', 'preparar', 'en-vivo', 'toma-abierta', 'palmada', 'palmada-vencida', 'terminada',
-        'notas-de-antes', 'foto', 'prproj', 'prproj-lleno', 'prproj-listo', 'diagnostico',
-        // El modo semanal: lo miran personas que no son el editor y que no van a
-        // aprender esta interfaz, así que la vara es la misma o más estricta.
-        'semanal', 'semanal-grabando', 'semanal-ficha', 'semanal-revisar', 'semanal-revisar-fuera', 'semanal-hecho'];
+    : maqueta.escenariosMenos({ iconos: 'no es una pantalla: es la hoja de los dibujos' });
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
 
 /**
@@ -139,6 +139,24 @@ async function medir(pagina) {
         const pesos = new Set();
         const colores = new Set();
         const bajoAA = [];
+        const apagados = [];
+
+        /**
+         * ¿Está este texto dentro de un control apagado?
+         *
+         * WCAG 1.4.3 deja fuera del mínimo de contraste lo que llama
+         * «incidental»: el texto de un componente de interfaz INACTIVO. Y con
+         * razón: un botón apagado tiene que verse apagado, que es justamente
+         * no tener el contraste del que sí se puede apretar. Acá eso son 0,38
+         * de opacidad (`.btn:disabled`), que le baja el contraste al texto de
+         * 8,4:1 a 2,16:1 — y esos 2,16 son el aspecto que se quiere, no un
+         * defecto.
+         *
+         * Se cuentan aparte igual. Que no sean un fallo no quiere decir que no
+         * haya que saber cuántos hay: si un día aparece uno donde no debería,
+         * sale en la lista.
+         */
+        const apagado = el => el.closest(':disabled, [aria-disabled="true"]') !== null;
 
         for (const el of document.querySelectorAll('*')) {
             if (!visible(el)) continue;
@@ -170,7 +188,9 @@ async function medir(pagina) {
                 size, peso, ratio: Math.round(r * 100) / 100, minimo
             };
             textos.push(info);
-            if (r < minimo) bajoAA.push(info);
+            if (r >= minimo) continue;
+            if (apagado(el)) apagados.push(info);
+            else bajoAA.push(info);
         }
 
         /* ── Blancos de clic (SC 2.5.8) ────────────────────────────────── */
@@ -209,6 +229,7 @@ async function medir(pagina) {
             pesos: [...pesos].sort(),
             colores: colores.size,
             bajoAA,
+            apagados,
             peorContraste: textos.length
                 ? Math.min(...textos.map(x => x.ratio)) : null,
             clicables,
@@ -240,8 +261,11 @@ async function main() {
                 // La maqueta aplica el escenario después de que la app dibuja.
                 // Esperar a que el escenario esté puesto, y no un rato fijo: los
                 // del modo semanal tardan segundos en armarse.
-                await pagina.evaluate('window.maquetaPuesta').catch(() => {});
-                await new Promise(r => setTimeout(r, 300));
+                const puesta = await pagina.evaluate('window.maquetaPuesta');
+                if (!puesta.ok) {
+                    console.log(`✗ ${escenario} no se pudo armar: ${puesta.error}`);
+                    fallos++;
+                }
 
                 const m = await medir(pagina);
                 await pagina.close();
@@ -260,7 +284,8 @@ async function main() {
                 console.log(`\n${mal.length ? '✗' : '✓'} ${escenario} @ ${ancho}×${ALTO}`);
                 console.log(`   textos ${m.textos} · tamaños ${m.tamanos.join('/')} ` +
                     `· pesos ${m.pesos.join('/')} · colores ${m.colores}`);
-                console.log(`   peor contraste ${m.peorContraste}:1 · bajo AA ${m.bajoAA.length}`);
+                console.log(`   peor contraste ${m.peorContraste}:1 · bajo AA ${m.bajoAA.length}`
+                    + (m.apagados.length ? ` (+${m.apagados.length} en controles apagados, exentos)` : ''));
                 console.log(`   clicables ${m.clicables} · bajo 24×24 ${m.chicos.length}`);
                 if (m.filas) console.log(`   filas ${m.filas.cuantas} · la más alta ${m.filas.alta} px`);
                 if (m.claquetas) console.log(`   claquetas ${m.claquetas.cuantas} · la más alta ${m.claquetas.alta} px`);

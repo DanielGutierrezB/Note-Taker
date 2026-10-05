@@ -92,8 +92,10 @@ contextBridge.exposeInMainWorld('nt', {
     semanalAbrir: pedido => ipcRenderer.invoke('semanal-abrir', pedido),
     semanalTrozo: (cual, trozo) => ipcRenderer.send('semanal-trozo', cual, trozo),
     semanalCerrar: () => ipcRenderer.invoke('semanal-cerrar'),
-    // Las fotos vuelven en `data:`, que es lo único que la ventana puede
-    // dibujar con su CSP: igual que las del OUT.
+    // Devuelve RUTAS del disco, no `data:`. La ventana las resuelve contra su
+    // propia página —que en la app es `file:`— y se las da a los dos `<video>`
+    // del editor. Son dos vídeos de decenas de megas: meterlos por el puente
+    // codificados no entra en un mensaje de IPC ni haría falta.
     semanalMontaje: json => ipcRenderer.invoke('semanal-montaje', json),
     semanalExportar: (json, como) => ipcRenderer.invoke('semanal-exportar', json, como),
     onSemanalProgreso: callback => {

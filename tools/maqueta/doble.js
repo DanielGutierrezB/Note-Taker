@@ -15,9 +15,42 @@
 
 import { estadoEnVivo, estadoSemanal, SESIONES, AJUSTES, ENTRADAS, CAMARAS, DOCTOR } from './datos.js';
 
+/**
+ * Todos los escenarios que este doble sabe armar, dicho de una vez.
+ *
+ * Es el catálogo, y está acá porque este es el archivo que los implementa: una
+ * lista en otro sitio puede quedarse vieja, y esta no, porque es la que decide
+ * si un nombre vale. Las herramientas que miden la leen —`tools/maqueta/abrir.js`
+ * la repite para Node, que no puede importar un módulo que usa `window`— y
+ * `tests/maqueta.test.js` comprueba que las dos digan lo mismo.
+ *
+ * Y se usa, no solo se declara: un `?e=` que no esté acá avisa fuerte. Antes un
+ * nombre mal escrito daba la pantalla de arranque sin decir nada, y la
+ * herramienta sacaba la foto igual y la medía creyendo que era otra cosa.
+ */
+export const SE_HACEN = [
+    'vacio', 'sin-carpeta', 'sesiones',
+    'preparar', 'preparar-sin-audio', 'preparar-microfono', 'preparar-zoom-falso',
+    'sin-whisper', 'sin-zoom', 'faltan-modelos', 'update',
+    'en-vivo', 'desplegada', 'claqueta-abierta', 'toma-abierta', 'releyendo',
+    'sin-audio', 'terminada', 'notas-de-antes', 'foto', 'foto-cien',
+    'palmada', 'palmada-vencida',
+    'prproj', 'prproj-lleno', 'prproj-listo',
+    'ajustes', 'ajustes-semanal', 'diagnostico', 'iconos',
+    'semanal', 'semanal-sin-pantalla', 'semanal-grabando', 'semanal-sin-tomas',
+    'semanal-con-aviso', 'semanal-ficha', 'semanal-revisar', 'semanal-revisar-fuera',
+    'semanal-cortando', 'semanal-hecho'
+];
+
 const escenarios = new Set(
     (new URLSearchParams(location.search).get('e') || '').split(',').filter(Boolean));
 const hay = nombre => escenarios.has(nombre);
+
+for (const x of escenarios) {
+    if (!SE_HACEN.includes(x)) {
+        console.error(`maqueta: no sé armar «${x}». Los que hay: ${SE_HACEN.join(', ')}`);
+    }
+}
 
 /**
  * La foto de referencia de la maqueta: una pantalla de clase dibujada a mano.
@@ -503,6 +536,29 @@ window.AudioWorkletNode = class {
 const espera = ms => new Promise(r => setTimeout(r, ms));
 
 /**
+ * Esperar a que algo aparezca, en vez de esperar un rato y cruzar los dedos.
+ *
+ * Los ratos fijos de acá abajo son para animaciones que duran lo que duran. Esto
+ * es para lo otro: lo que tarda lo que tarde. El corte falso, por ejemplo, va por
+ * cinco pasos de barra antes de dar el vídeo, y cuánto suma eso depende del
+ * escenario. Contar un rato que alcance es apostar; esperar el botón es saber.
+ */
+async function hastaQue(selector, comoSeLlama) {
+    for (let i = 0; i < 300; i++) {
+        if (document.querySelector(selector)) return document.querySelector(selector);
+        await espera(20);
+    }
+    throw new Error(`${comoSeLlama || selector} no apareció en 6 s`);
+}
+
+/** Apretar algo que TIENE que estar. Si no está, se dice en voz alta. */
+async function apretar(selector, comoSeLlama) {
+    const boton = document.querySelector(selector);
+    if (!boton) throw new Error(`no encontré ${comoSeLlama || selector} para apretar`);
+    boton.click();
+}
+
+/**
  * Empujarle a la ventana un aviso del motor, desde afuera.
  *
  * Es la única manera de comprobar lo que la ventana hace con lo que LLEGA y no
@@ -612,17 +668,18 @@ async function aplicar() {
     if (esLaSemana()) {
         await app.irASemanal();
         await espera(120);
-        if (!hay('semanal-sin-pantalla')) {
-            document.querySelector('[data-hace="elegir-pantalla"]').click();
-            await espera(120);
-        }
+        // Sin pantalla elegida no hay botón de grabar: es justamente la
+        // pantalla que este escenario retrata, así que acá se termina.
+        if (hay('semanal-sin-pantalla')) return;
+        await apretar('[data-hace="elegir-pantalla"]', 'Elegir pantalla');
+        await espera(120);
         if (hay('semanal')) return;
 
         // Arrancar tarda: antes de grabar se comprueba que el codificador
         // acepte cada fuente (`aguanta` en `src/js/grabar/filmar.js`), y son
         // 200 ms por fuente. Sin esperarlos, acá todavía no hay botón que
         // apretar.
-        document.querySelector('[data-hace="grabar"]').click();
+        await apretar('[data-hace="grabar"]', 'Grabar');
         await espera(700);
         if (hay('semanal-grabando') || hay('semanal-ficha')) {
             await espera(300);
@@ -630,7 +687,7 @@ async function aplicar() {
             // sin esperar al final, que es lo que se pidió después de grabar
             // el primer vídeo de verdad.
             if (hay('semanal-ficha')) {
-                document.querySelector('#semanal-cuerpo [data-hace="plegar"][data-toma="3"]').click();
+                await apretar('#semanal-cuerpo [data-hace="plegar"][data-toma="3"]', 'la ficha de la toma 3');
                 await espera(120);
             }
             return;
@@ -638,22 +695,34 @@ async function aplicar() {
 
         // Terminar ya no exporta: lleva a la revisión. De ahí en adelante hay
         // que apretar «Cortar y exportar», que es el camino de verdad.
-        document.querySelector('[data-hace="terminar"]').click();
+        await apretar('[data-hace="terminar"]', 'Terminar');
         await espera(300);
         // Parado en otra toma, y con las desactivadas ocultas: es el editor
         // cuando ya se decidió qué va y qué no, y la línea de arriba pasa a ser
         // exactamente el corte que va a salir.
         if (hay('semanal-revisar-fuera')) {
-            document.querySelector('.linea-toma[data-toma="3"]').click();
+            await apretar('.linea-toma[data-toma="3"]', 'la toma 3 en la línea');
             await espera(150);
-            document.querySelector('[data-hace="ocultar-fuera"]').click();
+            await apretar('[data-hace="ocultar-fuera"]', 'Ocultar desactivadas');
             await espera(150);
             return;
         }
         if (hay('semanal-revisar')) return;
 
-        const cortar = document.querySelector('[data-hace="exportar"]');
-        if (cortar) cortar.click();
+        // Sin ninguna toma abierta no hay nada que revisar y «Terminar» ya cortó
+        // —y ya falló— sin pasar por acá. Es el único camino que se saltea la
+        // revisión, y conviene decirlo: antes esto era un `if (cortar)` que
+        // tapaba por igual este caso legítimo y cualquier botón que se hubiera
+        // dejado de dibujar por error.
+        if (document.querySelector('[data-hace="ver-brutos"]')) return;
+        await apretar('[data-hace="exportar"]', 'Cortar y exportar');
+        // El corte falso va por cinco pasos de barra. Antes acá se volvía en el
+        // acto y las herramientas dormían 300 ms, que alcanzaban por poco:
+        // quitada esa siesta, la foto de «semanal-hecho» salía de la barra a
+        // medias. Ahora se espera lo que se está esperando de verdad —cada
+        // escenario, lo suyo: uno retrata la barra andando y el otro el final.
+        if (hay('semanal-cortando')) await hastaQue('.nivel-barra', 'la barra del corte');
+        else await hastaQue('[data-hace="ver-brutos"]', 'el vídeo cortado');
         return;
     }
 
@@ -902,8 +971,26 @@ async function verIconos() {
           </div></div></div>`;
 }
 
-// La promesa de que el escenario ya está puesto. Las herramientas la esperan
-// en vez de contar un rato al azar: los escenarios del modo semanal tardan
-// segundos en armarse —elegir pantalla, grabar, terminar, apretar cosas— y una
-// espera fija dejaba la foto a medio camino sin decirlo.
-window.maquetaPuesta = aplicar();
+/**
+ * La promesa de que el escenario ya está puesto Y DIBUJADO.
+ *
+ * Las herramientas la esperan en vez de contar un rato al azar: los escenarios
+ * del modo semanal tardan segundos en armarse —elegir pantalla, grabar,
+ * terminar, apretar cosas— y una espera fija dejaba la foto a medio camino sin
+ * decirlo.
+ *
+ * Las dos vueltas de `requestAnimationFrame` al final son la diferencia entre
+ * «el guion terminó» y «la pantalla se puede fotografiar»: el último `.click()`
+ * vuelve antes de que el navegador haya pintado lo que ese clic cambió. Sin
+ * ellas, las tres herramientas esperaban esta promesa y DESPUÉS dormían 300 ms
+ * por si acaso, que es exactamente la espera al azar que esto venía a borrar.
+ *
+ * Y si algo falla, falla a la vista: devuelve `{ok: false}` con el error en vez
+ * de rechazar. Un rechazo se lo comía el `.catch(() => {})` de las herramientas
+ * y la foto salía de una pantalla a medio armar, medida y auditada como si
+ * fuera la buena.
+ */
+window.maquetaPuesta = aplicar()
+    .then(() => new Promise(listo => requestAnimationFrame(() => requestAnimationFrame(listo))))
+    .then(() => ({ ok: true }))
+    .catch(e => ({ ok: false, error: String((e && e.message) || e) }));

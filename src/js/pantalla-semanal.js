@@ -622,8 +622,13 @@ async function cambiarFicha(id, cambio) {
     // Y el montaje otra vez, siempre: cualquiera de los tres cambios mueve lo
     // que hay que reproducir. Un borde cambia dónde empieza y termina la toma
     // dentro del archivo, una vista cambia cuál de los dos se ve, y un descarte
-    // cambia a qué toma se salta. Volver a pedirlo es leer el sidecar y hacer
-    // restas —no se toca ffmpeg—, así que se puede hacer con cada clic.
+    // cambia a qué toma se salta.
+    //
+    // Es leer el sidecar y hacer restas, salvo la primera vez: el motor también
+    // le pregunta a ffprobe si la cámara trae pista de audio, y eso sí es un
+    // proceso. Lo recuerda por archivo (`tieneAudio`), así que del segundo clic
+    // en adelante no se lanza nada. Antes acá decía «no se toca ffmpeg», que era
+    // mentira y escondía un `spawnSync` por clic en el proceso principal.
     await traerElMontaje();
     pintar();
 }

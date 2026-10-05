@@ -29,17 +29,8 @@ function arg(nombre, def) {
     return i === -1 ? def : process.argv[i + 1];
 }
 
-const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
-    'sin-carpeta', 'sesiones', 'preparar', 'preparar-sin-audio', 'sin-whisper',
-    'preparar-microfono', 'preparar-zoom-falso', 'sin-zoom',
-    'en-vivo', 'en-vivo,desplegada', 'en-vivo,claqueta-abierta',
-    'toma-abierta', 'releyendo', 'sin-audio', 'terminada', 'notas-de-antes', 'foto', 'foto-cien',
-    'palmada', 'palmada-vencida', 'prproj', 'prproj-lleno', 'prproj-listo',
-    'ajustes', 'ajustes-semanal', 'diagnostico', 'faltan-modelos',
-    // El modo semanal, momento por momento.
-    'semanal', 'semanal-grabando', 'semanal-ficha', 'semanal-revisar', 'semanal-revisar-fuera', 'semanal-cortando', 'semanal-hecho',
-    'iconos'
-];
+// Todos: una captura por escenario es justamente lo que esta herramienta hace.
+const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : maqueta.ESCENARIOS;
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
 const ALTO = Number(arg('alto', 840));
 
@@ -69,8 +60,11 @@ async function main() {
                 await pagina.goto(`${sitio.url}?e=${escenario}`, { waitUntil: 'networkidle0' });
                 // Esperar a que el escenario esté puesto, y no un rato fijo: los
                 // del modo semanal tardan segundos en armarse.
-                await pagina.evaluate('window.maquetaPuesta').catch(() => {});
-                await new Promise(r => setTimeout(r, 300));
+                const puesta = await pagina.evaluate('window.maquetaPuesta');
+                if (!puesta.ok) {
+                    console.log(`✗ ${escenario} no se pudo armar: ${puesta.error}`);
+                    rotas.push(`${escenario} @ ${ancho}: ${puesta.error}`);
+                }
 
                 const archivo = path.join(DESTINO, `${escenario.replace(/,/g, '+')}-${ancho}.png`);
                 await pagina.screenshot({ path: archivo });
@@ -90,7 +84,8 @@ async function main() {
 
     console.log(`\nEn ${path.relative(process.cwd(), DESTINO)}/`);
     if (rotas.length) {
-        console.log(`\n${rotas.length} vista(s) con errores de JS.`);
+        console.log(`\n${rotas.length} vista(s) que no se pudieron dibujar bien:`);
+        for (const r of rotas) console.log(`   ${r}`);
         process.exit(1);
     }
 }

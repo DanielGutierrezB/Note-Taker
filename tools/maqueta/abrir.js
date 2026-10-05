@@ -130,6 +130,47 @@ function crear(puerto) {
 }
 
 /**
+ * Lo que hay que dibujar: cada escenario, y los que van juntos con coma.
+ *
+ * **Estaba escrito tres veces** —en `capturar.js`, en `medir-botones.js` y en
+ * `auditar.js`— y las tres listas habían derivado: 37, 34 y 21 nombres. Cinco
+ * que la maqueta sabe armar no estaban en NINGUNA: los tres del modo semanal
+ * que se salen del camino felíz, el aviso de versión nueva, y el estado vacío.
+ * O sea que los estados de error, que son los que se escriben con menos cuidado
+ * y los que más se leen cuando algo falló, no los miraba nadie.
+ *
+ * El catálogo de verdad es `SE_HACEN` en `doble.js`, que es el archivo que los
+ * implementa. Esto es la misma lista puesta para Node —que no puede importar un
+ * módulo que usa `window`— con los pares que se combinan ya armados, y que las
+ * dos digan lo mismo lo cuida `tests/maqueta.test.js`.
+ *
+ * Cada herramienta declara lo que SALTA y por qué. Declarar exclusiones y no
+ * inclusiones es lo que hace que un escenario nuevo entre solo en las tres.
+ */
+const ESCENARIOS = [
+    'vacio', 'sin-carpeta', 'sesiones',
+    'preparar', 'preparar-sin-audio', 'preparar-microfono', 'preparar-zoom-falso',
+    'sin-whisper', 'sin-zoom', 'faltan-modelos', 'update',
+    // `desplegada` y `claqueta-abierta` no son pantallas: son cómo queda la de
+    // en vivo con algo abierto, así que van con ella.
+    'en-vivo', 'en-vivo,desplegada', 'en-vivo,claqueta-abierta',
+    'toma-abierta', 'releyendo', 'sin-audio', 'terminada', 'notas-de-antes',
+    'foto', 'foto-cien', 'palmada', 'palmada-vencida',
+    'prproj', 'prproj-lleno', 'prproj-listo',
+    'ajustes', 'ajustes-semanal', 'diagnostico',
+    // El modo semanal, momento por momento, más los tres que se salen del
+    // camino felíz: sin pantalla compartida, sin ninguna toma, y con el aviso
+    // de que un vídeo se rompió a mitad.
+    'semanal', 'semanal-sin-pantalla', 'semanal-grabando', 'semanal-sin-tomas',
+    'semanal-con-aviso', 'semanal-ficha', 'semanal-revisar',
+    'semanal-revisar-fuera', 'semanal-cortando', 'semanal-hecho',
+    'iconos'
+];
+
+/** Los de la lista menos los que esta herramienta no quiere, con su razón. */
+const escenariosMenos = saltar => ESCENARIOS.filter(e => !saltar[e]);
+
+/**
  * Levanta la maqueta y devuelve su URL y cómo bajarla.
  *
  * Se exporta para que las tres herramientas de medición se la levanten solas:
@@ -157,4 +198,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { levantar };
+module.exports = { levantar, ESCENARIOS, escenariosMenos };

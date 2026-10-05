@@ -37,7 +37,14 @@ let elCam = null;
 let elPan = null;
 let plan = [];
 let archivos = { camara: null, pantalla: null };
-let recuadro = { lado: 0.1875, margen: 0.025, redondeo: 0.125 };
+// La esquina donde va la cámara, cuando el motor la manda.
+//
+// Arranca en nada a propósito. Tenía por defecto `{lado: 0.1875, margen: 0.025,
+// redondeo: 0.125}`, que son 360/1920, 48/1920 y 45/360: los tres números del
+// exportador, copiados dentro del módulo al que se le mandan POR IPC justamente
+// para no copiarlos. Y como solo se usaban cuando el plan venía sin ellos,
+// quedarse viejos no se notaba nunca.
+let recuadro = null;
 let donde = -1;
 let sola = false;
 let tictac = null;
@@ -103,7 +110,7 @@ export function poner(m) {
     const iba = reproduciendo();
     plan = (m.tomas || []).map(t => ({ ...t }));
     archivos = m.archivos || archivos;
-    recuadro = m.recuadro || recuadro;
+    recuadro = m.recuadro || null;
     apuntar(elCam, archivos.camara);
     apuntar(elPan, archivos.pantalla);
     const sigue = antes ? plan.findIndex(t => t.id === antes.id) : -1;
@@ -116,7 +123,7 @@ function apuntar(v, ruta) {
     v.src = ruta;
 }
 
-export function laDeAhora() {
+function laDeAhora() {
     return donde >= 0 && donde < plan.length ? plan[donde] : null;
 }
 
@@ -152,7 +159,7 @@ export function alternar() {
     else arrancar();
 }
 
-export function arrancar() {
+function arrancar() {
     let t = laDeAhora();
     if (!t) return;
     // Al final de todo, volver al principio en vez de no hacer nada: apretar
@@ -229,7 +236,8 @@ function mirar() {
 }
 
 function hayRecuadro(t) {
-    return Boolean(t && t.fondo === 'pantalla' && t.camaraDesde != null && t.pantallaDesde != null);
+    return Boolean(recuadro && t && t.fondo === 'pantalla'
+        && t.camaraDesde != null && t.pantallaDesde != null);
 }
 
 /** Qué se ve y dónde, que es lo único que distingue una vista de la otra. */
@@ -256,7 +264,8 @@ function acomodar(t) {
         // cuadrado, que es lo que mide `CAMARA_REDONDEO` contra `CAMARA_LADO`.
         // `margin: 0` porque el `auto` del centrado de la pantalla lo movería.
         elCam.style.cssText = `width:${recuadro.lado * 100}%;aspect-ratio:1;height:auto;`
-            + `right:${recuadro.margen * 100}%;bottom:${recuadro.margen * 100 * 16 / 9}%;`
+            + `right:${recuadro.margen * 100}%;`
+            + `bottom:${recuadro.margen * 100 * recuadro.proporcion}%;`
             + `border-radius:${recuadro.redondeo * 100}%`;
     }
     // La cámara suena siempre que esté puesta, se vea entera o en la esquina:
@@ -275,18 +284,10 @@ function decir() {
         dentro,
         dura: t ? t.segundos : 0,
         montado: corte.loMontadoHasta(plan, donde) + (t && !t.descartada ? dentro : 0),
-        total: elTotal(),
+        total: corte.elTotal(plan),
         sola,
         reproduciendo: reproduciendo()
     });
-}
-
-export function elTotal() {
-    return corte.elTotal(plan);
-}
-
-export function elPlan() {
-    return plan;
 }
 
 /** Al irse de la pantalla: parar y soltar los archivos. */
