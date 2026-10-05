@@ -29,6 +29,18 @@ module.exports = function (t) {
         const aparte = path.join(carpeta, 'ajustes.json');
         process.env.NT_AJUSTES = aparte;
         try {
+            // Se mira ANTES de escribir, y si no coincide no se escribe nada.
+            //
+            // Esta prueba llama a `guardar` de verdad, así que si `archivo()`
+            // se rompiera escribiría en los ajustes de quien corre esto —el
+            // daño exacto que viene a impedir—. Pasó: comprobando que esta
+            // prueba se pusiera roja, rompí `archivo()` a propósito y la
+            // corrida se llevó puesta una configuración real antes de fallar.
+            // Una prueba que para avisar de un desastre lo provoca no sirve.
+            if (ajustes.dondeViven() !== aparte) {
+                throw new Error(`NO se escribe: los ajustes irían a ${ajustes.dondeViven()}`
+                    + ` en vez de a ${aparte}`);
+            }
             ajustes.guardar({ modo: 'semanal', curso: 'solo de prueba' });
             t.ok(fs.existsSync(aparte), 'escribió donde se le dijo');
             t.eq(JSON.parse(fs.readFileSync(aparte, 'utf8')).curso, 'solo de prueba');
