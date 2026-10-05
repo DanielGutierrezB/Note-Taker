@@ -45,9 +45,14 @@ function wav(desdeS, segundos) {
     return { archivo: '/tmp/audio.wav', ruta: '/tmp/audio.wav', desdeMs: T0 + desdeS * 1000, segundos };
 }
 
-/** Una toma con sus bordes ya ajustados, en segundos desde el cero. */
-function toma(id, desdeS, hastaS) {
-    return { id, desdeMs: T0 + desdeS * 1000, hastaMs: T0 + hastaS * 1000 };
+/**
+ * Una toma con sus bordes ya ajustados, en segundos desde el cero.
+ *
+ * `R` por defecto, que es la vista de pantalla: es con la que se miran casi
+ * todas estas pruebas, porque es la que tiene fondo Y recuadro.
+ */
+function toma(id, desdeS, hastaS, vista) {
+    return { id, vista: vista || 'R', desdeMs: T0 + desdeS * 1000, hastaMs: T0 + hastaS * 1000 };
 }
 
 module.exports = function (t) {
@@ -96,6 +101,58 @@ module.exports = function (t) {
         t.ok(/pantalla/.test(r.trozos[0].fondo.ruta), 'el fondo es la pantalla');
         t.ok(/camara/.test(r.trozos[0].encima.ruta), 'y la cámara va encima');
         t.eq(r.trozos[0].segundos, 10);
+    });
+
+    t.test('una toma de profesor es la cámara sola: ni pantalla de fondo ni recuadro', () => {
+        const r = exportar.repartir({
+            tomas: [toma(1, 10, 20, 'PV')],
+            pantalla: video('pantalla', 0, 60),
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.eq(r.avisos.length, 0, r.avisos.join(' · '));
+        t.ok(/camara/.test(r.trozos[0].fondo.ruta), 'el fondo es la cámara');
+        t.eq(r.trozos[0].encima, null, 'y no hay nada encima: no se superpone a sí misma');
+        t.eq(r.trozos[0].fondo.llenar, true, 'una cara llena el cuadro en vez de quedar con bandas');
+    });
+
+    t.test('la vista de cada toma manda, toma por toma', () => {
+        const r = exportar.repartir({
+            tomas: [toma(1, 10, 20, 'PV'), toma(2, 25, 30, 'R'), toma(3, 35, 40, 'S')],
+            pantalla: video('pantalla', 0, 60),
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.deep(r.trozos.map(x => path.basename(x.fondo.ruta)),
+            ['camara.mp4', 'pantalla.mp4', 'pantalla.mp4'],
+            'PV con la cámara; R y S con la pantalla, que es lo que dice el viewMap');
+        t.deep(r.trozos.map(x => Boolean(x.encima)), [false, true, true]);
+    });
+
+    t.test('`mandaLaCamara` es el mismo mapa que usa Premiere, y no una tabla nueva', () => {
+        t.eq(exportar.mandaLaCamara('PV'), true);
+        t.eq(exportar.mandaLaCamara('R'), false);
+        t.eq(exportar.mandaLaCamara('S'), false);
+        // Las vistas viejas se traducen al leer, así que una `SL` de un XML de
+        // antes tiene que caer con las slides y no inventar una fuente.
+        t.eq(exportar.mandaLaCamara('SL'), false, 'una vista renombrada sigue sabiendo de dónde sale');
+        t.eq(exportar.mandaLaCamara(''), false, 'y sin vista, la pantalla: es el caso del modo semanal');
+    });
+
+    t.test('una toma que pide la cámara y no la tiene sale con la pantalla, y se dice', () => {
+        const r = exportar.repartir({
+            tomas: [toma(1, 50, 55, 'PV')],
+            pantalla: video('pantalla', 0, 60),
+            camara: video('camara', 0, 30),        // se cortó antes
+            camaraConAudio: false,
+            wavs: [wav(0, 60)]
+        });
+        t.eq(r.trozos.length, 1, 'la toma entra igual');
+        t.ok(/pantalla/.test(r.trozos[0].fondo.ruta), 'con la otra fuente');
+        t.eq(r.trozos[0].fondo.llenar, false, 'y una pantalla no se recorta');
+        t.ok(r.avisos.some(a => /pedía tu cámara/.test(a)), r.avisos.join(' · '));
     });
 
     t.test('cada archivo se recorta en SU instante, no en el de la grabación', () => {
@@ -252,9 +309,45 @@ module.exports = function (t) {
         const filtro = g.args[g.args.indexOf('-filter_complex') + 1];
         t.ok(filtro.includes(`overlay=W-w-${exportar.MARGEN}:H-h-${exportar.MARGEN}`),
             `pegada al borde de abajo y de la derecha, con su margen: ${filtro.slice(0, 200)}`);
-        t.ok(filtro.includes(`scale=${exportar.CAMARA_ANCHO}:-2`), 'a un cuarto del ancho');
+        t.ok(filtro.includes(`scale=${exportar.CAMARA_LADO}:${exportar.CAMARA_LADO}`),
+            'cuadrada y chica');
+        t.ok(filtro.includes("crop='min(iw,ih)':'min(iw,ih)'"),
+            'recortada al cuadrado ANTES de achicar, que es lo que deja la cara');
         t.ok(filtro.includes(`scale=${exportar.ANCHO}:${exportar.ALTO}:force_original_aspect_ratio=decrease`),
             'y el fondo entero, sin deformar');
+    });
+
+    t.test('el recuadro de la cámara lleva las esquinas redondeadas', () => {
+        const r = exportar.repartir({
+            tomas: [toma(1, 10, 20), toma(2, 30, 40)],
+            pantalla: video('pantalla', 0, 60),
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        const g = exportar.grafo({ trozos: r.trozos, salida: '/tmp/x.mp4' });
+        const filtro = g.args[g.args.indexOf('-filter_complex') + 1];
+
+        // Una sola vez, repartida entre las tomas: `geq` cuesta por píxel y
+        // por fotograma, y calcularla en cada uno duplica lo que tarda el corte.
+        t.eq((filtro.match(/geq=/g) || []).length, 1, 'la máscara se calcula una vez');
+        t.ok(filtro.includes('loop=loop=-1:size=1:start=0'), 'y después se repite');
+        t.ok(filtro.includes('[mascara]split=2[m0][m1]'), 'una copia por toma');
+        t.ok(filtro.includes('[c0][m0]alphamerge=shortest=1[e0]'), 'cada toma recorta la suya');
+        t.ok(filtro.includes('[c1][m1]alphamerge=shortest=1[e1]'), 'sin pisarse');
+    });
+
+    t.test('sin cámara encima no se calcula ninguna máscara', () => {
+        const r = exportar.repartir({
+            tomas: [toma(1, 10, 20, 'PV')],
+            pantalla: video('pantalla', 0, 60),
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        const g = exportar.grafo({ trozos: r.trozos, salida: '/tmp/x.mp4' });
+        const filtro = g.args[g.args.indexOf('-filter_complex') + 1];
+        t.ok(!filtro.includes('geq='), `la cámara llena el cuadro, no hay esquina: ${filtro}`);
     });
 
     t.test('los trozos se pegan en orden y con su audio', () => {
@@ -270,6 +363,37 @@ module.exports = function (t) {
         t.ok(filtro.includes('[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]'), filtro.slice(-120));
         t.ok(filtro.includes('trim=start=10:end=20'), 'el primero');
         t.ok(filtro.includes('trim=start=30:end=40'), 'y el segundo');
+    });
+
+    t.test('el fondo que llena el cuadro se recorta, y el que no, se rellena', () => {
+        const con = exportar.grafo({
+            trozos: exportar.repartir({
+                tomas: [toma(1, 10, 20, 'PV')],
+                pantalla: video('pantalla', 0, 60),
+                camara: video('camara', 0, 60),
+                camaraConAudio: true,
+                wavs: [wav(0, 60)]
+            }).trozos,
+            salida: '/tmp/x.mp4'
+        });
+        const filtroCamara = con.args[con.args.indexOf('-filter_complex') + 1];
+        t.ok(/force_original_aspect_ratio=increase/.test(filtroCamara), 'escala de más');
+        t.ok(new RegExp(`crop=${exportar.ANCHO}:${exportar.ALTO}`).test(filtroCamara), 'y recorta');
+        t.ok(!/pad=/.test(filtroCamara), 'sin bandas negras: la cara llena el cuadro');
+
+        const sin = exportar.grafo({
+            trozos: exportar.repartir({
+                tomas: [toma(1, 10, 20, 'R')],
+                pantalla: video('pantalla', 0, 60),
+                camara: video('camara', 0, 60),
+                camaraConAudio: true,
+                wavs: [wav(0, 60)]
+            }).trozos,
+            salida: '/tmp/x.mp4'
+        });
+        const filtroPantalla = sin.args[sin.args.indexOf('-filter_complex') + 1];
+        t.ok(/force_original_aspect_ratio=decrease/.test(filtroPantalla), 'la pantalla entra entera');
+        t.ok(/pad=/.test(filtroPantalla), 'con lo que sobre en negro: recortarla se comería lo explicado');
     });
 
     t.test('sin tomas no hay grafo: lo dice en vez de armar un vídeo vacío', () => {
@@ -320,9 +444,11 @@ module.exports = function (t) {
             { cual: 'pantalla', archivo: pantalla, tipo: 'video/mp4', empezoMs: T0, cerradoMs: T0 + 12000 },
             { cual: 'camara', archivo: camara, tipo: 'video/mp4', empezoMs: T0, cerradoMs: T0 + 12000 }
         ];
+        // `R` es la vista de pantalla: pantalla de fondo con la cámara en la
+        // esquina, que es lo que estas pruebas miran en la imagen.
         estado.tomas = o.tomas || [
-            { id: 1, vista: 'PV', inMs: T0 + 1000, outMs: T0 + 3000, palabras: [], comentarios: [] },
-            { id: 2, vista: 'PV', inMs: T0 + 6000, outMs: T0 + 9000, palabras: [], comentarios: [] }
+            { id: 1, vista: 'R', inMs: T0 + 1000, outMs: T0 + 3000, palabras: [], comentarios: [] },
+            { id: 2, vista: 'R', inMs: T0 + 6000, outMs: T0 + 9000, palabras: [], comentarios: [] }
         ];
 
         const archivos = workspace.archivosDeSesion(dir, secuencia);
@@ -370,6 +496,103 @@ module.exports = function (t) {
         // la cámara no se comió la pantalla entera.
         const fuera = pixel(10, exportar.ALTO - 100);
         t.ok(fuera[0] > 100 && fuera[1] < 80, `fuera del recuadro, la pantalla: ${fuera}`);
+
+        // Y la punta del recuadro: dentro del cuadrado, pero fuera del
+        // redondeo. Si ahí hay cámara, las esquinas salieron en pico.
+        const punta = pixel(exportar.ANCHO - exportar.MARGEN - 8, exportar.ALTO - exportar.MARGEN - 8);
+        t.ok(punta[0] > 100 && punta[1] < 80, `la esquina está redondeada: ${punta}`);
+    });
+
+    t.test('una toma de profesor sale con la cámara llenando el cuadro, y sin recuadro', async () => {
+        const sitio = sembrar({
+            tomas: [{ id: 1, vista: 'PV', inMs: T0 + 1000, outMs: T0 + 4000, palabras: [], comentarios: [] }]
+        });
+        const r = await exportar.deSesion(sitio.json);
+        t.ok(r.ok, r.error || '');
+
+        // La cámara es verde y la pantalla roja: si la vista se respetó, no
+        // queda un solo píxel rojo en ninguna de las cuatro esquinas ni en el
+        // medio. Es la comprobación de que la cámara llenó el cuadro Y de que
+        // no se le superpuso nada.
+        const pixel = (x, y) => {
+            const r2 = spawnSync(paths.ffmpeg().path, ['-v', 'error', '-i', r.ruta,
+                '-vf', `crop=4:4:${x}:${y},scale=1:1`, '-frames:v', '1',
+                '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 24 });
+            return [r2.stdout[0], r2.stdout[1], r2.stdout[2]];
+        };
+        const sitios = {
+            'el medio': [exportar.ANCHO / 2, exportar.ALTO / 2],
+            'arriba a la izquierda': [8, 8],
+            'abajo a la izquierda': [8, exportar.ALTO - 12],
+            'donde iría el recuadro': [exportar.ANCHO - exportar.MARGEN - 100, exportar.ALTO - exportar.MARGEN - 60]
+        };
+        for (const [donde, [x, y]] of Object.entries(sitios)) {
+            const p = pixel(Math.round(x), Math.round(y));
+            t.ok(p[1] > 100 && p[0] < 80, `${donde}: la cámara (verde), no la pantalla · ${p}`);
+        }
+    });
+
+    t.test('un vídeo de cero bytes no mata la exportación: sale con el otro y se dice', async () => {
+        // Es lo que pasó la primera vez que esto se usó de verdad: el
+        // codificador rechazó la pantalla Retina, el archivo quedó en cero, y
+        // ffmpeg se negó a abrirlo tirando la exportación entera abajo. El
+        // vídeo tenía que salir igual, con la cámara.
+        const sitio = sembrar();
+        const vacio = path.join(workspace.videoDir(sitio.dir), `${sitio.secuencia}-pantalla.mp4`);
+        fs.writeFileSync(vacio, '');
+
+        const r = await exportar.deSesion(sitio.json);
+        t.ok(r.ok, r.error || '');
+        t.eq(r.tomas, 2, 'las dos tomas entran igual');
+        t.ok(r.avisos.some(a => /No se grabó nada de la pantalla/.test(a)), r.avisos.join(' · '));
+        t.ok(fs.existsSync(vacio), 'y el archivo vacío se queda donde estaba, sin borrarse');
+    });
+
+    t.test('el montaje del editor: cada toma, en qué segundo de qué archivo', async () => {
+        const sitio = sembrar();
+        const r = exportar.montajeDeSesion(sitio.json);
+        t.ok(r.ok, r.error || '');
+        t.eq(r.tomas.length, 2);
+        t.deep(r.tomas.map(x => x.id), [1, 2], 'en orden');
+        t.eq(r.tomas[0].vista, 'R', 'con la vista que tiene hoy, para poder cambiarla');
+        t.eq(r.tomas[0].descartada, false);
+        t.near(r.tomas[0].segundos, 2, 0.01, 'y su duración ya ajustada');
+        t.eq(r.tomas[0].fondo, 'pantalla', 'la vista R se ve con la pantalla');
+        t.ok(r.archivos.camara && r.archivos.pantalla, 'los dos archivos, una sola vez');
+        for (const toma of r.tomas) {
+            t.ok(toma.camaraDesde >= 0, `la toma ${toma.id} sabe dónde cae en la cámara`);
+            t.ok(toma.pantallaDesde >= 0, 'y en la pantalla');
+        }
+        t.ok(r.recuadro.lado > 0 && r.recuadro.lado < 1, 'y el recuadro, en partes del ancho');
+    });
+
+    t.test('el montaje y el corte eligen el MISMO fondo en cada toma', async () => {
+        // Es lo único que de verdad importa de esta función: si el preview
+        // eligiera distinto que ffmpeg, lo que se mira no sería lo que sale.
+        const sitio = sembrar({
+            tomas: [
+                { id: 1, vista: 'PV', inMs: T0 + 1000, outMs: T0 + 3000, palabras: [], comentarios: [] },
+                { id: 2, vista: 'R', inMs: T0 + 6000, outMs: T0 + 9000, palabras: [], comentarios: [] }
+            ]
+        });
+        const m = exportar.montajeDeSesion(sitio.json);
+        t.deep(m.tomas.map(x => x.fondo), ['camara', 'pantalla']);
+        t.eq(m.tomas[0].encima, undefined, 'la toma de cámara no lleva recuadro');
+        t.ok(m.tomas[1].camaraDesde != null, 'y la de pantalla sí sabe dónde está la cara');
+    });
+
+    t.test('una toma descartada también viene en el montaje: hay que poder volver a meterla', async () => {
+        const sitio = sembrar({
+            tomas: [
+                { id: 1, vista: 'R', inMs: T0 + 1000, outMs: T0 + 3000, palabras: [], comentarios: [],
+                  descartada: true },
+                { id: 2, vista: 'R', inMs: T0 + 6000, outMs: T0 + 9000, palabras: [], comentarios: [] }
+            ]
+        });
+        const r = exportar.montajeDeSesion(sitio.json);
+        t.eq(r.tomas.length, 2, 'las dos están');
+        t.eq(r.tomas[0].descartada, true, 'marcada');
+        t.ok(r.tomas[0].pantallaDesde != null, 'y con dónde mirarla');
     });
 
     t.test('sin ninguna toma no exporta nada, y los brutos se quedan', async () => {

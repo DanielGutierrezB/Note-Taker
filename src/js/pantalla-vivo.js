@@ -33,6 +33,7 @@ import * as estados from './estados.js';
 import * as fuente from './grabar/fuente.js';
 import { mostrador } from './grabar/turnos.js';
 import * as texto from './grabar/texto-toma.js';
+import * as fichas from './grabar/lista-tomas.js';
 import { PALABRA_Y_APLAUSO_MS } from './grabar/senales.js';
 import { estiloDeVista, coloresDeVista } from './colores.js';
 import * as fotos from './fotos.js';
@@ -827,48 +828,15 @@ function vistas(toma) {
 }
 
 function filaToma(t, fps) {
-    const est = estados.deToma(t, estado);
-    const abierta = vista.abierta === `t${t.id}`;
-    const dur = t.outMs != null ? (t.outMs - t.inMs) / 1000 : null;
-    return `<div class="bloque-toma con-vista ${abierta ? 'es-abierta' : ''}"
-        data-estado="${est.clave}" style="${estiloDeVista(estado.vistas, t.vista)}">
-      <div class="fila guarda ${vista.elegida === t.id ? 'es-elegida' : ''}"
-           role="button" tabindex="0" aria-expanded="${abierta}"
-           data-estado="${est.clave}" data-toma="${t.id}" data-hace="plegar"
-           title="${esc(dicePlegar(abierta, est))}">
-        <span class="chevron">${icono('chevron')}</span>
-        <span class="etiqueta-vista">${esc(t.vista)}</span>
-        <span class="fila-nombre">Toma ${t.id}</span>
-        <time class="fila-dato tc">${fmt.timecodeDe(t.inMs, estado.ceroMs, fps)}</time>
-        ${dur != null ? `<span class="fila-dato">${fmt.duracion(dur)}</span>` : ''}
-        <span class="fila-nota">${esc(t.comentario || primeras(t))}</span>
-        <span class="crece"></span>
-        ${t.repiteA ? `<span class="pastilla" data-estado="por confirmar"
-          title="Empieza diciendo casi lo mismo que la toma ${t.repiteA}: puede ser un
-          intento repetido">repite la ${t.repiteA}</span>` : ''}
-        <span class="pastilla" data-estado="${est.clave}">${esc(est.palabra)}</span>
-      </div>
-      ${abierta ? cuerpoToma(t) : ''}
-    </div>`;
-}
-
-function primeras(t) {
-    return (t.palabras || []).slice(0, 10).map(w => w.texto).join(' ');
-}
-
-/**
- * Qué dice el hover de la fila de una toma.
- *
- * La fila entera es el botón que la abre, así que lo primero es qué se va a
- * ver al abrirla. Si la toma además tiene algo que avisar, el aviso va debajo:
- * la pastilla del final dice la palabra —«sin releer», «leída en chico»— y
- * acá está el porqué, que es lo que no cabe en la pastilla.
- */
-function dicePlegar(abierta, est) {
-    const gesto = abierta
-        ? 'Plegar la toma'
-        : 'Abrir la toma: su nota, su texto con el IN y el OUT para mover, y su vista';
-    return est.porque ? `${gesto}\n${est.porque}` : gesto;
+    return fichas.ficha(t, {
+        sesion: estado,
+        abierta: vista.abierta === `t${t.id}`,
+        elegida: vista.elegida === t.id,
+        vistas: estado.vistas,
+        tc: toma => fmt.timecodeDe(toma.inMs, estado.ceroMs, fps),
+        alAbrir: 'su nota, su texto con el IN y el OUT para mover, y su vista',
+        cuerpo: cuerpoToma
+    });
 }
 
 /**
@@ -908,11 +876,9 @@ function cuerpoToma(t) {
     // La abierta se edita arriba, en «Ahora»: dos textos movibles de la misma
     // toma serían dos líneas de IN que se pisan.
     if (t.outMs == null) {
-        return `<div class="cuerpo-toma">
-            <p class="v3">Está abierta: su texto, su nota y sus bordes están arriba, en «Ahora».</p>
-        </div>`;
+        return '<p class="v3">Está abierta: su texto, su nota y sus bordes están arriba, en «Ahora».</p>';
     }
-    return `<div class="cuerpo-toma">
+    return `
         <input type="text" data-campo="nota" data-toma="${t.id}"
                value="${esc(t.comentario || '')}" placeholder="Nota de toda la toma — va en el marcador del XML">
         <div data-texto="cerrada" data-toma="${t.id}"></div>
@@ -930,8 +896,7 @@ function cuerpoToma(t) {
                  ${icono('abrirToma')} Reabrir</button>`
             : ''}
           ${estadosDe(t)}
-        </div>
-    </div>`;
+        </div>`;
 }
 
 /**

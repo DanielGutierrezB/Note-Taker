@@ -350,6 +350,7 @@ async function buscarSenales() {
     s.buscando = true;
     let listo;
     s.pasada = new Promise(r => { listo = r; });
+    const empezoLaPasada = Date.now();
     try {
         // Primero los golpes que quedaron por leer: una claqueta es lo que ancla
         // la sincronía en post y una toma puede esperar tres segundos más.
@@ -398,8 +399,36 @@ async function buscarSenales() {
         // larga no la arregla (ver `VENTANA_MAX_MS`).
         s.escuchadoHastaMs = Math.max(s.escuchadoHastaMs, hasta - COLA_MS);
         s.buscando = false;
+        anotarSiSeAtraso(s, Date.now() - empezoLaPasada, hasta - desde);
         listo();
     }
+}
+
+/**
+ * Cuánto puede tardar una pasada antes de que valga la pena anotarlo.
+ *
+ * Una pasada tarda medio segundo con el modelo ya cargado y el ciclo dispara
+ * cada uno, así que a partir de dos ya se están salteando vueltas: lo que se
+ * dice tarda más en aparecer y una señal puede quedarse una vuelta esperando.
+ * Es lo que hay que poder mirar al día siguiente cuando alguien dice que tuvo
+ * que decir «3, 2, 1» dos veces, y hasta ahora no quedaba registrado en ningún
+ * sitio.
+ *
+ * Se anota de a una cada diez segundos: con el ciclo a un segundo, una GPU
+ * ocupada llenaría el diario con la misma noticia.
+ */
+const PASADA_LENTA_MS = 2 * CICLO_MS;
+const ENTRE_AVISOS_DE_LENTA_MS = 10000;
+
+function anotarSiSeAtraso(s, tardo, ventanaMs) {
+    if (tardo < PASADA_LENTA_MS) return;
+    if (s.ultimaLentaMs && Date.now() - s.ultimaLentaMs < ENTRE_AVISOS_DE_LENTA_MS) return;
+    s.ultimaLentaMs = Date.now();
+    registro.anotar('main', 'senal.pasada-lenta', {
+        tardoMs: tardo,
+        ventanaSec: Math.round(ventanaMs / 100) / 10,
+        ciclo: CICLO_MS
+    });
 }
 
 /**

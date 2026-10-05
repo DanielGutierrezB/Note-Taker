@@ -261,6 +261,108 @@ module.exports = function (t) {
         t.eq(e.tomas.length, 1, 'y ahí sí, una sola');
     });
 
+    t.group('notas-vivo · el conteo en inglés');
+
+    t.test('"three, two, one" abre una toma', () => {
+        // Con el idioma en automático, la pasada que oyó medio conteo llegó
+        // como «Okay. Three.»: el modelo escribe el número con letras cuando
+        // está solo, y sin esto la toma no abría.
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'three,'], [400, 'two,'], [800, 'one.']]));
+        t.eq(e.tomas.length, 1);
+    });
+
+    t.test('"Okay" delante del conteo es parte de la señal', () => {
+        // Medido con el residente: en inglés lo escribe «Okay» y no «Ok».
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'Okay'], [300, '3,'], [700, '2,'], [1100, '1.']]));
+        t.eq(e.tomas.length, 1, 'abrió');
+        t.ok(/Okay/.test(e.tomas[0].cuenta || ''), 'y el «Okay» quedó en la cuenta');
+    });
+
+    t.test('"one" suelto no abre nada', () => {
+        // «one of the problems» es el «uno de los problemas» del otro idioma:
+        // un número solo es habla, y la cuenta tiene que ser de dos o más.
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'one'], [400, 'of'], [800, 'the'], [1200, 'problems']]));
+        t.eq(e.tomas.length, 0);
+    });
+
+    t.test('"Pause" cierra la toma igual que "Pausa"', () => {
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'three,'], [400, 'two,'], [800, 'one.'], [1600, 'Hello']]));
+        vivo.aplicarSenales(e, palabras([[5000, 'Pause.']]),
+            { firmeHastaMs: T0 + 9400, finMs: T0 + 9900 });
+        t.ok(e.tomas[0].outMs != null, 'cerró');
+    });
+
+    t.test('y "pausing" o "pauses" no son la señal', () => {
+        // La expresión pide la palabra entera: con `paus[ae]` suelto, cualquier
+        // cosa que empiece igual cerraría la toma a mitad de una explicación.
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, '3,'], [400, '2,'], [800, '1.'], [1600, 'Hello']]));
+        vivo.aplicarSenales(e, palabras([[5000, 'pausing']]),
+            { firmeHastaMs: T0 + 9400, finMs: T0 + 9900 });
+        t.eq(e.tomas[0].outMs, null, 'sigue abierta');
+    });
+
+    t.group('notas-vivo · la última palabra, estirada por el silencio');
+
+    t.test('el "1" con el final estirado hasta el borde abre igual', () => {
+        // Medido en la primera grabación de verdad del vídeo semanal: cuando
+        // detrás hay silencio —y detrás de un «3, 2, 1» siempre lo hay, el que
+        // uno deja esperando a que la toma abra— Whisper le estira el final a
+        // la última palabra hasta el final del audio que oyó. El «1...» llegó
+        // cinco pasadas seguidas como 9.64-10.23, -11.26, -12.28, -13.30, con
+        // el final corriéndose detrás de la ventana, y la toma no abrió nunca:
+        // había que decir el conteo otra vez y seguir hablando.
+        const e = nuevo();
+        const dichas = palabras([[0, '3,'], [400, '2,'], [800, '1...']]);
+        dichas[2].hasta = T0 + 2400;            // estirada hasta el final de la ventana
+        vivo.aplicarSenales(e, dichas, { firmeHastaMs: T0 + 1900, finMs: T0 + 2400 });
+        t.eq(e.tomas.length, 1, 'abrió con el «1» empezado antes del límite');
+    });
+
+    t.test('pero una señal que EMPIEZA en la cola sigue esperando', () => {
+        const e = nuevo();
+        const dichas = palabras([[0, 'bueno'], [1400, '3,'], [1800, '2,'], [2200, '1.']]);
+        dichas[3].hasta = T0 + 2400;
+        vivo.aplicarSenales(e, dichas, { firmeHastaMs: T0 + 1900, finMs: T0 + 2400 });
+        t.eq(e.tomas.length, 0, 'el «1» empezó después del límite: a la pasada siguiente');
+    });
+
+    t.test('una palabra de la clase estirada SÍ espera, que puede venir cortada', () => {
+        // La regla de las señales no vale para las palabras: «funcion» a mitad
+        // de «funcionando» también empieza a tiempo, y guardarla sería guardarla
+        // mal.
+        const e = nuevo();
+        const dichas = palabras([[0, 'cómo'], [400, 'está'], [1800, 'funcion']]);
+        dichas[2].hasta = T0 + 2400;
+        vivo.aplicarSenales(e, dichas, { firmeHastaMs: T0 + 1900, finMs: T0 + 2400 });
+        t.deep(e.sueltas.map(w => w.texto), ['cómo', 'está']);
+    });
+
+    t.test('"Pausa" y quedarse callado cierra la toma', () => {
+        // El mismo estirón, del otro lado: el silencio que tenía que cerrar la
+        // toma se lo comía la palabra «pausa», el hueco daba una centésima y la
+        // toma seguía abierta. Ahora el hueco se mide desde donde la palabra
+        // EMPIEZA, con o sin palabra detrás.
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, '3,'], [400, '2,'], [800, '1.'], [1600, 'Hola']]));
+        const dichas = palabras([[5000, 'pausa']]);
+        dichas[0].hasta = T0 + 9900;            // estirada por los cinco segundos de silencio
+        vivo.aplicarSenales(e, dichas, { firmeHastaMs: T0 + 9400, finMs: T0 + 9900 });
+        t.ok(e.tomas[0].outMs != null, 'cerró');
+    });
+
+    t.test('y "pausa en el flujo" sigue sin cerrarla', () => {
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, '3,'], [400, '2,'], [800, '1.'], [1600, 'Hola']]));
+        vivo.aplicarSenales(e, palabras([[5000, 'pausa'], [5300, 'en'], [5600, 'el']]),
+            { firmeHastaMs: T0 + 5300, finMs: T0 + 5900 });
+        t.eq(e.tomas[0].outMs, null, 'sigue abierta');
+    });
+
     t.group('notas-vivo · abrir a mano');
 
     t.test('abre una toma donde se apretó, con el profesor callado', () => {

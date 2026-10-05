@@ -268,15 +268,19 @@
           calculan todos los marcadores del XML, así que cambiarlo a mitad de una
           clase movería los que ya se escribieron: se aplica a la sesión siguiente.</span>
       </label>
+      <!-- El único campo de abajo que vale en los dos modos, y el único que
+           guarda en dos sitios: el idioma de una clase y el de los vídeos de la
+           semana son ajustes distintos, con fábricas distintas, y se muestra el
+           del modo en que se está. -->
       <label class="campo">
-        <span class="rotulo">Idioma de la clase</span>
+        <span class="rotulo" id="aj-idioma-rotulo">Idioma de la clase</span>
         <select id="aj-idioma">
+          <option value="auto">Automático</option>
           <option value="es">Español</option>
           <option value="en">Inglés</option>
           <option value="pt">Portugués</option>
         </select>
-        <span class="v3">Se le pasa fijo a Whisper en vez de dejar que lo detecte:
-          detectar cuesta una pasada y el idioma no cambia a la mitad.</span>
+        <span class="v3" id="aj-idioma-dice"></span>
       </label>
       <label class="campo">
         <span class="rotulo">Nombre del curso</span>

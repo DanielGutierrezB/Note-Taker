@@ -92,7 +92,10 @@ contextBridge.exposeInMainWorld('nt', {
     semanalAbrir: pedido => ipcRenderer.invoke('semanal-abrir', pedido),
     semanalTrozo: (cual, trozo) => ipcRenderer.send('semanal-trozo', cual, trozo),
     semanalCerrar: () => ipcRenderer.invoke('semanal-cerrar'),
-    semanalExportar: json => ipcRenderer.invoke('semanal-exportar', json),
+    // Las fotos vuelven en `data:`, que es lo único que la ventana puede
+    // dibujar con su CSP: igual que las del OUT.
+    semanalMontaje: json => ipcRenderer.invoke('semanal-montaje', json),
+    semanalExportar: (json, como) => ipcRenderer.invoke('semanal-exportar', json, como),
     onSemanalProgreso: callback => {
         ipcRenderer.on('semanal-progreso', (_event, payload) => callback(payload));
     },

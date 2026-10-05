@@ -211,11 +211,13 @@ ipcMain.handle('ajustes-leer', () => ajustes.leer());
  * Cada pantalla manda solo lo suyo: Ajustes el fps y el idioma, Preparar la
  * carpeta y el dispositivo. Si una mandara todo lo que cargó al abrirse,
  * pisaría lo que la otra guardó mientras estaba abierta.
+ *
+ * El parche entra un nivel adentro (ver `ajustes.conParche`).
  */
 ipcMain.handle('ajustes-guardar', (event, datos) => {
     const parche = datos || {};
     try {
-        const guardados = ajustes.guardar({ ...ajustes.leer(), ...parche });
+        const guardados = ajustes.guardar(ajustes.conParche(ajustes.leer(), parche));
         anotar('ajustes.guardados', { que: Object.keys(parche), fps: guardados.fps });
         return { ok: true, ajustes: guardados };
     } catch (err) {

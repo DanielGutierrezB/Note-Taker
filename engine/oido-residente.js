@@ -89,6 +89,10 @@ function arrancar(opciones) {
                 '-m', modelo.path,
                 '--host', '127.0.0.1',
                 '--port', String(este.puerto),
+                // El de arranque es solo el de por defecto: cada pedido manda
+                // su `language`, y es ese el que vale (medido: con el servidor
+                // levantado en `es`, un pedido en `auto` detectó el inglés). Por
+                // eso cambiar de idioma —o de modo— no obliga a relevantarlo.
                 '-l', este.idioma,
                 // Sin arrastrar el texto de una pasada a la siguiente, por lo
                 // mismo que en `transcribe.runWhisper`: el prompt trabado repite.

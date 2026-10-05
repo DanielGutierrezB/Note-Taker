@@ -20,7 +20,42 @@ module.exports = function (t) {
         t.eq(a.carpeta, null);
         t.deep(a.carpetas, []);
         t.eq(a.modo, 'clase', 'la app abre tomando notas, como siempre');
-        t.deep(a.semanal, { carpeta: null });
+        t.deep(a.semanal, { carpeta: null, idioma: 'auto' },
+            'el vídeo de la semana detecta el idioma; la clase lo lleva puesto');
+    });
+
+    t.test('«auto» es un idioma válido, y cualquier otra cosa no', () => {
+        // Va a la línea de comandos de `whisper-server` tal cual, y con un `-l`
+        // que no entiende el servidor no arranca: sin servidor no hay ni
+        // «3, 2, 1» ni transcript.
+        t.eq(ajustes.sanear({ idioma: 'auto' }).idioma, 'auto');
+        t.eq(ajustes.sanear({ idioma: 'en' }).idioma, 'en');
+        t.eq(ajustes.sanear({ idioma: 'automático' }).idioma, 'es', 'se cae a lo de fábrica');
+        t.eq(ajustes.sanear({ idioma: '--help' }).idioma, 'es');
+        t.eq(ajustes.sanear({ semanal: { idioma: 'xx-larga' } }).semanal.idioma, 'auto');
+    });
+
+    t.group('ajustes · el parche de cada pantalla');
+
+    t.test('guardar la carpeta del semanal no se lleva su idioma', () => {
+        // Es por esto que el parche entra un nivel: quien guarda la carpeta
+        // manda `{semanal:{carpeta}}`, y pegado por arriba eso borraba el
+        // idioma de al lado.
+        const previos = ajustes.sanear({ semanal: { carpeta: '/tmp/x', idioma: 'en' } });
+        const despues = ajustes.sanear(
+            ajustes.conParche(previos, { semanal: { carpeta: '/tmp/otra' } }));
+        t.eq(despues.semanal.carpeta, '/tmp/otra');
+        t.eq(despues.semanal.idioma, 'en', 'el idioma sigue donde estaba');
+    });
+
+    t.test('y un nivel y nada más: lo que se vacía se vacía', () => {
+        const previos = ajustes.sanear({ carpeta: '/tmp/x', camara: 'OBSBOT', fps: 25 });
+        const despues = ajustes.conParche(previos, { camara: null, fps: 30 });
+        t.eq(despues.camara, null, 'un null reemplaza, no se fusiona');
+        t.eq(despues.fps, 30);
+        t.eq(despues.carpeta, '/tmp/x', 'y lo que no se mandó sigue igual');
+        t.deep(ajustes.conParche(previos, { carpetas: ['/a'] }).carpetas, ['/a'],
+            'un array tampoco se fusiona');
     });
 
     t.test('el modo se guarda, y uno inventado abre la app como siempre', () => {

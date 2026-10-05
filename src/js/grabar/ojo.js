@@ -80,17 +80,31 @@ const estado = {
  * quedaría con tres «Cámara» iguales.
  */
 export async function camaras() {
-    try {
-        const previo = await navigator.mediaDevices.getUserMedia({ video: true });
-        for (const track of previo.getTracks()) track.stop();
-    } catch (e) {
-        return { ok: false, error: 'No se pudo acceder a la cámara: ' + e.message, lista: [] };
+    const mirar = async () => (await navigator.mediaDevices.enumerateDevices())
+        .filter(d => d.kind === 'videoinput');
+
+    // **Primero se mira, y solo si hace falta se pide.** Abrir `video: true`
+    // para leer los nombres tiene un precio que no se ve: deja el dispositivo
+    // negociado a 640×480, y el pedido de verdad que viene detrás se encuentra
+    // la cámara ya abierta a ese tamaño y lo hereda. Medido en la app: una
+    // OBSBOT que da 2560×1440 entraba a 640×480, y una toma de «Yo» —la cámara
+    // llenando 1920×1080— salía estirada tres veces. Con el permiso ya dado,
+    // que es lo normal después de la primera vez, `enumerateDevices` trae los
+    // nombres sin abrir nada.
+    let lista = await mirar();
+    if (!lista.length || lista.every(d => !d.label)) {
+        try {
+            const previo = await navigator.mediaDevices.getUserMedia({ video: true });
+            for (const track of previo.getTracks()) track.stop();
+        } catch (e) {
+            return { ok: false, error: 'No se pudo acceder a la cámara: ' + e.message, lista: [] };
+        }
+        lista = await mirar();
     }
-    const todos = await navigator.mediaDevices.enumerateDevices();
-    const lista = todos
-        .filter(d => d.kind === 'videoinput')
-        .map(d => ({ id: d.deviceId, nombre: d.label || 'Cámara sin nombre' }));
-    return { ok: true, lista };
+    return {
+        ok: true,
+        lista: lista.map(d => ({ id: d.deviceId, nombre: d.label || 'Cámara sin nombre' }))
+    };
 }
 
 /**

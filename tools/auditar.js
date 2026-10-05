@@ -49,7 +49,7 @@ const ESCENARIOS = arg('escenario', null)
         'notas-de-antes', 'foto', 'prproj', 'prproj-lleno', 'prproj-listo', 'diagnostico',
         // El modo semanal: lo miran personas que no son el editor y que no van a
         // aprender esta interfaz, así que la vara es la misma o más estricta.
-        'semanal', 'semanal-grabando', 'semanal-hecho'];
+        'semanal', 'semanal-grabando', 'semanal-ficha', 'semanal-revisar', 'semanal-revisar-fuera', 'semanal-hecho'];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
 
 /**
@@ -238,7 +238,10 @@ async function main() {
                 await pagina.setViewport({ width: ancho, height: ALTO });
                 await pagina.goto(`${sitio.url}?e=${escenario}`, { waitUntil: 'networkidle0' });
                 // La maqueta aplica el escenario después de que la app dibuja.
-                await new Promise(r => setTimeout(r, 700));
+                // Esperar a que el escenario esté puesto, y no un rato fijo: los
+                // del modo semanal tardan segundos en armarse.
+                await pagina.evaluate('window.maquetaPuesta').catch(() => {});
+                await new Promise(r => setTimeout(r, 300));
 
                 const m = await medir(pagina);
                 await pagina.close();

@@ -1086,6 +1086,29 @@ b {
   filter: brightness(1.08);
 }
 
+/* La tecla escrita dentro del botón.
+   Sobre el relleno del color, el recuadro de `kbd` —fondo de superficie y
+   hairline— se pierde, así que se tiñe con la misma tinta que ya se calculó
+   para ese color (`tintaSobre` en `colores.js`). */
+.btn-vista kbd {
+  margin-right: var(--sp-2);
+}
+
+/* El grupo de los dos botones de vista del modo semanal.
+   Es el mismo grupo pegado que `.estados-toma`, pero sin su estado elegido: ese
+   pinta de gris con `[aria-pressed=true]` y, por especificidad, taparía
+   justamente el color del marcador que se quiere mostrar. */
+.semanal-vistas {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.btn-vista.es-elegida kbd {
+  background: color-mix(in srgb, var(--vista-tinta) 16%, transparent);
+  border-color: color-mix(in srgb, var(--vista-tinta) 38%, transparent);
+  color: var(--vista-tinta);
+}
+
 
 /* ──────────────────────────────────────────────────────────────────────────
    7. CAMPOS
@@ -2114,4 +2137,263 @@ kbd {
 .semanal-pantalla-previa {
   width: 168px;
   height: 94px;
+}
+
+/* La revisión: una fila por toma, y las dos fotos como selector.
+
+   Las fotos son el gesto, no un adorno: se elige qué se ve apretando lo que se
+   quiere ver. De ahí que sean botones de verdad —con foco, con `aria-pressed`
+   y con su borde de elegido— y no imágenes con un `onclick` encima. */
+
+.semanal-tomas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin-top: var(--sp-4);
+}
+
+.semanal-toma {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+/* Una toma que se dejó fuera se distingue por el borde y por su pastilla.
+
+   NO se apaga con `opacity` sobre la fila entera, que es lo primero que se
+   intentó: medio canal de opacidad le quita la mitad del contraste a cada
+   texto y los dejaba todos por debajo de AA (2.4:1 medido por
+   `tools/auditar.js`). Hay que poder leer una toma descartada: es el requisito
+   para decidir volver a meterla. */
+.semanal-toma[data-fuera="true"] {
+  border-style: dashed;
+}
+
+/* La casilla de «Quitar silencios», que es la única de la app.
+
+   Va con la casilla del sistema y no con una dibujada: el estado marcado /
+   sin marcar tiene que leerse de un vistazo justo antes de apretar el botón
+   que corta, y una casilla nativa es la que nadie tiene que aprender. El
+   tamaño es el mínimo clicable, que es lo que mide la auditoría. */
+.semanal-casilla {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  min-height: 24px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+/* `flex: none` porque si no, a 900 px la fila la encoge y la casilla sale de
+   13 px de ancho por 16 de alto: un rectángulo que no se lee.
+
+   24 y no 16 porque es el mínimo que se puede apretar (SC 2.5.8, `--target-min`),
+   que es el mismo alto que las demás filas de la app (`--row-xs`). Escalarla
+   con `transform` para dejarla dibujada más chica no sirve: lo que se mide es
+   el rectángulo, y la transformación se lo lleva puesto. */
+.semanal-casilla input {
+  flex: none;
+  width: var(--target-min);
+  height: var(--target-min);
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* La escena: cómo va a quedar la toma, montada en vivo.
+
+   Los números NO son de diseño, son los del exportador pasados a tanto por
+   ciento, y por eso están todos escritos como la división de la que salen:
+   `CAMARA_LADO`/`ANCHO` = 360/1920, `CAMARA_REDONDEO`/`CAMARA_LADO` = 45/360 y
+   `MARGEN` sobre cada lado, que son 48 de 1920 a la derecha y 48 de 1080
+   abajo. Si se separan de los de
+   `engine/exportar-video.js`, la vista previa estaría mintiendo sobre dónde va
+   a caer la cara; lo cuida una prueba. */
+
+.semanal-escena {
+  position: relative;
+  width: 320px;
+  aspect-ratio: 16 / 9;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: #000;
+}
+
+/* La pantalla entra entera, con lo que sobre en negro: es el `pad` del
+   exportador, que no recorta nunca lo que se está explicando. */
+.semanal-escena-fondo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* La cámara sola llena el cuadro recortando: es el `crop` del exportador. */
+.semanal-escena-llena {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Y el recuadro: un cuadrado con las esquinas redondeadas, abajo a la derecha.
+   `object-fit: cover` sobre un cuadrado es el `crop` centrado del exportador, y
+   el radio es el mismo octavo del lado. */
+.semanal-escena-esquina {
+  position: absolute;
+  display: block;
+  width: 18.75%;               /* 360 / 1920 */
+  aspect-ratio: 1 / 1;
+  right: 2.5%;                 /* 48 / 1920 */
+  bottom: 4.444%;              /* 48 / 1080 */
+  height: auto;
+  object-fit: cover;
+  border-radius: 12.5%;        /* 45 / 360 */
+}
+
+/* ─── El editor del corte final ───────────────────────────────────────── */
+
+/* El montaje: dos vídeos apilados en un 16:9 clavado.
+
+   16:9 y no lo que midan los archivos, porque eso es lo que va a medir el
+   exportado: la cámara entra a 4:3 o a 16:9 según la que sea, y la pantalla a
+   lo que mida el monitor. Todo se encuadra adentro de este cuadro igual que lo
+   hace ffmpeg, así que lo que se ve acá es lo que va a salir.
+
+   El alto tiene techo y el ancho sale de él, como el visor del final: a lo
+   ancho de la tarjeta, un 16:9 empuja la línea de tomas y los botones fuera de
+   la pantalla, que es justo lo que hay que tener delante mientras se mira. */
+.montaje {
+  position: relative;
+  width: min(100%, calc(46vh * 16 / 9));
+  margin-inline: auto;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.montaje-pan,
+.montaje-cam {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* La pantalla entra entera, con negro si hace falta: recortarla se come justo
+   lo que se está explicando. Una cara sí se recorta, que le sobra pared por
+   los lados. Es la misma regla que el `llenar` de `exportar-video.js`. */
+.montaje-pan { object-fit: contain; }
+.montaje-cam { object-fit: cover; }
+
+/* Y de recuadro, el cuadrado de la esquina. El lado, el margen y el redondeo
+   los manda el motor en partes del ancho (`recuadro` en `montajeDeSesion`),
+   así que están escritos en un sitio y no en dos. */
+.montaje-cam.es-recuadro {
+  inset: auto;
+  height: auto;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 45%);
+}
+
+.montaje-barra {
+  margin-top: var(--sp-3);
+  align-items: center;
+}
+
+/* El reloj del montaje, un punto por encima del resto: es lo que se mira de
+   reojo mientras pasa el vídeo. */
+.montaje-barra .tc {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+/* La línea de tomas: el vídeo entero de un vistazo.
+
+   Cada toma mide lo que dura, así que la línea es el vídeo a escala y se ve de
+   entrada si una toma se fue de largo. Y es el sitio donde se elige: apretar un
+   trozo pone esa toma abajo. */
+.linea-tomas {
+  display: flex;
+  gap: 2px;
+  margin-top: var(--sp-3);
+  height: 44px;
+}
+
+.linea-toma {
+  position: relative;
+  min-width: var(--target-min);
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: calc(var(--radius) - 3px);
+  /* Cada toma con el color de su vista, que es el del marcador de ese tipo de
+     toma en Premiere (`--vista`, puesta por `estiloDeVista`): la línea dice de
+     qué es cada trozo sin ninguna leyenda. Tiñe, no pinta: a plena pasta el
+     número de adentro no se lee. */
+  background: color-mix(in srgb, var(--vista, var(--bg-surface)) 34%, var(--bg-surface));
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.linea-toma:hover { border-color: var(--border-field); }
+
+.linea-toma[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+/* Las dejadas fuera: rayadas y apagadas. Siguen ahí para poder recuperarlas,
+   y «Ocultar desactivadas» las saca cuando ya se decidió. */
+.linea-toma[data-fuera="si"] {
+  background:
+    repeating-linear-gradient(135deg,
+      var(--bg-surface) 0 5px,
+      color-mix(in srgb, var(--vista, var(--bg-surface)) 20%, var(--bg-surface)) 5px 10px);
+  opacity: 0.55;
+}
+
+/* El número de la toma. Va en la tinta encendida y no en la apagada: encima
+   del tinte de la vista, el gris de `--text-muted` da 3,3:1 y hay que poder
+   leer de un vistazo en qué toma se está parado. */
+.linea-num {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* La aguja: dónde va el reproductor dentro de la toma que suena. Se mueve
+   escribiendo `left` y nada más, sin repintar nada. */
+.linea-aguja {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--text-primary);
+  pointer-events: none;
+}
+
+/* El vídeo ya cortado, para verlo antes de subirlo.
+   16:9 clavado: es la forma del archivo, y dejar que el vídeo elija su alto
+   haría saltar la tarjeta cuando carga los metadatos.
+   El alto tiene techo y el ancho sale de él: a lo ancho de la tarjeta, un 16:9
+   empuja los botones —y «Ajustar»— fuera de la pantalla, y lo que hay que poder
+   hacer después de mirarlo es justamente apretarlos. */
+.semanal-visor {
+  display: block;
+  width: min(100%, calc(42vh * 16 / 9));
+  margin-inline: auto;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
 }

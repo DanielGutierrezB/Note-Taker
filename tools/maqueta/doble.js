@@ -13,7 +13,7 @@
  * recorre es el mismo que recorre la app de verdad.
  */
 
-import { estadoEnVivo, SESIONES, AJUSTES, ENTRADAS, CAMARAS, DOCTOR } from './datos.js';
+import { estadoEnVivo, estadoSemanal, SESIONES, AJUSTES, ENTRADAS, CAMARAS, DOCTOR } from './datos.js';
 
 const escenarios = new Set(
     (new URLSearchParams(location.search).get('e') || '').split(',').filter(Boolean));
@@ -54,6 +54,26 @@ const PANTALLA_FALSA = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
       <rect x="20" y="160" width="120" height="4" rx="2" fill="#2a3040"/>
     </svg>`);
 
+/**
+ * Y una cara, para el otro lado del selector de la revisión.
+ *
+ * Esa pantalla pregunta «¿esta toma con tu cara o con tu pantalla?», así que
+ * las dos miniaturas tienen que distinguirse de un vistazo o no se está
+ * mirando el diseño que se quiere mirar. Dibujada igual de a mano y por el
+ * mismo motivo: que no se pueda confundir con la cara de nadie.
+ */
+const CARA_FALSA = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 320 180">
+      <rect width="320" height="180" fill="#1a1d24"/>
+      <rect x="0" y="120" width="320" height="60" fill="#151821"/>
+      <circle cx="160" cy="78" r="34" fill="#39404f"/>
+      <circle cx="148" cy="72" r="3.4" fill="#aab4c4"/><circle cx="172" cy="72" r="3.4" fill="#aab4c4"/>
+      <path d="M146 92q14 10 28 0" stroke="#aab4c4" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+      <path d="M104 180q0-44 56-44t56 44z" fill="#39404f"/>
+      <text x="160" y="170" fill="#6d7686" font-family="Helvetica" font-size="8"
+            text-anchor="middle">tu cámara</text>
+    </svg>`);
+
 /* ─── El puente ───────────────────────────────────────────────────────── */
 
 const avisos = [];
@@ -62,6 +82,10 @@ if (hay('sin-carpeta')) ajustes = { ...ajustes, carpeta: null, carpetas: [], cur
 if (hay('preparar-microfono')) ajustes = { ...ajustes, dispositivo: 'MacBook Pro Microphone (Built-in)' };
 if (hay('preparar-zoom-falso')) ajustes = { ...ajustes, dispositivo: 'ZoomAudioDevice (Virtual)' };
 if (hay('preparar-sin-audio') || hay('sin-zoom')) ajustes = { ...ajustes, dispositivo: null };
+// El panel de Ajustes visto desde el modo semanal: el idioma cambia de rótulo,
+// de valor de fábrica y de sitio donde se guarda, y el fps y el curso están
+// apagados. No se llega cambiando el modo a mano porque cambiarlo navega.
+if (hay('ajustes-semanal')) ajustes = { ...ajustes, modo: 'semanal' };
 
 const progresoUpdate = [];
 const listaUpdate = [];
@@ -106,8 +130,18 @@ window.nt = {
     doctor: async () => doctor,
 
     ajustesLeer: async () => ajustes,
+    // El parche entra un nivel, igual que `ajustes.conParche` en el motor: con
+    // el parche pegado por arriba, guardar la carpeta del vídeo semanal borraba
+    // el idioma de al lado, y la maqueta mentía sobre eso.
     ajustesGuardar: async parche => {
-        ajustes = { ...ajustes, ...parche };
+        const llano = x => Boolean(x) && typeof x === 'object' && !Array.isArray(x);
+        const nuevos = { ...ajustes };
+        for (const [clave, valor] of Object.entries(parche || {})) {
+            nuevos[clave] = llano(valor) && llano(ajustes[clave])
+                ? { ...ajustes[clave], ...valor }
+                : valor;
+        }
+        ajustes = nuevos;
         return { ok: true, ajustes };
     },
     carpetaRecordar: async ruta => {
@@ -163,24 +197,33 @@ window.nt = {
     audioAppCerrar: async () => true,
     onAudioApp: cb => { oyenteZoom = cb; },
 
-    grabarIniciar: async () => ({ ok: true, estado: estadoEnVivo() }),
-    grabarReanudar: async () => ({ ok: true, estado: estadoEnVivo() }),
+    grabarIniciar: async () => ({ ok: true, estado: laSesion() }),
+    grabarReanudar: async () => ({ ok: true, estado: laSesion() }),
     grabarPcm: () => {},
     grabarClaqueta: async () => estadoEnVivo(),
     grabarQuitarClaqueta: async () => estadoEnVivo(),
-    grabarEditar: async c => (c && c.tipo === 'borde' && c.borde === 'in'
-        ? moverInEn(Number(c.paredMs))
-        : estadoEnVivo()),
+    grabarEditar: async c => {
+        if (c && c.tipo === 'borde' && c.borde === 'in') return moverInEn(Number(c.paredMs));
+        return cambiarEnVivo(c);
+    },
     // Las notas de una clase ya grabada: el mismo estado de la clase con
     // `grabando: false`, que es lo que la pantalla usa para no dibujar el cromo
     // de grabar (ver `paraMirar` en engine/sesiones-grabadas.js).
-    grabarAbrirGrabada: async json => ({ ok: true, estado: estadoDeNotas(json) }),
-    grabarEditarGrabada: async (json, c) => ({ ok: true, estado: conCambio(estadoDeNotas(json), c) }),
+    // En el modo semanal, «lo grabado» es la sesión que se acaba de cerrar: es
+    // de donde la revisión saca el texto de cada toma para poder moverle los
+    // bordes. En el de clase es una clase vieja que se abre a mirar.
+    grabarAbrirGrabada: async json => ({
+        ok: true,
+        estado: esLaSemana() ? cerradaDelTodo() : estadoDeNotas(json)
+    }),
+    grabarEditarGrabada: async (json, c) => (esLaSemana()
+        ? { ok: true, estado: cambiarEnVivo(c) }
+        : { ok: true, estado: conCambio(estadoDeNotas(json), c) }),
     grabarAbrirToma: async ms => abrirEn(ms),
     grabarCerrarToma: async ms => cerrarEn(ms),
     grabarDeshacer: async () => ({ ok: true, que: 'poner la toma 4 en S', estado: estadoEnVivo() }),
     grabarRehacer: async () => ({ ok: false, estado: estadoEnVivo() }),
-    grabarEstado: async () => estadoEnVivo(),
+    grabarEstado: async () => laSesion(),
     grabarVistas: async () => estadoEnVivo().vistas,
     grabarListar: async () => sesiones(),
     grabarRenombrar: async () => ({ ok: true, secuencia: 'renombrada', movida: true, audios: 1 }),
@@ -268,10 +311,70 @@ window.nt = {
             { cual: 'pantalla', bytes: 96_000_000, segundos: 214 }
         ]
     }),
-    semanalExportar: async () => {
+    /**
+     * El montaje: dónde cae cada toma en los dos vídeos crudos.
+     *
+     * Sale de las MISMAS tomas que la lista de mientras se graba, y no de una
+     * lista escrita al lado: con las dos a mano se iban separando —una decía
+     * cuatro tomas y la otra otras cuatro distintas— y la maqueta dejaba de
+     * servir justo para lo que está, que es mirar el camino entero.
+     *
+     * Los «vídeos crudos» son dos sintéticos de 40 s hechos con ffmpeg, uno
+     * apaisado y chico como una cámara y el otro 1920x1080 como una pantalla,
+     * los dos con una barra que viaja: así se ve de un golpe cuál de los dos
+     * está puesto, que el encuadre es el que le toca a cada uno (la cámara
+     * recortada, la pantalla entera) y que el reproductor buscó donde dijo.
+     *
+     * Y los segundos de cada toma son los del TRAMO, no los de la sesión falsa:
+     * si dijeran 56 s y el tramo durara ocho, el salto a la toma siguiente no se
+     * podría probar. La toma 3 se queda sin pantalla a propósito: es el caso feo
+     * —una fuente que no cubre esa toma— y hay que poder ver cómo se dice.
+     */
+    semanalMontaje: async () => {
+        if (hay('semanal-sin-tomas')) return { ok: true, tomas: [], avisos: [] };
+        const cerradas = laSesion().tomas.filter(t => t.outMs != null);
+        // A cada toma, un tramo suyo del archivo, en orden y de distinto largo:
+        // con todos iguales la línea de tomas saldría en trozos iguales y no se
+        // vería que cada trozo mide lo que dura.
+        const LARGOS = [7, 3, 9, 5];
+        let desde = 1;
+        return {
+            ok: true,
+            avisos: hay('semanal-con-aviso')
+                ? ['La toma 3 va sin la cámara: ese trozo no está grabado.'] : [],
+            archivos: {
+                camara: '/maqueta/semanal-camara.mp4',
+                pantalla: '/maqueta/semanal-pantalla.mp4'
+            },
+            recuadro: { lado: 0.1875, margen: 0.025, redondeo: 0.125 },
+            tomas: cerradas.map((t, i) => {
+                const sinPantalla = t.id === 3;
+                const pide = t.vista === 'PV' ? 'camara' : 'pantalla';
+                const largo = LARGOS[i % LARGOS.length];
+                const arranca = desde;
+                desde += largo + 1;
+                return {
+                    id: t.id,
+                    vista: t.vista,
+                    descartada: Boolean(t.descartada),
+                    segundos: largo,
+                    fondo: sinPantalla ? 'camara' : pide,
+                    camaraDesde: arranca,
+                    pantallaDesde: sinPantalla ? null : arranca,
+                    conAudio: true
+                };
+            })
+        };
+    },
+
+    semanalExportar: async (json, como) => {
         for (const pct of [8, 24, 51, 78, 96]) {
             for (const cb of progresoSemanal) cb({ pct, segundos: pct * 1.6, total: 162 });
-            await espera(hay('semanal-cortando') ? 4000 : 120);
+            // Despacio solo donde la barra es lo que se mira. En los demás
+            // escenarios el corte falso tiene que terminar dentro del rato que
+            // esperan `capturar.js` y compañía, o la foto sale con la barra a
+            // medias en vez de con el vídeo listo.
+            await espera(hay('semanal-cortando') ? 4000 : 20);
         }
         if (hay('semanal-sin-tomas')) {
             return {
@@ -280,12 +383,26 @@ window.nt = {
                     + 'Los vídeos y el audio quedaron guardados.'
             };
         }
+        // Con los silencios quitados el vídeo dura menos y sale en más
+        // pedazos: es lo que hay que poder ver en la pantalla del final para
+        // saber si la casilla hizo algo o no.
+        const quita = Boolean(como && como.quitarSilencios);
         return {
-            ok: true, tomas: 4, segundos: 162, bytes: 41_300_000,
-            ruta: '/Users/daniel/Movies/Semanal/semana_2026-10-03_09-12-40.mp4',
-            avisos: hay('semanal-con-aviso')
+            ok: true,
+            tomas: 3,
+            pedazos: quita ? 7 : 3,
+            segundos: quita ? 134 : 162,
+            bytes: quita ? 34_100_000 : 41_300_000,
+            // Un vídeo de verdad, servido por la maqueta: el reproductor del
+            // final se mide y se captura con algo que carga y se puede mover,
+            // no con un cuadro negro. La pantalla resuelve la ruta contra la
+            // página (`urlDeArchivo`), así que acá una ruta del servidor y en
+            // la app una del disco son lo mismo.
+            ruta: '/maqueta/semana_2026-10-03_09-12-40.mp4',
+            avisos: (hay('semanal-con-aviso')
                 ? ['La toma 3 va sin la cámara: ese trozo no está grabado.']
                 : []
+            ).concat(quita ? ['Se quitaron 4 silencio(s) de más de 0.7 s: 28 s menos de vídeo.'] : [])
         };
     },
     onSemanalProgreso: cb => progresoSemanal.push(cb),
@@ -409,7 +526,17 @@ async function aplicar() {
         hay('preparar-microfono') || hay('preparar-zoom-falso') || hay('sin-zoom')) {
         await app.irAPreparar();
         // El nivel entrando, que es lo que dice «hay algo del otro lado».
-        if (!hay('preparar-sin-audio')) await conAudio();
+        //
+        // Sin `await`: `conAudio` es un surtidor que bombea nivel durante casi
+        // un minuto, no un paso que termina. Esperarlo dejaba a
+        // `window.maquetaPuesta` sin resolver todo ese rato, y los tools que lo
+        // aguardan tardaban 48 s por escenario en vez de medio segundo.
+        if (!hay('preparar-sin-audio')) {
+            conAudio();
+            // Pero sí el primer pico: lo que la captura tiene que mostrar es el
+            // medidor con algo dentro, y eso llega en la primera vuelta.
+            await espera(120);
+        }
         return;
     }
 
@@ -482,8 +609,7 @@ async function aplicar() {
      * mano es el estado de la grabación que el motor devolvería, que es lo que
      * dibuja el contador de tomas.
      */
-    if (hay('semanal') || hay('semanal-grabando') || hay('semanal-cortando')
-        || hay('semanal-hecho') || hay('semanal-sin-tomas') || hay('semanal-con-aviso')) {
+    if (esLaSemana()) {
         await app.irASemanal();
         await espera(120);
         if (!hay('semanal-sin-pantalla')) {
@@ -492,20 +618,46 @@ async function aplicar() {
         }
         if (hay('semanal')) return;
 
+        // Arrancar tarda: antes de grabar se comprueba que el codificador
+        // acepte cada fuente (`aguanta` en `src/js/grabar/filmar.js`), y son
+        // 200 ms por fuente. Sin esperarlos, acá todavía no hay botón que
+        // apretar.
         document.querySelector('[data-hace="grabar"]').click();
-        await espera(200);
-        if (hay('semanal-grabando')) {
-            // Dos tomas cerradas y una abierta: es el estado en el que esta
-            // pantalla se mira de verdad, hablando a la cámara.
-            await espera(400);
+        await espera(700);
+        if (hay('semanal-grabando') || hay('semanal-ficha')) {
+            await espera(300);
+            // Una ficha abierta: es donde se le corrigen los bordes a una toma
+            // sin esperar al final, que es lo que se pidió después de grabar
+            // el primer vídeo de verdad.
+            if (hay('semanal-ficha')) {
+                document.querySelector('#semanal-cuerpo [data-hace="plegar"][data-toma="3"]').click();
+                await espera(120);
+            }
             return;
         }
 
+        // Terminar ya no exporta: lleva a la revisión. De ahí en adelante hay
+        // que apretar «Cortar y exportar», que es el camino de verdad.
         document.querySelector('[data-hace="terminar"]').click();
+        await espera(300);
+        // Parado en otra toma, y con las desactivadas ocultas: es el editor
+        // cuando ya se decidió qué va y qué no, y la línea de arriba pasa a ser
+        // exactamente el corte que va a salir.
+        if (hay('semanal-revisar-fuera')) {
+            document.querySelector('.linea-toma[data-toma="3"]').click();
+            await espera(150);
+            document.querySelector('[data-hace="ocultar-fuera"]').click();
+            await espera(150);
+            return;
+        }
+        if (hay('semanal-revisar')) return;
+
+        const cortar = document.querySelector('[data-hace="exportar"]');
+        if (cortar) cortar.click();
         return;
     }
 
-    if (hay('ajustes')) app.verAjustes();
+    if (hay('ajustes') || hay('ajustes-semanal')) app.verAjustes();
     if (hay('diagnostico')) app.verDiagnostico();
 }
 
@@ -536,6 +688,47 @@ async function conPalmada(estado) {
  * el estado tal cual, porque ahí lo que se mira es la pantalla, no el motor.
  */
 let vivo = null;
+
+/**
+ * La sesión que el motor devolvería, de la clase o del vídeo de la semana.
+ *
+ * Son dos porque muestran cosas distintas: la semanal no tiene claquetas, ni
+ * notas escritas, ni más vistas que la pantalla y la cámara. Con una sola, la
+ * maqueta del modo semanal enseñaba tomas en «Slides» y renglones que decían
+ * «Los tres pilares», y eso no es lo que ve quien graba su semana.
+ */
+const esLaSemana = () => [...escenarios].some(e => e.startsWith('semanal'));
+
+function laSesion() {
+    if (vivo) return vivo;
+    return esLaSemana() ? estadoSemanal() : estadoEnVivo();
+}
+
+/** La sesión con todas las tomas cerradas: lo que deja Terminar. */
+function cerradaDelTodo() {
+    const base = laSesion();
+    vivo = {
+        ...base,
+        grabando: false,
+        abierta: null,
+        tomas: base.tomas.map(t => (t.outMs == null ? { ...t, outMs: t.inMs + 30000 } : t))
+    };
+    return vivo;
+}
+
+/** Un cambio sobre una toma de la sesión viva: para VER que el gesto llega. */
+function cambiarEnVivo(c) {
+    const base = laSesion();
+    if (!c || !Number.isFinite(Number(c.toma))) return base;
+    const toma = base.tomas.find(t => t.id === Number(c.toma));
+    if (!toma) return base;
+    const cambiada = { ...toma };
+    if (c.tipo === 'vista') cambiada.vista = c.vista;
+    else if (c.tipo === 'descartar') cambiada.descartada = Boolean(c.descartada);
+    else return base;
+    vivo = { ...base, tomas: base.tomas.map(t => (t === toma ? cambiada : t)) };
+    return vivo;
+}
 
 /**
  * Las notas de una clase ya grabada, como las manda el motor.
@@ -600,7 +793,7 @@ function conCambio(base, c) {
  * maqueta no tiene motor.
  */
 function moverInEn(ms) {
-    const base = vivo || estadoEnVivo();
+    const base = laSesion();
     const toma = base.tomas.find(t => t.id === base.abierta);
     if (!toma || !Number.isFinite(ms)) return base;
     let piso = null;
@@ -620,20 +813,21 @@ function moverInEn(ms) {
 }
 
 function abrirEn(ms) {
-    const base = vivo || estadoEnVivo();
+    const base = laSesion();
     if (base.abierta != null) return base;
     const sueltas = base.sueltas || [];
     const desde = ms != null ? ms : (sueltas.length ? sueltas[Math.max(0, sueltas.length - 8)].t : base.ceroMs);
+    const id = Math.max(0, ...base.tomas.map(t => t.id)) + 1;
     const toma = {
-        ...base.tomas[0], id: 7, vista: 'PV', comentario: '', outMs: null, relectura: null,
+        ...base.tomas[0], id, vista: 'PV', comentario: '', outMs: null, relectura: null,
         inMs: desde, palabras: sueltas.filter(w => w.t >= desde), antes: [], despues: []
     };
-    vivo = { ...base, abierta: 7, tomas: base.tomas.concat([toma]), sueltas: sueltas.filter(w => w.t < desde) };
+    vivo = { ...base, abierta: id, tomas: base.tomas.concat([toma]), sueltas: sueltas.filter(w => w.t < desde) };
     return { ...vivo, retrocedioSec: ms != null ? 0 : 4.2 };
 }
 
 function cerrarEn(ms) {
-    const base = vivo || estadoEnVivo();
+    const base = laSesion();
     const toma = base.tomas.find(t => t.id === base.abierta);
     if (!toma) return base;
     const hasta = ms != null ? ms : (toma.palabras.length ? toma.palabras[toma.palabras.length - 1].hasta : toma.inMs + 1000);
@@ -708,4 +902,8 @@ async function verIconos() {
           </div></div></div>`;
 }
 
-aplicar();
+// La promesa de que el escenario ya está puesto. Las herramientas la esperan
+// en vez de contar un rato al azar: los escenarios del modo semanal tardan
+// segundos en armarse —elegir pantalla, grabar, terminar, apretar cosas— y una
+// espera fija dejaba la foto a medio camino sin decirlo.
+window.maquetaPuesta = aplicar();

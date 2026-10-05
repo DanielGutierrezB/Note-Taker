@@ -54,9 +54,17 @@ const DEFAULTS = {
     /** A cuántos cuadros va la secuencia del editor. */
     fps: 30,
     /**
-     * En qué idioma habla la clase. Va a `whisper-cli -l`, y se fija en vez de
-     * detectarse porque detectar cuesta una pasada y en una clase en vivo el
-     * idioma no cambia a la mitad.
+     * En qué idioma habla la clase. Va a `whisper-cli -l`.
+     *
+     * Fijo y no `auto` porque una clase es de un idioma de punta a punta, y
+     * detectar cuesta: medido contra el residente, 790 ms la pasada con el
+     * idioma puesto y 1200 ms con `auto`, o sea 400 ms más de atraso para el
+     * «3, 2, 1» en una pantalla donde el idioma no va a cambiar nunca.
+     *
+     * `auto` existe igual, para quien dé una clase en dos idiomas, y es lo de
+     * fábrica del vídeo semanal (ver `semanal.idioma`): ahí el idioma SÍ cambia
+     * a la mitad, que es justo lo que pasó la primera vez que alguien se grabó
+     * explicando la semana en inglés con el español clavado.
      */
     idioma: 'es',
     /**
@@ -106,12 +114,30 @@ const DEFAULTS = {
      * llena de vídeos de la semana, y la carpeta de un curso no se llena de
      * MP4. Lo que se comparte son la cámara y el micrófono, que son de la
      * máquina y no del modo.
+     *
+     * Y el idioma es otro, y de fábrica `auto`: una clase es de un idioma, pero
+     * una persona contando su semana se pasa al inglés a mitad de frase. Los
+     * 400 ms que cuesta detectar se pagan acá y no allá, y acá no duelen: la
+     * toma también se abre con Enter.
      */
-    semanal: { carpeta: null }
+    semanal: { carpeta: null, idioma: 'auto' }
 };
 
 /** Los dos modos. Cualquier otra cosa escrita en el archivo es `clase`. */
 const MODOS = ['clase', 'semanal'];
+
+/**
+ * Un idioma que Whisper pueda recibir, o lo de fábrica.
+ *
+ * Dos letras es un código de idioma y `auto` es «detectalo vos». Lo que no sea
+ * ni una cosa ni la otra se cae a lo de fábrica en vez de llegar a la línea de
+ * comandos de `whisper-server`, que con un `-l` que no entiende no arranca — y
+ * sin servidor no hay ni «3, 2, 1» ni transcript.
+ */
+function idiomaSano(valor, deFabrica) {
+    return typeof valor === 'string' && (valor === 'auto' || /^[a-z]{2}$/.test(valor))
+        ? valor : deFabrica;
+}
 
 /**
  * La configuración del .prproj con la forma de siempre, o null si no sirve.
@@ -167,8 +193,7 @@ function sanear(crudo) {
         // —haría falta saber si lleva `ntsc`—, así que se cae al de fábrica en
         // vez de arrastrar un número que después nadie sabe de dónde salió.
         fps: FPS_POSIBLES.includes(Number(c.fps)) ? Number(c.fps) : DEFAULTS.fps,
-        idioma: (typeof c.idioma === 'string' && /^[a-z]{2}$/.test(c.idioma))
-            ? c.idioma : DEFAULTS.idioma,
+        idioma: idiomaSano(c.idioma, DEFAULTS.idioma),
         dispositivo: (typeof c.dispositivo === 'string' && c.dispositivo) || null,
         // Lo que haya guardado que no sea un nombre —el `false` de la versión en
         // la que esto era un sí o un no— se lee como «ninguna».
@@ -178,7 +203,8 @@ function sanear(crudo) {
         // exporta nada, o sea el que menos sorprende a quien abra la app.
         modo: MODOS.includes(c.modo) ? c.modo : DEFAULTS.modo,
         semanal: {
-            carpeta: (c.semanal && typeof c.semanal.carpeta === 'string' && c.semanal.carpeta) || null
+            carpeta: (c.semanal && typeof c.semanal.carpeta === 'string' && c.semanal.carpeta) || null,
+            idioma: idiomaSano(c.semanal && c.semanal.idioma, DEFAULTS.semanal.idioma)
         }
     };
 }
@@ -221,7 +247,31 @@ function recordarCarpeta(ruta) {
     return guardar({ ...antes, carpeta: ruta, carpetas: antes.carpetas });
 }
 
+/**
+ * Lo que había con un parche encima, entrando UN nivel.
+ *
+ * Cada pantalla guarda solo lo suyo, así que lo que llega es un pedazo: el fps,
+ * o la carpeta, o el idioma. Pegado por arriba, un pedazo de `semanal` borraba
+ * el resto de `semanal`: quien guardaba la carpeta del vídeo mandaba
+ * `{semanal:{carpeta}}` y con eso se llevaba el idioma de al lado, porque el
+ * objeto nuevo reemplazaba al viejo entero y `sanear` le ponía el de fábrica.
+ *
+ * Un nivel y no más: los ajustes son llanos salvo `semanal` y `prproj`, y
+ * fusionar en profundidad haría imposible vaciar algo. Un `null` reemplaza —es
+ * como se limpia un campo—, igual que un array: solo se fusionan dos objetos.
+ */
+function conParche(previos, parche) {
+    const llano = x => Boolean(x) && typeof x === 'object' && !Array.isArray(x);
+    const salida = { ...previos };
+    for (const [clave, valor] of Object.entries(parche || {})) {
+        salida[clave] = llano(valor) && llano(previos && previos[clave])
+            ? { ...previos[clave], ...valor }
+            : valor;
+    }
+    return salida;
+}
+
 module.exports = {
-    leer, guardar, recordarCarpeta,
+    leer, guardar, recordarCarpeta, conParche,
     sanear, archivo, DEFAULTS, RECIENTES, FPS_POSIBLES, MODOS
 };

@@ -102,16 +102,38 @@ function registrar({ ipcMain, send, anotar }) {
     });
 
     /**
+     * Dónde cae cada toma dentro de los dos vídeos crudos.
+     *
+     * Es lo que deja que el editor del corte final muestre el montaje sin
+     * exportarlo: la ventana reproduce los crudos y salta de toma en toma con
+     * estos segundos. Se vuelve a pedir después de mover un borde, porque el
+     * borde ajustado lo calcula el motor y no la pantalla.
+     */
+    ipcMain.handle('semanal-montaje', async (event, json) => {
+        try {
+            const r = exportar.montajeDeSesion(json);
+            anotar('semanal.montaje', {
+                json: path.basename(String(json || '')), tomas: r.tomas.length
+            });
+            return r;
+        } catch (err) {
+            anotar('semanal.falla-montaje', { error: err.message });
+            return { ok: false, error: err.message, tomas: [] };
+        }
+    });
+
+    /**
      * Corta y exporta el MP4 de una sesión ya terminada.
      *
      * Va después de `grabar-terminar`, que es quien deja el sidecar escrito con
      * las tomas y sus bordes: desde acá se lee el disco, no la memoria, para
      * que exportar de nuevo mañana dé exactamente el mismo vídeo.
      */
-    ipcMain.handle('semanal-exportar', async (event, json) => {
+    ipcMain.handle('semanal-exportar', async (event, json, como) => {
         try {
             const r = await exportar.deSesion(json, {
-                alProgreso: p => send('semanal-progreso', p)
+                alProgreso: p => send('semanal-progreso', p),
+                quitarSilencios: Boolean(como && como.quitarSilencios)
             });
             anotar(r.ok ? 'semanal.exportado' : 'semanal.sin-exportar', {
                 json: path.basename(String(json || '')),

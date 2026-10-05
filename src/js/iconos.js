@@ -158,7 +158,14 @@ const DIBUJOS = {
         + '<path d="M13.7 10.3a3.4 3.4 0 0 1 0 4.8l-2.4 2.4a3.4 3.4 0 0 1-4.8-4.8l1.2-1.2"/>'
         + '<path d="m4.6 4.6 14.8 14.8"/>',
     cerrar: '<path d="m6.4 6.4 11.2 11.2M17.6 6.4 6.4 17.6"/>',
-    mas: '<path d="M12 5.2v13.6M5.2 12h13.6"/>'
+    mas: '<path d="M12 5.2v13.6M5.2 12h13.6"/>',
+
+    // Los dos del reproductor del montaje. Rellenos y no de línea, al revés que
+    // todo el resto: es el único par de iconos de la app que se mira de reojo
+    // mientras pasa el vídeo, y un triángulo hueco a ese tamaño no se lee.
+    reproducir: '<path d="M8 5.4 19 12 8 18.6z" fill="currentColor" stroke="none"/>',
+    pausa: '<path d="M8.4 5.6h2.8v12.8H8.4zM12.8 5.6h2.8v12.8h-2.8z"'
+        + ' fill="currentColor" stroke="none"/>'
 };
 
 /**

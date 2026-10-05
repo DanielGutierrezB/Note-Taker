@@ -231,7 +231,11 @@ function conectarAjustes() {
         }
     });
     $('#aj-fps').addEventListener('change', e => guardar({ fps: Number(e.target.value) }));
-    $('#aj-idioma').addEventListener('change', e => guardar({ idioma: e.target.value }));
+    // Al idioma del modo en que se está, no siempre al de la clase: son dos
+    // ajustes porque son dos preguntas distintas (ver `idiomaDelModo`).
+    $('#aj-idioma').addEventListener('change', e => guardar(app.ajustes.modo === 'semanal'
+        ? { semanal: { idioma: e.target.value } }
+        : { idioma: e.target.value }));
     $('#aj-curso').addEventListener('change', e => guardar({ curso: e.target.value }));
     $('#aj-camara').addEventListener('change', async e => {
         await guardar({ camara: e.target.value || null });
@@ -258,16 +262,45 @@ function pintarAjustes() {
               : 'La primera vez te va a preguntar dónde guardarlos.')
         : 'Tomás notas de un rodaje en vivo y la app escribe el XML que el editor importa '
           + 'en Premiere. Lo de abajo es de este modo.';
-    for (const campo of ['#aj-fps', '#aj-idioma', '#aj-curso']) {
+    for (const campo of ['#aj-fps', '#aj-curso']) {
         // En el modo semanal no hay secuencia ni curso: el fps lo fija el modo
         // y el nombre lo pone la app. Se dejan a la vista pero apagados, que
         // dice más que esconderlos.
         $(campo).disabled = app.ajustes.modo === 'semanal';
     }
     $('#aj-fps').value = String(app.ajustes.fps);
-    $('#aj-idioma').value = app.ajustes.idioma;
+    pintarIdioma();
     $('#aj-curso').value = app.ajustes.curso || '';
     pintarCamaras();
+}
+
+/**
+ * El idioma del modo en que se está, con su porqué.
+ *
+ * Son dos ajustes y un solo control porque son la misma pregunta hecha a dos
+ * personas distintas: una clase es de un idioma de punta a punta —y ahí
+ * detectarlo solo cuesta los 400 ms por pasada que medimos, 790 ms contra
+ * 1200— mientras que quien cuenta su semana se pasa al inglés a mitad de frase.
+ * De ahí que uno venga en español y el otro en automático.
+ */
+function pintarIdioma() {
+    const semanal = app.ajustes.modo === 'semanal';
+    $('#aj-idioma-rotulo').textContent = semanal
+        ? 'Idioma de tus vídeos' : 'Idioma de la clase';
+    $('#aj-idioma').value = idiomaDelModo();
+    $('#aj-idioma-dice').textContent = semanal
+        ? 'Automático entiende el «3, 2, 1» y la «Pausa» lo mismo en español que en '
+          + 'inglés, y te deja cambiar de idioma a mitad de frase. Ponerlo fijo ahorra '
+          + 'unos 400 ms en cada pasada, o sea que la toma abre un pelo antes.'
+        : 'Puesto es mejor que automático cuando se sabe: detectarlo cuesta unos 400 ms '
+          + 'en cada pasada, y una clase es de un idioma de punta a punta. Automático es '
+          + 'para quien dé la clase en dos.';
+}
+
+function idiomaDelModo() {
+    return app.ajustes.modo === 'semanal'
+        ? ((app.ajustes.semanal && app.ajustes.semanal.idioma) || 'auto')
+        : app.ajustes.idioma;
 }
 
 /* ─── La cámara de referencia ─────────────────────────────────────────── */

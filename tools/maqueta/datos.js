@@ -110,6 +110,70 @@ const SUELTAS = palabras(
     'conectamos el disparador con la condición de salida fíjense que cuando ' +
     'cambia el valor se vuelve a evaluar todo desde el principio Laqueta clase dos', 1015);
 
+/**
+ * Las tomas de un vídeo de la semana, que no son las de una clase.
+ *
+ * Están aparte porque el modo semanal muestra otra cosa: solo dos vistas —la
+ * pantalla y la cámara—, ninguna nota escrita a mano y ninguna claqueta. Con
+ * las de la clase, la maqueta enseñaba tomas en «Slides» y en «Multi» y
+ * renglones que decían «Los tres pilares», que ahí no existen: la captura
+ * mentía sobre la pantalla que estaba enseñando.
+ *
+ * Lo que sí se repite de la clase es lo que de verdad pasa igual: una toma
+ * descartada, una que repite a otra y los números cortos de quien se graba
+ * explicando su semana en cinco minutos.
+ */
+const TOMAS_SEMANA = [
+    {
+        id: 1, vista: 'R', comentario: '', cuenta: '3, 2, 1.',
+        inMs: seg(18), outMs: seg(74), descartada: false, cerradaSola: false,
+        palabras: palabras('Esta semana terminamos el importador y ya está corriendo ' +
+            'en producción con los tres clientes grandes', 18),
+        antes: palabras('tres dos uno', 16), despues: palabras('pausa', 75),
+        comentarios: [], relectura: null, repiteA: null, pausaAdentro: null
+    },
+    {
+        id: 2, vista: 'R', comentario: '', cuenta: '3, 2, 1.',
+        inMs: seg(96), outMs: seg(110), descartada: true, cerradaSola: false,
+        palabras: palabras('Lo segundo que hicimos fue perdón me equivoqué', 96),
+        antes: [], despues: [], comentarios: [], relectura: null, repiteA: null, pausaAdentro: null
+    },
+    {
+        id: 3, vista: 'R', comentario: '', cuenta: '3, 2, 1.',
+        inMs: seg(124), outMs: seg(212), descartada: false, cerradaSola: false,
+        palabras: palabras('Lo segundo que hicimos fue bajar el tiempo de carga a la ' +
+            'mitad y acá en la pantalla les muestro de dónde salía la demora', 124),
+        antes: [], despues: [], comentarios: [], relectura: null, repiteA: 2, pausaAdentro: null
+    },
+    {
+        id: 4, vista: 'PV', comentario: '', cuenta: '3, 2, 1.',
+        inMs: seg(240), outMs: seg(288), descartada: false, cerradaSola: true,
+        palabras: palabras('La semana que viene arrancamos con el rediseño del panel ' +
+            'y les voy a pedir una mano con las pruebas', 240),
+        antes: [], despues: [], comentarios: [], relectura: null, repiteA: null, pausaAdentro: null
+    }
+];
+
+/** Lo que se oyó después de la última toma del vídeo de la semana. */
+const SUELTAS_SEMANA = palabras(
+    'bueno creo que con eso estamos y si queda alguna duda me escriben por acá', 292);
+
+/**
+ * El estado de un vídeo de la semana a mitad de grabar: tres tomas y la cuarta
+ * abierta, que es el momento en que esta pantalla se mira de verdad.
+ */
+export function estadoSemanal(extra) {
+    return estadoEnVivo(Object.assign({
+        secuencia: 'semana_2026-10-03_09-12-40',
+        curso: '',
+        claquetas: [],
+        segundos: 300,
+        historia: { atras: 0, adelante: 0, queAtras: '', queAdelante: '' },
+        sueltas: SUELTAS_SEMANA,
+        tomas: TOMAS_SEMANA
+    }, extra || {}));
+}
+
 /** El estado de una sesión en curso, como lo manda `espejo.resumen`. */
 export function estadoEnVivo(extra) {
     return Object.assign({
@@ -176,7 +240,7 @@ export const AJUSTES = {
     // En modo de clase, que es el que tienen que ver todos los escenarios menos
     // los del modo semanal: ese se pide por la URL.
     modo: 'clase',
-    semanal: { carpeta: '/Users/daniel/Movies/Semanal' }
+    semanal: { carpeta: '/Users/daniel/Movies/Semanal', idioma: 'auto' }
 };
 
 // Los nombres son los de verdad de una Mac con Zoom instalado: es la lista

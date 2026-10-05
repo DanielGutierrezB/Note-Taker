@@ -21,14 +21,14 @@
 
 /* ─── Las expresiones, copiadas del motor tal cual ────────────────────── */
 
-const CUENTA = /^(?:3|2|1|tres|dos|uno)[.,…!?]*$/i;
+const CUENTA = /^(?:3|2|1|tres|dos|uno|three|two|one)[.,…!?]*$/i;
 const RETOMAR = /^retomamos[.,…!?]*$/i;
-const PAUSA = /^pausa[.,…!?]*$/i;
-const OK = /^ok[.,…!?]*$/i;
+const PAUSA = /^paus[ae][.,…!?]*$/i;
+const OK = /^ok(?:ay)?[.,…!?]*$/i;
 const CLAQUETA = /laque|cacle/i;
 
 const MINIMO_DE_CUENTA = 2;
-const VALOR = { 3: 3, tres: 3, 2: 2, dos: 2, 1: 1, uno: 1 };
+const VALOR = { 3: 3, tres: 3, three: 3, 2: 2, dos: 2, two: 2, 1: 1, uno: 1, one: 1 };
 export const SILENCIO_TRAS_PAUSA_SEC = 1;
 
 /**

@@ -58,7 +58,11 @@ const TIPOS = {
     '.js': 'text/javascript; charset=utf-8',
     '.woff2': 'font/woff2',
     '.png': 'image/png',
-    '.svg': 'image/svg+xml'
+    '.svg': 'image/svg+xml',
+    // El vídeo de ejemplo del modo semanal. Son 37 kB y se manda entero, sin
+    // atender rangos: el reproductor acepta el 200 completo y busca dentro de
+    // lo que ya tiene, que con tres segundos es todo.
+    '.mp4': 'video/mp4'
 };
 
 /**

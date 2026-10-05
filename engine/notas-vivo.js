@@ -208,12 +208,34 @@ function estadoNuevo(params) {
  * escribe puntos suspensivos: en el curso salió "3, 2, 1..." y con un solo signo
  * permitido el "1..." no era un número, el conteo se quedaba en "3, 2" y la toma
  * no se abría. Lo encontró la simulación sobre el audio de verdad.
+ *
+ * **En los dos idiomas.** Quien se graba contando su semana se pasa al inglés a
+ * mitad de frase, y el conteo se le pasa con él: medido con el residente, el
+ * modelo escribe los números como dígitos en los dos idiomas —«Okay. 3, 2, 1.
+ * So this week…»— así que la mayoría de las veces alcanza con lo que ya había.
+ * Las palabras van igual, por las veces que no: «three» no es «3» y una toma
+ * que no abre es una toma perdida. «one» no se acepta suelta por lo mismo que
+ * «uno» —tiene que cerrar una cuenta de dos o más— y por eso no lo dispara
+ * «one of the problems».
  */
-const CUENTA = /^(?:3|2|1|tres|dos|uno)[.,…!?]*$/i;
+const CUENTA = /^(?:3|2|1|tres|dos|uno|three|two|one)[.,…!?]*$/i;
 const RETOMAR = /^retomamos[.,…!?]*$/i;
-const PAUSA = /^pausa[.,…!?]*$/i;
-/** "Ok" delante del conteo es parte de la señal, no de la clase. */
-const OK = /^ok[.,…!?]*$/i;
+/**
+ * «Pausa» o «Pause», que es la misma palabra dicha en el otro idioma.
+ *
+ * Son dos letras de diferencia y el riesgo es el mismo que ya se corría en
+ * español: lo que separa la señal de «acá hacemos una pausa» es el silencio
+ * detrás, no la palabra.
+ */
+const PAUSA = /^paus[ae][.,…!?]*$/i;
+/**
+ * "Ok" delante del conteo es parte de la señal, no de la clase.
+ *
+ * Con «y» porque en inglés el modelo lo escribe «Okay» —se midió, está en
+ * «Okay. 3, 2, 1. So this week…»— y sin ella el conteo quedaba detrás de una
+ * palabra que no era ni señal ni número.
+ */
+const OK = /^ok(?:ay)?[.,…!?]*$/i;
 
 /**
  * La claqueta, dicha.
@@ -244,7 +266,7 @@ const CLAQUETA = /laque|cacle/i;
 const MINIMO_DE_CUENTA = 2;
 
 /** Cuánto vale cada palabra de la cuenta, para saber si va hacia abajo. */
-const VALOR = { 3: 3, tres: 3, 2: 2, dos: 2, 1: 1, uno: 1 };
+const VALOR = { 3: 3, tres: 3, three: 3, 2: 2, dos: 2, two: 2, 1: 1, uno: 1, one: 1 };
 
 function valorDeCuenta(texto) {
     const limpia = String(texto).toLowerCase().replace(/[.,…!?]+$/, '');
@@ -321,8 +343,8 @@ function senales(palabras, finMs) {
             // se resuelve con el silencio que venga después, así que quien llama
             // decide (ver `cierraDeVerdad`).
             //
-            // **Con palabra detrás, el hueco se mide desde donde EMPIEZA «pausa»,
-            // y no desde donde termina.** Medirlo desde el final parece más
+            // **El hueco se mide desde donde EMPIEZA «pausa», y no desde donde
+            // termina.** Con palabra detrás, medirlo desde el final parece más
             // exacto y no lo es: el final sale del modelo o del DTW, que sobre
             // una palabra suelta se corre varias décimas hacia adelante, y eso
             // se le descontaba al hueco. En la clase del 29/09 el profesor decía
@@ -331,15 +353,20 @@ function senales(palabras, finMs) {
             // cuánto tardó en llegar la palabra siguiente, que es justo lo que
             // separa la señal de «acá hacemos una pausa en el flujo».
             //
-            // Sin palabra detrás sí se mide desde el final, contra lo que se
-            // alcanzó a oír: lo que se pregunta ahí es otra cosa —si ya pasó el
-            // segundo de silencio— y antes una «pausa» al final de la ventana
-            // contaba como silencio infinito y cerraba con medio segundo oído.
+            // Sin palabra detrás hace falta por otro motivo, y también medido:
+            // cuando detrás hay silencio, Whisper le estira el
+            // final a la última palabra hasta el final del audio que oyó. En la
+            // primera grabación de verdad del vídeo semanal, un «pausa.» dicho
+            // en el segundo 0,69 llegó como «0.69-6.13» con la ventana
+            // terminando en 6.14 — o sea que el silencio de cinco segundos que
+            // tenía que cerrar la toma se lo había comido la palabra, y el hueco
+            // daba una centésima. Desde el comienzo, el hueco mide lo único que
+            // se puede medir sin creerle al final: cuánto audio pasó desde que
+            // la palabra empezó sin que llegara nada más.
             const siguiente = lista[i + 1];
-            const finPausa = lista[i].hasta != null ? lista[i].hasta : lista[i].t;
             const hueco = siguiente
                 ? (siguiente.t - lista[i].t) / 1000
-                : (finMs != null ? (finMs - finPausa) / 1000 : Infinity);
+                : (finMs != null ? (finMs - lista[i].t) / 1000 : Infinity);
             if (hueco >= SILENCIO_TRAS_PAUSA_SEC) {
                 salida.push({ tipo: 'cierra', desde: i, hasta: i, por: 'pausa' });
             } else {
@@ -1177,7 +1204,28 @@ function aplicarSenales(estado, palabras, opciones) {
         .some(t => Math.abs(nuevas[marca.hasta].t - t) < MISMA_SENAL_MS);
     const finMs = opciones && Number.isFinite(opciones.finMs) ? opciones.finMs : undefined;
 
-    const marcas = senales(nuevas, finMs).filter(m => m.hasta < cuantasFirmes && !yaVista(m));
+    // **A una señal se le cree por dónde EMPIEZA; a una palabra, por dónde
+    // termina.** Que sean distintos no es un descuido: cuando detrás hay
+    // silencio —y detrás de un «3, 2, 1» siempre lo hay, el que uno deja
+    // esperando a que la toma abra— Whisper le estira el final a la última
+    // palabra hasta el final del audio que oyó, que por construcción está
+    // después del límite de lo firme. Con la regla del final, el «1» no era
+    // firme nunca: en la primera grabación de verdad del vídeo semanal llegó
+    // cinco pasadas seguidas como «1...@9.64-10.23», «-11.26», «-12.28»,
+    // «-13.30» —el final corriéndose con la ventana— y la toma no abrió ni una
+    // vez. Por eso hacía falta decirlo dos veces: la segunda uno sigue
+    // hablando, la palabra deja de ser la última y recién ahí vale.
+    //
+    // El comienzo no se estira, y para una señal alcanza: son palabras cortas
+    // de una lista cerrada, y media sílaba de más no convierte un «1» en otra
+    // cosa. Para las palabras de la clase no alcanzaría —«funcion» a mitad de
+    // «funcionando» empieza a tiempo y se guardaría cortada—, así que ahí sigue
+    // valiendo el final (ver `cuantasFirmes`). La claqueta va con las palabras:
+    // lo que se le busca es el número de al lado, y ese sí puede venir cortado.
+    const empezoATiempo = m => (m.tipo === 'claqueta'
+        ? m.hasta < cuantasFirmes
+        : nuevas[m.hasta].t <= firme);
+    const marcas = senales(nuevas, finMs).filter(m => empezoATiempo(m) && !yaVista(m));
     // Dónde empieza lo que no se había oído: por el TEXTO y no por la hora (ver
     // `dondeSigue`).
     const inicioNuevo = dondeSigue(estado, nuevas);

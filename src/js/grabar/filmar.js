@@ -50,18 +50,175 @@ const FORMATOS = [
 /** Lo que se le pide a cada vídeo. La pantalla pesa más: es la que se lee. */
 const CALIDAD = { pantalla: 8e6, camara: 4e6 };
 
+/**
+ * El tope al que se pide la pantalla, y no es una preferencia: es un límite del
+ * codificador del Mac.
+ *
+ * Una pantalla Retina de 2560×1600 entra a 5120×3200, y a ese tamaño el H.264
+ * por hardware contesta «The given encoder configuration is not supported by
+ * the encoder» y no produce NI UN fotograma: el archivo queda en cero bytes.
+ * Medido en el Electron de esta app sobre la pantalla de verdad: 5120×3200
+ * falla, 2560×1600 pasa, 1920×1080 pasa. El techo está entre medias, que es lo
+ * que se espera de VideoToolbox (4096 de ancho).
+ *
+ * 1920×1080 y no el techo real porque es exactamente lo que mide el vídeo que
+ * sale (`ANCHO`/`ALTO` en `engine/exportar-video.js`): capturar más es gastar
+ * disco y codificador en píxeles que el exportador va a tirar igual.
+ */
+const MAX_ANCHO = 1920;
+const MAX_ALTO = 1080;
+
+/**
+ * Cuánto se espera a que el codificador se queje antes de darlo por bueno.
+ *
+ * Medido con la pantalla que falla, tres veces seguidas: el `onerror` llegó a
+ * los 27, 2 y 5 ms de la llamada a `start()`. Doscientos es diez veces el peor
+ * caso, y es lo que se le suma a apretar Grabar.
+ */
+const PRUEBA_MS = 200;
+
+/**
+ * Cada cuánto se le toma el pulso a las pistas que se están grabando.
+ *
+ * **Esto existe porque una pista puede morirse sin que nadie avise.** Medido en
+ * el Electron de esta app: con un grabador andando se le hace `stop()` a la
+ * pista de vídeo y NI `onerror` del grabador NI `onended` de la pista dicen
+ * nada; el grabador simplemente deja de entregar pedazos y el archivo se queda
+ * con lo que llevaba. Pasó de verdad: una grabación de 71 segundos terminó con
+ * la cámara en cero bytes y cero pedazos, sin un solo aviso, y quien grababa se
+ * enteró al llegar a la pantalla de revisión.
+ *
+ * Lo que sí se puede mirar es la pista: un `stop()` la deja en `ended` en el
+ * acto, y una cámara que se queda sin imagen —otra app se la llevó, el cable—
+ * se pone en `muted`. Dos segundos es el mismo paso que los pedazos.
+ */
+const PULSO_MS = 2000;
+
+/**
+ * Cuánto se aguanta sin un solo pedazo antes de darlo por muerto.
+ *
+ * El pulso de arriba agarra la pista muerta; esto agarra lo que quede: un
+ * grabador que arrancó, tiene pista viva y no entrega nada. Es el caso que pasó
+ * de verdad, y la sospecha es el micrófono: el grabador de la cámara lleva la
+ * voz adentro del mismo MP4, y un muxer esperando un audio que no llega no
+ * entrega tampoco el vídeo. La pantalla, que graba sin audio, siguió entera.
+ *
+ * **Uno por fuente, porque no tardan lo mismo.** El MP4 de Chromium entrega a
+ * tirones y el tirón depende de cuántos datos haya: medido, una cámara con una
+ * cara delante suelta su primer pedazo antes de los 4 segundos, mientras que
+ * una pantalla casi quieta tardó 35. Un solo número para las dos sería o un
+ * aviso falso en la pantalla o una cámara perdida durante un minuto.
+ */
+const SIN_NADA_MS = { camara: 15000, pantalla: 45000 };
+
 const estado = {
     pantalla: null,          // el stream de la pantalla, elegido antes de grabar
+    tipos: {},               // cual → el mimeType que su fuente aguanta
     grabadores: new Map(),   // cual → MediaRecorder
+    pulso: null,             // el reloj que le toma el pulso a las pistas
+    salud: new Map(),        // cual → { bytes, desdeMs, avisado, pistas }
     alAviso: () => {}
 };
 
-function formatoPara(conAudio) {
+/**
+ * Los formatos que este Mac dice aceptar, en orden de preferencia.
+ *
+ * Decir que los acepta y aceptarlos son cosas distintas —`isTypeSupported` mira
+ * el códec, no el tamaño de lo que le vas a meter—, así que esta lista es de
+ * candidatos y quien decide de verdad es `aguanta()`.
+ */
+function formatosPara(conAudio) {
     const puede = t => window.MediaRecorder && MediaRecorder.isTypeSupported(t);
     // Sin audio no hace falta que el formato declare códec de audio: pedirlo con
     // `mp4a` y no mandar pista deja un archivo con una pista vacía declarada.
-    const lista = conAudio ? FORMATOS : FORMATOS.map(t => t.replace(/,\s*(mp4a[^";]*|opus)/, ''));
-    return lista.find(puede) || null;
+    if (!conAudio) return FORMATOS.map(t => t.replace(/,\s*(mp4a[^";]*|opus)/, '')).filter(puede);
+    // **Y con audio, solo los que lo declaran.** `video/mp4;codecs=avc1` estaba
+    // en la lista y es un candidato válido para la pantalla, pero si le entra la
+    // pista del micrófono a un formato que no declara audio, la voz se va en
+    // silencio: el archivo sale sin ella y nadie se enteró. Visto de verdad en
+    // una corrida de la cámara, que cayó a ese formato porque el primero no
+    // pasó la prueba del codificador.
+    return FORMATOS.filter(t => /mp4a|opus/.test(t)).filter(puede);
+}
+
+/**
+ * Si el codificador acepta de verdad esta fuente con este formato.
+ *
+ * Se graba medio segundo a la basura y se mira si el grabador se queja. Parece
+ * exagerado y es justo lo contrario: sin esto, una fuente que el codificador no
+ * traga se descubre cuando la persona termina de grabar y se encuentra con un
+ * archivo vacío, que es exactamente lo que pasó con la pantalla Retina. El
+ * error llega en los primeros milisegundos —no al final—, así que medio segundo
+ * antes de arrancar compra la única garantía que importa.
+ *
+ * Se prueba sin `timeslice`: no interesa el dato, interesa el `onerror`. Y es
+ * lo único que se puede mirar: medido, un `MediaRecorder` de MP4 no entrega
+ * nada en los primeros tres segundos ni pidiéndoselo cada 100 ms, así que
+ * «todavía no llegó un trozo» no significa nada.
+ */
+async function aguanta(stream, tipo, cual) {
+    let grabador;
+    try {
+        grabador = new MediaRecorder(stream, { mimeType: tipo, videoBitsPerSecond: CALIDAD[cual] });
+    } catch (e) {
+        return false;
+    }
+    let roto = false;
+    grabador.onerror = () => { roto = true; };
+    try {
+        grabador.start();
+    } catch (e) {
+        return false;
+    }
+    await new Promise(r => setTimeout(r, PRUEBA_MS));
+    // Si ya se cayó solo, `stop()` tira: el estado quedó en `inactive`.
+    try { if (grabador.state !== 'inactive') grabador.stop(); } catch (e) { roto = true; }
+    return !roto;
+}
+
+/** El primer formato que esta fuente aguanta de verdad. `null` si ninguno. */
+async function formatoQueAguanta(stream, conAudio, cual) {
+    for (const tipo of formatosPara(conAudio)) {
+        if (await aguanta(stream, tipo, cual)) return tipo;
+    }
+    return null;
+}
+
+/**
+ * Deja la pista en el cuadro del vídeo que sale, y dice a qué quedó.
+ *
+ * Se pide acotada Y se acota después: medido, las dos funcionan por separado
+ * —pedirla con `max` entra ya a 1920×1080, y `applyConstraints` baja una de
+ * 5120×3200 que ya estaba abierta—, pero el selector del sistema de macOS es
+ * quien resuelve el pedido y no se le puede exigir que honre la restricción.
+ * La segunda vía es la que no depende de él.
+ *
+ * **Y encuadra en las dos direcciones, no solo hacia abajo.** Una cámara se
+ * puede quedar clavada CHICA: `ojo.camaras()` abre la cámara con `video: true`
+ * para poder leer los nombres, eso la negocia a 640×480, y el pedido de verdad
+ * que viene detrás se encuentra el dispositivo ya abierto a ese tamaño y lo
+ * hereda. Medido en la app: una OBSBOT que da 2560×1440 entró a 640×480. En la
+ * esquina no se nota, pero una toma de «Yo» es la cámara llenando 1920×1080, y
+ * ahí 640 de ancho se estiran a tres veces su tamaño.
+ */
+async function acotar(pista) {
+    const mide = () => (pista.getSettings ? pista.getSettings() : {});
+    const antes = mide();
+    const grande = (antes.width || 0) > MAX_ANCHO || (antes.height || 0) > MAX_ALTO;
+    const chica = (antes.width || 0) < MAX_ANCHO && (antes.height || 0) < MAX_ALTO;
+    if (grande || chica) {
+        try {
+            await pista.applyConstraints({
+                width: { ideal: MAX_ANCHO, max: MAX_ANCHO },
+                height: { ideal: MAX_ALTO, max: MAX_ALTO },
+                frameRate: { max: 30 }
+            });
+        } catch (e) {
+            // Se sigue igual: puede que el codificador aguante este tamaño, y
+            // quien lo decide es `aguanta()`, no esta cuenta.
+        }
+    }
+    return mide();
 }
 
 /**
@@ -75,7 +232,11 @@ export async function elegirPantalla() {
     await soltarPantalla();
     try {
         estado.pantalla = await navigator.mediaDevices.getDisplayMedia({
-            video: { frameRate: { ideal: 30 } },
+            video: {
+                frameRate: { ideal: 30 },
+                width: { max: MAX_ANCHO },
+                height: { max: MAX_ALTO }
+            },
             audio: false
         });
     } catch (e) {
@@ -90,9 +251,23 @@ export async function elegirPantalla() {
     pista.onended = () => {
         // «Dejar de compartir» desde la barra del sistema.
         estado.pantalla = null;
+        estado.tipos.pantalla = null;
         estado.alAviso({ tipo: 'pantalla-soltada' });
     };
-    const puesta = pista.getSettings ? pista.getSettings() : {};
+    const puesta = await acotar(pista);
+
+    // Se comprueba acá, con la persona mirando y todavía sin grabar: si esta
+    // pantalla no se puede codificar, hay que decirlo ahora.
+    estado.tipos.pantalla = await formatoQueAguanta(estado.pantalla, false, 'pantalla');
+    if (!estado.tipos.pantalla) {
+        await soltarPantalla();
+        return {
+            ok: false,
+            error: `Este Mac no puede grabar esa pantalla (${puesta.width}×${puesta.height}): `
+                + 'su codificador de vídeo la rechaza. Probá eligiendo una ventana en vez de la '
+                + 'pantalla entera, o bajá la resolución en Ajustes del sistema.'
+        };
+    }
     return {
         ok: true,
         nombre: pista.label || 'la pantalla',
@@ -110,12 +285,55 @@ export function tienePantalla() {
 }
 
 export async function soltarPantalla() {
+    estado.tipos.pantalla = null;
     if (!estado.pantalla) return;
     for (const pista of estado.pantalla.getTracks()) {
         pista.onended = null;
         pista.stop();
     }
     estado.pantalla = null;
+}
+
+/** Cómo se llama cada fuente cuando hay que nombrarla en un cartel. */
+const nombreDe = cual => (cual === 'camara' ? 'tu cámara' : 'tu pantalla');
+
+/**
+ * Le toma el pulso a lo que se está grabando y avisa UNA vez por fuente.
+ *
+ * Una vez y no en cada vuelta: quien graba está hablando a cámara y no puede
+ * hacer nada con el segundo cartel que no pudiera hacer con el primero. El
+ * renglón que `pantalla-semanal.js` deja fijo en la tarjeta es el que queda.
+ */
+function tomarElPulso() {
+    for (const cual of estado.grabadores.keys()) {
+        const salud = estado.salud.get(cual);
+        if (!salud || salud.avisado) continue;
+
+        // Las pistas que se guardaron al arrancar, y no `grabador.stream`: es el
+        // mismo objeto, y pedirlo por acá no depende de que el grabador lo
+        // exponga (la maqueta usa uno falso que no lo tiene).
+        const pistas = salud.pistas;
+        const muerta = pistas.find(p => p.readyState === 'ended');
+        const muda = pistas.find(p => p.muted);
+        const tope = SIN_NADA_MS[cual] || SIN_NADA_MS.pantalla;
+        const quieto = !salud.bytes && Date.now() - salud.desdeMs > tope;
+        if (!muerta && !muda && !quieto) continue;
+
+        salud.avisado = true;
+        const error = muerta
+            ? 'se apagó la fuente'
+            : (muda ? 'dejó de llegar imagen' : `no llegó nada en ${Math.round(tope / 1000)} s`);
+        window.nt.anotar('semanal.fuente-caida', {
+            cual,
+            motivo: error,
+            bytes: salud.bytes,
+            segundos: Math.round((Date.now() - salud.desdeMs) / 1000),
+            pistas: pistas.map(p => ({
+                estado: p.readyState, muda: p.muted, encendida: p.enabled, nombre: p.label
+            }))
+        });
+        estado.alAviso({ tipo: 'roto', cual, error });
+    }
 }
 
 /**
@@ -135,6 +353,14 @@ export async function empezar(avisos) {
 
     const camara = ojo.elStream();
     if (camara && camara.getVideoTracks().length) {
+        // La cámara se acota igual que la pantalla, y por lo mismo: `ojo.js` la
+        // abre pidiéndole lo más grande que tenga —le sirve, porque de ahí saca
+        // las fotos de referencia de una clase— y acá eso no se usa para nada.
+        // Una OBSBOT entra a 2560×1440 y el exportador la mete en un cuadrado
+        // de 360 o, como mucho, en el cuadro de 1920×1080: cada píxel de más es
+        // codificador y disco gastados en algo que se va a tirar, y encima le
+        // roba CPU a Whisper, que es quien abre las tomas cuando se dice «3, 2, 1».
+        await acotar(camara.getVideoTracks()[0]);
         pedidos.push({
             cual: 'camara',
             stream: new MediaStream([
@@ -152,8 +378,18 @@ export async function empezar(avisos) {
     // Primero los archivos, y solo después los `start()`.
     const listos = [];
     for (const pedido of pedidos) {
-        const tipo = formatoPara(pedido.conAudio);
-        if (!tipo) return { ok: false, error: 'Este Mac no puede grabar vídeo desde la ventana.' };
+        // El de la pantalla ya se comprobó contra esta fuente al elegirla. El de
+        // la cámara se comprueba acá y no se guarda: la cámara se puede cambiar
+        // en el selector, y entonces lo comprobado sería de otra.
+        const tipo = estado.tipos[pedido.cual]
+            || await formatoQueAguanta(pedido.stream, pedido.conAudio, pedido.cual);
+        if (!tipo) {
+            return {
+                ok: false,
+                error: `Este Mac no puede grabar ${nombreDe(pedido.cual)}: su codificador de vídeo `
+                    + 'rechaza esa fuente.'
+            };
+        }
         let grabador;
         try {
             grabador = new MediaRecorder(pedido.stream, {
@@ -180,8 +416,27 @@ export async function empezar(avisos) {
     }
 
     for (const l of abiertos) {
+        const pistas = (l.stream.getVideoTracks && l.stream.getVideoTracks()) || [];
+        estado.salud.set(l.cual, { bytes: 0, desdeMs: Date.now(), avisado: false, pistas });
+        // Con qué entra cada fuente, anotado antes del primer fotograma. Es el
+        // dato que faltaba la vez que la cámara terminó en cero: sin él no hubo
+        // forma de saber a qué tamaño estaba grabando.
+        const pista = pistas[0];
+        const puesta = (pista && pista.getSettings && pista.getSettings()) || {};
+        window.nt.anotar('semanal.fuente', {
+            cual: l.cual,
+            tipo: l.tipo,
+            ancho: puesta.width || null,
+            alto: puesta.height || null,
+            fps: puesta.frameRate ? Math.round(puesta.frameRate) : null,
+            nombre: (pista && pista.label) || null,
+            conAudio: l.conAudio
+        });
+
         l.grabador.ondataavailable = async e => {
             if (!e.data || !e.data.size) return;
+            const salud = estado.salud.get(l.cual);
+            if (salud) salud.bytes += e.data.size;
             const bytes = new Uint8Array(await e.data.arrayBuffer());
             window.nt.semanalTrozo(l.cual, bytes);
         };
@@ -198,6 +453,9 @@ export async function empezar(avisos) {
     // `await` de IPC en medio: medido, el primer fotograma cae a 43 ms.
     for (const l of abiertos) l.grabador.start(CADA_MS);
 
+    if (estado.pulso) clearInterval(estado.pulso);
+    estado.pulso = setInterval(tomarElPulso, PULSO_MS);
+
     return { ok: true, grabando: abiertos.map(l => l.cual) };
 }
 
@@ -209,6 +467,8 @@ export async function empezar(avisos) {
  * segundos, que es justo donde está el final de la última toma.
  */
 export async function terminar() {
+    if (estado.pulso) { clearInterval(estado.pulso); estado.pulso = null; }
+    estado.salud.clear();
     const paradas = [...estado.grabadores.values()].map(g => new Promise(listo => {
         if (g.state === 'inactive') return listo();
         g.onstop = listo;

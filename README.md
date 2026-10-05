@@ -69,11 +69,56 @@ otro lo corte, acá una persona **se graba explicando lo que hizo en la semana y
 sale con el vídeo cortado**. Sin editor, sin XML, sin Premiere.
 
 Es una sola pantalla con cuatro momentos: elegir cámara, micrófono y pantalla;
-grabar; cortar; y el MP4 listo con su botón de **Mostrar en Finder**. Se graban
-las tres cosas a la vez —la cámara, la pantalla y la voz—, las tomas se abren
-diciendo **«3, 2, 1»** y se cierran con **«Pausa»** igual que en una clase, y al
-apretar **Terminar** la app corta las tomas, pone la pantalla de fondo con la
-cámara en la esquina inferior derecha, y exporta. No pregunta nada.
+grabar; elegir el corte; y el MP4 listo con su botón de **Mostrar en Finder**.
+Se graban las tres cosas a la vez —la cámara, la pantalla y la voz—, las tomas
+se abren diciendo **«3, 2, 1»** o **«three, two, one»** y se cierran con
+**«Pausa»** o **«Pause»** igual que en una clase. Mientras se graba, las tomas
+que van quedando **caen abajo como fichas**, con su texto, para leerlas,
+corregirles el IN y el OUT o descartarlas sin esperar al final. Al apretar
+**Terminar** se cae directo en el editor.
+
+### El editor del corte final
+
+No es un reproductor de lo exportado: es un **montaje en vivo** del corte que
+todavía se está eligiendo. Arriba van los dos vídeos crudos —uno a pantalla
+completa y el otro, si toca, en el recuadro de la esquina— y abajo una **línea
+de tomas** donde cada toma es un botón del ancho de lo que dura. Lo que suena
+es el corte final: las tomas desactivadas **se saltan**. Clicar una
+desactivada la reproduce sola, para poder oírla antes de decidir.
+
+Debajo de la línea está **solo la toma donde se está parado**: su texto con lo
+de antes y lo de después, para alargar un IN o un OUT sobre las palabras; los
+dos botones de vista (**Mi pantalla** / **Yo**), que cambian lo de arriba al
+instante; y el botón de dejarla fuera. **«Ocultar desactivadas»** esconde las
+que se van sacando, así se ve el corte limpio mientras se arma.
+
+Lo que hace que el montaje sea de fiar es que **llama al mismo `repartir` que
+el export**. No hay una segunda tabla que decida fondo, recuadro y encuadre: el
+motor contesta, por toma, en qué segundo de qué archivo cae y cuál de los dos
+se ve entero, incluidos los repuestos —una toma que pidió la cámara y no la
+tiene sale con la pantalla—. El navegador solo busca ese segundo y pone los
+dos `<video>` donde el motor dijo. Así lo que se mira es lo que va a salir.
+
+### «Quitar silencios»
+
+Una casilla antes de **Cortar y exportar**. Saca los huecos de más de **0,7 s**
+de dentro de cada toma, para que el vídeo tenga mejor ritmo
+(`engine/quitar-silencios.js`). Se desmarca y se vuelve a cortar; el MP4 de
+antes no se pisa.
+
+Dos decisiones que hay que saber. La primera: **el hueco no se borra, se
+acorta a 0,3 s**. Pegar dos frases una contra la otra suena a corte, y la idea
+es ritmo, no tartamudeo. La segunda: **mide sobre la onda, no sobre las
+palabras de Whisper**, porque el final de la última palabra lo estira justo el
+silencio que estamos buscando. Es la misma maquinaria de `ajustar-corte.js`,
+con su umbral local en vez de uno fijo.
+
+Al cortar, una toma con silencios sale en **varios pedazos**, y eso se dice
+aparte: lo que la pantalla cuenta son las **tomas** —las veces que la persona
+dijo «3, 2, 1»—, que es lo que reconoce. El aviso dice cuántos segundos menos
+de vídeo quedaron, y los dice en el **reloj de pared**: los huecos se miden en
+el reloj del audio, que es donde viven los bordes, pero el número que se le
+muestra tiene que ser el que va a ver en el reproductor.
 
 Lo que hace que esto sea barato es que **casi todo ya estaba**: el micrófono va
 por el mismo camino que en una clase, así que el «3, 2, 1», la «Pausa», el
@@ -124,11 +169,18 @@ esperados y 6,37 s obtenidos.
 
 | se dice | qué pasa |
 |---|---|
-| **"3, 2, 1"** (o "tres, dos, uno") | se abre una toma, en la palabra que sigue |
-| **"Retomamos"** | lo mismo |
-| **"Pausa"** + un segundo de silencio | se cierra, en la última palabra dicha |
+| **"3, 2, 1"** (o "tres, dos, uno", o **"three, two, one"**) | se abre una toma, en la palabra que sigue |
+| **"Retomamos"** (o **"We're back"**) | lo mismo |
+| **"Pausa"** o **"Pause"** + un segundo de silencio | se cierra, en la última palabra dicha |
 | **"Claqueta"** | se anota una claqueta |
 | un **aplauso** | lo mismo, y se confirma leyendo lo que se dijo alrededor |
+
+Las palabras valen en los dos idiomas siempre, sin tener que decirle en cuál se
+va a hablar: quien se graba la semana puede empezar en español y seguir en
+inglés y las dos cuentas abren toma. Lo que sí se elige es **qué idioma
+transcribe Whisper**, en Ajustes: **Automático**, **Español** o **Inglés**. De
+fábrica va automático en el modo semanal —ahí se mezcla— y español en la clase,
+donde forzarlo da mejor texto que dejarlo adivinar frase por frase.
 
 **Esas palabras se ven marcadas en el transcript**, que es la única manera de
 saber si la app oyó: un "3, 2, 1" que Whisper escribió "3, 2, uña" no abre nada,
@@ -1157,10 +1209,32 @@ npx electron . --use-fake-device-for-media-stream \
     --guion=tools/semanal-de-punta-a-punta.js [--segundos=12]
 ```
 
-Graba con la cámara falsa de Chromium, abre y cierra dos tomas con un hueco en
-medio, corta, exporta, y después mide lo único que lo dice todo: que el vídeo
-dure lo que duran las tomas —cruzando antes los dos relojes, porque el
-micrófono falso escribe audio a 1,88x—. De ahí salió la corrección de deriva.
+Graba con la cámara falsa de Chromium, abre y cierra tres tomas con huecos en
+medio, abre una ficha mientras graba y le corre el IN sobre una palabra, cae en
+el editor, y mide lo único que lo dice todo: que el vídeo dure lo que duran las
+tomas —cruzando antes los dos relojes, porque el micrófono falso escribe audio
+a 0,51x—. De ahí salió la corrección de deriva. En la última corrida, 14,59 s
+esperados y 14,59 s obtenidos, con 4 ms de diferencia.
+
+Del editor comprueba lo que la maqueta no puede contestar: que los dos
+`<video>` apunten a los archivos que se acaban de grabar y **carguen desde
+`file:` con la CSP de la app puesta** (1920x1080 y 3840x2160, 33,4 s), que cada
+toma busque su propio segundo dentro de lo que dura el archivo (0,22 · 13,07 ·
+23,34) y no más allá, que una toma en vista «Yo» muestre solo la cámara y las
+de «Mi pantalla» la pantalla con el recuadro, que el reloj del montaje se mueva
+al apretar Reproducir, y que dejar una fuera se vea en la línea de tomas.
+Después exporta dos veces, la segunda con «Quitar silencios», y mira que el
+segundo MP4 dure menos y que el primero siga en su sitio: 15 huecos quitados,
+10,57 s contra 14,59 s.
+
+El editor por dentro —que clicar una ficha no rebobine el montaje, que las
+desactivadas se salten, que «Ocultar desactivadas» esconda, que la barra
+espaciadora reproduzca— se prueba más rápido sobre la maqueta, con
+`node tools/probar-editor.js`, que además cuenta los errores de JavaScript de
+la pasada. Los tres MP4 que la maqueta sirve son sintéticos y se rehacen con
+`node tools/maqueta/hacer-videos.js`: dos «crudos» de 40 s, de distinto tamaño
+y color y con una barra que viaja como reloj, y uno corto que hace de
+exportado.
 
 **La cámara de referencia se prueba con la cámara falsa de Chrome.** Lo que
 `src/js/grabar/ojo.js` hace —abrir una cámara, guardar un fotograma cada medio
@@ -1178,7 +1252,7 @@ toma, fuera del XML, la ruta comprobada antes de abrirla— están en
 main.js · preload.js     Electron (el motor corre en el proceso principal)
 ipc/grabar.js            el puente de la grabación
 ipc/referencias.js       el de las fotos del OUT
-ipc/semanal.js           el del modo semanal: los dos vídeos y el corte
+ipc/semanal.js           el del modo semanal: los dos vídeos, el montaje y el corte
 engine/
   grabacion.js           la sesión: los relojes, el ciclo de señales, las claquetas
   espejo.js              lo que se ve de la sesión: el disco y la pantalla
@@ -1188,7 +1262,8 @@ engine/
   fcp-xml.js             el formato FCP7, con marcadores de secuencia y de clip
   captura.js             el WAV que se escribe mientras entra
   video-crudo.js         los dos vídeos del modo semanal, mientras entran
-  exportar-video.js      el MP4 cortado, con la cámara en la esquina
+  exportar-video.js      el MP4 cortado, y el montaje que el editor mira
+  quitar-silencios.js    partir las tomas por los huecos de más de 0,7 s
   aplausos.js            la palmada de la claqueta, en el PCM
   golpe.js               un pico corto y fuerte (lo que usaba antes)
   oir.js · transcribe.js Whisper local, por pedazos
@@ -1210,6 +1285,8 @@ src/js/
   grabar/oido.js         getUserMedia y el worklet que manda el PCM
   grabar/ojo.js          la cámara de referencia y el anillo de fotogramas
   grabar/filmar.js       grabar la cámara y la pantalla (modo semanal)
+  grabar/lista-tomas.js  las fichas de abajo, compartidas por las dos pantallas
+  semanal/montaje.js     los dos <video> del editor, puestos donde dice el motor
   fotos.js               cuándo se guarda la foto de una toma
 tools/                   maqueta, auditoría, simulación, build
 tests/                   corredor propio: node tests/run.js

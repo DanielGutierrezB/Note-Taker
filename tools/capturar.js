@@ -35,9 +35,9 @@ const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : [
     'en-vivo', 'en-vivo,desplegada', 'en-vivo,claqueta-abierta',
     'toma-abierta', 'releyendo', 'sin-audio', 'terminada', 'notas-de-antes', 'foto', 'foto-cien',
     'palmada', 'palmada-vencida', 'prproj', 'prproj-lleno', 'prproj-listo',
-    'ajustes', 'diagnostico', 'faltan-modelos',
-    // El modo semanal, en sus cuatro momentos.
-    'semanal', 'semanal-grabando', 'semanal-cortando', 'semanal-hecho',
+    'ajustes', 'ajustes-semanal', 'diagnostico', 'faltan-modelos',
+    // El modo semanal, momento por momento.
+    'semanal', 'semanal-grabando', 'semanal-ficha', 'semanal-revisar', 'semanal-revisar-fuera', 'semanal-cortando', 'semanal-hecho',
     'iconos'
 ];
 const ANCHOS = arg('ancho', null) ? [Number(arg('ancho'))] : [900, 1180, 1440];
@@ -67,7 +67,10 @@ async function main() {
 
                 await pagina.setViewport({ width: ancho, height: ALTO });
                 await pagina.goto(`${sitio.url}?e=${escenario}`, { waitUntil: 'networkidle0' });
-                await new Promise(r => setTimeout(r, 800));
+                // Esperar a que el escenario esté puesto, y no un rato fijo: los
+                // del modo semanal tardan segundos en armarse.
+                await pagina.evaluate('window.maquetaPuesta').catch(() => {});
+                await new Promise(r => setTimeout(r, 300));
 
                 const archivo = path.join(DESTINO, `${escenario.replace(/,/g, '+')}-${ancho}.png`);
                 await pagina.screenshot({ path: archivo });
