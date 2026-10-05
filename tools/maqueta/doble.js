@@ -112,13 +112,13 @@ const CARA_FALSA = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
 
 const avisos = [];
 let ajustes = { ...AJUSTES };
-if (hay('sin-carpeta')) ajustes = { ...ajustes, carpeta: null, carpetas: [], curso: '' };
+if (hay('sin-carpeta')) ajustes = { ...ajustes, carpeta: null, carpetas: [] };
 if (hay('preparar-microfono')) ajustes = { ...ajustes, dispositivo: 'MacBook Pro Microphone (Built-in)' };
 if (hay('preparar-zoom-falso')) ajustes = { ...ajustes, dispositivo: 'ZoomAudioDevice (Virtual)' };
 if (hay('preparar-sin-audio') || hay('sin-zoom')) ajustes = { ...ajustes, dispositivo: null };
 // El panel de Ajustes visto desde el modo semanal: el idioma cambia de rótulo,
-// de valor de fábrica y de sitio donde se guarda, y el fps y el curso están
-// apagados. No se llega cambiando el modo a mano porque cambiarlo navega.
+// de valor de fábrica y de sitio donde se guarda, y el fps está apagado. No se
+// llega cambiando el modo a mano porque cambiarlo navega.
 if (hay('ajustes-semanal')) ajustes = { ...ajustes, modo: 'semanal' };
 
 const progresoUpdate = [];
@@ -293,7 +293,7 @@ window.nt = {
         const vez = suyas
             .filter(s => s.numero === numero)
             .reduce((alta, s) => Math.max(alta, s.vez || 1), 0) + 1;
-        const cursoDicho = q.curso || (ajustes.carpeta || '').split('/').filter(Boolean).pop() || 'clase';
+        const cursoDicho = (ajustes.carpeta || '').split('/').filter(Boolean).pop() || 'clase';
         const curso = String(cursoDicho).toLowerCase()
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -302,7 +302,6 @@ window.nt = {
             numero,
             vez,
             cuandoMs: Date.now(),
-            curso: cursoDicho,
             nombre: `${dosDigitos}_${vez > 1 ? `V${vez}_` : ''}${curso}_2026-09-29_10-15-00`
         };
     },

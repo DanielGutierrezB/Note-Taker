@@ -170,7 +170,7 @@ module.exports = function (t) {
         const dir = carpeta();
         const s = sembrar(dir);
         referencias.guardar({ carpeta: dir, secuencia: s.secuencia, toma: 1, bytes: jpeg(1) });
-        const r = sesiones.renombrar(s.json, { curso: 'Otro Curso' });
+        const r = sesiones.renombrar(s.json, { numero: 4 });
         t.ok(r.movida);
         t.eq(referencias.listar(dir, s.secuencia).length, 0, 'ya no están en el nombre viejo');
         t.deep(referencias.listar(dir, r.secuencia).map(f => f.toma), [1]);
@@ -199,7 +199,7 @@ module.exports = function (t) {
         // foto, y nada de esto puede estorbar.
         const dir = carpeta();
         const s = sembrar(dir);
-        const r = sesiones.renombrar(s.json, { curso: 'Otro' });
+        const r = sesiones.renombrar(s.json, { numero: 4 });
         t.ok(r.movida);
         t.eq(sesiones.borrar(r.archivos.json).fotos, 0);
     });
@@ -210,7 +210,7 @@ module.exports = function (t) {
         const b = sembrar(dir, 'b_2026-09-29_11-00-00', 'b');
         referencias.guardar({ carpeta: dir, secuencia: a.secuencia, toma: 1, bytes: jpeg(1) });
         referencias.guardar({ carpeta: dir, secuencia: b.secuencia, toma: 1, bytes: jpeg(2) });
-        const r = sesiones.renombrar(a.json, { curso: 'otro' });
+        const r = sesiones.renombrar(a.json, { numero: 4 });
         t.deep(referencias.listar(dir, r.secuencia).map(f => f.toma), [1]);
         t.deep(referencias.listar(dir, b.secuencia).map(f => f.toma), [1], 'la otra clase, intacta');
     });

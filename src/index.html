@@ -48,19 +48,13 @@
             <button id="btn-elegir-carpeta" class="btn" type="button"
                     title="Elegir en qué carpeta del disco van el XML, el audio y los datos de este curso">Elegir carpeta…</button>
           </div>
-          <!-- El nombre del curso se edita acá y no solo en Ajustes: es de esta
-               carpeta y se lee al lado de ella, y entrar a Ajustes para cambiar
-               algo que pertenece a la pantalla que ya estás mirando es un viaje
-               de ida y vuelta para escribir dos palabras. El de Ajustes sigue
-               estando y es el mismo valor. -->
+          <!-- Acá hubo un campo para ponerle nombre al curso. No hay nada que
+               escribir: el curso ES esta carpeta, así que su nombre sale del de
+               ella. Lo que queda es el nombre completo que va a tener la clase
+               siguiente, que es lo que de verdad se quería ver al escribirlo. -->
           <div class="tarjeta-cuerpo">
-            <label class="campo">
-              <span class="rotulo">Nombre del curso</span>
-              <input id="curso-nombre" type="text" disabled
-                     title="Va en el nombre de cada clase de esta carpeta, y en el de la secuencia que importás en Premiere">
-              <span class="v3">Así se va a llamar la clase siguiente:
-                <code id="curso-ejemplo">—</code></span>
-            </label>
+            <span class="v3">La clase que sigue se va a llamar
+              <code id="curso-ejemplo">—</code></span>
           </div>
         </div>
         <p class="v3" style="margin-top:8px">
@@ -295,11 +289,6 @@
           <option value="pt">Portugués</option>
         </select>
         <span class="v3" id="aj-idioma-dice"></span>
-      </label>
-      <label class="campo">
-        <span class="rotulo">Nombre del curso</span>
-        <input id="aj-curso" type="text" placeholder="Curso de React">
-        <span class="v3">Es la primera mitad del nombre del XML.</span>
       </label>
       <div class="campo">
         <span class="rotulo">Cámara de referencia</span>

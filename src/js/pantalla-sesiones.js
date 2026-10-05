@@ -34,10 +34,6 @@ export function conectar(contexto) {
     });
     $('#lista-sesiones').addEventListener('click', alClic);
     $('#lista-sesiones').addEventListener('keydown', alTecla);
-    // `change` y no `input`: se guarda al salir del campo o al apretar Enter, no
-    // en cada letra. Escribir «Curso de React» por `input` serían catorce
-    // escrituras del archivo de ajustes y catorce ejemplos a medio escribir.
-    $('#curso-nombre').addEventListener('change', guardarCurso);
     $('#btn-prproj').addEventListener('click', () => panelPrproj.abrir(app.ajustes.carpeta));
     panelPrproj.conectar();
 }
@@ -57,7 +53,7 @@ export async function pintar() {
     $('#carpeta-ruta').textContent = carpeta || 'Todavía no elegiste ninguna';
     $('#btn-abrir-carpeta').hidden = !carpeta;
     $('#btn-nueva').disabled = !carpeta;
-    await pintarCurso(carpeta);
+    await pintarLaQueSigue(carpeta);
 
     sesiones = carpeta ? await window.nt.grabarListar([carpeta]) : [];
     $('#sesiones-cuantas').textContent = sesiones.length
@@ -74,42 +70,25 @@ export async function pintar() {
 }
 
 /**
- * El nombre del curso y el ejemplo de cómo va a llamarse la clase siguiente.
+ * Cómo se va a llamar la clase siguiente, al lado de la carpeta.
  *
- * El campo vacío no es un error: entonces el curso es el nombre de la carpeta,
- * que es lo que la app usaba antes de que esto se pudiera escribir y lo que
- * sigue usando. Por eso el nombre de la carpeta va de `placeholder` —se ve
- * tenue, igual que el valor que va a tomar— en vez de escribirse dentro del
- * campo, que diría que alguien lo eligió.
+ * Acá había un campo para escribir el nombre del curso. Se fue: el curso es la
+ * carpeta, así que no hay nada que escribir, y lo único que quedaba de ese campo
+ * era esto —ver el nombre antes de que exista—.
  *
- * El ejemplo lo arma el motor (`grabarNombreSiguiente`): es la única forma de
- * que la convención de nombres viva en un solo archivo, porque la ventana no
- * puede `require` el del motor. Y es lo que hace que el número automático se
- * vea ANTES de grabar, que es cuando sirve para corregirlo.
+ * Lo arma el motor (`grabarNombreSiguiente`) y no esta pantalla. Es la única
+ * forma de que la convención de nombres viva en un solo archivo, porque la
+ * ventana no puede `require` el del motor; y es lo que hace que el número
+ * automático se vea ANTES de grabar, que es cuando sirve para corregirlo.
  */
-async function pintarCurso(carpeta) {
-    const campo = $('#curso-nombre');
+async function pintarLaQueSigue(carpeta) {
     const ejemplo = $('#curso-ejemplo');
-    campo.disabled = !carpeta;
-    if (document.activeElement !== campo) campo.value = app.ajustes.curso || '';
     if (!carpeta) {
-        campo.placeholder = 'Elegí primero la carpeta';
         ejemplo.textContent = '—';
         return;
     }
-    // El `placeholder` sale de lo que el motor contesta y no del nombre de la
-    // carpeta recortado acá: el que decide qué curso se usa cuando nadie lo
-    // escribió es el motor, y copiar esa decisión en la pantalla era arriesgarse
-    // a mostrar de ejemplo un nombre distinto del que se iba a grabar.
-    const r = await window.nt.grabarNombreSiguiente(carpeta, { curso: app.ajustes.curso });
-    campo.placeholder = (r && r.curso) || '';
+    const r = await window.nt.grabarNombreSiguiente(carpeta);
     ejemplo.textContent = r && r.nombre ? `${r.nombre}.xml` : '—';
-}
-
-async function guardarCurso(e) {
-    const escrito = e.target.value.trim();
-    app.ajustes = (await window.nt.ajustesGuardar({ curso: escrito || null })).ajustes;
-    await pintarCurso(app.ajustes.carpeta);
 }
 
 function vacio(carpeta) {

@@ -41,10 +41,10 @@ module.exports = function (t) {
                 throw new Error(`NO se escribe: los ajustes irían a ${ajustes.dondeViven()}`
                     + ` en vez de a ${aparte}`);
             }
-            ajustes.guardar({ modo: 'semanal', curso: 'solo de prueba' });
+            ajustes.guardar({ modo: 'semanal', dispositivo: 'solo de prueba' });
             t.ok(fs.existsSync(aparte), 'escribió donde se le dijo');
-            t.eq(JSON.parse(fs.readFileSync(aparte, 'utf8')).curso, 'solo de prueba');
-            t.eq(ajustes.leer().curso, 'solo de prueba', 'y lee de ahí también');
+            t.eq(JSON.parse(fs.readFileSync(aparte, 'utf8')).dispositivo, 'solo de prueba');
+            t.eq(ajustes.leer().dispositivo, 'solo de prueba', 'y lee de ahí también');
         } finally {
             if (antes === undefined) delete process.env.NT_AJUSTES;
             else process.env.NT_AJUSTES = antes;
@@ -167,8 +167,15 @@ module.exports = function (t) {
         t.deep(ajustes.sanear({ carpetas: ['/a', null, 3, '', '/b'] }).carpetas, ['/a', '/b']);
     });
 
-    t.test('el curso se recorta pero no se pierde', () => {
-        t.eq(ajustes.sanear({ curso: '  React  ' }).curso, 'React');
+    t.test('el curso no se guarda: es el nombre de la carpeta', () => {
+        // Guardado aparte, el nombre del curso se escribía una vez y después
+        // mentía: quien elegía otra carpeta seguía grabando clases con el nombre
+        // del curso anterior. Ahora sale de la carpeta elegida, que se ve en la
+        // pantalla donde eso pasa. Lo que quedó en el disco se cae al guardar,
+        // porque `sanear` rearma el objeto entero.
+        const puesto = ajustes.sanear({ curso: 'React', carpeta: '/Cursos/Diseño UX' });
+        t.eq(puesto.curso, undefined, 'no vuelve, ni vacío');
+        t.eq(puesto.carpeta, '/Cursos/Diseño UX', 'de ahí sale el nombre ahora');
     });
 
     t.test('todos los fps de la lista se aceptan', () => {

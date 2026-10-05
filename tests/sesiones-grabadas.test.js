@@ -145,12 +145,12 @@ module.exports = function (t) {
 
     t.group('sesiones-grabadas · renombrar');
 
-    t.test('cambia el curso y mueve los tres archivos', () => {
+    t.test('mueve los tres archivos de la clase', () => {
         const dir = carpeta();
         const s = sembrar(dir);
-        const r = sesiones.renombrar(s.json, { curso: 'Otro Curso' });
+        const r = sesiones.renombrar(s.json, { numero: 3 });
         t.ok(r.movida);
-        t.eq(r.secuencia, 'otro-curso_2026-09-29_10-00-00');
+        t.eq(r.secuencia, '03_curso_2026-09-29_10-00-00');
         t.ok(fs.existsSync(r.archivos.xml), 'el XML nuevo está');
         t.ok(fs.existsSync(r.archivos.json), 'y el sidecar');
         t.eq(fs.existsSync(s.xml), false, 'el viejo se fue');
@@ -161,7 +161,7 @@ module.exports = function (t) {
         // Es de donde sale el clip de A1 y «Regenerar» meses después.
         const dir = carpeta();
         const s = sembrar(dir);
-        const r = sesiones.renombrar(s.json, { curso: 'Otro' });
+        const r = sesiones.renombrar(s.json, { numero: 3 });
         const sidecar = JSON.parse(fs.readFileSync(r.archivos.json, 'utf8'));
         t.ok(fs.existsSync(sidecar.sesiones[0].archivo), sidecar.sesiones[0].archivo);
     });
@@ -169,40 +169,37 @@ module.exports = function (t) {
     t.test('nunca cambia la hora', () => {
         const dir = carpeta();
         const s = sembrar(dir);
-        const r = sesiones.renombrar(s.json, { curso: 'Otro' });
+        const r = sesiones.renombrar(s.json, { numero: 3 });
         t.ok(r.secuencia.endsWith('_2026-09-29_10-00-00'));
     });
 
     t.test('el mismo nombre no mueve nada', () => {
         const dir = carpeta();
         const s = sembrar(dir);
-        const r = sesiones.renombrar(s.json, { curso: 'curso' });
-        t.eq(r.movida, false);
+        const r = sesiones.renombrar(s.json, { numero: '' });
+        t.eq(r.movida, false, 'sin número, y ya no tenía: el nombre es el mismo');
     });
 
-    t.test('un nombre que ya existe se rechaza', () => {
-        const dir = carpeta();
-        const a = sembrar(dir, { secuencia: 'a_2026-09-29_10-00-00', curso: 'a' });
-        sembrar(dir, { secuencia: 'b_2026-09-29_10-00-00', curso: 'b' });
-        let error = null;
-        try { sesiones.renombrar(a.json, { curso: 'b' }); } catch (e) { error = e.message; }
-        t.ok(error && error.includes('Ya hay una sesión'), error);
-        t.ok(fs.existsSync(a.xml), 'y la original sigue entera');
-    });
-
-    t.test('un curso vacío se rechaza', () => {
+    t.test('un archivo que ya está en ese nombre se rechaza', () => {
+        // Dos clases no pueden chocar entre ellas: repetir un número da una V2.
+        // Lo que sí puede estar en el camino es un archivo suelto —un XML sin
+        // sidecar, de una copia a mano o de un borrado a medias—, que no sale en
+        // la lista y por eso no entra en la cuenta de las veces. Pisarlo sería
+        // perderlo sin decirlo.
         const dir = carpeta();
         const s = sembrar(dir);
+        fs.writeFileSync(path.join(dir, 'xml', '03_curso_2026-09-29_10-00-00.xml'), 'suelto');
         let error = null;
-        try { sesiones.renombrar(s.json, { curso: '   ' }); } catch (e) { error = e.message; }
-        t.ok(error && error.includes('vacío'), error);
+        try { sesiones.renombrar(s.json, { numero: 3 }); } catch (e) { error = e.message; }
+        t.ok(error && error.includes('Ya hay una sesión'), error);
+        t.ok(fs.existsSync(s.xml), 'y la original sigue entera');
     });
 
     t.test('la que se está grabando no se renombra', () => {
         const dir = carpeta();
         const s = sembrar(dir);
         let error = null;
-        try { sesiones.renombrar(s.json, { curso: 'x' }, s.secuencia); } catch (e) { error = e.message; }
+        try { sesiones.renombrar(s.json, { numero: 3 }, s.secuencia); } catch (e) { error = e.message; }
         t.ok(error && error.includes('grabando'), error);
     });
 
@@ -250,12 +247,16 @@ module.exports = function (t) {
         t.eq(JSON.parse(fs.readFileSync(b.archivos.json, 'utf8')).numero, null);
     });
 
-    t.test('cambiar el curso después conserva el número', () => {
+    t.test('el curso se queda como estaba, aunque la carpeta se haya renombrado', () => {
+        // Podría rearmarse del nombre de la carpeta, que es de donde sale ahora.
+        // No se hace: el nombre de una clase ya grabada es con lo que el editor
+        // empareja los archivos de la cámara, y rebautizar diez clases viejas
+        // porque alguien le corrigió una tilde a la carpeta rompe eso en silencio.
         const dir = carpeta();
-        const s = sembrar(dir);
-        const a = sesiones.renombrar(s.json, { numero: 3 });
-        const b = sesiones.renombrar(a.archivos.json, { curso: 'Otro' });
-        t.eq(b.secuencia, '03_otro_2026-09-29_10-00-00');
+        const a = clase(dir, 1, 1, 0);
+        const r = sesiones.renombrar(a.json, { numero: 5 });
+        t.eq(r.secuencia, '05_curso_2026-09-29_10-00-00', 'el curso viejo, el número nuevo');
+        t.eq(JSON.parse(fs.readFileSync(r.archivos.json, 'utf8')).curso, 'curso');
     });
 
     t.test('la lista trae el número, para editarlo', () => {
@@ -320,6 +321,10 @@ module.exports = function (t) {
         const dir = carpeta();
         sembrar(dir, { secuencia: '07_curso_2026-09-29_10-00-00' });
         t.eq(sesiones.proximoNumero(dir), 8);
+        // Y la lista lo trae ya resuelto: es el número que la pantalla pone en el
+        // campo del lápiz, y tiene que ser el mismo que el motor cuenta.
+        t.eq(sesiones.listar([dir])[0].numero, 7, 'el de su nombre');
+        t.eq(sesiones.listar([dir])[0].vez, 1);
     });
 
     t.test('repetir un número da V2, y después V3', () => {
@@ -382,17 +387,29 @@ module.exports = function (t) {
             'y al lado se ve lo que no se toca: el curso, la fecha y la hora');
     });
 
-    t.test('nadie fuera del motor decide qué curso se usa si no hay uno escrito', () => {
-        // Estaba decidido en tres sitios —las dos pantallas y el motor— y tres
-        // copias de «si no hay curso, usá la carpeta» querían decir que el nombre
-        // que la pantalla mostraba de ejemplo podía dejar de ser el que la
-        // grabación iba a escribir. Eso no se nota hasta que ya está en el disco.
+    t.test('el curso no se escribe en ningún sitio: es el nombre de la carpeta', () => {
+        // «El nombre del curso debe sí o sí ser siempre el slug que es el nombre
+        // de la carpeta». Había un campo para escribirlo en Ajustes y otro al
+        // lado de la carpeta, y un valor guardado aparte se escribe una vez y
+        // después miente: quien elegía otra carpeta seguía grabando clases con el
+        // nombre del curso anterior.
+        //
+        // Lo que queda es una sola decisión, en el motor. Tenerla en las
+        // pantallas también —estuvo en tres sitios— quería decir que el nombre
+        // que se mostraba de ejemplo podía dejar de ser el que se iba a grabar, y
+        // eso no se nota hasta que ya está en el disco.
         const raiz = path.join(__dirname, '..');
+        const html = fs.readFileSync(path.join(raiz, 'src', 'index.html'), 'utf8');
+        t.ok(!/id="aj-curso"|id="curso-nombre"/.test(html), 'no hay campo que escribir');
+        t.ok(/id="curso-ejemplo"/.test(html), 'pero sí la vista previa del nombre que viene');
         for (const cual of ['pantalla-sesiones.js', 'pantalla-preparar.js']) {
             const js = fs.readFileSync(path.join(raiz, 'src', 'js', cual), 'utf8');
             t.ok(!/split\('\/'\)\.filter\(Boolean\)\.pop\(\)/.test(js),
                 `${cual} no se saca el nombre de la carpeta por su cuenta`);
+            t.ok(!/ajustes\.curso/.test(js), `${cual} tampoco lo lee de los ajustes`);
         }
+        const guardados = fs.readFileSync(path.join(raiz, 'engine', 'ajustes.js'), 'utf8');
+        t.ok(!/^\s*curso:/m.test(guardados), 'y no queda guardado, que es de dónde mentía');
         const motor = fs.readFileSync(path.join(raiz, 'engine', 'nombre-de-sesion.js'), 'utf8');
         t.ok(/function cursoPorDefecto\(dir\)/.test(motor), 'lo decide el motor, en un solo sitio');
     });

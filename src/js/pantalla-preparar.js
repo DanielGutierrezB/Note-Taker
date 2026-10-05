@@ -44,7 +44,7 @@ const audio = {
 };
 
 /**
- * Cómo se va a llamar esta clase: `{ numero, vez, curso, nombre }`.
+ * Cómo se va a llamar esta clase: `{ numero, vez, cuandoMs, nombre }`.
  *
  * Lo contesta el motor, que es el único que sabe qué hay en la carpeta y el
  * único que tiene la convención de nombres. Acá se guarda para poder dibujarlo
@@ -104,7 +104,7 @@ export async function ver(opciones) {
 async function preguntarElNombre(numero) {
     const carpeta = app.ajustes.carpeta;
     if (!carpeta) return null;
-    return window.nt.grabarNombreSiguiente(carpeta, { curso: app.ajustes.curso, numero });
+    return window.nt.grabarNombreSiguiente(carpeta, { numero });
 }
 
 async function releerEntradas() {
@@ -418,10 +418,6 @@ async function iniciar() {
     const como = fuente.comoSuena();
     const payload = {
         dir: app.ajustes.carpeta,
-        // Sin curso escrito lo resuelve el motor, con el nombre de la carpeta
-        // (`nombre-de-sesion.cursoPorDefecto`): es la misma decisión que armó el
-        // ejemplo de arriba, y por eso no se repite acá.
-        curso: app.ajustes.curso || null,
         // El número, no la versión: cuál de las veces que se grabó esta clase es
         // esta se resuelve en el motor al escribir, con lo que haya en la
         // carpeta en ese instante (ver `grabacion.iniciar`).

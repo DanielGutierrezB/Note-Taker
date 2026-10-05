@@ -49,8 +49,6 @@ const DEFAULTS = {
      */
     carpeta: null,
     carpetas: [],
-    /** El nombre del curso, que es la primera mitad del nombre de la sesión. */
-    curso: '',
     /** A cuántos cuadros va la secuencia del editor. */
     fps: 30,
     /**
@@ -204,7 +202,16 @@ function sanear(crudo) {
         carpetas: (carpeta ? [carpeta] : [])
             .concat([...new Set(recordadas)])
             .slice(0, RECIENTES),
-        curso: typeof c.curso === 'string' ? c.curso.trim() : '',
+        // Acá vivía `curso`, el nombre que iba delante del de cada clase. Ya no:
+        // el curso ES la carpeta, así que su nombre sale del de ella
+        // (`nombre-de-sesion.cursoPorDefecto`) y no se guarda. Guardado era un
+        // valor suelto que se escribía una vez y después mentía: quien elegía
+        // otra carpeta seguía grabando clases con el nombre del curso anterior,
+        // y el ajuste no se veía desde la pantalla donde eso pasaba.
+        //
+        // Como `sanear` rearma el objeto entero, el que ya esté en el disco se
+        // cae solo al guardar, sin migración que escribir.
+
         // Un fps que no está en la lista no se puede escribir bien en el XML
         // —haría falta saber si lleva `ntsc`—, así que se cae al de fábrica en
         // vez de arrastrar un número que después nadie sabe de dónde salió.

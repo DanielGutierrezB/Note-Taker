@@ -80,8 +80,8 @@ function dos(n) {
 /**
  * El curso, como cabe en un nombre de archivo.
  *
- * Sale de lo que el editor escribió o del nombre de la carpeta, así que puede
- * traer cualquier cosa: espacios, tildes, barras.
+ * Sale del nombre de la carpeta, así que puede traer cualquier cosa: espacios,
+ * tildes, barras, emoji.
  */
 function cursoEnElNombre(curso) {
     return workspace.safeName(curso || 'clase')
@@ -92,14 +92,20 @@ function cursoEnElNombre(curso) {
 }
 
 /**
- * El curso, cuando nadie lo escribió: el nombre de la carpeta.
+ * El curso de una carpeta: su nombre, y nada más.
  *
- * Está acá y no en cada pantalla porque es una decisión y no un formato, y
- * estaba tomada en tres sitios —la pantalla de la carpeta, la lista de
- * verificación y el motor al arrancar—. Tres copias de «si no hay curso, usá la
- * carpeta» querían decir que el nombre que la pantalla mostraba de ejemplo podía
- * dejar de ser el que la grabación iba a escribir, y eso no se nota hasta que ya
- * está en el disco.
+ * **Nadie lo escribe.** Antes había un campo para ponerle nombre al curso, en
+ * Ajustes y al lado de la carpeta. Se fue: «el nombre del curso debe sí o sí ser
+ * siempre el slug que es el nombre de la carpeta». Un nombre que se escribe
+ * aparte es un nombre que se escribe UNA vez y después miente —quien cambiaba de
+ * carpeta seguía grabando clases con el nombre del curso anterior—, mientras que
+ * la carpeta se elige cada vez y se ve en la pantalla.
+ *
+ * Y está acá y no en cada pantalla porque es una decisión y no un formato.
+ * Estaba tomada en tres sitios —la pantalla de la carpeta, la lista de
+ * verificación y el motor al arrancar—, y tres copias querían decir que el
+ * nombre que la pantalla mostraba de ejemplo podía dejar de ser el que la
+ * grabación iba a escribir, que no se nota hasta que ya está en el disco.
  */
 function cursoPorDefecto(dir) {
     return String(dir || '').split(path.sep).filter(Boolean).pop() || 'clase';

@@ -190,6 +190,13 @@ function sidecaresDe(donde, base) {
             const suyos = workspace.sesionDelSidecar(json);
             sesiones.push({
                 ...leida,
+                // Resuelto y no crudo del sidecar: la pantalla pone este número
+                // en el campo del lápiz, y el motor cuenta con `numeroDe` al
+                // decidir qué número sigue. Si la lista mostrara uno y el motor
+                // contara otro —pasa con una clase renombrada a mano, que tiene
+                // el número en el nombre y no adentro—, el campo saldría vacío
+                // sobre una clase que sí tiene número.
+                ...numeroDe(leida),
                 carpeta: base,
                 archivos: { xml: suyos.xml, json },
                 resumen: {
@@ -635,7 +642,7 @@ function wavRenombrado(ruta, viejo, nuevo) {
 }
 
 /**
- * Renombra una sesión: el curso o el número de clase, nunca la hora.
+ * Renombra una sesión: su número de clase, nunca la hora ni el curso.
  *
  * **El gesto de la pantalla es el número.** El editor, con la lista delante:
  * «al darle editar el nombre, es ese número el que me debe dejar editar». O sea
@@ -659,8 +666,15 @@ function wavRenombrado(ruta, viejo, nuevo) {
  * nuevo, y recién al final se borra el par viejo. En ningún momento hay un
  * sidecar apuntando a un XML que ya no se llama así.
  *
+ * **El curso no se toca, ni siquiera si la carpeta se renombró.** Es el nombre
+ * de la carpeta (`cursoPorDefecto`), así que podría rearmarse; pero el nombre de
+ * una clase ya grabada es con lo que el editor empareja los archivos de la
+ * cámara, y rebautizar diez clases viejas porque alguien le corrigió una tilde a
+ * la carpeta rompería ese emparejamiento sin avisar. Cada clase se queda con el
+ * curso que tenía cuando se grabó.
+ *
  * @param {string} json el sidecar de la sesión
- * @param {object} cambio { curso, numero } — el que no venga se queda como está
+ * @param {object} cambio { numero } — vacío le quita el número
  * @param {string} [enCurso] la secuencia que se está grabando ahora
  */
 function renombrar(json, cambio, enCurso) {
@@ -671,14 +685,9 @@ function renombrar(json, cambio, enCurso) {
     if (estado.secuencia && estado.secuencia === enCurso) {
         throw new Error('Esa sesión se está grabando ahora. Terminala para renombrarla.');
     }
-    if (c.curso != null && !String(c.curso).trim()) {
-        throw new Error('El nombre del curso no puede quedar vacío.');
-    }
 
     const cuandoMs = horaDeCaptura(estado, sitio.nombre);
-    const curso = c.curso != null
-        ? String(c.curso)
-        : (estado.curso || (nombreDeSesion.leer(sitio.nombre) || {}).curso || '');
+    const curso = estado.curso || (nombreDeSesion.leer(sitio.nombre) || {}).curso || '';
 
     const pedido = c.numero != null ? c.numero : numeroDe(estado).numero;
     const numero = nombreDeSesion.numeroEnElNombre(pedido) ? Math.floor(Number(pedido)) : null;

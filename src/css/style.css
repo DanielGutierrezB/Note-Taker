@@ -337,12 +337,6 @@ body {
   white-space: nowrap;
 }
 
-/* El nombre del curso, al lado de la carpeta. Ancho de nombre y no de ruta: el
-   campo llegaba al borde de la tarjeta y decía que ahí iba un párrafo. */
-#curso-nombre {
-  max-width: 360px;
-}
-
 .ses-base {
   font-size: 13px;
   font-weight: 600;

@@ -187,7 +187,7 @@ function soltar() {
  * donde el editor apretó grabar y la primera claqueta queda marcada adentro,
  * con su timecode, que es exactamente lo que él necesita para correlacionar.
  *
- * @param {object} params { dir, curso, numero, fps, idioma, dispositivo,
+ * @param {object} params { dir, numero, fps, idioma, dispositivo,
  *   sampleRate, canales, avisar, sinReloj, reanudar, carpetaPropia }
  */
 function iniciar(params) {
@@ -231,10 +231,10 @@ function iniciar(params) {
     const numero = nombreDeSesion.numeroEnElNombre(p.numero) ? Math.floor(Number(p.numero)) : null;
     const vez = numero != null ? sesionesGrabadas.vezLibre(dir, numero) : null;
 
-    // Sin curso escrito, el curso es el nombre de la carpeta. Se resuelve acá y
-    // no en la ventana para que el nombre que la pantalla muestra de ejemplo y el
-    // que se escribe salgan de la MISMA decisión.
-    const curso = p.curso || nombreDeSesion.cursoPorDefecto(p.dir);
+    // El curso es el nombre de la carpeta, siempre. La ventana no lo manda: se
+    // resuelve acá para que el nombre que la pantalla muestra de ejemplo y el que
+    // se escribe salgan de la MISMA decisión. Ver `cursoPorDefecto`.
+    const curso = nombreDeSesion.cursoPorDefecto(p.dir);
 
     sesion = {
         // Mientras esté en pie. Lo mira todo lo que vuelve de un `await`, que es

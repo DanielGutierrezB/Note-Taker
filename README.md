@@ -45,7 +45,8 @@ audio grabado y no contra el reloj de pared (ver **Un solo reloj**).
 
 ## Cómo funciona
 
-1. **Sesiones** — se elige la carpeta del curso y se le pone nombre. Adentro se
+1. **Sesiones** — se elige la carpeta del curso, que es la que le da nombre a
+   cada clase que se grabe ahí. Adentro se
    crean `xml/` con el archivo que se importa en Premiere, `xml/Audio/` con el
    WAV y `xml/Datos/` con lo que la app se guarda para sí misma.
 2. **Preparar** — una lista de verificación: la entrada de audio con su
@@ -102,15 +103,26 @@ nombre —curso, fecha y hora— no lo mueve nadie: es lo que el editor empareja
 los archivos de cámara, que traen la hora local de su reloj en su fecha de
 creación.
 
-**El nombre del curso se edita al lado de la carpeta**, además de en Ajustes. Es
-el mismo valor: pertenece a esa carpeta y se lee junto a ella, y entrar a un
-panel para escribir dos palabras que pertenecen a la pantalla que ya estás
-mirando es un viaje de ida y vuelta. Vacío, el curso es el nombre de la carpeta,
-y se ve de `placeholder` para que se note que nadie lo eligió. Al lado está el
-nombre completo que va a tener la clase siguiente, armado **por el motor**: la
-ventana no puede `require` un módulo de `engine/`, así que la única forma de que
-la convención viva en un solo archivo es que la pregunta se conteste del lado de
-Node (`grabar-nombre-siguiente`).
+**El nombre del curso es el de la carpeta, y no se escribe en ningún lado.**
+Hubo un campo para ponerlo, en Ajustes y al lado de la carpeta; se fue. Un nombre
+guardado aparte se escribe una vez y después miente: quien elegía otra carpeta
+seguía grabando clases con el nombre del curso anterior, y el ajuste que lo decía
+no se veía desde la pantalla donde eso estaba pasando. La carpeta, en cambio, se
+elige cada vez y está a la vista.
+
+Lo que sí queda al lado de la carpeta es **el nombre completo que va a tener la
+clase siguiente**, que es lo único que se quería de ese campo: ver el nombre
+antes de que exista. Lo arma **el motor** y no la pantalla: la ventana no puede
+`require` un módulo de `engine/`, así que la única forma de que la convención
+viva en un solo archivo es que la pregunta se conteste del lado de Node
+(`grabar-nombre-siguiente`). Que la ventana lo dedujera por su cuenta —y lo hacía
+en tres sitios— era arriesgarse a mostrar de ejemplo un nombre distinto del que
+se iba a grabar, que no se nota hasta que ya está en el disco.
+
+Renombrar una clase vieja **no le cambia el curso**, ni siquiera si la carpeta se
+renombró: el nombre de una clase ya grabada es con lo que el editor empareja los
+archivos de cámara, y rebautizar diez clases porque alguien le corrigió una tilde
+a la carpeta rompería ese emparejamiento sin avisar.
 
 ## El otro modo: un vídeo por semana
 

@@ -236,7 +236,6 @@ function conectarAjustes() {
     $('#aj-idioma').addEventListener('change', e => guardar(app.ajustes.modo === 'semanal'
         ? { semanal: { idioma: e.target.value } }
         : { idioma: e.target.value }));
-    $('#aj-curso').addEventListener('change', e => guardar({ curso: e.target.value }));
     $('#aj-camara').addEventListener('change', async e => {
         await guardar({ camara: e.target.value || null });
         await verLaCamara();
@@ -262,15 +261,11 @@ function pintarAjustes() {
               : 'La primera vez te va a preguntar dónde guardarlos.')
         : 'Tomás notas de un rodaje en vivo y la app escribe el XML que el editor importa '
           + 'en Premiere. Lo de abajo es de este modo.';
-    for (const campo of ['#aj-fps', '#aj-curso']) {
-        // En el modo semanal no hay secuencia ni curso: el fps lo fija el modo
-        // y el nombre lo pone la app. Se dejan a la vista pero apagados, que
-        // dice más que esconderlos.
-        $(campo).disabled = app.ajustes.modo === 'semanal';
-    }
+    // En el modo semanal no hay secuencia: el fps lo fija el modo. Se deja a la
+    // vista pero apagado, que dice más que esconderlo.
+    $('#aj-fps').disabled = app.ajustes.modo === 'semanal';
     $('#aj-fps').value = String(app.ajustes.fps);
     pintarIdioma();
-    $('#aj-curso').value = app.ajustes.curso || '';
     pintarCamaras();
 }
 

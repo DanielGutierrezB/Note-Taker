@@ -165,7 +165,6 @@ const SUELTAS_SEMANA = palabras(
 export function estadoSemanal(extra) {
     return estadoEnVivo(Object.assign({
         secuencia: 'semana_2026-10-03_09-12-40',
-        curso: '',
         claquetas: [],
         segundos: 300,
         historia: { atras: 0, adelante: 0, queAtras: '', queAdelante: '' },

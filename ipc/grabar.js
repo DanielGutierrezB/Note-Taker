@@ -245,15 +245,14 @@ function registrar({ ipcMain, app, send, anotar }) {
             : grabacion.proximoNumero(dir);
         const vez = grabacion.vezDeLaSiguiente(dir, numero);
         const cuandoMs = Date.now();
-        // `curso` vuelve también: es el que la pantalla muestra de `placeholder`
-        // cuando nadie escribió uno, y que salga de acá es lo que impide que lo
-        // que se ve y lo que se graba se separen.
-        const curso = q.curso || nombreDeSesion.cursoPorDefecto(dir);
+        // El curso sale de la carpeta y lo resuelve el motor, no la ventana: eso
+        // es lo que impide que el nombre que se ve de ejemplo y el que se graba
+        // se separen.
+        const curso = nombreDeSesion.cursoPorDefecto(dir);
         return {
             numero,
             vez,
             cuandoMs,
-            curso,
             nombre: nombreDeSesion.armar({ curso, cuandoMs, numero, vez })
         };
     });
@@ -315,7 +314,7 @@ function registrar({ ipcMain, app, send, anotar }) {
      * llega a este renglón ya está decidido, y el motor borra.
      */
     ipcMain.handle('grabar-renombrar', (event, json, cambio) => {
-        anotar('grabar.renombrar', { json, curso: cambio && cambio.curso, numero: cambio && cambio.numero });
+        anotar('grabar.renombrar', { json, numero: cambio && cambio.numero });
         try {
             const r = grabacion.renombrarGrabada(json, cambio);
             anotar('grabar.renombrada', { json, secuencia: r.secuencia, audios: r.audios });
