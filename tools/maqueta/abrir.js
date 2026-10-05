@@ -148,8 +148,9 @@ function crear(puerto) {
  * inclusiones es lo que hace que un escenario nuevo entre solo en las tres.
  */
 const ESCENARIOS = [
-    'vacio', 'sin-carpeta', 'sesiones',
-    'preparar', 'preparar-sin-audio', 'preparar-microfono', 'preparar-zoom-falso',
+    'vacio', 'sin-carpeta', 'sesiones', 'numero-de-clase',
+    'preparar', 'preparar-clase-repetida', 'preparar-sin-audio', 'preparar-microfono',
+    'preparar-zoom-falso',
     'sin-whisper', 'sin-zoom', 'faltan-modelos', 'update',
     // `desplegada` y `claqueta-abierta` no son pantallas: son cómo queda la de
     // en vivo con algo abierto, así que van con ella.

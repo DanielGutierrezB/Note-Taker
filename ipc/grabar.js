@@ -13,6 +13,7 @@
  */
 
 const grabacion = require('../engine/grabacion');
+const nombreDeSesion = require('../engine/nombre-de-sesion');
 const vivo = require('../engine/notas-vivo');
 const audioApp = require('../engine/audio-app');
 
@@ -223,6 +224,40 @@ function registrar({ ipcMain, app, send, anotar }) {
     ipcMain.handle('grabar-vistas', () => vivo.VISTAS);
     ipcMain.handle('grabar-listar', (event, dirs) => grabacion.listar(dirs));
 
+    /**
+     * Cómo se llamaría la clase siguiente en esa carpeta.
+     *
+     * Contesta el nombre ARMADO y no solo el número, y por eso existe: la
+     * ventana muestra ese nombre en dos sitios —el ejemplo de la pantalla de la
+     * carpeta y la lista de verificación— y armarlo allá quería decir tener la
+     * convención de nombres escrita también en el renderer, que es justo lo que
+     * `nombre-de-sesion.js` existe para evitar. El renderer no puede `require`
+     * un módulo del motor, así que la única forma de que haya una sola
+     * convención es que la pregunta se conteste de este lado.
+     *
+     * El número se vuelve a resolver al arrancar: entre ver esto y apretar
+     * Iniciar puede pasar media clase.
+     */
+    ipcMain.handle('grabar-nombre-siguiente', (event, dir, que) => {
+        const q = que || {};
+        const numero = q.numero != null && q.numero !== ''
+            ? Math.floor(Number(q.numero))
+            : grabacion.proximoNumero(dir);
+        const vez = grabacion.vezDeLaSiguiente(dir, numero);
+        const cuandoMs = Date.now();
+        // `curso` vuelve también: es el que la pantalla muestra de `placeholder`
+        // cuando nadie escribió uno, y que salga de acá es lo que impide que lo
+        // que se ve y lo que se graba se separen.
+        const curso = q.curso || nombreDeSesion.cursoPorDefecto(dir);
+        return {
+            numero,
+            vez,
+            cuandoMs,
+            curso,
+            nombre: nombreDeSesion.armar({ curso, cuandoMs, numero, vez })
+        };
+    });
+
     // Tarda lo que tarde releer las últimas tomas con el modelo grande: la
     // ventana espera la respuesta y lo dice mientras tanto.
     ipcMain.handle('grabar-terminar', async () => {
@@ -280,7 +315,7 @@ function registrar({ ipcMain, app, send, anotar }) {
      * llega a este renglón ya está decidido, y el motor borra.
      */
     ipcMain.handle('grabar-renombrar', (event, json, cambio) => {
-        anotar('grabar.renombrar', { json, curso: cambio && cambio.curso, prefijo: cambio && cambio.prefijo });
+        anotar('grabar.renombrar', { json, curso: cambio && cambio.curso, numero: cambio && cambio.numero });
         try {
             const r = grabacion.renombrarGrabada(json, cambio);
             anotar('grabar.renombrada', { json, secuencia: r.secuencia, audios: r.audios });

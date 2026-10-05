@@ -16,6 +16,7 @@ const sesiones = require('../engine/sesiones-grabadas');
 const workspace = require('../engine/workspace');
 const notasXml = require('../engine/notas-xml');
 const vivo = require('../engine/notas-vivo');
+const nombre = require('../engine/nombre-de-sesion');
 
 const T0 = Date.parse('2026-09-29T10:00:00');
 
@@ -35,7 +36,11 @@ function sembrar(dir, opciones) {
     // otra hora queda coherente —el WAV, las tomas y la claqueta se mueven con
     // ella— y el orden de la lista se puede probar de verdad.
     const cero = o.ceroMs != null ? o.ceroMs : T0;
-    const estado = vivo.estadoNuevo({ secuencia, curso: o.curso || 'curso', ceroMs: cero, fps: 30 });
+    const estado = vivo.estadoNuevo({
+        secuencia, curso: o.curso || 'curso', ceroMs: cero, fps: 30,
+        numero: o.numero != null ? o.numero : null,
+        vez: o.vez != null ? o.vez : null
+    });
     estado.sesiones = [{ archivo: wav, desdeMs: cero, segundos: 600, sampleRate: 48000, canales: 1 }];
     estado.tomas = o.tomas || [{
         id: 1, vista: 'PV', comentario: 'Una', cuenta: '3, 2, 1.',
@@ -201,63 +206,164 @@ module.exports = function (t) {
         t.ok(error && error.includes('grabando'), error);
     });
 
-    t.group('sesiones-grabadas · renombrar con un nombre delante');
+    t.group('sesiones-grabadas · el número de clase');
 
-    t.test('lo escrito va DELANTE del nombre de siempre, como se escribió', () => {
-        // El editor: «el renombre debería agregarse antes del nombre que pone
-        // ahorita por default». El curso, la fecha y la hora se quedan.
+    /** Una clase con su número, nombrada como la nombra la app. */
+    const clase = (dir, numero, vez, minuto) => sembrar(dir, {
+        numero,
+        vez,
+        ceroMs: T0 + (minuto || 0) * 60000,
+        secuencia: nombre.armar({
+            curso: 'curso', numero, vez, cuandoMs: T0 + (minuto || 0) * 60000
+        })
+    });
+
+    t.test('el número va delante y el resto del nombre no se toca', () => {
         const dir = carpeta();
         const s = sembrar(dir);
-        const r = sesiones.renombrar(s.json, { prefijo: 'Clase 3 Física' });
+        const r = sesiones.renombrar(s.json, { numero: 3 });
         t.ok(r.movida);
-        t.eq(r.secuencia, 'Clase 3 Física_curso_2026-09-29_10-00-00');
+        t.eq(r.secuencia, '03_curso_2026-09-29_10-00-00');
         t.ok(fs.existsSync(r.archivos.xml) && fs.existsSync(r.archivos.json));
         t.eq(r.audios, 1, 'el WAV se mueve con el nombre nuevo');
         const sidecar = JSON.parse(fs.readFileSync(r.archivos.json, 'utf8'));
-        t.eq(sidecar.prefijo, 'Clase 3 Física', 'se guarda aparte');
+        t.eq(sidecar.numero, 3, 'se guarda aparte, para no tener que releer el nombre');
         t.eq(sidecar.curso, 'curso', 'y el curso no se toca');
-        t.ok(fs.readFileSync(r.archivos.xml, 'utf8').includes('Clase 3 Física_curso_2026-09-29_10-00-00'),
+        t.ok(fs.readFileSync(r.archivos.xml, 'utf8').includes('03_curso_2026-09-29_10-00-00'),
             'la secuencia del XML también se llama así');
     });
 
     t.test('renombrar otra vez lo reemplaza, no le suma otro delante', () => {
         const dir = carpeta();
         const s = sembrar(dir);
-        const a = sesiones.renombrar(s.json, { prefijo: 'Clase 3' });
-        const b = sesiones.renombrar(a.archivos.json, { prefijo: 'Clase 4' });
-        t.eq(b.secuencia, 'Clase 4_curso_2026-09-29_10-00-00');
+        const a = sesiones.renombrar(s.json, { numero: 3 });
+        const b = sesiones.renombrar(a.archivos.json, { numero: 4 });
+        t.eq(b.secuencia, '04_curso_2026-09-29_10-00-00');
     });
 
-    t.test('vacío vuelve al nombre de siempre', () => {
+    t.test('vacío le quita el número', () => {
         const dir = carpeta();
         const s = sembrar(dir);
-        const a = sesiones.renombrar(s.json, { prefijo: 'Clase 3' });
-        const b = sesiones.renombrar(a.archivos.json, { prefijo: '   ' });
+        const a = sesiones.renombrar(s.json, { numero: 3 });
+        const b = sesiones.renombrar(a.archivos.json, { numero: '' });
         t.eq(b.secuencia, s.secuencia);
-        t.eq(JSON.parse(fs.readFileSync(b.archivos.json, 'utf8')).prefijo, null);
+        t.eq(JSON.parse(fs.readFileSync(b.archivos.json, 'utf8')).numero, null);
     });
 
-    t.test('lo que un nombre de archivo no aguanta se cambia por un guion', () => {
+    t.test('cambiar el curso después conserva el número', () => {
         const dir = carpeta();
         const s = sembrar(dir);
-        const r = sesiones.renombrar(s.json, { prefijo: 'Clase 3/4: repaso' });
-        t.eq(r.secuencia, 'Clase 3-4- repaso_curso_2026-09-29_10-00-00');
-        t.ok(workspace.dentroDe(dir, r.archivos.xml), 'y no se sale de la carpeta');
-    });
-
-    t.test('cambiar el curso después conserva el nombre de delante', () => {
-        const dir = carpeta();
-        const s = sembrar(dir);
-        const a = sesiones.renombrar(s.json, { prefijo: 'Clase 3' });
+        const a = sesiones.renombrar(s.json, { numero: 3 });
         const b = sesiones.renombrar(a.archivos.json, { curso: 'Otro' });
-        t.eq(b.secuencia, 'Clase 3_otro_2026-09-29_10-00-00');
+        t.eq(b.secuencia, '03_otro_2026-09-29_10-00-00');
     });
 
-    t.test('la lista trae el nombre de delante, para editarlo', () => {
+    t.test('la lista trae el número, para editarlo', () => {
         const dir = carpeta();
         const s = sembrar(dir);
-        sesiones.renombrar(s.json, { prefijo: 'Clase 3' });
-        t.eq(sesiones.listar([dir])[0].prefijo, 'Clase 3');
+        sesiones.renombrar(s.json, { numero: 3 });
+        const puesta = sesiones.listar([dir])[0];
+        t.eq(puesta.numero, 3);
+        t.eq(puesta.vez, 1, 'la primera vez que se grabó esa clase');
+    });
+
+    t.test('la vez de clase no pisa la versión del formato del sidecar', () => {
+        // Pasó: al número de vez lo llamé `version`, que es el nombre que ya
+        // tenía la versión del FORMATO del sidecar. Las dos claves cayeron en el
+        // mismo objeto literal y ganó la última, así que una clase 01 dejaba el
+        // archivo diciendo que era de la versión 1 del formato en vez de la 2.
+        //
+        // Un sidecar que miente sobre su propio formato se lee mal para siempre
+        // y en silencio, y es por eso que esto se comprueba y no se confía en
+        // que nadie vuelva a elegir ese nombre.
+        const dir = carpeta();
+        const s = clase(dir, 1, 3, 0);
+        const escrito = JSON.parse(fs.readFileSync(s.json, 'utf8'));
+        t.eq(escrito.version, 2, 'la del formato, que es la que leen los lectores');
+        t.eq(escrito.vez, 3, 'y la de clase, aparte');
+    });
+
+    t.test('el que sigue es el más alto, más uno', () => {
+        const dir = carpeta();
+        t.eq(sesiones.proximoNumero(dir), 1, 'una carpeta vacía empieza en la 01');
+        clase(dir, 1, 1, 0);
+        t.eq(sesiones.proximoNumero(dir), 2);
+        clase(dir, 5, 1, 10);
+        t.eq(sesiones.proximoNumero(dir), 6, 'el más alto y no cuántas hay');
+    });
+
+    t.test('borrar una del medio no reusa su número', () => {
+        // El número es cómo se llama la clase: «en la 04 expliqué los hooks».
+        // Reusarlo haría que dos clases distintas se llamaran igual en los
+        // apuntes de quien la vio.
+        const dir = carpeta();
+        clase(dir, 1, 1, 0);
+        const dos = clase(dir, 2, 1, 10);
+        clase(dir, 3, 1, 20);
+        sesiones.borrar(dos.json);
+        t.eq(sesiones.proximoNumero(dir), 4);
+    });
+
+    t.test('una clase de antes del número no rompe la cuenta', () => {
+        // Las grabadas antes de que esto existiera no tienen número, y tienen
+        // que seguir listándose: una sesión que no se lee no se puede abrir.
+        const dir = carpeta();
+        sembrar(dir);
+        t.eq(sesiones.proximoNumero(dir), 1, 'no cuenta, y no tira la cuenta');
+        t.eq(sesiones.listar([dir]).length, 1, 'pero sigue estando');
+    });
+
+    t.test('el número lee del nombre cuando el sidecar no lo dice', () => {
+        // El sidecar manda y el nombre es el respaldo, que es el mismo orden que
+        // usa todo lo demás. Importa para las clases de una versión anterior,
+        // que están en el disco con el número en el nombre y sin él adentro.
+        const dir = carpeta();
+        sembrar(dir, { secuencia: '07_curso_2026-09-29_10-00-00' });
+        t.eq(sesiones.proximoNumero(dir), 8);
+    });
+
+    t.test('repetir un número da V2, y después V3', () => {
+        const dir = carpeta();
+        t.eq(sesiones.vezLibre(dir, 1), 1, 'libre, así que no lleva marca');
+        clase(dir, 1, 1, 0);
+        t.eq(sesiones.vezLibre(dir, 1), 2);
+        clase(dir, 1, 2, 10);
+        t.eq(sesiones.vezLibre(dir, 1), 3);
+        t.eq(sesiones.proximoNumero(dir), 2, 'y las veces no corren el número');
+    });
+
+    t.test('la V2 se escribe en el nombre y en la secuencia', () => {
+        const dir = carpeta();
+        clase(dir, 1, 1, 0);
+        const s = sembrar(dir, { ceroMs: T0 + 600000, secuencia: 'otra_2026-09-29_10-10-00' });
+        const r = sesiones.renombrar(s.json, { numero: 1 });
+        t.eq(r.secuencia, '01_V2_curso_2026-09-29_10-10-00');
+        t.ok(fs.readFileSync(r.archivos.xml, 'utf8').includes('01_V2_curso_2026-09-29_10-10-00'),
+            'la secuencia de Premiere también');
+    });
+
+    t.test('guardar sin cambiar nada no la empuja a la vez siguiente', () => {
+        // Al contar las veces de esa clase hay que SACARLA de la cuenta a ella
+        // misma. Sin eso, cada vez que se abría el lápiz y se guardaba, la misma
+        // sesión subía una V, y el nombre decía que se había grabado seis veces
+        // una clase que se grabó una.
+        const dir = carpeta();
+        clase(dir, 1, 1, 0);
+        const s = sembrar(dir, { ceroMs: T0 + 600000, secuencia: 'otra_2026-09-29_10-10-00' });
+        const a = sesiones.renombrar(s.json, { numero: 1 });
+        t.eq(a.secuencia, '01_V2_curso_2026-09-29_10-10-00');
+        const b = sesiones.renombrar(a.archivos.json, { numero: 1 });
+        t.eq(b.secuencia, '01_V2_curso_2026-09-29_10-10-00', 'sigue siendo la V2');
+        t.eq(b.movida, false, 'y no se movió ningún archivo');
+    });
+
+    t.test('mover una clase a un número tomado la vuelve V2 de ESE número', () => {
+        // La V que traía no significa nada en el número nuevo: se recalcula.
+        const dir = carpeta();
+        clase(dir, 3, 1, 0);
+        const s = clase(dir, 9, 1, 10);
+        const r = sesiones.renombrar(s.json, { numero: 3 });
+        t.eq(r.secuencia, '03_V2_curso_2026-09-29_10-10-00');
     });
 
     t.test('la pantalla ya no usa window.prompt, que Electron no tiene', () => {
@@ -265,7 +371,45 @@ module.exports = function (t) {
         // nunca hizo nada.
         const js = fs.readFileSync(path.join(__dirname, '..', 'src', 'js', 'pantalla-sesiones.js'), 'utf8');
         t.ok(!/window\.prompt\(/.test(js));
-        t.ok(/grabarRenombrar\(json, \{ prefijo: campo\.value \}\)/.test(js), 'manda el prefijo');
+        t.ok(/grabarRenombrar\(json, \{ numero: campo\.value \}\)/.test(js), 'manda el número');
+    });
+
+    t.test('el lápiz edita el número y deja fijo el resto del nombre', () => {
+        const js = fs.readFileSync(path.join(__dirname, '..', 'src', 'js', 'pantalla-sesiones.js'), 'utf8');
+        t.ok(/type="number" min="1" step="1" data-campo="numero"/.test(js),
+            'es un campo de número, no de texto libre');
+        t.ok(/<span class="ses-base">_\$\{esc\(base\)\}<\/span>/.test(js),
+            'y al lado se ve lo que no se toca: el curso, la fecha y la hora');
+    });
+
+    t.test('nadie fuera del motor decide qué curso se usa si no hay uno escrito', () => {
+        // Estaba decidido en tres sitios —las dos pantallas y el motor— y tres
+        // copias de «si no hay curso, usá la carpeta» querían decir que el nombre
+        // que la pantalla mostraba de ejemplo podía dejar de ser el que la
+        // grabación iba a escribir. Eso no se nota hasta que ya está en el disco.
+        const raiz = path.join(__dirname, '..');
+        for (const cual of ['pantalla-sesiones.js', 'pantalla-preparar.js']) {
+            const js = fs.readFileSync(path.join(raiz, 'src', 'js', cual), 'utf8');
+            t.ok(!/split\('\/'\)\.filter\(Boolean\)\.pop\(\)/.test(js),
+                `${cual} no se saca el nombre de la carpeta por su cuenta`);
+        }
+        const motor = fs.readFileSync(path.join(raiz, 'engine', 'nombre-de-sesion.js'), 'utf8');
+        t.ok(/function cursoPorDefecto\(dir\)/.test(motor), 'lo decide el motor, en un solo sitio');
+    });
+
+    t.test('la lista de verificación muestra el número antes de grabar', () => {
+        const js = fs.readFileSync(path.join(__dirname, '..', 'src', 'js', 'pantalla-preparar.js'), 'utf8');
+        t.ok(/titulo: 'Qué clase es'/.test(js), 'tiene su renglón');
+        t.ok(/numero: nombre \? nombre\.numero : null/.test(js),
+            'y manda el número al arrancar, no la vez: esa la resuelve el motor');
+        t.ok(/nombre = reanudar \? null : await preguntarElNombre\(\)/.test(js),
+            'al reanudar no se ofrece: esa clase ya tiene su nombre y sus marcadores');
+        // Escribir un número tomado tiene que mostrar la V2 ANTES de grabar:
+        // después de tres horas no hay arreglo barato.
+        t.ok(/nombre = await preguntarElNombre\(campo\.value\)/.test(js),
+            'y al escribir uno se le vuelve a preguntar al motor');
+        t.ok(/Ya hay una clase \$\{dosDigitos\(nombre\.numero\)\} en esta carpeta/.test(js),
+            'que es lo que deja avisar de la V2 a tiempo');
     });
 
     t.group('sesiones-grabadas · borrar');

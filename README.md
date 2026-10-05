@@ -45,13 +45,13 @@ audio grabado y no contra el reloj de pared (ver **Un solo reloj**).
 
 ## Cómo funciona
 
-1. **Sesiones** — se elige la carpeta del curso. Adentro se crean `xml/` con el
-   archivo que se importa en Premiere, `xml/Audio/` con el WAV y `xml/Datos/`
-   con lo que la app se guarda para sí misma.
+1. **Sesiones** — se elige la carpeta del curso y se le pone nombre. Adentro se
+   crean `xml/` con el archivo que se importa en Premiere, `xml/Audio/` con el
+   WAV y `xml/Datos/` con lo que la app se guarda para sí misma.
 2. **Preparar** — una lista de verificación: la entrada de audio con su
-   medidor, Whisper, la carpeta y los cuadros por segundo. El botón de
-   **Iniciar grabación** se enciende cuando lo esencial está en verde, y cada
-   renglón dice qué falta y ofrece el arreglo ahí mismo.
+   medidor, Whisper, la carpeta, qué clase es y los cuadros por segundo. El
+   botón de **Iniciar grabación** se enciende cuando lo esencial está en verde,
+   y cada renglón dice qué falta y ofrece el arreglo ahí mismo.
 3. **En vivo** — el timecode grande, el estado de la sesión, la tarjeta de lo
    que está pasando ahora y la lista de todo lo que ya pasó. Las tomas se
    abren y se cierran solas; la nota se escribe a mano.
@@ -60,6 +60,57 @@ audio grabado y no contra el reloj de pared (ver **Un solo reloj**).
 
 Ajustes y Diagnóstico son paneles: se abren encima de cualquier pantalla,
 porque la pregunta que contestan aparece en cualquier momento.
+
+### Cómo se llama cada clase
+
+    01_curso-jev_2026-09-30_16-01-20.xml
+    01_V2_curso-jev_2026-09-30_19-40-00.xml
+
+**El número de clase va primero.** Un curso son las clases 01, 02, 03… y ese
+número es cómo se las nombra al hablar de ellas: «en la 04 expliqué los hooks».
+La fecha ordena igual de bien, pero no se puede decir en voz alta ni buscar en
+el Finder. Lo sugiere la app —**el más alto que haya en la carpeta, más uno**—
+así que no hay cuenta que llevar, y se puede cambiar en la lista de verificación
+antes de grabar o con el lápiz después.
+
+El más alto y no cuántas hay: si de cinco clases se borra la 02, la próxima
+sigue siendo la 06. Reusar el número haría que dos clases distintas se llamaran
+igual en los apuntes de quien las vio.
+
+**Si el número se repite, la segunda es `V2`.** Volver a grabar la clase 01 pasa
+de verdad: se cortó el Zoom, se volvió a dar, se grabó dos veces el mismo tema.
+Las dos son la 01 y lo que las distingue es cuál es la segunda toma de esa clase.
+La primera no lleva `V1`: casi todas las clases se graban una sola vez, y un
+`V1` en todas sería ruido en todas para decir algo de unas pocas. La versión se
+resuelve **al escribir y no al mostrarse**: entre ver el número en la lista de
+verificación y apretar Iniciar puede pasar media clase, y esa carpeta suele
+estar en un Drive donde otra máquina pudo dejar su 01 mientras tanto.
+
+La pantalla **avisa antes** cuando va a quedar una V2. Es casi siempre a
+propósito, pero también es como se ve un número mal tecleado, y es lo único que
+se puede decir a tiempo: descubrir después de tres horas que la clase quedó como
+V2 porque se escribió 1 en vez de 11 no tiene arreglo barato.
+
+El número y la vez se guardan **aparte en el sidecar** además de ir en el
+nombre, y se leen de ahí; el nombre es el respaldo para las clases grabadas antes
+de que el número existiera, que siguen leyéndose y listándose igual. El campo se
+llama `vez` y no `version` por una razón que ya costó una vez: `version` es la
+versión del FORMATO del sidecar, y las dos claves en el mismo objeto dejaban el
+archivo diciendo que era de un formato que no es. `tests/sesiones-grabadas.test.js`
+lo comprueba, en vez de confiar en que nadie vuelva a elegir ese nombre. El resto del
+nombre —curso, fecha y hora— no lo mueve nadie: es lo que el editor empareja con
+los archivos de cámara, que traen la hora local de su reloj en su fecha de
+creación.
+
+**El nombre del curso se edita al lado de la carpeta**, además de en Ajustes. Es
+el mismo valor: pertenece a esa carpeta y se lee junto a ella, y entrar a un
+panel para escribir dos palabras que pertenecen a la pantalla que ya estás
+mirando es un viaje de ida y vuelta. Vacío, el curso es el nombre de la carpeta,
+y se ve de `placeholder` para que se note que nadie lo eligió. Al lado está el
+nombre completo que va a tener la clase siguiente, armado **por el motor**: la
+ventana no puede `require` un módulo de `engine/`, así que la única forma de que
+la convención viva en un solo archivo es que la pregunta se conteste del lado de
+Node (`grabar-nombre-siguiente`).
 
 ## El otro modo: un vídeo por semana
 
@@ -1160,7 +1211,7 @@ node tools/maqueta/abrir.js    # la interfaz de verdad, con datos falsos
 ```
 
 Los criterios de aceptación están escritos como números en `tools/auditar.js`, y
-lo que no los cumple sale con código 1. **Sobre los 41 escenarios** a 900, 1180
+lo que no los cumple sale con código 1. **Sobre los 43 escenarios** a 900, 1180
 y 1440 px, que es todo lo que una persona puede llegar a ver: también los
 vacíos y los de error, que son los que se escriben con menos cuidado y los que
 más se leen cuando algo salió mal. La lista salía a mano en cada herramienta y
@@ -1176,7 +1227,7 @@ herramienta fotografía, mide y audita otra pantalla creyendo que es esa.
 | el peor contraste | **4.6:1** |
 | controles apagados, exentos de AA | **15**, declarados uno por uno |
 | tamaños de letra pintados a la vez | **5** (13/12/11 + los dos grandes) |
-| controles por debajo de 24×24 | **0** de 2649 |
+| controles por debajo de 24×24 | **0** de 2775 |
 | texto pintado fuera de su caja | **0** |
 | solapes | **0** |
 | botones sin un hover que diga qué hacen | **0** |
@@ -1194,7 +1245,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 817 pruebas, sin red y sin abrir nada
+npm test           # 836 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```

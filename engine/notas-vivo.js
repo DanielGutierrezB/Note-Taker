@@ -137,6 +137,14 @@ function estadoNuevo(params) {
     return {
         secuencia: p.secuencia || null,
         curso: p.curso || null,
+        // El número de clase (1 → `01` en el nombre) y, si esa clase se grabó
+        // más de una vez, cuál de esas veces es esta. Los dos nulos en el modo
+        // semanal, que nombra por fecha y no tiene clases que numerar.
+        //
+        // `vez` y no `version`, que es el nombre que ya usa el formato del
+        // sidecar (ver `PRIMERA_VEZ` en `nombre-de-sesion.js`).
+        numero: p.numero != null ? p.numero : null,
+        vez: p.vez != null ? p.vez : null,
         // El momento de "Iniciar grabación", del que cuelgan los cuadros del XML.
         ceroMs: p.ceroMs != null ? p.ceroMs : null,
         // A cuántos cuadros va la secuencia del editor. Se congela al arrancar y

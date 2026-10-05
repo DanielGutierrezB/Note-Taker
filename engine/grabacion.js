@@ -187,8 +187,8 @@ function soltar() {
  * donde el editor apretó grabar y la primera claqueta queda marcada adentro,
  * con su timecode, que es exactamente lo que él necesita para correlacionar.
  *
- * @param {object} params { dir, curso, fps, idioma, dispositivo, sampleRate,
- *   canales, avisar, sinReloj, reanudar, carpetaPropia }
+ * @param {object} params { dir, curso, numero, fps, idioma, dispositivo,
+ *   sampleRate, canales, avisar, sinReloj, reanudar, carpetaPropia }
  */
 function iniciar(params) {
     const p = params || {};
@@ -218,13 +218,33 @@ function iniciar(params) {
         ? workspace.carpetaDeGrabacion(p.dir, nombreDeSesion.sello(ceroMs))
         : p.dir;
 
+    // El número de clase, y cuál de las veces que se grabó esa clase es esta.
+    //
+    // La versión se resuelve ACÁ, al arrancar, y no cuando la pantalla mostró
+    // el número: entre que alguien ve «01» en la lista de verificación y aprieta
+    // Iniciar puede pasar media clase, y en esa carpeta —que suele estar en un
+    // Drive compartido— puede haber aparecido la 01 de otra máquina. Lo que vale
+    // es lo que hay en el disco en el instante en que se va a escribir.
+    //
+    // Sin número no hay versión: así entra el modo semanal, que nombra por fecha
+    // y no tiene clases que numerar.
+    const numero = nombreDeSesion.numeroEnElNombre(p.numero) ? Math.floor(Number(p.numero)) : null;
+    const vez = numero != null ? sesionesGrabadas.vezLibre(dir, numero) : null;
+
+    // Sin curso escrito, el curso es el nombre de la carpeta. Se resuelve acá y
+    // no en la ventana para que el nombre que la pantalla muestra de ejemplo y el
+    // que se escribe salgan de la MISMA decisión.
+    const curso = p.curso || nombreDeSesion.cursoPorDefecto(p.dir);
+
     sesion = {
         // Mientras esté en pie. Lo mira todo lo que vuelve de un `await`, que es
         // la única forma de saber que la sesión se cerró mientras se esperaba.
         viva: true,
         estado: previa ? previa.estado : vivo.estadoNuevo({
-            secuencia: nombreDeSesion.armar({ curso: p.curso, cuandoMs: ceroMs }),
-            curso: p.curso,
+            secuencia: nombreDeSesion.armar({ curso, cuandoMs: ceroMs, numero, vez }),
+            curso,
+            numero,
+            vez,
             ceroMs,
             fps: p.fps,
             idioma: p.idioma,
@@ -823,6 +843,35 @@ function listar(dirs) {
 }
 
 /**
+ * Qué número de clase le toca a la siguiente en esa carpeta.
+ *
+ * La que se está grabando ahora SÍ cuenta: su número ya está usado. `listar`
+ * la deja fuera a propósito —la pantalla la dibuja aparte— y por eso acá se
+ * suma a mano. Sin esto, apretar «Nueva sesión» en medio de una clase ofrecía
+ * el número de la clase que se está grabando en ese momento.
+ */
+function proximoNumero(dir) {
+    const suelto = sesionesGrabadas.proximoNumero(dir);
+    const mia = sesion && sesion.estado.numero != null ? Number(sesion.estado.numero) + 1 : 0;
+    return Math.max(suelto, mia);
+}
+
+/**
+ * Qué vez de ese número le tocaría a una clase nueva.
+ *
+ * La que se está grabando cuenta, por lo mismo que en `proximoNumero`: poner a
+ * mano el número de la clase que está grabándose ahora tiene que dar V2, no
+ * pisarla.
+ */
+function vezDeLaSiguiente(dir, numero) {
+    const suelta = sesionesGrabadas.vezLibre(dir, numero);
+    const mia = sesion && Number(sesion.estado.numero) === Number(numero)
+        ? Number(sesion.estado.vez || 1) + 1
+        : 0;
+    return Math.max(suelta, mia);
+}
+
+/**
  * Renombrar, borrar y reanudar pasan por la fachada y no se exportan directo, y
  * es por lo único que este tramo existe: son las tres que tienen que saber cuál
  * es la sesión que se está grabando en este instante, para negarse a tocarle los
@@ -869,6 +918,8 @@ module.exports = {
     apagar,
     resumen,
     listar,
+    proximoNumero,
+    vezDeLaSiguiente,
     reanudar,
     regenerar: sesionesGrabadas.regenerar,
     rehacerXml: json => sesionesGrabadas.rehacerXml(json, enCurso()),

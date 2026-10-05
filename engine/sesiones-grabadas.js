@@ -62,6 +62,77 @@ function listar(dirs, enCurso) {
     return sesiones.sort((a, b) => (b.ceroMs || 0) - (a.ceroMs || 0));
 }
 
+/* ── El número de clase ───────────────────────────────────────────────────────
+ *
+ * Las dos preguntas que hay que hacerle a la carpeta para nombrar una clase:
+ * cuál es el número que sigue, y si ese número ya está tomado, cuál es la
+ * versión libre. Las dos se contestan leyendo el disco y no una cuenta
+ * guardada: la carpeta la comparten varias máquinas por Drive, se le borran
+ * clases a mano, y un contador que viva en los ajustes de ESTA Mac habría
+ * empezado a mentir el primer día.
+ *
+ * El número de cada sesión sale del sidecar, y si no lo tiene —las clases
+ * grabadas antes de que esto existiera— del nombre. Es el mismo orden que usa
+ * todo lo demás: lo que se escribió aparte manda, y el nombre es el respaldo.
+ */
+
+/** El número de una sesión ya grabada: del sidecar, o leído de su nombre. */
+function numeroDe(s) {
+    if (s.numero != null) return { numero: Number(s.numero), vez: Number(s.vez) || 1 };
+    const leido = nombreDeSesion.leer(s.secuencia || '') || {};
+    return { numero: leido.numero, vez: leido.vez || 1 };
+}
+
+/**
+ * El número que le toca a la clase siguiente: el más alto que haya, más uno.
+ *
+ * **El más alto y no cuántas hay.** Si de cinco clases se borra la 02, quedan
+ * cuatro pero la próxima es la 06 y no la 05: el número es cómo se llama la
+ * clase —«en la 04 expliqué los hooks»— y reusarlo haría que dos cosas
+ * distintas se llamaran igual en los apuntes de quien la vio.
+ *
+ * Las veces no cuentan: `01` y `01_V2` son la misma clase grabada dos veces,
+ * así que después de las dos sigue la 02.
+ *
+ * @param {string} dir la carpeta del curso
+ * @returns {number} 1 si no hay ninguna, o no se pudo leer la carpeta
+ */
+function proximoNumero(dir) {
+    if (!dir) return 1;
+    let alto = 0;
+    for (const s of listar([dir])) {
+        const n = numeroDe(s).numero;
+        if (n != null && n > alto) alto = n;
+    }
+    return alto + 1;
+}
+
+/**
+ * Qué vez de esa clase es esta: la primera, o la que siga.
+ *
+ * Se cuenta sobre las que YA están en la carpeta, no sobre un número guardado:
+ * grabar la 01 dos veces y borrar la segunda tiene que dejar libre la V2 otra
+ * vez, porque si no el nombre diría que hay una tercera toma que no existe.
+ *
+ * @param {string} dir la carpeta del curso
+ * @param {number} numero la clase
+ * @param {string} [salvo] la secuencia que no se cuenta: es la que se está
+ *   renombrando, y chocar consigo misma la mandaría una vez más arriba en cada
+ *   guardado aunque no se le cambie nada
+ * @returns {number} 1 si ese número está libre
+ */
+function vezLibre(dir, numero, salvo) {
+    const n = Number(numero);
+    if (!dir || !Number.isFinite(n)) return nombreDeSesion.PRIMERA_VEZ;
+    let alta = 0;
+    for (const s of listar([dir])) {
+        if (salvo && s.secuencia === salvo) continue;
+        const suyo = numeroDe(s);
+        if (suyo.numero === n && suyo.vez > alta) alta = suyo.vez;
+    }
+    return Math.max(nombreDeSesion.PRIMERA_VEZ, alta + 1);
+}
+
 /**
  * Las carpetas donde puede haber sesiones, dada una que eligió la persona.
  *
@@ -564,14 +635,20 @@ function wavRenombrado(ruta, viejo, nuevo) {
 }
 
 /**
- * Renombra una sesión: el curso o el nombre de delante, nunca la hora.
+ * Renombra una sesión: el curso o el número de clase, nunca la hora.
  *
- * **El gesto de la pantalla es el prefijo.** El editor, con la lista delante:
- * «debería poder renombrar la secuencia si lo deseo; el renombre debería
- * agregarse antes del nombre que pone ahorita por default». O sea que lo que
- * escribe va DELANTE de `curso_fecha_hora`, que se queda: es lo que ordena las
- * clases y lo que dice cuándo se grabó. Se guarda aparte (`prefijo`) para que un
- * segundo renombrado lo reemplace, y vacío vuelve al nombre de siempre.
+ * **El gesto de la pantalla es el número.** El editor, con la lista delante:
+ * «al darle editar el nombre, es ese número el que me debe dejar editar». O sea
+ * que lo único que se mueve es el `01` de adelante, y `curso_fecha_hora` se
+ * queda: es lo que dice cuándo se grabó y lo que el editor empareja con los
+ * archivos de la cámara. Se guarda aparte (`numero`) para que un segundo
+ * renombrado lo reemplace, y vacío vuelve al nombre sin número.
+ *
+ * **La vez se recalcula, no se arrastra.** Mover una clase de la 01 a la 03
+ * tiene que mirar si la 03 ya está tomada, y la V2 que traía de ser la segunda
+ * 01 no significa nada en la 03. Y renombrarla sin cambiarle el número tiene que
+ * dejarla donde estaba: por eso al contar se la saca de la cuenta a sí misma
+ * (`salvo`), que si no cada guardado la empujaba una vez más arriba.
  *
  * **La que se está grabando no se renombra.** El motor tiene su nombre en
  * memoria y le escribe el XML en cada cambio: renombrarle los archivos por
@@ -583,7 +660,7 @@ function wavRenombrado(ruta, viejo, nuevo) {
  * sidecar apuntando a un XML que ya no se llama así.
  *
  * @param {string} json el sidecar de la sesión
- * @param {object} cambio { curso, prefijo } — el que no venga se queda como está
+ * @param {object} cambio { curso, numero } — el que no venga se queda como está
  * @param {string} [enCurso] la secuencia que se está grabando ahora
  */
 function renombrar(json, cambio, enCurso) {
@@ -603,9 +680,13 @@ function renombrar(json, cambio, enCurso) {
         ? String(c.curso)
         : (estado.curso || (nombreDeSesion.leer(sitio.nombre) || {}).curso || '');
 
-    const prefijo = nombreDeSesion.prefijoEnElNombre(c.prefijo != null ? c.prefijo : estado.prefijo);
+    const pedido = c.numero != null ? c.numero : numeroDe(estado).numero;
+    const numero = nombreDeSesion.numeroEnElNombre(pedido) ? Math.floor(Number(pedido)) : null;
+    const vez = numero != null
+        ? vezLibre(sitio.base, numero, estado.secuencia)
+        : null;
 
-    const nombre = nombreDeSesion.armar({ curso, cuandoMs, prefijo });
+    const nombre = nombreDeSesion.armar({ curso, cuandoMs, numero, vez });
     const archivos = { xml: sitio.xml, json: sitio.json };
     // El mismo nombre no es un error: se llega acá corrigiendo una tilde que el
     // nombre de archivo ya no distinguía. Se contesta que no se movió nada, en
@@ -643,7 +724,8 @@ function renombrar(json, cambio, enCurso) {
 
         estado.secuencia = nombre;
         estado.curso = curso;
-        estado.prefijo = prefijo || null;
+        estado.numero = numero;
+        estado.vez = vez;
 
         // Renombrar no mueve ningún tiempo, así que el ajuste que ya estaba
         // guardado se reusa tal cual; esto solo lo calcula para una sesión vieja
@@ -715,6 +797,8 @@ function borrar(json, enCurso) {
 module.exports = {
     SUFIJO_SIDECAR,
     listar,
+    proximoNumero,
+    vezLibre,
     sidecaresDe,
     resumirParaLaLista,
     regenerar,

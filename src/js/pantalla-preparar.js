@@ -43,6 +43,15 @@ const audio = {
     clase: null, aceptado: false, error: null, roto: null
 };
 
+/**
+ * Cómo se va a llamar esta clase: `{ numero, vez, curso, nombre }`.
+ *
+ * Lo contesta el motor, que es el único que sabe qué hay en la carpeta y el
+ * único que tiene la convención de nombres. Acá se guarda para poder dibujarlo
+ * y para mandar el número al arrancar.
+ */
+let nombre = null;
+
 /** El pico decae solo: sin esto, un golpe deja el medidor arriba para siempre. */
 let ultimoPico = 0;
 /** El último estado del audio que se dibujó, para repintar solo al cambiar. */
@@ -63,6 +72,10 @@ export async function ver(opciones) {
     reanudar = (opciones && opciones.reanudar) || null;
     verVista('vista-preparar');
     doctor = await window.nt.doctor();
+    // Al reanudar no se pregunta: esa clase ya tiene su número y su nombre, y
+    // ofrecerle el siguiente invitaría a cambiarle el nombre a una sesión que ya
+    // tiene marcadores escritos y que el editor puede haber sincronizado.
+    nombre = reanudar ? null : await preguntarElNombre();
     await releerEntradas();
 
     // Si la entrada de la última vez sigue ahí, se abre sola. Se guarda por
@@ -80,6 +93,18 @@ export async function ver(opciones) {
     }
 
     pintar();
+}
+
+/**
+ * Le pregunta al motor cómo se llamaría esta clase.
+ *
+ * @param {number|string} [numero] el que se escribió a mano; sin esto, el que
+ *   la app sugiere (el más alto de la carpeta, más uno)
+ */
+async function preguntarElNombre(numero) {
+    const carpeta = app.ajustes.carpeta;
+    if (!carpeta) return null;
+    return window.nt.grabarNombreSiguiente(carpeta, { curso: app.ajustes.curso, numero });
 }
 
 async function releerEntradas() {
@@ -152,6 +177,19 @@ function pintar() {
                         title="Volver atrás para elegir la carpeta del curso">
                 Volver a Sesiones</button>`
         }),
+        reanudar ? '' : check({
+            listo: 'si',
+            titulo: 'Qué clase es',
+            estado: { clave: 'listo', palabra: `la ${dosDigitos(nombre && nombre.numero)}` },
+            dice: comoSeVaALlamar(),
+            arreglo: `
+              <label class="campo-fila">
+                <span class="v2">Número de clase</span>
+                <input type="number" min="1" step="1" data-campo="numero" class="prep-numero"
+                       value="${nombre && nombre.numero != null ? nombre.numero : ''}"
+                       title="El que sigue en esta carpeta. Cambialo si esta clase es otra.">
+              </label>`
+        }),
         check({
             listo: 'si',
             titulo: 'Cómo va a quedar el XML',
@@ -181,6 +219,31 @@ function opciones() {
     const resto = entradas.filter(d => d.tipo !== 'app');
     return (llamada.length ? `<optgroup label="La llamada">${llamada.map(opcion).join('')}</optgroup>` : '') +
         `<optgroup label="Micrófonos y dispositivos (graban la sala)">${resto.map(opcion).join('')}</optgroup>`;
+}
+
+function dosDigitos(n) {
+    return n == null ? '—' : String(n).padStart(2, '0');
+}
+
+/**
+ * Qué dice el renglón del número: cómo se va a llamar, y si es una repetición.
+ *
+ * **La vez se avisa.** Grabar la 01 cuando ya hay una 01 es casi siempre a
+ * propósito —se cortó el Zoom, se volvió a dar la clase— pero también es como se
+ * ve un número mal escrito, y es lo único que la pantalla puede decir a tiempo.
+ * Después de grabar tres horas, descubrir que la clase quedó como V2 porque se
+ * tecleó 1 en vez de 11 no tiene arreglo barato.
+ */
+function comoSeVaALlamar() {
+    if (!nombre) return 'Elegí la carpeta del curso para saber qué clase sigue.';
+    const comoQueda = `Va a quedar <code>${esc(nombre.nombre)}.xml</code>, y la secuencia de `
+        + 'Premiere se llama igual.';
+    if (nombre.vez > 1) {
+        return `Ya hay una clase ${dosDigitos(nombre.numero)} en esta carpeta, así que esta `
+            + `queda como <strong>V${nombre.vez}</strong>: la vez número ${nombre.vez} `
+            + `que se graba esa clase. ${comoQueda}`;
+    }
+    return `Es el número que sigue en esta carpeta. ${comoQueda}`;
 }
 
 /** Qué es este renglón, dicho según lo que hay y lo que se eligió. */
@@ -233,7 +296,16 @@ function check({ listo, titulo, estado, dice, arreglo }) {
 
 async function alCambiar(e) {
     const campo = e.target.closest('[data-campo]');
-    if (!campo || campo.dataset.campo !== 'dispositivo') return;
+    if (!campo) return;
+    if (campo.dataset.campo === 'numero') {
+        // Se le vuelve a preguntar al motor en vez de creerle al campo: escribir
+        // un número que ya está tomado tiene que mostrar la V2 que va a salir,
+        // antes de grabar y no después.
+        nombre = await preguntarElNombre(campo.value);
+        pintar();
+        return;
+    }
+    if (campo.dataset.campo !== 'dispositivo') return;
     await abrirEntrada(campo.value);
     pintar();
 }
@@ -346,7 +418,14 @@ async function iniciar() {
     const como = fuente.comoSuena();
     const payload = {
         dir: app.ajustes.carpeta,
-        curso: app.ajustes.curso || nombreDeLaCarpeta(app.ajustes.carpeta),
+        // Sin curso escrito lo resuelve el motor, con el nombre de la carpeta
+        // (`nombre-de-sesion.cursoPorDefecto`): es la misma decisión que armó el
+        // ejemplo de arriba, y por eso no se repite acá.
+        curso: app.ajustes.curso || null,
+        // El número, no la versión: cuál de las veces que se grabó esta clase es
+        // esta se resuelve en el motor al escribir, con lo que haya en la
+        // carpeta en ese instante (ver `grabacion.iniciar`).
+        numero: nombre ? nombre.numero : null,
         fps: app.ajustes.fps,
         idioma: app.ajustes.idioma,
         dispositivo: como.dispositivo,
@@ -363,10 +442,6 @@ async function iniciar() {
     // antes sería escribir pedazos en una sesión que no arrancó.
     await fuente.empezarAMandar();
     app.irAVivo(r.estado, audio);
-}
-
-function nombreDeLaCarpeta(ruta) {
-    return String(ruta || '').split('/').filter(Boolean).pop() || 'clase';
 }
 
 /** El estado del audio, que la pantalla de En vivo sigue mirando. */

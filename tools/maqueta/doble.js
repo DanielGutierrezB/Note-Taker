@@ -29,8 +29,9 @@ import { estadoEnVivo, estadoSemanal, SESIONES, SEMANALES, AJUSTES, ENTRADAS, CA
  * herramienta sacaba la foto igual y la medía creyendo que era otra cosa.
  */
 export const SE_HACEN = [
-    'vacio', 'sin-carpeta', 'sesiones',
-    'preparar', 'preparar-sin-audio', 'preparar-microfono', 'preparar-zoom-falso',
+    'vacio', 'sin-carpeta', 'sesiones', 'numero-de-clase',
+    'preparar', 'preparar-clase-repetida', 'preparar-sin-audio', 'preparar-microfono',
+    'preparar-zoom-falso',
     'sin-whisper', 'sin-zoom', 'faltan-modelos', 'update',
     'en-vivo', 'desplegada', 'claqueta-abierta', 'toma-abierta', 'releyendo',
     'sin-audio', 'terminada', 'notas-de-antes', 'foto', 'foto-cien',
@@ -272,6 +273,39 @@ window.nt = {
     grabarVistas: async () => estadoEnVivo().vistas,
     grabarListar: async () => sesiones(),
     grabarRenombrar: async () => ({ ok: true, secuencia: 'renombrada', movida: true, audios: 1 }),
+
+    /**
+     * Cómo se llamaría la clase siguiente.
+     *
+     * La cuenta es la del motor —el más alto más uno, y V2 si ese número ya
+     * está— hecha sobre las sesiones falsas: así la maqueta muestra la 04 porque
+     * hay una 03, y no un número escrito a mano que mañana no cuadra con la
+     * lista de al lado. Armar el nombre sí se repite, y es lo único: `armar`
+     * vive en el motor y acá no se puede importar.
+     */
+    grabarNombreSiguiente: async (dir, que) => {
+        const q = que || {};
+        const suyas = esLaSemana() ? [] : SESIONES;
+        const pedido = q.numero != null && q.numero !== '' ? Math.floor(Number(q.numero)) : null;
+        const numero = pedido != null
+            ? pedido
+            : suyas.reduce((alto, s) => Math.max(alto, s.numero || 0), 0) + 1;
+        const vez = suyas
+            .filter(s => s.numero === numero)
+            .reduce((alta, s) => Math.max(alta, s.vez || 1), 0) + 1;
+        const cursoDicho = q.curso || (ajustes.carpeta || '').split('/').filter(Boolean).pop() || 'clase';
+        const curso = String(cursoDicho).toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const dosDigitos = String(numero).padStart(2, '0');
+        return {
+            numero,
+            vez,
+            cuandoMs: Date.now(),
+            curso: cursoDicho,
+            nombre: `${dosDigitos}_${vez > 1 ? `V${vez}_` : ''}${curso}_2026-09-29_10-15-00`
+        };
+    },
     grabarBorrar: async () => ({ ok: true, secuencia: 'borrada', audios: 1 }),
     grabarRegenerar: async () => ({ ok: true, tomas: 6, sinAudio: 0, degradadas: 0, sinLeer: 0 }),
     grabarRehacerXml: async () => ({ ok: true, tomas: 6, claquetas: 3 }),
@@ -590,9 +624,28 @@ async function aplicar() {
 
     if (hay('iconos')) return verIconos();
 
-    if (hay('preparar') || hay('preparar-sin-audio') || hay('sin-whisper') ||
-        hay('preparar-microfono') || hay('preparar-zoom-falso') || hay('sin-zoom')) {
+    // El número de clase abierto para cambiarlo. Es el único estado de la
+    // primera pantalla que no se veía desde ninguna herramienta: el lápiz
+    // reemplaza la fila entera por un campo, y una fila que nadie dibuja es una
+    // fila que nadie audita.
+    if (hay('numero-de-clase')) {
+        await apretar('.fila [data-hace="renombrar"]', 'el lápiz de la primera clase');
+        await hastaQue('[data-campo="numero"]', 'el campo del número');
+        return;
+    }
+
+    if (hay('preparar') || hay('preparar-clase-repetida') || hay('preparar-sin-audio') ||
+        hay('sin-whisper') || hay('preparar-microfono') || hay('preparar-zoom-falso') ||
+        hay('sin-zoom')) {
         await app.irAPreparar();
+        // Escribir el número de una clase que ya está grabada: la pantalla tiene
+        // que decir que va a quedar como V2 ANTES de grabar tres horas.
+        if (hay('preparar-clase-repetida')) {
+            const campo = await hastaQue('[data-campo="numero"]', 'el número de clase');
+            campo.value = '2';
+            campo.dispatchEvent(new Event('change', { bubbles: true }));
+            await espera(120);
+        }
         // El nivel entrando, que es lo que dice «hay algo del otro lado».
         //
         // Sin `await`: `conAudio` es un surtidor que bombea nivel durante casi

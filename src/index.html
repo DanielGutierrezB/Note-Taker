@@ -48,6 +48,20 @@
             <button id="btn-elegir-carpeta" class="btn" type="button"
                     title="Elegir en qué carpeta del disco van el XML, el audio y los datos de este curso">Elegir carpeta…</button>
           </div>
+          <!-- El nombre del curso se edita acá y no solo en Ajustes: es de esta
+               carpeta y se lee al lado de ella, y entrar a Ajustes para cambiar
+               algo que pertenece a la pantalla que ya estás mirando es un viaje
+               de ida y vuelta para escribir dos palabras. El de Ajustes sigue
+               estando y es el mismo valor. -->
+          <div class="tarjeta-cuerpo">
+            <label class="campo">
+              <span class="rotulo">Nombre del curso</span>
+              <input id="curso-nombre" type="text" disabled
+                     title="Va en el nombre de cada clase de esta carpeta, y en el de la secuencia que importás en Premiere">
+              <span class="v3">Así se va a llamar la clase siguiente:
+                <code id="curso-ejemplo">—</code></span>
+            </label>
+          </div>
         </div>
         <p class="v3" style="margin-top:8px">
           Adentro se crean <code>xml/</code> con el archivo que importás en Premiere,

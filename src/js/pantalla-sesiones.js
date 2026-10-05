@@ -34,6 +34,10 @@ export function conectar(contexto) {
     });
     $('#lista-sesiones').addEventListener('click', alClic);
     $('#lista-sesiones').addEventListener('keydown', alTecla);
+    // `change` y no `input`: se guarda al salir del campo o al apretar Enter, no
+    // en cada letra. Escribir «Curso de React» por `input` serían catorce
+    // escrituras del archivo de ajustes y catorce ejemplos a medio escribir.
+    $('#curso-nombre').addEventListener('change', guardarCurso);
     $('#btn-prproj').addEventListener('click', () => panelPrproj.abrir(app.ajustes.carpeta));
     panelPrproj.conectar();
 }
@@ -53,6 +57,7 @@ export async function pintar() {
     $('#carpeta-ruta').textContent = carpeta || 'Todavía no elegiste ninguna';
     $('#btn-abrir-carpeta').hidden = !carpeta;
     $('#btn-nueva').disabled = !carpeta;
+    await pintarCurso(carpeta);
 
     sesiones = carpeta ? await window.nt.grabarListar([carpeta]) : [];
     $('#sesiones-cuantas').textContent = sesiones.length
@@ -61,11 +66,50 @@ export async function pintar() {
     $('#btn-prproj').hidden = !sesiones.length;
     if (renombrando && !sesiones.some(s => s.archivos.json === renombrando)) renombrando = null;
     $('#lista-sesiones').innerHTML = sesiones.length ? sesiones.map(fila).join('') : vacio(carpeta);
-    const campo = $('#lista-sesiones [data-campo="prefijo"]');
+    const campo = $('#lista-sesiones [data-campo="numero"]');
     if (campo) {
         campo.focus();
         campo.select();
     }
+}
+
+/**
+ * El nombre del curso y el ejemplo de cómo va a llamarse la clase siguiente.
+ *
+ * El campo vacío no es un error: entonces el curso es el nombre de la carpeta,
+ * que es lo que la app usaba antes de que esto se pudiera escribir y lo que
+ * sigue usando. Por eso el nombre de la carpeta va de `placeholder` —se ve
+ * tenue, igual que el valor que va a tomar— en vez de escribirse dentro del
+ * campo, que diría que alguien lo eligió.
+ *
+ * El ejemplo lo arma el motor (`grabarNombreSiguiente`): es la única forma de
+ * que la convención de nombres viva en un solo archivo, porque la ventana no
+ * puede `require` el del motor. Y es lo que hace que el número automático se
+ * vea ANTES de grabar, que es cuando sirve para corregirlo.
+ */
+async function pintarCurso(carpeta) {
+    const campo = $('#curso-nombre');
+    const ejemplo = $('#curso-ejemplo');
+    campo.disabled = !carpeta;
+    if (document.activeElement !== campo) campo.value = app.ajustes.curso || '';
+    if (!carpeta) {
+        campo.placeholder = 'Elegí primero la carpeta';
+        ejemplo.textContent = '—';
+        return;
+    }
+    // El `placeholder` sale de lo que el motor contesta y no del nombre de la
+    // carpeta recortado acá: el que decide qué curso se usa cuando nadie lo
+    // escribió es el motor, y copiar esa decisión en la pantalla era arriesgarse
+    // a mostrar de ejemplo un nombre distinto del que se iba a grabar.
+    const r = await window.nt.grabarNombreSiguiente(carpeta, { curso: app.ajustes.curso });
+    campo.placeholder = (r && r.curso) || '';
+    ejemplo.textContent = r && r.nombre ? `${r.nombre}.xml` : '—';
+}
+
+async function guardarCurso(e) {
+    const escrito = e.target.value.trim();
+    app.ajustes = (await window.nt.ajustesGuardar({ curso: escrito || null })).ajustes;
+    await pintarCurso(app.ajustes.carpeta);
 }
 
 function vacio(carpeta) {
@@ -115,36 +159,53 @@ No se graba nada: lo que ajustes se escribe en su XML en el acto.">Notas</button
               title="Volver a leer todas las tomas con el modelo grande">${icono('regenerar')}</button>
       <button class="btn btn-tenue btn-ico" type="button" data-hace="renombrar"
               aria-pressed="${editando}"
-              title="${editando ? 'Dejar el nombre como estaba' : 'Ponerle un nombre delante del que puso la app'}">${icono('renombrar')}</button>
+              title="${editando ? 'Dejar el número como estaba' : 'Cambiarle el número de clase'}">${icono('renombrar')}</button>
       <button class="btn btn-tenue btn-ico btn-peligro" type="button" data-hace="borrar"
               title="Borrar el XML, el audio y los datos">${icono('borrar')}</button>
     </div>`;
 }
 
 /**
- * El nombre de una sesión mientras se lo cambia.
+ * El número de clase de una sesión mientras se lo cambia.
  *
- * Lo que se escribe va DELANTE del nombre que puso la app, y ese nombre se ve
- * fijo al lado del campo mientras tanto: es lo que dice que no se va a perder
- * la fecha ni la hora, que son las que ordenan la lista y las que el editor
- * empareja con la cámara.
+ * **Se edita el número y nada más.** El resto del nombre —el curso, la fecha y
+ * la hora— se ve fijo al lado del campo: es lo que dice que no se va a perder
+ * cuándo se grabó, que es lo que el editor empareja con los archivos de la
+ * cámara y lo que ordena la lista.
+ *
+ * Es `number` y no texto para que en una Mac salga con sus flechitas y para que
+ * el teclado del sistema no ofrezca letras. Dejarlo vacío le quita el número.
  */
 function campoDeNombre(s) {
-    const prefijo = s.prefijo || '';
-    const base = prefijo && s.secuencia.startsWith(`${prefijo}_`)
-        ? s.secuencia.slice(prefijo.length + 1)
-        : s.secuencia;
+    const numero = s.numero != null ? s.numero : '';
+    const base = sinNumero(s);
     return `<span class="ses-renombre">
-        <input type="text" data-campo="prefijo" value="${esc(prefijo)}"
-               placeholder="Nombre" aria-label="Nombre delante de ${esc(base)}">
+        <input type="number" min="1" step="1" data-campo="numero" value="${esc(numero)}"
+               placeholder="—" aria-label="Número de clase de ${esc(base)}">
         <span class="ses-base">_${esc(base)}</span>
-        <button class="btn" type="button" data-hace="guardar-nombre">Guardar</button>
+        <button class="btn" type="button" data-hace="guardar-nombre"
+                title="Renombra el XML, el audio y los datos de esta clase, y la secuencia que importás en Premiere. Si ese número ya está en la carpeta, esta queda como V2.">
+          Guardar</button>
         <span class="v3">Enter guarda · Esc cancela</span>
       </span>`;
 }
 
+/**
+ * El nombre sin el número ni la vez: lo que no se toca al renombrar.
+ *
+ * Se recorta del nombre de verdad y no se rearma con el curso y la fecha, que
+ * sería armar un nombre por segunda vez fuera de `nombre-de-sesion.js`. Si el
+ * recorte no cuadra se muestra el nombre entero, que es peor pero cierto.
+ */
+function sinNumero(s) {
+    const marca = s.numero == null
+        ? null
+        : `${String(s.numero).padStart(2, '0')}_${s.vez > 1 ? `V${s.vez}_` : ''}`;
+    return marca && s.secuencia.startsWith(marca) ? s.secuencia.slice(marca.length) : s.secuencia;
+}
+
 function alTecla(e) {
-    const campo = e.target.closest('[data-campo="prefijo"]');
+    const campo = e.target.closest('[data-campo="numero"]');
     if (!campo) return;
     if (e.key === 'Enter') {
         e.preventDefault();
@@ -248,18 +309,18 @@ async function regenerar(json, boton) {
 }
 
 /**
- * Guarda el nombre de delante. Renombra los tres archivos de la sesión —el XML,
+ * Guarda el número de clase. Renombra los tres archivos de la sesión —el XML,
  * los datos y el audio— y la secuencia que se ve en Premiere.
  *
  * Antes esto pedía el nombre con `window.prompt`, que Electron no tiene: tira
  * «prompt() is not supported», así que el lápiz nunca hizo nada. Por eso el
- * nombre se edita en la fila misma.
+ * número se edita en la fila misma.
  */
 async function guardarNombre() {
     const json = renombrando;
-    const campo = $('#lista-sesiones [data-campo="prefijo"]');
+    const campo = $('#lista-sesiones [data-campo="numero"]');
     if (!json || !campo) return;
-    const r = await window.nt.grabarRenombrar(json, { prefijo: campo.value });
+    const r = await window.nt.grabarRenombrar(json, { numero: campo.value });
     if (!r.ok) {
         // El campo se queda abierto con lo escrito: el motivo suele ser que ya
         // hay otra sesión con ese nombre, y se corrige cambiando una letra.

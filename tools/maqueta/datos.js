@@ -223,22 +223,28 @@ export const SEMANALES = [
 
 export const SESIONES = [
     {
-        secuencia: 'curso-de-automatizaciones_2026-09-28_09-02-11',
+        secuencia: '03_curso-de-automatizaciones_2026-09-28_09-02-11',
         curso: 'Curso de automatizaciones',
+        numero: 3,
+        vez: 1,
         ceroMs: new Date('2026-09-28T09:02:11').getTime(),
         archivos: { xml: '/x/a.xml', json: '/x/a_notas-en-vivo.json' },
         resumen: { tomas: 14, descartadas: 2, claquetas: 4, segundos: 9820, sinReleer: 0, estado: 'terminada' }
     },
     {
-        secuencia: 'curso-de-automatizaciones_2026-09-27_14-30-00',
+        secuencia: '02_V2_curso-de-automatizaciones_2026-09-27_14-30-00',
         curso: 'Curso de automatizaciones',
+        numero: 2,
+        vez: 2,
         ceroMs: new Date('2026-09-27T14:30:00').getTime(),
         archivos: { xml: '/x/b.xml', json: '/x/b_notas-en-vivo.json' },
         resumen: { tomas: 9, descartadas: 0, claquetas: 2, segundos: 5410, sinReleer: 3, estado: 'sin releer' }
     },
     {
-        secuencia: 'curso-de-automatizaciones_2026-09-26_10-00-00',
+        secuencia: '02_curso-de-automatizaciones_2026-09-26_10-00-00',
         curso: 'Curso de automatizaciones',
+        numero: 2,
+        vez: 1,
         ceroMs: new Date('2026-09-26T10:00:00').getTime(),
         archivos: { xml: '/x/c.xml', json: '/x/c_notas-en-vivo.json' },
         resumen: { tomas: 6, descartadas: 1, claquetas: 1, segundos: 2140, sinReleer: 0, estado: 'abierta' }

@@ -382,9 +382,17 @@ function sidecar(estado) {
         version: 2,
         secuencia: estado.secuencia || null,
         curso: estado.curso || null,
-        // Lo que el editor le puso delante al nombre al renombrarla. Va aparte
-        // para que renombrar otra vez lo REEMPLACE en vez de sumarle otro delante.
-        prefijo: estado.prefijo || null,
+        // El número de clase y, si se grabó más de una vez, cuál de esas veces
+        // es. Van aparte del nombre para que renombrarla los REEMPLACE en vez de
+        // sumarle otro número delante, y para no tener que volver a leer el
+        // nombre con una expresión regular cada vez que hace falta saber cuál es
+        // la clase más alta de la carpeta.
+        numero: estado.numero != null ? estado.numero : null,
+        // `vez` y no `version`: ese nombre ya lo usa la versión del formato de
+        // este mismo archivo, tres líneas arriba, y las dos claves juntas en el
+        // mismo objeto dejaban el sidecar diciendo que era de un formato que no
+        // es. Ver `PRIMERA_VEZ` en `nombre-de-sesion.js`.
+        vez: estado.vez || null,
         fps,
         // Cómo se escribe ese fps en el XML, resuelto: es lo que deja leer un
         // sidecar y saber si la secuencia era NTSC sin volver a hacer la cuenta.

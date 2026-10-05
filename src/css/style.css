@@ -303,9 +303,9 @@ body {
   font-feature-settings: 'tnum' 1;
 }
 
-/* El nombre de una sesión mientras se lo cambia: el campo para lo que va
-   delante y, al lado y fijo, el nombre que puso la app, que no se toca. Cabe en
-   el renglón de 32 px, así que el campo es de 24 y no del alto de un formulario. */
+/* El número de clase de una sesión mientras se lo cambia: el campo del número
+   y, al lado y fijo, el resto del nombre, que no se toca. Cabe en el renglón de
+   32 px, así que el campo es de 24 y no del alto de un formulario. */
 .ses-renombre {
   display: flex;
   align-items: center;
@@ -313,12 +313,34 @@ body {
   min-width: 0;
 }
 
-.ses-renombre input[type='text'] {
-  width: 180px;
+/* Estrecho porque lo que entra son dos dígitos: un campo de 180 px para
+   escribir «04» decía que ahí iba un nombre, que es lo que antes iba. */
+.ses-renombre input[type='number'] {
+  width: 84px;
   min-height: 24px;
   height: 24px;
   padding: 0 var(--sp-2);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* El número de la lista de verificación, que sí está en un formulario y va del
+   alto de los demás campos de esa pantalla. Su rótulo no se parte en dos
+   líneas: «Número de / clase» hacía que el renglón midiera distinto que los
+   otros cuatro y la lista dejaba de leerse como una lista. */
+.prep-numero {
+  width: 88px;
+  font-variant-numeric: tabular-nums;
+}
+
+.check-arreglo .campo-fila > .v2 {
+  white-space: nowrap;
+}
+
+/* El nombre del curso, al lado de la carpeta. Ancho de nombre y no de ruta: el
+   campo llegaba al borde de la tarjeta y decía que ahí iba un párrafo. */
+#curso-nombre {
+  max-width: 360px;
 }
 
 .ses-base {

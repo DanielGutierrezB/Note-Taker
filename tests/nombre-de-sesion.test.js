@@ -57,4 +57,73 @@ module.exports = function (t) {
         const armado = nombre.armar({ curso: 'a b c', cuandoMs });
         t.eq(nombre.leer(armado).cuandoMs, cuandoMs);
     });
+
+    t.group('nombre-de-sesion · el número de clase');
+
+    const T = Date.parse('2026-09-29T10:15:00');
+    const arma = (numero, vez) => nombre.armar({ curso: 'Curso Jev', cuandoMs: T, numero, vez });
+
+    t.test('el número va primero y con dos dígitos', () => {
+        // Dos dígitos para que `01` ordene al lado de `02` y de `10`, que es
+        // justo lo que `1`, `2` y `10` no hacen en ninguna lista de archivos.
+        t.eq(arma(1), '01_curso-jev_2026-09-29_10-15-00');
+        t.eq(arma(12), '12_curso-jev_2026-09-29_10-15-00');
+    });
+
+    t.test('la primera vez no lleva V1', () => {
+        // Casi todas las clases se graban una sola vez: un `V1` en todas sería
+        // ruido en todas para decir algo de unas pocas.
+        t.eq(arma(1, 1), arma(1));
+        t.eq(arma(1, 2), '01_V2_curso-jev_2026-09-29_10-15-00');
+        t.eq(arma(1, 7), '01_V7_curso-jev_2026-09-29_10-15-00');
+    });
+
+    t.test('pasados los 99 se escribe entero, no truncado', () => {
+        // Un curso de 120 clases es raro, pero perderle el número a la 100 por
+        // raro sería un error silencioso en el nombre de un archivo.
+        t.eq(arma(100), '100_curso-jev_2026-09-29_10-15-00');
+    });
+
+    t.test('sin número el nombre es el de siempre', () => {
+        // Es por acá que entra el modo semanal, que nombra por fecha.
+        t.eq(arma(null), 'curso-jev_2026-09-29_10-15-00');
+        t.eq(arma(0), 'curso-jev_2026-09-29_10-15-00', 'no hay clase 00');
+        t.eq(arma('abc'), 'curso-jev_2026-09-29_10-15-00');
+        t.eq(nombre.armar({ curso: 'Curso Jev', cuandoMs: T, vez: 4 }),
+            'curso-jev_2026-09-29_10-15-00', 'y una vez sin número no se escribe sola');
+    });
+
+    t.test('leer devuelve el número y la vez que armar puso', () => {
+        for (const [n, v] of [[1, 1], [1, 2], [12, 4], [100, 12]]) {
+            const leido = nombre.leer(arma(n, v));
+            t.eq(leido.numero, n, arma(n, v));
+            t.eq(leido.vez, v);
+            t.eq(leido.curso, 'curso-jev');
+            t.eq(leido.cuandoMs, T);
+        }
+    });
+
+    t.test('una clase sin número se lee igual, con la vez en 1', () => {
+        // Las grabadas antes de que el número existiera. Una sesión que no se
+        // puede leer no se puede abrir ni renombrar ni regenerar.
+        const leido = nombre.leer('curso-jev_2026-09-29_10-15-00');
+        t.eq(leido.numero, null);
+        t.eq(leido.vez, 1, 'siempre al menos 1: el que lee no tiene que acordarse');
+    });
+
+    t.test('un curso que empieza con números no se confunde con uno', () => {
+        // Es el caso real: la carpeta «2609_Claude_Code» da el curso
+        // «2609-claude-code». Lo que salva es que la parte del número pide
+        // dígitos seguidos de `_`, y ahí después de los dígitos viene un guión.
+        const leido = nombre.leer('2609-claude-code_2026-09-29_10-15-00');
+        t.eq(leido.numero, null);
+        t.eq(leido.curso, '2609-claude-code');
+    });
+
+    t.test('un curso que ES un número no se come la fecha', () => {
+        const leido = nombre.leer('01_2026-09-29_10-15-00');
+        t.eq(leido.curso, '01');
+        t.eq(leido.numero, null);
+        t.eq(leido.cuandoMs, T);
+    });
 };
