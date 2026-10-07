@@ -332,7 +332,7 @@ function duracionEnPared(tomas, wavs) {
  * quede abajo a la derecha y que se peguen en orden.
  *
  * @param {object} p { trozos, salida, audio } — `audio` es el plan de
- *   `mejorar-audio.plan`, o nada si la casilla está destildada
+ *   `mejorar-audio.plan`, o nada si la opción está apagada
  * @returns {{args:string[], segundos:number, entradas:string[]}}
  */
 function grafo(p) {

@@ -15,6 +15,9 @@
  * se hace con los números, no si ffmpeg sabe medir.
  */
 
+const path = require('path');
+const { pathToFileURL } = require('url');
+
 const audio = require('../engine/mejorar-audio');
 
 /** Un trozo como los que arma `repartir`, con lo justo que mira el plan. */
@@ -281,6 +284,33 @@ module.exports = function (t) {
         const p = audio.plan({ trozos: [], ffmpeg: null });
         t.deep(p.porTrozo, []);
         t.deep(p.avisos, []);
+    });
+
+    t.group('mejorar audio · la opción en la pantalla de revisión');
+
+    t.test('viene encendida, y lo dice donde se puede leer sin mirar', async () => {
+        const tarjetas = await import(pathToFileURL(path.join(
+            __dirname, '..', 'src', 'js', 'semanal', 'tarjetas.js')).href);
+        const html = tarjetas.tarjetaRevisar({ paso: 'revisar', mejorarAudio: true });
+        t.ok(/data-campo="mejorar-audio"[^>]*aria-pressed="true"/.test(html),
+            'sin la cajita de check, `aria-pressed` es lo único que lo cuenta');
+    });
+
+    t.test('apagada se dice igual de claro', async () => {
+        const tarjetas = await import(pathToFileURL(path.join(
+            __dirname, '..', 'src', 'js', 'semanal', 'tarjetas.js')).href);
+        const html = tarjetas.tarjetaRevisar({ paso: 'revisar', mejorarAudio: false });
+        t.ok(/data-campo="mejorar-audio"[^>]*aria-pressed="false"/.test(html), html.slice(0, 200));
+    });
+
+    t.test('la explicación sigue estando, aunque ya no se vea', async () => {
+        // Se fue del cuerpo de la pantalla al `title`. Que no se vea no
+        // quiere decir que se pueda perder: es lo único que explica qué hace.
+        const tarjetas = await import(pathToFileURL(path.join(
+            __dirname, '..', 'src', 'js', 'semanal', 'tarjetas.js')).href);
+        const html = tarjetas.tarjetaRevisar({ paso: 'revisar', mejorarAudio: true });
+        t.ok(html.includes('al volumen de cualquier otro'), 'qué hace');
+        t.ok(html.includes('ruido de fondo'), 'y la otra mitad');
     });
 
     t.group('mejorar audio · lo que se le dice a quien grabó');

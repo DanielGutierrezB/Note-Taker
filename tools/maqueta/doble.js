@@ -463,7 +463,7 @@ window.nt = {
         }
         // Con los silencios quitados el vídeo dura menos y sale en más
         // pedazos: es lo que hay que poder ver en la pantalla del final para
-        // saber si la casilla hizo algo o no.
+        // saber si la opción hizo algo o no.
         const quita = Boolean(como && como.quitarSilencios);
         return {
             ok: true,

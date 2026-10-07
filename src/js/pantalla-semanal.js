@@ -76,7 +76,7 @@ const estado = {
     grabada: null,           // las tomas con su texto, para mover los bordes
     brutos: [],              // los vídeos tal como se grabaron, para poder verlos
     corte: { pct: 0 },
-    // Las dos casillas de la revisión, que se aplican al cortar. Encendidas de
+    // Las dos opciones de la revisión, que se aplican al cortar. Encendidas de
     // fábrica: son lo que hay que hacerle a un vídeo para que se pueda ver, y
     // quien no las quiera las apaga y vuelve a cortar. Apagadas de fábrica
     // querían decir que el vídeo normal era el peor de los dos posibles.
@@ -90,6 +90,7 @@ export function conectar(contexto) {
     app = contexto;
     $('#semanal-cuerpo').addEventListener('click', alClic);
     $('#semanal-cuerpo').addEventListener('change', alCambio);
+    $('#semanal-cuerpo').addEventListener('pointerdown', arrastrarPorLaLinea);
     document.addEventListener('keydown', alTeclado);
     // El color de cada vista es el del marcador que va a aparecer en Premiere, y
     // quien los sabe es el motor: así lo que se ve mientras se graba es lo mismo
@@ -390,7 +391,7 @@ function conUrls(m) {
 function alMontaje(info) {
     const cambioLaToma = !estado.enVivo || estado.enVivo.toma !== info.toma;
     estado.enVivo = info;
-    if (cambioLaToma && info.toma != null) {
+    if (cambioLaToma && info.toma != null && !arrastrando) {
         estado.ficha = info.toma;
         pintar();
         return;
@@ -579,10 +580,6 @@ async function alCambio(e) {
         await abrirElMicro();
         pintar();
     }
-    // La casilla no repinta: se mira al cortar, y repintar le sacaría el foco
-    // justo al elemento que se acaba de tocar.
-    if (campo === 'silencios') estado.silencios = e.target.checked;
-    if (campo === 'mejorar-audio') estado.mejorarAudio = e.target.checked;
 }
 
 async function alClic(e) {
@@ -608,7 +605,13 @@ async function alClic(e) {
     if (hace === 'fuera') return cambiarFicha(Number(boton.dataset.toma),
         { tipo: 'descartar', descartada: boton.dataset.usar === 'no' });
     if (hace === 'reproducir') { montaje.alternar(); return undefined; }
-    if (hace === 'parar-en') return pararEn(Number(boton.dataset.toma));
+    if (hace === 'opcion') return alternarOpcion(boton);
+    if (hace === 'parar-en') {
+        // Con el ratón ya lo puso el arrastre, en el punto exacto. Con el
+        // teclado no hubo arrastre, así que esto es lo único que lo mueve.
+        if (yaLoPusoElArrastre) { yaLoPusoElArrastre = false; return undefined; }
+        return pararEn(Number(boton.dataset.toma));
+    }
     if (hace === 'ocultar-fuera') {
         estado.ocultarFuera = !estado.ocultarFuera;
         pintar();
@@ -634,18 +637,129 @@ async function alClic(e) {
  * nombre y el momento alcanzan para elegir. Es la misma regla que en clase.
  */
 /**
- * Pararse en una toma de la línea: abajo aparece ella, y el vídeo salta a su
- * principio.
+ * Encender o apagar una de las opciones de exportar.
+ *
+ * No repinta: la pantalla entera se rehace por cosas que cambian el vídeo, y
+ * esto no cambia ninguna —se mira recién al cortar—. Repintar además le
+ * sacaría el foco al botón que se acaba de apretar.
+ */
+function alternarOpcion(boton) {
+    const campo = boton.dataset.campo;
+    const clave = campo === 'silencios' ? 'silencios' : 'mejorarAudio';
+    estado[clave] = !estado[clave];
+    boton.setAttribute('aria-pressed', String(estado[clave]));
+}
+
+/**
+ * Pararse en una toma de la línea: abajo aparece ella, y el vídeo salta al segundo
+ * que se pidió, o a su principio si no se pidió ninguno.
  *
  * Y si estaba reproduciendo, sigue reproduciendo desde ahí. Clicar una toma es
  * decir «mostrame esta», no «pará»: tener que apretar play otra vez después de
  * cada clic es lo que hace que revisar sea un trámite.
  */
-function pararEn(id) {
+function pararEn(id, segundos) {
     const iba = montaje.reproduciendo();
     estado.ficha = id;
-    montaje.irA(id, { reproducir: iba });
+    montaje.irA(id, { reproducir: iba, segundos });
     pintar();
+}
+
+/**
+ * Dónde cae un punto de la línea de tomas, en toma y en segundo.
+ *
+ * Se mide sobre la línea ENTERA y no sobre el trozo que se apretó, porque
+ * arrastrar tiene que poder cruzar de una toma a la siguiente: con el ratón
+ * apretado uno sale de un trozo y entra en otro, y si cada trozo contestara
+ * solo por él, al salirse no contestaría nadie.
+ *
+ * Los trozos miden lo que duran (`corte.anchoDe`), salvo los muy cortos, que
+ * tienen un mínimo para poder tocarse. Por eso la cuenta va sobre lo que cada
+ * trozo MIDE en pantalla y no sobre lo que dura: es lo que se está señalando.
+ */
+function dondeCaeEnLaLinea(clienteX) {
+    // Se buscan los trozos de nuevo en cada paso y no se guardan: la pantalla
+    // se rehace entera cada vez que cambia la toma, y una lista guardada
+    // apuntaría a botones que ya no están en ningún sitio. Medían todos cero y
+    // el arrastre se iba siempre al último.
+    const trozos = [...document.querySelectorAll('#semanal-cuerpo .linea-toma')];
+    if (!trozos.length) return null;
+    // Fuera por un lado o por el otro, el de la punta: arrastrar y pasarse
+    // tiene que dejarte al final, no soltarte.
+    const primero = trozos[0].getBoundingClientRect();
+    if (clienteX < primero.left) return { id: Number(trozos[0].dataset.toma), segundos: 0 };
+    for (const b of trozos) {
+        const r = b.getBoundingClientRect();
+        if (clienteX > r.right) continue;
+        const parte = r.width > 0 ? (clienteX - r.left) / r.width : 0;
+        return {
+            id: Number(b.dataset.toma),
+            segundos: Math.max(0, Math.min(1, parte)) * Number(b.dataset.segundos || 0)
+        };
+    }
+    const ultimo = trozos[trozos.length - 1];
+    return { id: Number(ultimo.dataset.toma), segundos: Number(ultimo.dataset.segundos || 0) };
+}
+
+/**
+ * Si el puntero ya dejó el montaje donde quería.
+ *
+ * El botón de cada toma sigue teniendo su `click`, que es lo que lo hace
+ * manejable con el teclado. Con el ratón llegan los dos —el arrastre y, detrás,
+ * el clic— y el clic dejaría el montaje al principio de la toma, deshaciendo
+ * justo lo que se acababa de elegir.
+ */
+let yaLoPusoElArrastre = false;
+
+/**
+ * Si el puntero está recorriendo la línea ahora mismo.
+ *
+ * Mientras dura, la pantalla NO se repinta aunque cambie de toma: repintar
+ * rehace la línea entera debajo del puntero, y el arrastre se queda midiendo
+ * botones que ya no están en ningún sitio. Al soltar se repinta una vez.
+ */
+let arrastrando = false;
+
+/**
+ * Arrastrar por la línea de tomas para buscar un punto del vídeo.
+ *
+ * La línea ya era el vídeo a escala y ya se podía apretar, pero apretar te
+ * dejaba al PRINCIPIO de la toma: para ver algo del medio había que arrancar
+ * desde su comienzo y esperar. Ahora cae donde se apretó, y con el ratón
+ * apretado se recorre el vídeo entero.
+ *
+ * No repinta mientras se arrastra: repintar rehace los botones y el puntero se
+ * queda apretando un elemento que ya no existe. Al soltar, una sola vez.
+ */
+function arrastrarPorLaLinea(e) {
+    if (!e.target.closest('.linea-tomas') || e.button !== 0) return;
+    const caida = dondeCaeEnLaLinea(e.clientX);
+    if (!caida) return;
+    e.preventDefault();
+
+    const iba = montaje.reproduciendo();
+    if (iba) montaje.pausar();
+    arrastrando = true;
+
+    let ultima = caida;
+    const mueve = ev => {
+        const d = dondeCaeEnLaLinea(ev.clientX);
+        if (!d) return;
+        ultima = d;
+        montaje.irA(d.id, { segundos: d.segundos });
+    };
+    const suelta = () => {
+        yaLoPusoElArrastre = true;
+        arrastrando = false;
+        window.removeEventListener('pointermove', mueve);
+        window.removeEventListener('pointerup', suelta);
+        estado.ficha = ultima.id;
+        montaje.irA(ultima.id, { reproducir: iba, segundos: ultima.segundos });
+        pintar();
+    };
+    window.addEventListener('pointermove', mueve);
+    window.addEventListener('pointerup', suelta);
+    montaje.irA(caida.id, { segundos: caida.segundos });
 }
 
 function plegar(id) {

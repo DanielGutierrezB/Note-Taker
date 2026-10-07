@@ -234,6 +234,15 @@ async function laPasada({ win, arg }) {
             dibujadas: [...(caja ? caja.querySelectorAll('.palabra') : [])].length,
             palabras: palabras.length,
             inMs: t2 ? t2.inMs : null,
+            // El IN no puede entrar en la toma de antes: moverBorde lo topa
+            // en su OUT. Acá hace falta saberlo porque el micrófono falso de
+            // Chromium escribe el audio más rápido que el reloj, las palabras
+            // quedan corridas, y la segunda de la toma 2 puede caer —según
+            // cuánto haya derivado esa corrida— antes de que la toma 2 empiece.
+            pisoMs: (() => {
+                const uno = (antes.tomas || []).find(t => t.id === 1);
+                return uno ? uno.outMs : null;
+            })(),
             // La segunda si la hay, y si no la última: lo que se prueba es que
             // el borde soltado sobre una palabra caiga en esa palabra.
             mueveA: palabras.length > 1 ? palabras[1].t : null
@@ -251,9 +260,12 @@ async function laPasada({ win, arg }) {
             const d = (r.tomas || []).find(t => t.id === 2);
             return { a: d ? d.inMs : null };
         })()`);
+        const esperado = ficha.pisoMs != null
+            ? Math.max(ficha.mueveA, ficha.pisoMs) : ficha.mueveA;
         decir(`el IN de la toma 2 se movió de ${ficha.inMs} a ${movido.a} ms` +
-            ` (se pidió ${ficha.mueveA})`);
-        if (movido.a !== ficha.mueveA) decir('✗ el motor no lo puso donde se pidió');
+            ` (se pidió ${ficha.mueveA}` +
+            (esperado !== ficha.mueveA ? `, topado en el OUT de la toma 1` : '') + ')');
+        if (movido.a !== esperado) decir('✗ el motor no lo puso donde se pidió');
     } else {
         decir('la toma 2 no tiene dos palabras que oír: no hay borde que mover');
     }
@@ -361,20 +373,22 @@ async function laPasada({ win, arg }) {
     decir('la línea de tomas queda:', linea);
     if (!/3:si/.test(linea)) decir('✗ la toma 3 no quedó marcada como fuera');
 
-    // Las dos casillas vienen encendidas de fábrica, y este primer corte las
+    // Las dos opciones vienen encendidas de fábrica, y este primer corte las
     // apaga a propósito: lo que mide es si los bordes caen donde se pidieron,
     // y eso solo se puede comprobar contra un corte que no le haya hecho nada
     // al audio. Encendidas van en el segundo.
-    decir('apagando las dos casillas para medir el corte crudo…');
-    await js(`(() => {
+    decir('apagando las dos opciones para medir el corte crudo…');
+    const apagadas = await js(`(() => {
         for (const campo of ['silencios', 'mejorar-audio']) {
-            const c = document.querySelector(\`[data-campo="\${campo}"]\`);
-            if (!c) return 'falta la casilla ' + campo;
-            c.checked = false;
-            c.dispatchEvent(new Event('change', { bubbles: true }));
+            const b = document.querySelector(\`[data-hace="opcion"][data-campo="\${campo}"]\`);
+            if (!b) return 'falta la opción ' + campo;
+            if (b.getAttribute('aria-pressed') !== 'true') return campo + ' no venía encendida';
+            b.click();
+            if (b.getAttribute('aria-pressed') !== 'false') return campo + ' no se apagó';
         }
         return 'ok';
-    })()`).then(r => { if (r !== 'ok') decir(`✗ ${r}`); });
+    })()`);
+    if (apagadas !== 'ok') decir(`✗ ${apagadas}`);
 
     decir('apretando Cortar y exportar…');
     await js(`document.querySelector('[data-hace="exportar"]').click()`);
@@ -533,22 +547,19 @@ async function laPasada({ win, arg }) {
      *
      * Acá no se puede pedir una duración exacta: cuántos silencios hay lo
      * dice el audio, y el de esta corrida es un pitido de Chromium. Lo que se
-     * comprueba es la cadena entera —casilla, puente, motor, ffmpeg— y que el
+     * comprueba es la cadena entera —botón, puente, motor, ffmpeg— y que el
      * vídeo salga más corto que el de antes y se siga pudiendo abrir.
      */
-    console.log('\n── El mismo corte, con las dos casillas como vienen de fábrica\n');
+    console.log('\n── El mismo corte, con las dos opciones como vienen de fábrica\n');
     await js(`document.querySelector('[data-hace="ajustar"]').click()`);
     await espera(400);
     const comoVienen = await js(`(() => {
-        const c = [...document.querySelectorAll('[data-campo="silencios"],'
-            + '[data-campo="mejorar-audio"]')];
-        for (const x of c) {
-            x.checked = true;
-            x.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        return c.map(x => x.dataset.campo).join(' + ');
+        const b = [...document.querySelectorAll('[data-hace="opcion"]')];
+        for (const x of b) if (x.getAttribute('aria-pressed') !== 'true') x.click();
+        return b.filter(x => x.getAttribute('aria-pressed') === 'true')
+            .map(x => x.dataset.campo).join(' + ');
     })()`);
-    decir('tildadas:', comoVienen);
+    decir('encendidas:', comoVienen);
     await js(`document.querySelector('[data-hace="exportar"]').click()`);
     let dos = null;
     for (let i = 0; i < 180; i++) {

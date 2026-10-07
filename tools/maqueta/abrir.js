@@ -124,7 +124,41 @@ function crear(puerto) {
         return res.end('no está');
     }
 
-    res.writeHead(200, { 'Content-Type': TIPOS[path.extname(base)] || 'application/octet-stream' });
+    const tipo = TIPOS[path.extname(base)] || 'application/octet-stream';
+    const largo = fs.statSync(base).size;
+
+    /* Por trozos, si los piden.
+     *
+     * Hace falta para el vídeo y no es un lujo: un `<video>` solo puede
+     * buscar dentro de lo que el servidor le deje pedir por trozos. Sin esto,
+     * `currentTime = 4.5` se lee de vuelta como 0 —el navegador lo recorta a
+     * lo que lleva descargado— y la maqueta no puede probar nada que no sea
+     * el principio de cada toma. En la app no se nota porque ahí las rutas
+     * son `file:`, que se busca entero. Lo encontré probando el arrastre por
+     * la línea de tomas: el montaje caía siempre en cero y parecía un fallo
+     * del montaje. */
+    const rango = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+    if (rango) {
+        const desde = rango[1] ? Number(rango[1]) : Math.max(0, largo - Number(rango[2]));
+        const hasta = rango[1] && rango[2] ? Math.min(Number(rango[2]), largo - 1) : largo - 1;
+        if (!(desde >= 0) || desde > hasta) {
+            res.writeHead(416, { 'Content-Range': `bytes */${largo}` });
+            return res.end();
+        }
+        res.writeHead(206, {
+            'Content-Type': tipo,
+            'Accept-Ranges': 'bytes',
+            'Content-Range': `bytes ${desde}-${hasta}/${largo}`,
+            'Content-Length': hasta - desde + 1
+        });
+        return fs.createReadStream(base, { start: desde, end: hasta }).pipe(res);
+    }
+
+    res.writeHead(200, {
+        'Content-Type': tipo,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': largo
+    });
     res.end(fs.readFileSync(base));
     });
 }

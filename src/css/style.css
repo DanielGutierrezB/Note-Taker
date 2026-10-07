@@ -2185,6 +2185,28 @@ kbd {
   justify-content: center;
   align-items: flex-start;
   gap: var(--sp-4);
+  /* Para que el espejo de abajo sepa cuándo irse. Se pregunta por el ancho de
+     esta misma fila y no por el de la ventana: lo que decide si entran las
+     tres columnas es el sitio que hay acá dentro, no el tamaño del monitor. */
+  container-type: inline-size;
+}
+
+/* El hueco de la izquierda, que no tiene nada dentro y existe para que el
+   reproductor quede en el MEDIO de la tarjeta y no corrido a un lado.
+
+   Sin él, lo que queda centrado es el par vídeo + opciones, así que el vídeo
+   —que es lo que se está mirando— cae medio ancho de columna a la izquierda
+   del centro. Con un hueco del mismo ancho que las opciones, el centro del
+   vídeo es el centro de la tarjeta. */
+.revisar-espejo {
+  flex: 1 1 240px;
+  max-width: 300px;
+}
+
+/* Cuando ya no caben las tres columnas, el hueco sobra: dejarlo le robaría al
+   vídeo el ancho que le hace falta justo cuando menos tiene. */
+@container (width < 920px) {
+  .revisar-espejo { display: none; }
 }
 
 .revisar-video {
@@ -2195,72 +2217,62 @@ kbd {
   max-width: calc(46vh * 16 / 9);
 }
 
+/* Tres cosas del mismo ancho, una debajo de otra: las dos opciones y el botón.
+
+   Antes cada opción llevaba su explicación escrita debajo, y eran cuatro
+   párrafos de letra chica al lado del reproductor para dos decisiones que casi
+   nadie cambia. Las dos vienen encendidas y hacen lo que hay que hacerle a un
+   vídeo: de un vistazo se necesita saber si están puestas, no por qué. El
+   porqué está en el `title`, a un segundo de distancia. */
 .revisar-lado {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
+  gap: var(--sp-2);
   flex: 1 1 240px;
-  /* Más ancha no se lee mejor: los párrafos de debajo de cada casilla son de
-     dos renglones y estirarlos solo aleja la casilla de su explicación. */
-  max-width: 320px;
+  max-width: 300px;
 }
 
-.revisar-opciones {
-  display: flex;
-  flex-direction: column;
+/* Las dos opciones son botones que se quedan apretados, con la misma forma que
+   el Exportar de debajo: tres rectángulos iguales se leen como un grupo.
+
+   Sin cajita de check. Puesta o no lo dice el botón entero, que se ve de más
+   lejos que un cuadradito de 24 px; `aria-pressed` es lo que lo cuenta para
+   quien no lo está mirando. */
+.revisar-opcion {
+  width: 100%;
 }
 
-/* La explicación va pegada a SU casilla y separada de la siguiente: sin esto
-   las dos parejas se leen como un bloque de cuatro cosas sueltas. */
-.revisar-opciones .v3 {
-  margin: 0 0 var(--sp-3);
-  padding-left: calc(var(--target-min) + var(--sp-2));
+/* Apagada: gris encima de gris, para que se vea que no está haciendo nada.
+   No es `:disabled` —se puede apretar— así que no lleva el `opacity` de
+   deshabilitado, que diría «esto no se toca». */
+.revisar-opcion[aria-pressed='false'] {
+  background: transparent;
+  color: var(--text-secondary);
 }
 
-.revisar-opciones .v3:last-child {
-  margin-bottom: 0;
+/* Encendida: el acento, pero teñido y no a plena pasta.
+
+   A plena pasta serían tres botones de acento en la misma columna y ninguno
+   diría «acá»: el relleno sólido es de la acción principal y en esta pantalla
+   esa es Exportar, una sola (ver `.btn-primario`). Teñido alcanza de sobra
+   para que se vea de un vistazo cuál está puesta, que es lo único que hay que
+   saber antes de cortar. */
+.revisar-opcion[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
 }
 
-/* El botón ocupa la columna entera: es la única cosa de esta pantalla que
-   termina el trabajo, y a media columna se confundiría con un botón más. */
+.revisar-opcion[aria-pressed='true']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+/* El botón ocupa la columna entera, igual que las dos opciones de arriba: es
+   la única cosa de esta pantalla que termina el trabajo, y a media columna se
+   confundiría con un botón más. */
 .revisar-exportar {
   width: 100%;
-  justify-content: center;
-}
-
-/* El último párrafo es de las dos casillas y va antes del botón: el botón
-   tiene que ser lo último que se lee, porque es lo último que se hace. */
-.revisar-lado > .v3 {
-  margin: 0;
-}
-
-/* Va con la casilla del sistema y no con una dibujada: el estado marcado /
-   sin marcar tiene que leerse de un vistazo justo antes de apretar el botón
-   que corta, y una casilla nativa es la que nadie tiene que aprender. El
-   tamaño es el mínimo clicable, que es lo que mide la auditoría. */
-.semanal-casilla {
-  display: flex;
-  gap: var(--sp-2);
-  align-items: center;
-  min-height: var(--target-min);
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text-primary);
-}
-
-/* `flex: none` porque si no, a 900 px la fila la encoge y la casilla sale de
-   13 px de ancho por 16 de alto: un rectángulo que no se lee.
-
-   24 y no 16 porque es el mínimo que se puede apretar (SC 2.5.8, `--target-min`),
-   que es el mismo alto que las demás filas de la app (`--row-xs`). Escalarla
-   con `transform` para dejarla dibujada más chica no sirve: lo que se mide es
-   el rectángulo, y la transformación se lo lleva puesto. */
-.semanal-casilla input {
-  flex: none;
-  width: var(--target-min);
-  height: var(--target-min);
-  accent-color: var(--accent);
-  cursor: pointer;
+  margin-top: var(--sp-2);
 }
 
 /* La escena: cómo va a quedar la toma, montada en vivo.
@@ -2372,6 +2384,19 @@ kbd {
      que el mismo reloj en una fila de abajo. */
   flex-wrap: wrap;
   row-gap: var(--sp-2);
+}
+
+/* La cuenta de tomas y el botón de ocultarlas van juntos y a la derecha.
+
+   Juntos porque si envuelven sueltos cae uno solo al renglón de abajo, pegado
+   a la izquierda y debajo del reloj, como si fuera otra cosa. Y con
+   `margin-left: auto` en vez de un separador que crezca porque así el grupo
+   sigue a la derecha también cuando es él el que envolvió. */
+.montaje-cuenta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
 }
 
 /* El reloj del montaje, un punto por encima del resto: es lo que se mira de

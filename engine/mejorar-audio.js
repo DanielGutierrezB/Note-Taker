@@ -3,7 +3,7 @@
  * mejorar-audio.js — Que el vídeo de la semana salga al volumen de todo lo
  * demás, parejo entre tomas y sin el zumbido de la sala.
  *
- * Es la otra casilla de la pantalla de revisión, al lado de «Quitar
+ * Es la otra opción de la pantalla de revisión, al lado de «Quitar
  * silencios», y como aquella vive acá y no en el navegador: la decisión se
  * toma mirando el audio de verdad, y eso es ffmpeg.
  *

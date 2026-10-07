@@ -168,7 +168,7 @@ function irAlIndice(i, o) {
     const t = laDeAhora();
     sola = Boolean(t && t.descartada);
     acomodar(t);
-    buscar(t);
+    buscar(t, o.segundos);
     if (o.reproducir) arrancar();
     else decir();
 }
@@ -229,13 +229,27 @@ function dentroDe(t) {
     return m && t ? Math.max(0, m.currentTime - arranqueDe(t)) : 0;
 }
 
-function buscar(t) {
+/**
+ * Ponerse en un punto de una toma. Sin `segundos`, en su principio.
+ *
+ * Los dos vídeos se mueven el mismo rato y no cada uno al suyo: están en
+ * archivos distintos que empiezan en instantes distintos, y lo que los ata es
+ * que ese rato sea el mismo para los dos.
+ */
+function buscar(t, segundos) {
     if (!t) return;
     // Sin esto, el estirón de la toma anterior sigue puesto en la siguiente y
     // el vídeo arranca un 8 % rápido hasta que el tic lo note.
     aVelocidadNormal();
-    if (elCam && elCam.dataset.ruta && t.camaraDesde != null) elCam.currentTime = t.camaraDesde;
-    if (elPan && elPan.dataset.ruta && t.pantallaDesde != null) elPan.currentTime = t.pantallaDesde;
+    // Nunca al filo mismo del final: ahí el tic da la toma por terminada y
+    // salta a la siguiente, que no es donde se hizo clic.
+    const dentro = Math.max(0, Math.min(Number(segundos) || 0, t.segundos - AL_FILO * 2));
+    if (elCam && elCam.dataset.ruta && t.camaraDesde != null) {
+        elCam.currentTime = t.camaraDesde + dentro;
+    }
+    if (elPan && elPan.dataset.ruta && t.pantallaDesde != null) {
+        elPan.currentTime = t.pantallaDesde + dentro;
+    }
 }
 
 /** El tic: ¿sigue dentro de la toma, y siguen juntos los dos vídeos? */

@@ -148,6 +148,57 @@ async function main() {
     // seguida de una «s», que no aparece nunca, y el texto salía sin colapsar.
     decir('y lo dice:', String(dice || '').replace(/\s+/g, ' ').trim());
 
+    /* ── Apretar un punto de la línea cae en ESE punto ────────────────
+     *
+     * La línea es el vídeo a escala, así que apretar por la mitad de un trozo
+     * tiene que dejar el montaje por la mitad de esa toma. Antes dejaba
+     * siempre en su principio, y ver algo del medio costaba arrancar desde el
+     * comienzo y esperar.
+     */
+    decir('\napretando por el medio del trozo de la toma 1…');
+    const caja = await js(`(() => {
+        const b = document.querySelector('.linea-toma[data-toma="1"]');
+        const r = b.getBoundingClientRect();
+        return { x: r.left, y: r.top + r.height / 2, w: r.width, dura: Number(b.dataset.segundos) };
+    })()`);
+    if (!caja || !caja.dura) {
+        decir('✗ el trozo de la toma 1 no dice cuánto dura: sin eso no se puede buscar dentro');
+    } else {
+        await p.mouse.click(caja.x + caja.w / 2, caja.y);
+        await espera(900);
+        e = await mirar();
+        const enSegundos = x => {
+            const [m, s] = String(x || '0:0').split(':').slice(-2).map(Number);
+            return (m || 0) * 60 + (s || 0);
+        };
+        const quedo = enSegundos(e.reloj);
+        decir(`la toma 1 dura ${caja.dura.toFixed(1)} s · el reloj quedó en ${e.reloj}`);
+        // El reloj cuenta el vídeo entero y la 1 es la primera, así que por la
+        // mitad de la 1 es la mitad de su duración. Un segundo de margen: el
+        // montaje sigue corriendo mientras se mide.
+        const medio = caja.dura / 2;
+        if (Math.abs(quedo - medio) > 1.2) {
+            decir(`✗ se apretó por la mitad (≈${medio.toFixed(1)} s) y cayó en ${quedo} s`);
+        }
+        if (e.puesta !== 1) decir('✗ no quedó marcada la 1');
+    }
+
+    /* ── Y arrastrando se recorre, cruzando de una toma a otra ───────── */
+    decir('\narrastrando desde la toma 1 hasta la 3…');
+    const hasta = await js(`(() => {
+        const b = document.querySelector('.linea-toma[data-toma="3"]');
+        const r = b.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    })()`);
+    await p.mouse.move(caja.x + caja.w / 2, caja.y);
+    await p.mouse.down();
+    await p.mouse.move(hasta.x, hasta.y, { steps: 12 });
+    await p.mouse.up();
+    await espera(900);
+    e = await mirar();
+    decir('abajo:', e.tomaAbajo, '· marcada la', e.puesta);
+    if (e.puesta !== 3) decir('✗ arrastrar de la 1 a la 3 no cruzó de toma');
+
     /* ── Clicar una desactivada la reproduce sola ────────────────────── */
     decir('\nclicando la toma 2, que está fuera del vídeo…');
     await p.click('.linea-toma[data-toma="2"]');

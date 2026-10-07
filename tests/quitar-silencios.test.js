@@ -169,7 +169,7 @@ module.exports = function (t) {
     });
 
     t.test('los números son los que se le prometen a la persona', async () => {
-        // La casilla de la revisión dice «los huecos de más de 0,7 s quedan en
+        // La opción de la revisión dice «los huecos de más de 0,7 s quedan en
         // 0,3». Son los dos números del motor escritos en una frase, y nadie
         // los iba a mantener a mano: se dibuja la tarjeta de verdad y se le
         // busca lo que el motor dice HOY. Cambiar una constante y no el texto
@@ -182,7 +182,7 @@ module.exports = function (t) {
             path.join(__dirname, '..', 'src', 'js', 'semanal', 'tarjetas.js')).href);
         const html = tarjetas.tarjetaRevisar({ paso: 'revisar', silencios: false });
         t.ok(html.includes(`más de ${coma(silencios.LARGO_MIN_SEC)} s`),
-            'y la casilla dice el largo mínimo del motor');
+            'y la opción dice el largo mínimo del motor');
         t.ok(html.includes(`quedan en ${coma(silencios.AIRE_SEC)}`),
             'y el aire que les deja');
     });

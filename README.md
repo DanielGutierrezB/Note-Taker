@@ -194,7 +194,7 @@ se ve entero, incluidos los repuestos —una toma que pidió la cámara y no la
 tiene sale con la pantalla—. El navegador solo busca ese segundo y pone los
 dos `<video>` donde el motor dijo. Así lo que se mira es lo que va a salir.
 
-**Las dos casillas y el botón de exportar van a la derecha del reproductor**,
+**Las dos opciones y el botón de exportar van a la derecha del reproductor**,
 no debajo. Estaban debajo del todo —después del montaje, de la línea de tomas
 y de la ficha de la toma— y en una ventana normal eso dejaba fuera de la
 pantalla el botón que termina el trabajo, sin nada que diera a entender que
@@ -203,12 +203,35 @@ partir de cierto ancho le sobra el espacio de los costados y ahí no le quita
 sitio a nada. Cuando la ventana se estrecha y ya no caben los dos, la columna
 se va debajo sola: es flex envolviendo, no un punto de corte escrito a mano.
 
+Las tres son **el mismo botón** —mismo alto, mismo ancho, texto centrado—, y
+lo único que las distingue es el color. Exportar va en acento lleno: es la
+acción de la pantalla, y de esas hay una sola. Las otras dos cuentan si están
+puestas con **el acento rebajado** —fondo teñido, borde y letra en acento— y
+apagadas se van a **gris opaco sobre nada**, que es lo que hace que de un
+vistazo se vea cuál está encendida sin tener que leerlas. No llevan cajita de
+check: lo que dice el estado es el color, y para quien no lo ve, el
+`aria-pressed` del botón. Lo que hacen está en el `title`, al pasar por
+encima; estaba escrito debajo de cada una y eran cuatro renglones de letra
+chica para dos opciones que casi nunca se tocan.
+
+El reproductor queda **centrado en la tarjeta**: a la izquierda hay un hueco
+del ancho de la columna de la derecha, que no es nada y solo está para
+equilibrarla. Por debajo de 920 px ese hueco desaparece (`@container`) porque
+ahí el sitio vale más que la simetría.
+
+**La línea de tomas de abajo es también la barra de búsqueda.** Apretar en
+cualquier punto reproduce desde ahí —no desde el principio de esa toma— y sin
+soltar se puede arrastrar a lo largo de todo el vídeo, cruzando tomas, con el
+montaje siguiendo al dedo. Mientras se arrastra, la pantalla **no se
+repinta**: la línea se rehacía debajo del puntero cada vez que se cambiaba de
+toma y el arrastre terminaba en la toma equivocada.
+
 ### «Quitar silencios»
 
-Una de las dos casillas de la revisión, **encendida de fábrica**. Saca los
+Una de las dos opciones de la revisión, **encendida de fábrica**. Saca los
 huecos de más de **0,7 s**
 de dentro de cada toma, para que el vídeo tenga mejor ritmo
-(`engine/quitar-silencios.js`). Se desmarca y se vuelve a cortar; el MP4 de
+(`engine/quitar-silencios.js`). Se apaga y se vuelve a cortar; el MP4 de
 antes no se pisa.
 
 Dos decisiones que hay que saber. La primera: **el hueco no se borra, se
@@ -227,7 +250,7 @@ muestra tiene que ser el que va a ver en el reproductor.
 
 ### «Mejorar audio»
 
-La otra casilla, también **encendida de fábrica**
+La otra opción, también **encendida de fábrica**
 (`engine/mejorar-audio.js`). Deja el vídeo al volumen de cualquier otro vídeo
 de internet, empareja las tomas entre sí y le quita el ruido de fondo de la
 sala. Como la otra, se aplica **al cortar** y solo al MP4 final: las capturas

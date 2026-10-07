@@ -428,6 +428,7 @@ export function tarjetaRevisar(estado) {
     return `
       <div class="tarjeta">
         <div class="tarjeta-cuerpo revisar-fila">
+          <div class="revisar-espejo" aria-hidden="true"></div>
           <div class="revisar-video">
             <div id="semanal-montaje" class="montaje-hueco"></div>
             ${barraDelMontaje(estado, todas, van)}
@@ -459,25 +460,16 @@ export function tarjetaRevisar(estado) {
  * caben los dos, la columna se va debajo sola (`.revisar-fila` envuelve).
  */
 function ladoDeExportar(estado, van) {
+    const comun = 'Se aplica al cortar, así que no se oye en el montaje de al lado. '
+        + 'Si no te gusta cómo quedó, apagala y volvé a cortar.';
     return `
       <aside class="revisar-lado" aria-label="Antes de exportar">
-        <div class="revisar-opciones">
-          <label class="semanal-casilla">
-            <input type="checkbox" data-campo="silencios" ${estado.silencios ? 'checked' : ''}>
-            <span>Quitar silencios</span>
-          </label>
-          <p class="v3">Los huecos de más de 0,7 s —cuando te quedás pensando o buscando algo—
-            quedan en 0,3.</p>
-          <label class="semanal-casilla">
-            <input type="checkbox" data-campo="mejorar-audio"
-                   ${estado.mejorarAudio ? 'checked' : ''}>
-            <span>Mejorar audio</span>
-          </label>
-          <p class="v3">Deja el vídeo al volumen de cualquier otro, empareja las tomas entre sí
-            y le quita el ruido de fondo a la sala.</p>
-        </div>
-        <p class="v3">Las dos se aplican al cortar, así que no se oyen en el montaje de al lado.
-          Si no te gusta cómo quedó, destildá y volvé a cortar.</p>
+        ${opcion('silencios', 'Quitar silencios', estado.silencios,
+            `Los huecos de más de 0,7 s —cuando te quedás pensando o buscando algo— quedan `
+            + `en 0,3.\n\n${comun}`)}
+        ${opcion('mejorar-audio', 'Mejorar audio', estado.mejorarAudio,
+            `Deja el vídeo al volumen de cualquier otro, empareja las tomas entre sí y le `
+            + `quita el ruido de fondo a la sala.\n\n${comun}`)}
         <button class="btn btn-primario revisar-exportar" type="button" data-hace="exportar"
                 ${van.length ? '' : 'disabled'}
                 title="${van.length
@@ -485,6 +477,26 @@ function ladoDeExportar(estado, van) {
                     : 'No queda ninguna toma: volvé a meter alguna o grabá otro'}">
           Exportar</button>
       </aside>`;
+}
+
+/**
+ * Una opción de exportar: un botón que se queda apretado.
+ *
+ * Era una casilla con la explicación escrita debajo, y eran cuatro párrafos de
+ * letra chica al lado del reproductor para dos decisiones que casi nadie
+ * cambia. Las dos vienen encendidas y hacen lo que hay que hacerle a un vídeo:
+ * de un vistazo se necesita saber si están puestas, no por qué. El porqué está
+ * en el `title`, a un segundo de distancia.
+ *
+ * Y sin la cajita: puesta o no se dice con el color del botón entero, que se
+ * ve de más lejos que un cuadradito de 24 px. `aria-pressed` es lo que lo
+ * cuenta para quien no lo está mirando.
+ */
+function opcion(campo, rotulo, puesta, explica) {
+    return `
+      <button class="btn revisar-opcion" type="button" data-hace="opcion" data-campo="${campo}"
+              aria-pressed="${Boolean(puesta)}" title="${esc(explica)}">
+        ${esc(rotulo)}</button>`;
 }
 
 /** Reproducir, dónde va, y si se ven las que dejé fuera. */
@@ -497,15 +509,16 @@ export function barraDelMontaje(estado, todas, van) {
                 id="semanal-reproducir"></button>
         <time class="tc" id="semanal-montado">${esc(fmt.relojCorto(v.montado || 0))}</time>
         <span class="v3">de ${esc(fmt.relojCorto(v.total || 0))}</span>
-        <span class="crece"></span>
-        <span class="v3">${van.length} toma${van.length === 1 ? '' : 's'} en el vídeo${
+        <span class="montaje-cuenta">
+          <span class="v3">${van.length} toma${van.length === 1 ? '' : 's'} en el vídeo${
             fuera ? ` · ${fuera} fuera` : ''}</span>
-        ${fuera ? `<button class="btn btn-tenue" type="button" data-hace="ocultar-fuera"
+          ${fuera ? `<button class="btn btn-tenue" type="button" data-hace="ocultar-fuera"
                 aria-pressed="${Boolean(estado.ocultarFuera)}"
                 title="${estado.ocultarFuera
                     ? 'Volver a ver las tomas que dejaste fuera, para poder recuperarlas'
                     : 'Deja de mostrar las que dejaste fuera: abajo queda solo el corte final'}">
-          ${estado.ocultarFuera ? 'Ver las desactivadas' : 'Ocultar desactivadas'}</button>` : ''}
+            ${estado.ocultarFuera ? 'Ver las desactivadas' : 'Ocultar desactivadas'}</button>` : ''}
+        </span>
       </div>`;
 }
 
@@ -530,6 +543,7 @@ export function lineaDeTomas(estado, todas) {
           <button class="linea-toma" type="button" data-hace="parar-en" data-toma="${x.id}"
                   style="flex:${corte.anchoDe(x) / total};${estiloDeVista(estado.vistas, corte.vistaReal(x))}"
                   data-fuera="${x.descartada ? 'si' : 'no'}"
+                  data-segundos="${x.segundos}"
                   aria-pressed="${Boolean(parada && parada.id === x.id)}"
                   title="Toma ${x.id} · ${fmt.duracion(x.segundos)}${
                       x.descartada ? ' · está fuera del vídeo' : ''}">
