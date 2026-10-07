@@ -133,7 +133,8 @@ function registrar({ ipcMain, send, anotar }) {
         try {
             const r = await exportar.deSesion(json, {
                 alProgreso: p => send('semanal-progreso', p),
-                quitarSilencios: Boolean(como && como.quitarSilencios)
+                quitarSilencios: Boolean(como && como.quitarSilencios),
+                mejorarAudio: Boolean(como && como.mejorarAudio)
             });
             anotar(r.ok ? 'semanal.exportado' : 'semanal.sin-exportar', {
                 json: path.basename(String(json || '')),

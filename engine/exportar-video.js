@@ -40,6 +40,7 @@ const workspace = require('./workspace');
 const vivo = require('./notas-vivo');
 const ajustar = require('./ajustar-corte');
 const silencios = require('./quitar-silencios');
+const mejorarAudio = require('./mejorar-audio');
 const videoCrudo = require('./video-crudo');
 const sesionesGrabadas = require('./sesiones-grabadas');
 
@@ -330,12 +331,14 @@ function duracionEnPared(tomas, wavs) {
  * prueba sin medios: que cada trozo recorte donde se le dijo, que la cámara
  * quede abajo a la derecha y que se peguen en orden.
  *
- * @param {object} p { trozos, salida }
+ * @param {object} p { trozos, salida, audio } — `audio` es el plan de
+ *   `mejorar-audio.plan`, o nada si la casilla está destildada
  * @returns {{args:string[], segundos:number, entradas:string[]}}
  */
 function grafo(p) {
     const trozos = p.trozos || [];
     if (!trozos.length) throw new Error('No hay ninguna toma que exportar.');
+    const audio = p.audio || {};
 
     // Una entrada por archivo, no por trozo: ffmpeg decodifica una vez y reparte.
     const entradas = [];
@@ -398,11 +401,25 @@ function grafo(p) {
         }
 
         const aud = indiceDe(t.audio.ruta);
+        // La ganancia de la toma va acá, pegada a su recorte, porque es lo
+        // único de la mejora que es de CADA toma y no del conjunto: empareja
+        // esta con las demás antes de que se peguen. Es una ganancia fija, así
+        // que no retrasa ni deforma nada (ver `mejorar-audio.js`).
+        const sube = audio.porTrozo && audio.porTrozo[i];
+        const nivela = sube ? `,volume=${sube.toFixed(2)}dB` : '';
         partes.push(`[${aud}:a]atrim=start=${tres(t.audio.desdeSec)}:end=${tres(t.audio.hastaSec)},`
-            + `asetpts=PTS-STARTPTS,aresample=48000[a${i}]`);
+            + `asetpts=PTS-STARTPTS,aresample=48000${nivela}[a${i}]`);
         pegar.push(`[v${i}][a${i}]`);
     });
-    partes.push(`${pegar.join('')}concat=n=${trozos.length}:v=1:a=1[v][a]`);
+    // Si hay cadena de conjunto, el concat entrega en una etiqueta aparte y
+    // ella produce `[a]`. La etiqueta no puede ser `[aN]`: esas son las pistas
+    // de los trozos y `[a0]` ya está puesta.
+    partes.push(`${pegar.join('')}concat=n=${trozos.length}:v=1:a=1[v]`
+        + (audio.programa ? '[apegado]' : '[a]'));
+    // La limpieza y el volumen del conjunto van sobre el vídeo ya pegado: el
+    // denoiser quiere un solo ruido que aprender y el volumen final es uno
+    // solo por definición.
+    if (audio.programa) partes.push(`[apegado]${audio.programa}[a]`);
 
     const args = ['-v', 'error', '-y', '-nostdin'];
     for (const ruta of entradas) args.push('-i', ruta);
@@ -683,7 +700,7 @@ function wavsDe(estado, sitio) {
  * Corta y exporta el vídeo de una sesión ya terminada.
  *
  * @param {string} json el sidecar de la sesión
- * @param {object} [opciones] `{ alProgreso, salida, quitarSilencios }`
+ * @param {object} [opciones] `{ alProgreso, salida, quitarSilencios, mejorarAudio }`
  * @returns {Promise<object>} { ok, ruta, segundos, tomas, avisos }
  */
 async function deSesion(json, opciones) {
@@ -746,8 +763,22 @@ async function deSesion(json, opciones) {
         };
     }
 
+    // Medir va DESPUÉS del reparto porque lo que se mide es lo que va a sonar:
+    // qué archivo trae el audio de cada toma lo decide `repartir`, y puede no
+    // ser el mismo para todas. Y se mide dos veces y se encodea una: la
+    // segunda pasada es solo audio y cuesta una lectura de los archivos,
+    // mientras que el exporte cuesta minutos de x264.
+    const audio = o.mejorarAudio
+        ? mejorarAudio.afinar({
+            trozos,
+            ffmpeg: paths.ffmpeg().path,
+            plan: mejorarAudio.plan({ trozos, ffmpeg: paths.ffmpeg().path })
+        })
+        : null;
+    if (audio) avisos.push(...audio.avisos);
+
     const salida = alLado(o.salida || path.join(sitio.base, `${sitio.nombre}.mp4`));
-    const g = grafo({ trozos, salida });
+    const g = grafo({ trozos, salida, audio });
     const r = await correr(g.args, g.segundos, o.alProgreso);
     if (!r.ok) return { ok: false, tomas: tomas.length, avisos, error: r.error };
 

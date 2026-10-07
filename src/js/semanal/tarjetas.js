@@ -443,15 +443,26 @@ export function tarjetaRevisar(estado) {
       <div class="tarjeta">
         <div class="tarjeta-cuerpo">
           <div class="campo-fila" style="align-items:flex-start">
-            <div>
-              <label class="semanal-casilla">
-                <input type="checkbox" data-campo="silencios" ${estado.silencios ? 'checked' : ''}>
-                <span>Quitar silencios</span>
-              </label>
-              <p class="v3" style="margin:4px 0 0;max-width:52ch">Los huecos de más de 0,7 s
-                —cuando te quedás pensando o buscando algo— quedan en 0,3. Esto no se ve en el
-                montaje de arriba: se aplica al cortar. Si no te gusta cómo suena, destildala
-                y volvé a cortar.</p>
+            <div class="semanal-casillas">
+              <div>
+                <label class="semanal-casilla">
+                  <input type="checkbox" data-campo="silencios" ${estado.silencios ? 'checked' : ''}>
+                  <span>Quitar silencios</span>
+                </label>
+                <p class="v3">Los huecos de más de 0,7 s —cuando te quedás pensando o buscando
+                  algo— quedan en 0,3.</p>
+              </div>
+              <div>
+                <label class="semanal-casilla">
+                  <input type="checkbox" data-campo="mejorar-audio"
+                         ${estado.mejorarAudio ? 'checked' : ''}>
+                  <span>Mejorar audio</span>
+                </label>
+                <p class="v3">Deja el vídeo al volumen de cualquier otro, empareja las tomas
+                  entre sí y le quita el ruido de fondo a la sala.</p>
+              </div>
+              <p class="v3">Las dos se aplican al cortar, así que no se oyen en el montaje de
+                arriba. Si no te gusta cómo quedó, destildá y volvé a cortar.</p>
             </div>
             <span class="crece"></span>
             <button class="btn btn-primario" type="button" data-hace="exportar" ${van.length ? '' : 'disabled'}

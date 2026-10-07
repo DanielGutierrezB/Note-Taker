@@ -196,7 +196,8 @@ dos `<video>` donde el motor dijo. Así lo que se mira es lo que va a salir.
 
 ### «Quitar silencios»
 
-Una casilla antes de **Cortar y exportar**. Saca los huecos de más de **0,7 s**
+Una de las dos casillas de la revisión, **encendida de fábrica**. Saca los
+huecos de más de **0,7 s**
 de dentro de cada toma, para que el vídeo tenga mejor ritmo
 (`engine/quitar-silencios.js`). Se desmarca y se vuelve a cortar; el MP4 de
 antes no se pisa.
@@ -214,6 +215,63 @@ dijo «3, 2, 1»—, que es lo que reconoce. El aviso dice cuántos segundos men
 de vídeo quedaron, y los dice en el **reloj de pared**: los huecos se miden en
 el reloj del audio, que es donde viven los bordes, pero el número que se le
 muestra tiene que ser el que va a ver en el reproductor.
+
+### «Mejorar audio»
+
+La otra casilla, también **encendida de fábrica**
+(`engine/mejorar-audio.js`). Deja el vídeo al volumen de cualquier otro vídeo
+de internet, empareja las tomas entre sí y le quita el ruido de fondo de la
+sala. Como la otra, se aplica **al cortar** y solo al MP4 final: las capturas
+originales no se tocan nunca.
+
+Hacía falta. Medidos los tres vídeos semanales que había grabados:
+
+| | sonoridad | dinámica | pico real |
+|---|---|---|---|
+| 05/10 | −30,8 LUFS | LRA 5,0 | −0,4 dBFS |
+| 06/10 | −26,0 LUFS | LRA 5,2 | −7,8 dBFS |
+| 07/10 | −27,0 LUFS | LRA 4,5 | −5,5 dBFS |
+
+El vídeo en línea se escucha a **−16 LUFS**. Estos salían entre 10 y 15 dB por
+debajo de todo lo demás, y además **4,8 dB de diferencia entre ellos**, así que
+el vídeo de una semana no sonaba como el de la otra. Cómo quedaron, medido con
+`tools/medir-audio.js`:
+
+| | sonoridad | dinámica | voz | ruido | desfase |
+|---|---|---|---|---|---|
+| 05/10 | −16,2 LUFS | 5,0 → 4,0 | −0,5 dB | −1,9 dB | −0,3 ms |
+| 06/10 | −16,1 LUFS | 5,2 → 4,6 | −0,3 dB | −3,8 dB | −0,2 ms |
+| 07/10 | −16,1 LUFS | 4,5 → 4,1 | −0,3 dB | −5,1 dB | −0,3 ms |
+
+Los 4,8 dB de diferencia quedaron en 0,1.
+
+**Una ganancia fija y no `loudnorm`.** `loudnorm` es lo que todo el mundo usa y
+fue lo primero que se probó: llega a −16, pero con este material se le acaba el
+sitio y cae a su modo dinámico, que es un compresor, y baja el LRA de 5,0 a
+3,3. Una ganancia fija medida llega al mismo sitio conservando un decibelio
+largo más de dinámica, que es lo que se pidió: que se nivele, no que se
+aplaste. De `loudnorm` sí se copian las **dos pasadas** —medir, corregir y
+comprobar— porque lo que el limitador recorta también baja la sonoridad, y
+cuánto no se puede calcular: hay que oírlo.
+
+**Subir 15 dB una señal cuyo pico está en −0,4 dBFS** parece imposible y lo
+sería si ese pico fuera voz. No lo es: en la grabación del 05/10, de 33
+segundos, lo que pasa de −12 dBFS dura **2 milisegundos**. Es un clic. El
+limitador se lo lleva y deja pasar el resto; contado sobre ventanas de habla,
+a −16 LUFS trabaja en menos del 5 %, y a −14 se dispara al 10 %. Por eso el
+destino es −16 y no el −14 al que YouTube normaliza.
+
+**El denoiser se afina al ruido de esa sala, no a un número fijo**, por lo
+mismo que `engine/sonido.js`: de las tres grabaciones, una tiene el piso en
+−60 dB y otra en −40. Decirle −40 a la callada le hace quitar 10 dB más de los
+que hay, y ahí es donde aparece el burbujeo.
+
+**Y hay que devolverle los 30 ms que se lleva.** `afftdn` trabaja por ventanas
+de FFT y devuelve la señal 25 ms tarde; el limitador suma 5 ms más. Sin
+compensarlo, el exporte saldría 30 ms detrás del montaje que la persona acaba
+de aprobar —justo la desincronía que se arregló dos versiones antes—. Se
+compensa cortando el principio y rellenando el final, y lo que queda medido
+son 0,3 ms.
 
 Lo que hace que esto sea barato es que **casi todo ya estaba**: el micrófono va
 por el mismo camino que en una clase, así que el «3, 2, 1», la «Pausa», el
@@ -1366,6 +1424,31 @@ corregía, corregía el vídeo que trae el sonido en vez del mudo, que es lo
 contrario de lo que decía su propia cabecera. Ahora son 11 ms de media y 22 de
 pico ya en marcha; al arrancar llega a 100 ms y el lazo los junta en 0,8 s, lo
 que la herramienta mide aparte para que no crezca sin que nadie mire.
+
+Y que **suene como se dice que suena**, que es el mismo problema por el otro
+lado:
+
+```bash
+node tools/medir-audio.js /ruta/a/un/exporte.mp4
+```
+
+Coge audio de verdad, le pasa la cadena de verdad y mide cuatro cosas contra lo
+prometido: que llegue a −16 LUFS ±1, que el LRA no caiga más de 1,5 LU —la
+diferencia entre nivelar y comprimir—, que la limpieza deje la voz donde
+estaba ±1 dB, y que el desfase que queda no pase de 5 ms. Sale con error si
+algo se sale de la vara, así que es una prueba aunque haya que correrla a mano.
+
+La voz se mide con la **limpieza sola**, sin la ganancia ni el limitador.
+Pasada por la cadena entera la pregunta no tiene respuesta: el limitador
+también mueve la voz, y moverla es su trabajo, así que un número que los sume
+no dice de quién es el movimiento. Eso es lo que primero hizo parecer que el
+denoiser se comía voz en la grabación del 05/10.
+
+La herramienta se ganó el sitio en la primera corrida: cazó que el tope de
+ganancia —puesto para no amplificar una toma rota— estaba también frenando el
+camino al destino, y dejaba la grabación del 05/10 en −19,5 LUFS, o sea sin
+arreglar. Son dos cosas distintas y ahora llevan dos topes distintos: 12 dB
+para emparejar una toma con sus hermanas, 24 para subir el vídeo entero.
 
 Los umbrales y la cuenta viven en `semanal/corte.js` y no en el reproductor: con
 un número entran y con dos salen, así que `tests/corte-del-editor.test.js` los

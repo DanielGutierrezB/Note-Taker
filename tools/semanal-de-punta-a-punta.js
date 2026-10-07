@@ -34,11 +34,12 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 const { desktopCapturer } = require('electron');
 
 const paths = require('../engine/paths');
 const workspace = require('../engine/workspace');
+const mejorar = require('../engine/mejorar-audio');
 
 const espera = ms => new Promise(r => setTimeout(r, ms));
 
@@ -360,6 +361,21 @@ async function laPasada({ win, arg }) {
     decir('la línea de tomas queda:', linea);
     if (!/3:si/.test(linea)) decir('✗ la toma 3 no quedó marcada como fuera');
 
+    // Las dos casillas vienen encendidas de fábrica, y este primer corte las
+    // apaga a propósito: lo que mide es si los bordes caen donde se pidieron,
+    // y eso solo se puede comprobar contra un corte que no le haya hecho nada
+    // al audio. Encendidas van en el segundo.
+    decir('apagando las dos casillas para medir el corte crudo…');
+    await js(`(() => {
+        for (const campo of ['silencios', 'mejorar-audio']) {
+            const c = document.querySelector(\`[data-campo="\${campo}"]\`);
+            if (!c) return 'falta la casilla ' + campo;
+            c.checked = false;
+            c.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        return 'ok';
+    })()`).then(r => { if (r !== 'ok') decir(`✗ ${r}`); });
+
     decir('apretando Cortar y exportar…');
     await js(`document.querySelector('[data-hace="exportar"]').click()`);
 
@@ -449,6 +465,15 @@ async function laPasada({ win, arg }) {
         };
     };
 
+    /** La sonoridad de un MP4, en LUFS. ffmpeg la escribe en su registro. */
+    const sonoridad = ruta => {
+        const r = spawnSync(paths.ffmpeg().path,
+            ['-v', 'info', '-nostdin', '-i', ruta, '-af', 'ebur128', '-f', 'null', '-'],
+            { encoding: 'utf8', maxBuffer: 1 << 26 });
+        const m = /Integrated loudness:[\s\S]*?I:\s*(-?[\d.]+)/.exec(r.stderr || '');
+        return m ? Number(m[1]) : NaN;
+    };
+
     for (const f of brutos) {
         const r = mide(path.join(workspace.videoDir(casa), f));
         decir(`bruto  ${f.padEnd(44)} ${r.segundos} s · ${r.pistas} · ${r.tamano}`);
@@ -511,14 +536,19 @@ async function laPasada({ win, arg }) {
      * comprueba es la cadena entera —casilla, puente, motor, ffmpeg— y que el
      * vídeo salga más corto que el de antes y se siga pudiendo abrir.
      */
-    console.log('\n── El mismo corte, con «Quitar silencios»\n');
+    console.log('\n── El mismo corte, con las dos casillas como vienen de fábrica\n');
     await js(`document.querySelector('[data-hace="ajustar"]').click()`);
     await espera(400);
-    await js(`(() => {
-        const c = document.querySelector('[data-campo="silencios"]');
-        c.checked = true;
-        c.dispatchEvent(new Event('change', { bubbles: true }));
+    const comoVienen = await js(`(() => {
+        const c = [...document.querySelectorAll('[data-campo="silencios"],'
+            + '[data-campo="mejorar-audio"]')];
+        for (const x of c) {
+            x.checked = true;
+            x.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        return c.map(x => x.dataset.campo).join(' + ');
     })()`);
+    decir('tildadas:', comoVienen);
     await js(`document.querySelector('[data-hace="exportar"]').click()`);
     let dos = null;
     for (let i = 0; i < 180; i++) {
@@ -540,6 +570,20 @@ async function laPasada({ win, arg }) {
         console.log(`\n   ${menos > 0
             ? `✓ dura ${menos.toFixed(2)} s menos que el de antes, y el de antes sigue ahí`
             : '· no había silencios de más de 0,7 s que quitar, así que dura lo mismo'}`);
+
+        // Y que «Mejorar audio» hizo lo que dice. Acá el audio es un pitido de
+        // Chromium, así que lo que se comprueba no es que suene bien —un
+        // pitido no suena bien de ninguna manera— sino que la cadena corrió de
+        // punta a punta y dejó el vídeo donde tenía que dejarlo. Si suena bien
+        // con voz de verdad lo dice `tools/medir-audio.js`.
+        const antes = sonoridad(path.join(casa, mp4[0]));
+        const ahora = sonoridad(path.join(casa, nuevos[0]));
+        decir(`sonoridad  ${antes.toFixed(1)} → ${ahora.toFixed(1)} LUFS`
+            + `  (destino ${mejorar.DESTINO_LUFS})`);
+        const lejos = Math.abs(ahora - mejorar.DESTINO_LUFS);
+        console.log(`   ${lejos <= 2
+            ? '✓ «Mejorar audio» lo dejó en el destino'
+            : `✗ quedó a ${lejos.toFixed(1)} dB del destino: la cadena no corrió`}`);
     }
 
     /* ── Volver a lo último grabado ────────────────────────────────────────

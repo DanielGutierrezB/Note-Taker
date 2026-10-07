@@ -2168,9 +2168,30 @@ kbd {
   height: 94px;
 }
 
-/* La casilla de «Quitar silencios», que es la única de la app.
+/* Las dos casillas de la revisión: «Quitar silencios» y «Mejorar audio».
 
-   Va con la casilla del sistema y no con una dibujada: el estado marcado /
+   En columna y no en fila: cada una lleva debajo la línea que dice qué hace,
+   y esa línea tiene que quedar pegada a SU casilla. Una al lado de la otra,
+   a 900 px los dos párrafos se estrechan hasta partir cada frase en cinco
+   renglones. */
+.semanal-casillas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-width: 52ch;
+}
+
+.semanal-casillas .v3 {
+  margin: 2px 0 0;
+}
+
+/* El último párrafo es de las dos, así que se separa un poco más de la
+   segunda de lo que la segunda se separa de su propio rótulo. */
+.semanal-casillas > .v3 {
+  margin-top: var(--sp-1);
+}
+
+/* Va con la casilla del sistema y no con una dibujada: el estado marcado /
    sin marcar tiene que leerse de un vistazo justo antes de apretar el botón
    que corta, y una casilla nativa es la que nadie tiene que aprender. El
    tamaño es el mínimo clicable, que es lo que mide la auditoría. */

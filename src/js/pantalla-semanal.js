@@ -76,7 +76,12 @@ const estado = {
     grabada: null,           // las tomas con su texto, para mover los bordes
     brutos: [],              // los vídeos tal como se grabaron, para poder verlos
     corte: { pct: 0 },
-    silencios: false,        // la casilla de la revisión, que se aplica al cortar
+    // Las dos casillas de la revisión, que se aplican al cortar. Encendidas de
+    // fábrica: son lo que hay que hacerle a un vídeo para que se pueda ver, y
+    // quien no las quiera las apaga y vuelve a cortar. Apagadas de fábrica
+    // querían decir que el vídeo normal era el peor de los dos posibles.
+    silencios: true,
+    mejorarAudio: true,
     hecho: null,             // lo que devolvió el exportador
     avisos: []
 };
@@ -577,6 +582,7 @@ async function alCambio(e) {
     // La casilla no repinta: se mira al cortar, y repintar le sacaría el foco
     // justo al elemento que se acaba de tocar.
     if (campo === 'silencios') estado.silencios = e.target.checked;
+    if (campo === 'mejorar-audio') estado.mejorarAudio = e.target.checked;
 }
 
 async function alClic(e) {
@@ -1028,7 +1034,7 @@ async function exportar(boton) {
     pintar();
     try {
         const r = await window.nt.semanalExportar(estado.json,
-            { quitarSilencios: estado.silencios });
+            { quitarSilencios: estado.silencios, mejorarAudio: estado.mejorarAudio });
         estado.hecho = { ...r, brutos: dondeEstanLosBrutos() };
         estado.paso = 'hecho';
         pintar();

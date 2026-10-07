@@ -365,6 +365,43 @@ module.exports = function (t) {
         t.ok(filtro.includes('trim=start=30:end=40'), 'y el segundo');
     });
 
+    t.test('con «Mejorar audio» cada toma lleva su ganancia y el conjunto su cadena', () => {
+        const r = exportar.repartir({
+            tomas: [toma(1, 10, 20), toma(2, 30, 40)],
+            pantalla: video('pantalla', 0, 60),
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        const g = exportar.grafo({
+            trozos: r.trozos,
+            salida: '/tmp/x.mp4',
+            audio: { porTrozo: [6, -3], programa: 'highpass=f=80,alimiter=limit=-1.5dB' }
+        });
+        const filtro = g.args[g.args.indexOf('-filter_complex') + 1];
+        t.ok(filtro.includes('volume=6.00dB'), 'la ganancia de la primera');
+        t.ok(filtro.includes('volume=-3.00dB'), 'y la de la segunda, que es otra');
+        // La etiqueta intermedia no puede ser `[aN]`: esas son las pistas de
+        // los trozos, y `[a0]` ya está puesta.
+        t.ok(filtro.includes('concat=n=2:v=1:a=1[v][apegado]'), filtro.slice(-160));
+        t.ok(filtro.includes('[apegado]highpass=f=80,alimiter=limit=-1.5dB[a]'), filtro.slice(-160));
+    });
+
+    t.test('sin «Mejorar audio» el audio sale del concat sin nada en medio', () => {
+        const r = exportar.repartir({
+            tomas: [toma(1, 10, 20)],
+            pantalla: video('pantalla', 0, 60),
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        const g = exportar.grafo({ trozos: r.trozos, salida: '/tmp/x.mp4' });
+        const filtro = g.args[g.args.indexOf('-filter_complex') + 1];
+        t.ok(!filtro.includes('volume='), 'ni una ganancia');
+        t.ok(!filtro.includes('apegado'), 'ni un filtro de más que haya que atravesar');
+        t.ok(filtro.includes('concat=n=1:v=1:a=1[v][a]'), filtro.slice(-120));
+    });
+
     t.test('el fondo que llena el cuadro se recorta, y el que no, se rellena', () => {
         const con = exportar.grafo({
             trozos: exportar.repartir({
