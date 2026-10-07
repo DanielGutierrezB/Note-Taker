@@ -194,6 +194,15 @@ se ve entero, incluidos los repuestos —una toma que pidió la cámara y no la
 tiene sale con la pantalla—. El navegador solo busca ese segundo y pone los
 dos `<video>` donde el motor dijo. Así lo que se mira es lo que va a salir.
 
+**Las dos casillas y el botón de exportar van a la derecha del reproductor**,
+no debajo. Estaban debajo del todo —después del montaje, de la línea de tomas
+y de la ficha de la toma— y en una ventana normal eso dejaba fuera de la
+pantalla el botón que termina el trabajo, sin nada que diera a entender que
+había algo más abajo. El montaje es 16:9 con el alto por techo, así que a
+partir de cierto ancho le sobra el espacio de los costados y ahí no le quita
+sitio a nada. Cuando la ventana se estrecha y ya no caben los dos, la columna
+se va debajo sola: es flex envolviendo, no un punto de corte escrito a mano.
+
 ### «Quitar silencios»
 
 Una de las dos casillas de la revisión, **encendida de fábrica**. Saca los

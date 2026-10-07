@@ -2168,27 +2168,70 @@ kbd {
   height: 94px;
 }
 
-/* Las dos casillas de la revisión: «Quitar silencios» y «Mejorar audio».
+/* El reproductor y, a su lado, lo que hay que decidir antes de exportar.
 
-   En columna y no en fila: cada una lleva debajo la línea que dice qué hace,
-   y esa línea tiene que quedar pegada a SU casilla. Una al lado de la otra,
-   a 900 px los dos párrafos se estrechan hasta partir cada frase en cinco
-   renglones. */
-.semanal-casillas {
+   El montaje es 16:9 con el alto por techo, así que a partir de cierto ancho
+   le sobra el espacio de los costados. Ahí va la columna de la derecha, que
+   antes estaba debajo de todo —montaje, línea de tomas y ficha de la toma— y
+   en una ventana normal quedaba fuera de la pantalla: había que adivinar que
+   el botón que termina el trabajo estaba más abajo.
+
+   Envuelve sola cuando no caben los dos. El `420px` de base no es un número
+   redondo: por debajo de eso el montaje se hace tan chico que ya no se puede
+   juzgar un encuadre, que es para lo único que está. */
+.revisar-fila {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: var(--sp-4);
+}
+
+.revisar-video {
+  flex: 1 1 420px;
+  min-width: 0;
+  /* El mismo techo que `.montaje`: sin él la columna crece de más y el vídeo
+     queda flotando en el medio con aire a los dos lados. */
+  max-width: calc(46vh * 16 / 9);
+}
+
+.revisar-lado {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
-  max-width: 52ch;
+  gap: var(--sp-3);
+  flex: 1 1 240px;
+  /* Más ancha no se lee mejor: los párrafos de debajo de cada casilla son de
+     dos renglones y estirarlos solo aleja la casilla de su explicación. */
+  max-width: 320px;
 }
 
-.semanal-casillas .v3 {
-  margin: 2px 0 0;
+.revisar-opciones {
+  display: flex;
+  flex-direction: column;
 }
 
-/* El último párrafo es de las dos, así que se separa un poco más de la
-   segunda de lo que la segunda se separa de su propio rótulo. */
-.semanal-casillas > .v3 {
-  margin-top: var(--sp-1);
+/* La explicación va pegada a SU casilla y separada de la siguiente: sin esto
+   las dos parejas se leen como un bloque de cuatro cosas sueltas. */
+.revisar-opciones .v3 {
+  margin: 0 0 var(--sp-3);
+  padding-left: calc(var(--target-min) + var(--sp-2));
+}
+
+.revisar-opciones .v3:last-child {
+  margin-bottom: 0;
+}
+
+/* El botón ocupa la columna entera: es la única cosa de esta pantalla que
+   termina el trabajo, y a media columna se confundiría con un botón más. */
+.revisar-exportar {
+  width: 100%;
+  justify-content: center;
+}
+
+/* El último párrafo es de las dos casillas y va antes del botón: el botón
+   tiene que ser lo último que se lee, porque es lo último que se hace. */
+.revisar-lado > .v3 {
+  margin: 0;
 }
 
 /* Va con la casilla del sistema y no con una dibujada: el estado marcado /
@@ -2324,6 +2367,11 @@ kbd {
 .montaje-barra {
   margin-top: var(--sp-3);
   align-items: center;
+  /* Envuelve: con la columna de exportar al lado, el reproductor puede
+     quedarse con poco ancho, y el reloj partido en dos renglones se lee peor
+     que el mismo reloj en una fila de abajo. */
+  flex-wrap: wrap;
+  row-gap: var(--sp-2);
 }
 
 /* El reloj del montaje, un punto por encima del resto: es lo que se mira de

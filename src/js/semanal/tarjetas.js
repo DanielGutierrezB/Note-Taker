@@ -427,10 +427,13 @@ export function tarjetaRevisar(estado) {
     const t = corte.laParada(todas, estado.ficha);
     return `
       <div class="tarjeta">
-        <div class="tarjeta-cuerpo">
-          <div id="semanal-montaje" class="montaje-hueco"></div>
-          ${barraDelMontaje(estado, todas, van)}
-          ${lineaDeTomas(estado, todas)}
+        <div class="tarjeta-cuerpo revisar-fila">
+          <div class="revisar-video">
+            <div id="semanal-montaje" class="montaje-hueco"></div>
+            ${barraDelMontaje(estado, todas, van)}
+            ${lineaDeTomas(estado, todas)}
+          </div>
+          ${ladoDeExportar(estado, van)}
         </div>
       </div>
       ${t ? tarjetaDeLaToma(estado, t) : `
@@ -439,40 +442,49 @@ export function tarjetaRevisar(estado) {
           <span class="v2">No queda ninguna toma en el vídeo. Volvé a meter alguna de las que
             dejaste fuera, o grabá otro.</span>
         </div>
-      </div>`}
-      <div class="tarjeta">
-        <div class="tarjeta-cuerpo">
-          <div class="campo-fila" style="align-items:flex-start">
-            <div class="semanal-casillas">
-              <div>
-                <label class="semanal-casilla">
-                  <input type="checkbox" data-campo="silencios" ${estado.silencios ? 'checked' : ''}>
-                  <span>Quitar silencios</span>
-                </label>
-                <p class="v3">Los huecos de más de 0,7 s —cuando te quedás pensando o buscando
-                  algo— quedan en 0,3.</p>
-              </div>
-              <div>
-                <label class="semanal-casilla">
-                  <input type="checkbox" data-campo="mejorar-audio"
-                         ${estado.mejorarAudio ? 'checked' : ''}>
-                  <span>Mejorar audio</span>
-                </label>
-                <p class="v3">Deja el vídeo al volumen de cualquier otro, empareja las tomas
-                  entre sí y le quita el ruido de fondo a la sala.</p>
-              </div>
-              <p class="v3">Las dos se aplican al cortar, así que no se oyen en el montaje de
-                arriba. Si no te gusta cómo quedó, destildá y volvé a cortar.</p>
-            </div>
-            <span class="crece"></span>
-            <button class="btn btn-primario" type="button" data-hace="exportar" ${van.length ? '' : 'disabled'}
-                    title="${van.length
-                        ? 'Corta las tomas, las pega y deja el MP4 listo para subir'
-                        : 'No queda ninguna toma: volvé a meter alguna o grabá otro'}">
-              Exportar</button>
-          </div>
+      </div>`}`;
+}
+
+/**
+ * Lo que hay que decidir antes de exportar, al lado del reproductor.
+ *
+ * Estaba debajo del todo, después del montaje, de la línea de tomas y de la
+ * ficha de la toma, y en una ventana normal eso lo dejaba fuera de la
+ * pantalla: había que hacer scroll para encontrar el botón que termina el
+ * trabajo, sin nada que diera a entender que había algo más abajo.
+ *
+ * Acá al lado no hace falta robarle sitio a nada. El montaje es 16:9 con el
+ * alto por techo, así que a partir de cierto ancho le sobra el espacio de los
+ * costados; esta columna lo ocupa. Cuando la ventana se estrecha y ya no
+ * caben los dos, la columna se va debajo sola (`.revisar-fila` envuelve).
+ */
+function ladoDeExportar(estado, van) {
+    return `
+      <aside class="revisar-lado" aria-label="Antes de exportar">
+        <div class="revisar-opciones">
+          <label class="semanal-casilla">
+            <input type="checkbox" data-campo="silencios" ${estado.silencios ? 'checked' : ''}>
+            <span>Quitar silencios</span>
+          </label>
+          <p class="v3">Los huecos de más de 0,7 s —cuando te quedás pensando o buscando algo—
+            quedan en 0,3.</p>
+          <label class="semanal-casilla">
+            <input type="checkbox" data-campo="mejorar-audio"
+                   ${estado.mejorarAudio ? 'checked' : ''}>
+            <span>Mejorar audio</span>
+          </label>
+          <p class="v3">Deja el vídeo al volumen de cualquier otro, empareja las tomas entre sí
+            y le quita el ruido de fondo a la sala.</p>
         </div>
-      </div>`;
+        <p class="v3">Las dos se aplican al cortar, así que no se oyen en el montaje de al lado.
+          Si no te gusta cómo quedó, destildá y volvé a cortar.</p>
+        <button class="btn btn-primario revisar-exportar" type="button" data-hace="exportar"
+                ${van.length ? '' : 'disabled'}
+                title="${van.length
+                    ? 'Corta las tomas, las pega y deja el MP4 listo para subir'
+                    : 'No queda ninguna toma: volvé a meter alguna o grabá otro'}">
+          Exportar</button>
+      </aside>`;
 }
 
 /** Reproducir, dónde va, y si se ven las que dejé fuera. */
