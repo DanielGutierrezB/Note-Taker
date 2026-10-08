@@ -98,7 +98,11 @@ const vista = {
     compacto: pref.leer('vivo.compacto', false),
     sinDesactivadas: pref.leer('vivo.sinDesactivadas', false),
     // { toma, desdeMs, hastaMs, texto }: el pedazo seleccionado que se está comentando.
-    comentando: null
+    comentando: null,
+    // { toma, indice, borrador }: un comentario ya guardado que se está corrigiendo.
+    // Uno solo a la vez, y nunca junto con `comentando`: dos campos abiertos al
+    // mismo tiempo son dos sitios donde escribir y uno que se pierde al repintar.
+    editando: null
 };
 
 /** Descarta las respuestas que llegan tarde (`turnos.js`). */
@@ -131,6 +135,9 @@ export function conectar(contexto) {
     // Seleccionar un pedazo del texto de una toma abre el campo para comentarlo.
     $('#ahora').addEventListener('mouseup', alSeleccionar);
     $('#lista-vivo').addEventListener('mouseup', alSeleccionar);
+    // Y doble clic sobre uno ya guardado lo abre para corregirlo.
+    $('#ahora').addEventListener('dblclick', alDobleClic);
+    $('#lista-vivo').addEventListener('dblclick', alDobleClic);
     // Y el clic derecho sobre UNA palabra pone ahí el IN o el OUT. En la
     // pantalla entera para que el clic derecho en cualquier otro lado también
     // cierre el menú, y en el documento para que lo cierre el de afuera.
@@ -192,6 +199,8 @@ export function conectar(contexto) {
     pantalla.addEventListener('input', e => {
         const c = e.target.closest('[data-campo="comentario"]');
         if (c && vista.comentando) vista.comentando.borrador = c.value;
+        const v = e.target.closest('[data-campo="comentario-editado"]');
+        if (v && vista.editando) vista.editando.borrador = v.value;
     });
 
     // La barra de arriba —timecode, estado, nivel— se refresca sola, aunque el
@@ -931,16 +940,31 @@ function sePuedeReabrir(t) {
  * Van al XML como marcadores blancos en el tramo comentado, además de la nota
  * de la toma entera. El campo aparece cuando se selecciona un pedazo del texto
  * de ESTA toma (`alSeleccionar`).
+ *
+ * Uno ya escrito se corrige con doble clic encima (`alDobleClic`): se escriben
+ * en medio de una clase, apurado, y hasta ahora el único arreglo era borrarlo
+ * y volver a seleccionar el mismo pedazo. El pedazo señalado no se toca: eso
+ * sí hay que volver a elegirlo con el mouse.
  */
 function comentariosDe(t) {
-    const lista = (t.comentarios || []).map((c, i) => `
-      <div class="comentario">
+    const lista = (t.comentarios || []).map((c, i) => {
+        const e = vista.editando;
+        const editando = e && e.toma === t.id && e.indice === i;
+        return `
+      <div class="comentario" data-toma="${t.id}" data-indice="${i}">
         <span class="hp-ico">${icono('comentar')}</span>
         <q>${esc(c.texto)}</q>
-        <span class="crece">${esc(c.comentario)}</span>
+        ${editando ? `
+        <input class="crece" type="text" data-campo="comentario-editado"
+               data-toma="${t.id}" data-indice="${i}" value="${esc(e.borrador)}">
+        <button class="btn" type="button" data-hace="guardar-edicion">Guardar</button>
+        <button class="btn btn-tenue" type="button" data-hace="cancelar-edicion">Cancelar</button>` : `
+        <span class="crece comentario-dicho"
+              title="Doble clic para corregirlo">${esc(c.comentario)}</span>
         <button class="btn btn-tenue btn-ico" type="button" data-hace="borrar-comentario"
-                data-toma="${t.id}" data-indice="${i}" title="Quitar este comentario">${icono('cerrar')}</button>
-      </div>`).join('');
+                data-toma="${t.id}" data-indice="${i}" title="Quitar este comentario">${icono('cerrar')}</button>`}
+      </div>`;
+    }).join('');
     const c = vista.comentando && vista.comentando.toma === t.id ? vista.comentando : null;
     const campo = c ? `
       <div class="comentar">
@@ -1417,6 +1441,11 @@ async function alClic(e) {
             vista.comentando = null;
             pintar();
             break;
+        case 'guardar-edicion': await guardarEdicion(); break;
+        case 'cancelar-edicion':
+            vista.editando = null;
+            pintar();
+            break;
         case 'borrar-comentario':
             await editar({ tipo: 'borrar-comentario', toma, indice: Number(boton.dataset.indice) });
             break;
@@ -1580,6 +1609,7 @@ function alSeleccionar(e) {
             hastaMs: Number(ultima.dataset.hasta || ultima.dataset.t),
             texto: elegidas.map(w => w.textContent).join(' ')
         };
+        vista.editando = null;
         sel.removeAllRanges();
         // El botón ya se soltó: se pinta ahora y no cuando venza la espera del
         // clic, que dejaba el campo sin foco y lo que se tecleaba iba a parar a
@@ -1589,6 +1619,64 @@ function alSeleccionar(e) {
         const campo = document.querySelector(`[data-campo="comentario"][data-toma="${vista.comentando.toma}"]`);
         if (campo) campo.focus({ preventScroll: true });
     }, 0);
+}
+
+/**
+ * Doble clic sobre un comentario guardado: se abre para corregirlo.
+ *
+ * Doble clic y no un botón más porque el renglón ya tiene uno —la × de
+ * quitarlo— y dos iconos de 24 px en doce píxeles de alto es un renglón de
+ * botones con un comentario al lado. El `title` del texto lo cuenta.
+ *
+ * Sobre el campo abierto no hace nada: ahí el doble clic es el del navegador,
+ * que selecciona la palabra que se quiere corregir.
+ */
+function alDobleClic(e) {
+    if (e.target.closest('input, textarea, button')) return;
+    const fila = e.target.closest('.comentario');
+    if (!fila || fila.dataset.indice == null) return;
+    const toma = Number(fila.dataset.toma);
+    const indice = Number(fila.dataset.indice);
+    const t = estado && estado.tomas.find(x => x.id === toma);
+    const c = t && (t.comentarios || [])[indice];
+    if (!c) return;
+    vista.editando = { toma, indice, borrador: c.comentario || '' };
+    vista.comentando = null;
+    // El doble clic deja seleccionado el texto de abajo, y si no se limpia,
+    // `alSeleccionar` lo toma por un pedazo elegido y abre el otro campo.
+    const sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    pulsando = false;
+    pintar();
+    const campo = document.querySelector('[data-campo="comentario-editado"]');
+    if (campo) {
+        campo.focus({ preventScroll: true });
+        campo.setSelectionRange(campo.value.length, campo.value.length);
+    }
+}
+
+/**
+ * Guardar la corrección. Vacío no se guarda: un comentario sin texto es un
+ * marcador blanco en el XML sin nada que decir, y para eso está la ×.
+ */
+async function guardarEdicion() {
+    const e = vista.editando;
+    if (!e) return;
+    const campo = document.querySelector('[data-campo="comentario-editado"]');
+    // Sin campo, el renglón dejó de ser el que se estaba corrigiendo: se borró
+    // otro comentario de la misma toma y los índices se corrieron debajo. El
+    // índice guardado ya apunta a otro, así que no se guarda nada.
+    if (!campo) {
+        vista.editando = null;
+        return;
+    }
+    const comentario = campo.value.trim();
+    if (!comentario) {
+        campo.focus();
+        return;
+    }
+    vista.editando = null;
+    await editar({ tipo: 'editar-comentario', toma: e.toma, indice: e.indice, comentario });
 }
 
 async function guardarComentario() {
@@ -1799,6 +1887,11 @@ async function alTeclado(e) {
         if (campo.dataset.campo === 'comentario') {
             if (e.key === 'Enter') { e.preventDefault(); return guardarComentario(); }
             if (e.key === 'Escape') { vista.comentando = null; return pintar(); }
+            return;
+        }
+        if (campo.dataset.campo === 'comentario-editado') {
+            if (e.key === 'Enter') { e.preventDefault(); return guardarEdicion(); }
+            if (e.key === 'Escape') { vista.editando = null; return pintar(); }
             return;
         }
         // Enter en un campo guarda y suelta el foco, que es lo que uno espera

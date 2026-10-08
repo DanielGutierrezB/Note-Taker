@@ -34,7 +34,17 @@ const TOMAS = [
         palabras: palabras('Hola y bienvenidos a la clase de hoy vamos a ver cómo se arma ' +
             'un flujo completo desde cero hasta produccion', 62),
         antes: palabras('tres dos uno', 60), despues: palabras('pausa che', 185),
-        comentarios: [], relectura: null, repiteA: null, pausaAdentro: null
+        // La única toma con comentarios sobre pedazos del texto: son el renglón
+        // que se corrige con doble clic, y sin ninguno en la maqueta no lo
+        // medía ni lo auditaba nadie. Dos, porque lo que puede salir mal es que
+        // el índice se corra entre uno y otro.
+        comentarios: [
+            { desdeMs: seg(64), hastaMs: seg(67), texto: 'bienvenidos a la clase de hoy',
+                comentario: 'Arranca acá de verdad' },
+            { desdeMs: seg(70), hastaMs: seg(74), texto: 'desde cero hasta produccion',
+                comentario: 'Revisar si esto aporta' }
+        ],
+        relectura: null, repiteA: null, pausaAdentro: null
     },
     {
         id: 2, vista: 'R', comentario: 'Demo del editor', cuenta: '3, 2, 1.',

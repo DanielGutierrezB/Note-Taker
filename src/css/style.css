@@ -885,6 +885,20 @@ b {
   min-width: 0;
 }
 
+/* Lo que se escribió, que se corrige con doble clic encima. El cursor lo
+   cuenta antes de que nadie lea el `title`: es texto que se puede tocar. */
+.comentario-dicho {
+  cursor: text;
+}
+
+/* Corrigiéndolo: el campo ocupa el sitio del texto y el renglón no salta.
+   `font-size` heredado porque el renglón es de 12 px y el campo, por defecto,
+   de 13: un píxel de más mueve todo lo que tiene debajo. */
+.comentario input {
+  min-width: 0;
+  font-size: inherit;
+}
+
 .comentar {
   display: flex;
   gap: var(--sp-2);

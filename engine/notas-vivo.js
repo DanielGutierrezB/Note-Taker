@@ -1535,6 +1535,34 @@ function descomentar(toma, indice) {
 }
 
 /**
+ * Cambiarle el texto a un comentario que ya está, sin mover el pedazo.
+ *
+ * Solo el comentario: el tramo que señala —`desdeMs`, `hastaMs` y las palabras
+ * citadas— es lo que se eligió con el mouse, y para cambiarlo hay que volver a
+ * seleccionar. Acá se corrige lo que se escribió, que es lo que se escribe
+ * apurado en medio de una clase.
+ *
+ * Por índice, como `descomentar`: no hay dos formas de nombrar un comentario.
+ * Un índice que no existe no hace nada, y no revienta, porque la lista pudo
+ * cambiar entre que se pintó la fila y que se guardó.
+ *
+ * **Lista nueva y comentario nuevo, sin tocar nada en su sitio**, igual que
+ * `comentar` concatena y `descomentar` filtra. Es lo que deja que `foto` en
+ * `deshacer.js` copie la lista por encima y comparta los objetos de adentro:
+ * si acá se le escribiera el texto al comentario que ya está, la foto que
+ * espera en el historial cambiaría sola y deshacer no devolvería nada.
+ *
+ * @param {object} c { indice, comentario }
+ */
+function recomentar(toma, c) {
+    const lista = toma.comentarios || [];
+    const i = Number(c.indice);
+    if (!lista[i]) return;
+    toma.comentarios = lista.map((x, k) =>
+        (k === i ? { ...x, comentario: String(c.comentario || '') } : x));
+}
+
+/**
  * Un borde corrido sin volver a oír: se reparten otra vez las palabras que hay.
  *
  * **Mover un borde no necesita el audio, y esa es la razón de que las orillas
@@ -1602,6 +1630,9 @@ function aplicar(toma, cambio, tomas) {
             return;
         case 'comentar':
             comentar(toma, c);
+            return;
+        case 'editar-comentario':
+            recomentar(toma, c);
             return;
         case 'borrar-comentario':
             descomentar(toma, c.indice);

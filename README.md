@@ -539,6 +539,22 @@ validar dónde quedó cada borde. El campo de espera no cambia: ahí todo es gri
 para comentarlas. El comentario va al XML como un marcador blanco en ese tramo,
 además de la nota de la toma entera, y las palabras comentadas quedan subrayadas.
 
+**Doble clic encima de uno ya escrito lo corrige.** Se escriben en medio de una
+clase, apurado, y hasta acá lo único que se podía hacer con uno mal escrito era
+borrarlo y volver a seleccionar el mismo pedazo con el mouse. Enter guarda,
+Escape lo deja como estaba. Lo que NO cambia es el pedazo señalado: el tramo y
+las palabras citadas salieron de lo que se eligió con el mouse, y moverlos sin
+volver a elegir dejaría un marcador diciendo una cosa sobre un tramo que dice
+otra. Doble clic y no un botón más porque el renglón ya tiene uno —la × de
+quitarlo— y dos iconos de 24 px no entran en un renglón de doce.
+
+Los tres gestos —poner, corregir y quitar— nombran el comentario **por su
+índice** en la lista de la toma, que es la única forma que hay: no tienen id.
+Eso lo hace frágil de una manera concreta y vale saberla: si la lista cambia
+debajo mientras uno está corrigiendo, el índice guardado apunta a otro. La
+pantalla lo corta por lo sano —si el campo ya no está, no guarda nada— y el
+motor ignora un índice que no existe en vez de reventar.
+
 Las **claquetas** van en la misma lista, en su lugar entre las tomas, con su
 número, timecode, la frase con la que se dijeron, si es la referencia y cómo
 quitarlas. En un costado aparte había que cruzar la pantalla y comparar
@@ -1496,6 +1512,15 @@ salir con cero no es una red, es un informe que nadie lee. Lo que SÍ se puede
 probar sin navegador se prueba sin navegador: `semanal/corte.js` y
 `semanal/tarjetas.js` no tocan el DOM, así que `tests/corte-del-editor.test.js`
 los importa, los llama y comprueba lo que devuelven.
+Lo mismo del lado de las notas: `node tools/probar-comentarios.js` comprueba
+que el doble clic abra el comentario con lo que ya decía, que Escape no mande
+nada al motor y que Enter mande `editar-comentario` con la toma y el índice del
+renglón. Dos detalles del arnés, porque costaron: `click({ clickCount: 2 })` de
+Puppeteer **no saca ningún `dblclick`** —manda un apretar-soltar con el contador
+en dos, y hacen falta las dos pulsaciones—, y los comentarios están abajo del
+todo, así que hay que traer el renglón a la pantalla antes de medirlo o el clic
+cae en cualquier otra cosa.
+
 Los tres MP4 que la maqueta sirve son sintéticos y se rehacen con
 `node tools/maqueta/hacer-videos.js`: dos «crudos» de 40 s, de distinto tamaño
 y color y con una barra que viaja como reloj, y uno corto que hace de

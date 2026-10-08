@@ -65,8 +65,9 @@ function nueva() {
  *
  * Las listas se copian y lo que hay dentro de ellas no: ni las palabras ni los
  * comentarios se modifican nunca en su sitio —`repartir` arma listas nuevas,
- * `comentar` concatena y `descomentar` filtra—, así que compartir esos objetos
- * entre la foto y la toma no puede hacer que la foto cambie sola.
+ * `comentar` concatena, `descomentar` filtra y `recomentar` mapea—, así que
+ * compartir esos objetos entre la foto y la toma no puede hacer que la foto
+ * cambie sola.
  *
  * @returns {object|null} null es "esta toma no existía", que es lo que deja que
  *   eliminar y volver a meter usen el mismo camino que cambiar un campo

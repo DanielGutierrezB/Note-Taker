@@ -50,6 +50,7 @@ const FILES = [
     'aviso-de-palmada.test.js',
     'audio-que-se-rompe.test.js',
     'nota-de-claqueta.test.js',
+    'comentarios.test.js',
     'video-crudo.test.js',
     'exportar-video.test.js',
     'semanal-captura.test.js',

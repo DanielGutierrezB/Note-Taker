@@ -29,6 +29,7 @@ const vivo = require('./notas-vivo');
  *   borde             { borde:'in'|'out', paredMs }   mover un borde a una palabra
  *   reabrir           —                               "Pausa" cerró de más
  *   comentar          { desdeMs, hastaMs, texto, comentario }  sobre un pedazo del texto
+ *   editar-comentario { indice, comentario }          corregir lo que se escribió
  *   borrar-comentario { indice }
  *   eliminar          —                               descartar: sacarla de la sesión
  *
