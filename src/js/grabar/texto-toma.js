@@ -95,27 +95,39 @@ function palabra(w, comentarios, senal) {
 }
 
 /**
- * La marca de hasta dónde llega la toma anterior.
+ * La marca de dónde empieza o termina la toma de al lado.
  *
- * Es una pastilla como las de los bordes, pero no se agarra: dice de quién es lo
- * que queda a su izquierda y, sobre todo, es la PARED del IN. `malParada` y
+ * Es una pastilla como las de los bordes, pero no se agarra: dice de quién es
+ * el texto de ese lado y, sobre todo, es la PARED del borde. `malParada` y
  * `bordesQuePuede` la leen igual que leen el otro borde, así que el arrastre se
  * frena acá solo, sin ninguna cuenta de tiempos: el orden de los hermanos ya
  * sabe de qué lado está cada cosa.
+ *
+ * Hay una de cada lado y son la misma cosa mirada al revés. A la izquierda
+ * frena el IN contra la toma anterior; a la derecha frena el OUT contra la
+ * siguiente. `data-lado` es lo que las distingue, porque un borde solo tropieza
+ * con la suya: el IN puede pasar por delante de la marca de la derecha sin
+ * problema, y al revés.
  *
  * El color de la vista de esa toma es el mismo que el de su bloque en la lista,
  * y no es el único canal: la pastilla dice «Toma 12» con letras, que es lo que
  * se lee si el color no llega (WCAG 1.4.1).
  */
-function limiteDe(limite) {
+function limiteDe(limite, lado) {
     const l = document.createElement('span');
     l.className = 'transcript-limite';
     l.dataset.limite = limite.toma;
-    l.title = `Hasta acá es la toma ${limite.toma}, que ya está hecha. `
-        + 'El IN no puede entrar ahí: las dos tomas se quedarían con las mismas palabras.';
+    l.dataset.lado = lado;
+    l.title = lado === 'antes'
+        ? `Hasta acá es la toma ${limite.toma}, que ya está hecha. `
+            + 'El IN no puede entrar ahí: las dos tomas se quedarían con las mismas palabras.'
+        : `Desde acá es la toma ${limite.toma}, que ya está hecha. `
+            + 'El OUT no puede entrar ahí: las dos tomas se quedarían con las mismas palabras.';
     const dice = document.createElement('span');
     dice.className = 'borde-etiqueta';
-    dice.textContent = `fin de la toma ${limite.toma}`;
+    dice.textContent = lado === 'antes'
+        ? `fin de la toma ${limite.toma}`
+        : `empieza la toma ${limite.toma}`;
     l.append(dice);
     return l;
 }
@@ -181,16 +193,23 @@ function palabraBajo(texto, x, y) {
  * palabra antes del OUT lo mandaba más allá del OUT; soltar el OUT pegado al
  * IN dejaba una toma de largo cero. Una toma necesita al menos una palabra.
  *
- * **Y el IN tampoco puede pasar la marca de la toma anterior.** Es el mismo
+ * **Y ningún borde puede pasar la marca de la toma de al lado.** Es el mismo
  * tipo de tope que el otro borde y se comprueba igual, por orden de hermanos,
  * así que el arrastre se frena solo ahí: la línea se queda en el límite en vez
- * de irse y volver al repintar. La última palabra la tiene el motor
- * (`pisoDelIn` en engine/notas-vivo.js), que no le cree a la ventana.
+ * de irse y volver al repintar. La última palabra la tienen el motor
+ * (`pisoDelIn` y `techoDelOut` en engine/notas-vivo.js), que no le cree a la
+ * ventana.
+ *
+ * Cada borde tropieza con la marca de SU lado y nada más: el IN con la de la
+ * toma anterior, que tiene que quedarle detrás, y el OUT con la de la
+ * siguiente, que tiene que quedarle delante.
  */
 function malParada(texto, b) {
-    if (b.dataset.borde === 'in') {
-        const limite = texto.querySelector('.transcript-limite');
-        if (limite && (b.compareDocumentPosition(limite) & Node.DOCUMENT_POSITION_FOLLOWING)) return true;
+    const propio = b.dataset.borde === 'in' ? 'antes' : 'despues';
+    const limite = texto.querySelector(`.transcript-limite[data-lado="${propio}"]`);
+    if (limite) {
+        const detras = Boolean(b.compareDocumentPosition(limite) & Node.DOCUMENT_POSITION_FOLLOWING);
+        if (propio === 'antes' ? detras : !detras) return true;
     }
     const otra = texto.querySelector(`.borde:not([data-borde="${b.dataset.borde}"])`);
     if (!otra) return false;
@@ -220,22 +239,29 @@ function malParada(texto, b) {
  *     siguiente no se puede: no hay pared, y el arrastre tampoco puede.
  *   · **Poner un borde donde ya está no se ofrece**: no cambiaría nada y
  *     dejaría un paso de deshacer que no deshace nada.
- *   · **Sobre una palabra que ya es de la toma anterior, el IN no se ofrece.**
- *     Es el mismo tope que frena el arrastre (`malParada`), leído del mismo
- *     sitio: si el menú lo ofreciera, el gesto que la app dibuja como imposible
- *     sería posible por el otro camino.
+ *   · **Sobre una palabra que ya es de otra toma, su borde no se ofrece.** Es el
+ *     mismo tope que frena el arrastre (`malParada`), leído del mismo sitio: si
+ *     el menú lo ofreciera, el gesto que la app dibuja como imposible sería
+ *     posible por el otro camino. Hacia atrás es el IN contra la toma anterior,
+ *     y hacia adelante el OUT contra la siguiente.
  */
 export function bordesQuePuede(texto, w) {
     const lineaIn = texto.querySelector('.borde.es-in');
     const lineaOut = texto.querySelector('.borde.es-out');
-    const limite = texto.querySelector('.transcript-limite');
+    const deAntes = texto.querySelector('.transcript-limite[data-lado="antes"]');
+    const deDespues = texto.querySelector('.transcript-limite[data-lado="despues"]');
     const antes = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
     const siguiente = palabraDespuesDe(w);
     const puede = [];
-    if (limite && antes(w, limite)) return puede;
+    if (deAntes && antes(w, deAntes)) return puede;
+    if (deDespues && antes(deDespues, w)) return puede;
     if (lineaIn && (!lineaOut || antes(w, lineaOut)) && palabraDespuesDe(lineaIn) !== w) {
         puede.push({ borde: 'in', ms: Number(w.dataset.t) });
     }
+    // La última palabra de antes de la marca SÍ puede llevar el OUT: apoya en
+    // la primera de la toma siguiente, o sea que el OUT queda exactamente en su
+    // IN. Dos tomas pegadas son legales —`techoDelOut` deja justo eso—, lo que
+    // no se puede es entrar.
     if (lineaIn && lineaOut && siguiente && antes(lineaIn, w) &&
         palabraDespuesDe(lineaOut) !== siguiente) {
         puede.push({ borde: 'out', ms: Number(siguiente.dataset.t) });
@@ -362,11 +388,14 @@ export function textoDe(p, alSoltar, previo) {
     if (previo && crecer(previo, p)) return previo;
     const texto = document.createElement('div');
     texto.className = `transcript es-${p.modo}${alSoltar ? ' es-movible' : ''}`;
-    // El color de la vista de la toma anterior, para su marca y sus palabras.
+    // El color de la vista de la toma de al lado, para su marca y sus palabras.
     // Lo trae hecho la pantalla (`coloresDeVista`): acá no se sabe de colores.
-    if (p.limite && p.limite.color) {
-        texto.style.setProperty('--vista-ajena', p.limite.color);
-        texto.style.setProperty('--tinta-ajena', p.limite.tinta);
+    // Una sola variable porque una sola marca aparece por transcript: la de
+    // antes es de la toma abierta y la de después, de una cerrada.
+    const ajena = p.limite || p.limiteDespues;
+    if (ajena && ajena.color) {
+        texto.style.setProperty('--vista-ajena', ajena.color);
+        texto.style.setProperty('--tinta-ajena', ajena.tinta);
     }
     // Las señales se buscan sobre la tirada ENTERA y en el orden en que se
     // dibuja, no sobre cada pedazo: el conteo que abrió la toma está en lo gris
@@ -408,7 +437,7 @@ export function textoDe(p, alSoltar, previo) {
             conBarra('out', 'Arrastralo hacia atrás para cerrar la toma en esa palabra');
         } else {
             conBarra('out');
-            for (const w of p.despues || []) poner(w);
+            ponerDespues(texto, p, poner);
         }
     }
 
@@ -437,12 +466,35 @@ function ponerAntes(texto, p, poner) {
     let puesta = false;
     for (let i = 0; i < ws.length; i++) {
         if (p.limite && !puesta && !ws[i].de) {
-            texto.append(limiteDe(p.limite), document.createTextNode(' '));
+            texto.append(limiteDe(p.limite, 'antes'), document.createTextNode(' '));
             puesta = true;
         }
         poner(ws[i]);
     }
-    if (p.limite && !puesta) texto.append(limiteDe(p.limite), document.createTextNode(' '));
+    if (p.limite && !puesta) texto.append(limiteDe(p.limite, 'antes'), document.createTextNode(' '));
+}
+
+/**
+ * Lo gris de después del OUT, con la marca de dónde empieza la toma siguiente.
+ *
+ * El mismo `ponerAntes` del revés: la marca va DELANTE de la primera palabra
+ * que ya es de otra toma. Si no hay ninguna a la vista va igual, al final: es
+ * la pared del OUT y tiene que estar para que el arrastre se frene, aunque lo
+ * que protege haya quedado más abajo del recorte.
+ */
+function ponerDespues(texto, p, poner) {
+    const ws = p.despues || [];
+    let puesta = false;
+    for (let i = 0; i < ws.length; i++) {
+        if (p.limiteDespues && !puesta && ws[i].de) {
+            texto.append(limiteDe(p.limiteDespues, 'despues'), document.createTextNode(' '));
+            puesta = true;
+        }
+        poner(ws[i]);
+    }
+    if (p.limiteDespues && !puesta) {
+        texto.append(limiteDe(p.limiteDespues, 'despues'), document.createTextNode(' '));
+    }
 }
 
 /** Con qué se dibujó cada transcript, para saber si puede crecer. */
@@ -465,6 +517,7 @@ function huella(p) {
         modo: p.modo,
         antes: firma(p.antes),
         limite: p.limite ? `${p.limite.toma}@${p.limite.ms}` : '',
+        limiteDespues: p.limiteDespues ? `${p.limiteDespues.toma}@${p.limiteDespues.ms}` : '',
         palabras: (p.palabras || []).map(sello),
         despues: firma(p.despues),
         comentarios: (p.comentarios || []).map(c => `${c.desdeMs}-${c.hastaMs}`).join(',')
@@ -508,6 +561,7 @@ function crecer(previo, p) {
     if (previo.querySelector('.transcript-vacio')) return false;
     if (antes.antes !== firma(p.antes) || antes.despues !== firma(p.despues)) return false;
     if (antes.limite !== (p.limite ? `${p.limite.toma}@${p.limite.ms}` : '')) return false;
+    if (antes.limiteDespues !== (p.limiteDespues ? `${p.limiteDespues.toma}@${p.limiteDespues.ms}` : '')) return false;
     if (antes.comentarios !== (p.comentarios || []).map(c => `${c.desdeMs}-${c.hastaMs}`).join(',')) return false;
 
     const ahora = (p.palabras || []).map(sello);

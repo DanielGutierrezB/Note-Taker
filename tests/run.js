@@ -52,6 +52,7 @@ const FILES = [
     'nota-de-claqueta.test.js',
     'comentarios.test.js',
     'in-que-retrocede.test.js',
+    'out-que-se-adelanta.test.js',
     'video-crudo.test.js',
     'exportar-video.test.js',
     'semanal-captura.test.js',

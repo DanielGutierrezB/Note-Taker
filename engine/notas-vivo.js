@@ -1563,6 +1563,28 @@ function recomentar(toma, c) {
 }
 
 /**
+ * Las palabras sueltas que ahora caen dentro de la toma pasan a ser suyas.
+ *
+ * Se usa al correr un borde de una toma CERRADA en la sesión viva. El caso que
+ * lo pide es adelantar el OUT de la última: lo que se dijo después de cerrarla
+ * está en `estado.sueltas` —no es de nadie— y abarcarlo con el borde es
+ * decir que sí era de la toma. Sin esto, la toma se quedaba sin ese texto
+ * hasta que la relectura lo trajera de Whisper.
+ *
+ * Solo lo que cae adentro, y sale de las sueltas: una palabra en los dos
+ * sitios se dibujaría dos veces, una gris y otra no.
+ */
+function tragarSueltas(estado, toma) {
+    const sueltas = estado.sueltas || [];
+    if (!sueltas.length || toma.inMs == null || toma.outMs == null) return;
+    const adentro = w => w.t >= toma.inMs && w.t < toma.outMs;
+    if (!sueltas.some(adentro)) return;
+    toma.palabras = (toma.palabras || []).concat(sueltas.filter(adentro))
+        .sort((a, b) => a.t - b.t);
+    estado.sueltas = sueltas.filter(w => !adentro(w));
+}
+
+/**
  * Un borde corrido sin volver a oír: se reparten otra vez las palabras que hay.
  *
  * **Mover un borde no necesita el audio, y esa es la razón de que las orillas
@@ -1726,6 +1748,7 @@ module.exports = {
     aplausoOido,
     PALABRA_Y_APLAUSO_MS,
     moverBorde,
+    tragarSueltas,
     tomasQueQuedan,
     limpio,
     comentarioDeEntrada,

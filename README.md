@@ -535,6 +535,29 @@ toma cuando no hay otra abierta, para cuando «Pausa» cerró de más.
 para leer solo el texto de la toma; apagado, se ve el antes y el después para
 validar dónde quedó cada borde. El campo de espera no cambia: ahí todo es gris.
 
+**Y lo gris de después del OUT de una toma cerrada es lo mismo del revés.**
+Ahí iba solo la orilla que escribe la relectura, o sea nada hasta que Whisper
+termina, y sin palabras el arrastre del OUT no tiene dónde apoyarse:
+`bordesQuePuede` necesita una palabra siguiente para calcular la pared. Así que
+cerrar una toma y querer estirarla un poco más no se podía, aunque el texto
+estuviera a la vista tres centímetros más abajo, en el campo de espera de la
+toma que viene. Ahora van las tres cosas en orden: la orilla de la relectura,
+lo que se oyó suelto desde el OUT, y veinticinco palabras de la toma siguiente
+si ya hay una, con su color y una pastilla que dice **«empieza la toma N»**.
+
+Esa pastilla es el espejo de la de «fin de la toma N» del otro lado, y hace el
+mismo trabajo: es la pared. Los dos topes se leen por orden de hermanos en el
+DOM, sin ninguna cuenta de tiempos, así que el arrastre se frena solo. Cada
+borde tropieza con la marca de **su** lado —si el IN leyera la de la derecha,
+dejaría de poder moverse apenas hubiera una toma siguiente, que son casi
+todas—. El OUT sí puede quedar pegado al IN de la que viene: dos tomas que se
+tocan son legales, lo que no se puede es entrar.
+
+Del lado del motor, adelantar el OUT **se lleva las sueltas que quedaron
+abarcadas** (`tragarSueltas`) en vez de esperar a la relectura. Es el mismo
+criterio que ya tenía mover el IN: repartir con lo que hay, y que Whisper afine
+después.
+
 **Lo gris de antes del IN de la toma abierta no son las palabras de la toma:
 son las que el motor tiene sueltas**, más las de la toma anterior. Importa
 porque correr el IN hacia adelante —con el clic derecho o arrastrándolo— saca

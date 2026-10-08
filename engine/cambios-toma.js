@@ -78,6 +78,13 @@ function editar(sesion, cambio) {
                 // hasta que terminaba la relectura —cargar 1,6 GB de modelo y
                 // pasar la toma entera, peleando la GPU con el texto en vivo—, y
                 // arrastrar el IN parecía no hacer nada durante varios segundos.
+                //
+                // «Lo que hay» incluye las sueltas: adelantar el OUT de la
+                // última toma cerrada es justamente meter adentro lo que se
+                // siguió diciendo, y eso todavía no es de nadie. Sin ellas la
+                // toma se quedaba sin el texto que uno acababa de abarcar hasta
+                // que Whisper lo releía.
+                vivo.tragarSueltas(sesion.estado, toma);
                 const guardadas = (toma.antes || []).concat(toma.palabras || [], toma.despues || []);
                 Object.assign(toma, vivo.repartir(guardadas, toma));
                 relecturas.encolar(sesion, toma.id);

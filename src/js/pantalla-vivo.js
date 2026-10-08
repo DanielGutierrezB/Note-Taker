@@ -667,6 +667,26 @@ function tomaAnterior(toma) {
 }
 
 /**
+ * La toma de después de una: la primera que empieza después de que esta empieza.
+ *
+ * El espejo de `tomaAnterior`, y copia de `techoDelOut` en
+ * `engine/notas-vivo.js` por lo mismo: la ventana necesita la misma respuesta
+ * para dibujar la marca y para frenar el arrastre del OUT sin pedir nada.
+ *
+ * Se mide contra el IN de ESTA y no contra su OUT —es lo que hace el motor—
+ * porque una toma sin cerrar todavía no tiene OUT y aun así tiene vecinas.
+ */
+function tomaSiguiente(toma) {
+    let proxima = null;
+    for (const t of estado.tomas) {
+        if (t.id === toma.id || t.descartada || t.inMs == null) continue;
+        if (t.inMs <= toma.inMs) continue;
+        if (!proxima || t.inMs < proxima.inMs) proxima = t;
+    }
+    return proxima;
+}
+
+/**
  * Cuántas palabras de la toma anterior se dejan ver antes del IN.
  *
  * Trescientas son unos dos minutos de habla: bastante para releer lo que se
@@ -718,6 +738,64 @@ function antesDeLaAbierta(toma) {
     return {
         antes: suyas.concat(medio),
         limite: { toma: previa.id, ms: previa.outMs, ...coloresDeVista(estado.vistas, previa.vista) }
+    };
+}
+
+/**
+ * Cuántas palabras de la toma siguiente se dejan ver después del OUT.
+ *
+ * Muchas menos que las trescientas del otro lado, a propósito. Antes del IN uno
+ * está releyendo lo que acaba de decir para decidir dónde empieza la toma; acá
+ * es al revés —lo que viene ya se vio pasar— y lo único que hace falta es
+ * entender dónde se frena el OUT. Con cincuenta, el asomo de la toma siguiente
+ * pesaba tanto como la toma que se está mirando. Veinticinco son unos diez
+ * segundos: lo justo para reconocer dónde empieza.
+ */
+const SIGUIENTE_MAX = 25;
+
+/**
+ * Lo que va después del OUT de una toma cerrada, y desde dónde es de otra.
+ *
+ * El espejo de `antesDeLaAbierta`, y existe por lo mismo. El editor, después
+ * de la clase del 07/10: «Cuando hago un OUT puedo ver en el espacio de toma
+ * para abrir el transcript aparecer, pero no se ve en el out de la toma que
+ * cerré. Por lo cual no puedo ajustar el OUT si deseo adelantarlo hasta mucho
+ * después.»
+ *
+ * Y tenía razón: acá iba solo `toma.despues`, que lo escribe la relectura con
+ * sus 12 s de orilla. Hasta que Whisper termina no hay NADA del otro lado del
+ * OUT, y sin palabras el arrastre no tiene dónde apoyarse —`bordesQuePuede`
+ * necesita una palabra siguiente—. Las palabras ya estaban en la pantalla, en
+ * el campo de espera de la toma que viene; lo que faltaba era mostrarlas
+ * también acá.
+ *
+ * Así que van las tres cosas, en orden: la orilla de la relectura, lo que se
+ * oyó suelto desde el OUT, y el principio de la toma siguiente si ya hay una.
+ *
+ * @returns {{despues: Array, limiteDespues: object|null}} `limiteDespues` es la
+ *   toma siguiente con su IN: donde se dibuja la marca que el OUT no cruza
+ */
+function despuesDeLaCerrada(toma) {
+    const siguiente = tomaSiguiente(toma);
+    const techo = siguiente ? siguiente.inMs : Infinity;
+    // La orilla de la relectura, las sueltas y la orilla de la siguiente son la
+    // misma tirada contada hasta tres veces: se juntan por tiempo, sin repetir.
+    const tierraDeNadie = new Map();
+    for (const w of (toma.despues || [])
+        .concat(sueltasLibres(), siguiente ? (siguiente.antes || []) : [])) {
+        if (w.t >= toma.outMs && w.t < techo && !tierraDeNadie.has(w.t)) tierraDeNadie.set(w.t, w);
+    }
+    const medio = [...tierraDeNadie.values()].sort((a, b) => a.t - b.t);
+    if (!siguiente) return { despues: medio, limiteDespues: null };
+    // De la toma siguiente, con su dueña pegada para que se distinga al dibujar.
+    const suyas = (siguiente.palabras || []).slice(0, SIGUIENTE_MAX)
+        .map(w => ({ ...w, de: { id: siguiente.id, vista: siguiente.vista } }));
+    return {
+        despues: medio.concat(suyas),
+        limiteDespues: {
+            toma: siguiente.id, ms: siguiente.inMs,
+            ...coloresDeVista(estado.vistas, siguiente.vista)
+        }
     };
 }
 
@@ -1110,11 +1188,13 @@ function montarTextos(quedan) {
                 vacio: 'Todavía no se oyó nada de esta toma.'
             }, soltar, previo));
         } else if (cual === 'cerrada' && toma) {
+            const adelante = despuesDeLaCerrada(toma);
             hueco.append(texto.textoDe({
                 modo: 'cerrada',
                 antes: toma.antes,
                 palabras: toma.palabras,
-                despues: toma.despues,
+                despues: adelante.despues,
+                limiteDespues: adelante.limiteDespues,
                 comentarios: toma.comentarios,
                 vacio: 'Esta toma no tiene texto.'
             }, soltar, previo));
