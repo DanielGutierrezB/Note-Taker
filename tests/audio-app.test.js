@@ -343,9 +343,41 @@ module.exports = async function (t) {
         t.ok(/stereoGlobalTapButExcludeProcesses/.test(swift), 'el tap global existe');
         t.ok(/valorDe\("--app"\)/.test(swift) && /args\.contains\("--sistema"\)/.test(swift),
             'y las dos banderas se leen');
-        t.ok(/kAudioAggregateDeviceTapAutoStartKey: prefijo != nil/.test(swift),
-            'el del sistema NO espera a que algo suene: lo normal al abrir Preparar '
-            + 'es el silencio, y esperar sería colgarse');
+        t.ok(/kAudioAggregateDeviceTapAutoStartKey: true/.test(swift),
+            'y el tap arranca con el dispositivo: en false, AudioDeviceStart '
+            + "devuelve 'stop' y no arranca nunca");
+    });
+
+    t.test('el agregado se cuelga del dispositivo por donde suenan las apps', () => {
+        // `DefaultOutputDevice` y `DefaultSystemOutputDevice` son dos cosas
+        // distintas con nombres casi iguales: el segundo es el de los sonidos
+        // de alerta. Mientras coinciden no se nota; en cuanto no —un monitor
+        // puesto como salida de alertas— el agregado queda colgado de un
+        // dispositivo por donde no pasa nada, y la escucha entrega silencio
+        // perfecto sin un solo error.
+        const swift = fs.readFileSync(path.join(__dirname, '..', 'nativo', 'escuchar-app.swift'), 'utf8');
+        t.ok(!/kAudioHardwarePropertyDefaultSystemOutputDevice/.test(swift),
+            'no se le pide ni una vez el de las alertas');
+        t.eq((swift.match(/kAudioHardwarePropertyDefaultOutputDevice/g) || []).length, 3,
+            'el de las apps: al armar el agregado, y en los dos oyentes que lo vigilan');
+    });
+
+    t.test('antes de la primera muestra, el silencio no es una caída', () => {
+        // El tap arranca cuando algo suena. En Preparar lo normal es que
+        // todavía no suene nada, y avisar ahí es poner la pantalla en rojo por
+        // estar callado. Una vez que llegó algo sigue llegando —también el
+        // silencio, medido—, así que ahí sí.
+        const avisos = [];
+        let ahora = 1000;
+        audioApp._fingirHijo(true);
+        audioApp._conectar({ alPcm: () => {}, avisar: a => avisos.push(a), tasa: 48000,
+            reloj: () => ahora, relanzar: () => {} });
+        for (let i = 0; i < 20; i++) { ahora += 250; audioApp._revisar(); }
+        t.ok(!avisos.some(a => a.tipo === 'caido'), 'cinco segundos callado en Preparar, sin alarma');
+        audioApp.recibir(Buffer.alloc(480 * 2));
+        for (let i = 0; i < 10; i++) { ahora += 250; audioApp._revisar(); }
+        t.ok(avisos.some(a => a.tipo === 'caido'), 'y después de la primera muestra, sí');
+        audioApp._fingirHijo(false);
     });
 
     t.test('un ayudante huérfano se suelta solo', () => {

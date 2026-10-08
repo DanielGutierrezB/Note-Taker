@@ -1005,11 +1005,24 @@ es a Note Taker misma, que se excluye por su bundle.
 Seguís oyendo la llamada en tus auriculares como siempre: las dos entradas son
 una COPIA del sonido, no se lo quitan a nadie.
 
-Un detalle del modo sistema que no se ve pero importa: el dispositivo agregado
-**no espera a que algo suene** para arrancar. Con el tap de una app sí espera
-—con Zoom abierto fuera de una reunión, sin eso Preparar se quedaba esperando
-para siempre—, pero con el global lo normal al abrir Preparar es que no suene
-nada todavía, y esperar sería colgarse hasta darse por muerto.
+**El tap arranca cuando algo suena, no antes.** Mientras nadie habla, el
+medidor de Preparar se queda en cero, y eso NO es que la escucha se haya
+caído: en cuanto llega la primera muestra sigue llegando todo, también el
+silencio medido, así que desde ahí un segundo y medio callado sí es una traba.
+Antes de la primera no se avisa nada, porque poner la pantalla en rojo por
+estar callado es enseñar a ignorar el aviso. Grabando se dice igual aunque
+nunca haya llegado nada —puede ser un tap que no enganchó— pero con diez
+segundos de plazo.
+
+**Y un error que estuvo ahí desde el principio, encontrado al probar esto.** El
+dispositivo agregado se colgaba de `kAudioHardwarePropertyDefaultSystemOutput‑
+Device`, que **no es** por donde suenan las apps: ese es el de los sonidos de
+alerta del sistema. Mientras los dos coinciden no se nota, y en cuanto no —un
+monitor puesto como salida de alertas y los altavoces como salida normal, que
+es lo que tenía la Mac donde se probó— el agregado queda colgado de un
+dispositivo por donde no pasa nada. El tap se crea, `AudioDeviceStart` dice que
+sí, el ayudante dice «listo»… y no entrega una sola muestra. Silencio perfecto,
+sin un solo error, en los dos modos. Ahora pide `DefaultOutputDevice`.
 
 **Cómo funciona.** macOS 14.2 trae los *process taps*: se le pide a Core Audio
 una copia del sonido que produce una app, y lo entrega sin cambiar a dónde va.
@@ -1050,7 +1063,9 @@ entrega siempre 48 kHz.
   escribe nunca, y sin sonido es justamente cuando esto pasa; y el SIGTERM solo
   llega si la app alcanzó a mandarlo, que un cierre forzado no lo hace. Ahora
   el ayudante mira cada dos segundos si su padre sigue ahí (`getppid() == 1` es
-  el padre adoptado por launchd) y, si no, suelta todo y sale.
+  el padre adoptado por launchd) y, si no, suelta todo y sale. Comprobado
+  contra el binario de antes, matándole el padre a los dos: el viejo sigue
+  vivo con el tap tomado y el nuevo se va solo.
 - Si no llega audio (una traba, un rearme), Node rellena el hueco con silencio
   para que el WAV no quede más corto que la clase; si lo que faltaba llega tarde,
   se descuenta del relleno. Se avisa en pantalla y queda en el registro.

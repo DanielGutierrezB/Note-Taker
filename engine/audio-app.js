@@ -109,6 +109,8 @@ let mandadas = 0;
 let relleno = 0;
 let ultimoDatoMs = 0;
 let trabado = false;
+/** Si llegó alguna muestra alguna vez: antes de la primera, el silencio es normal. */
+let hubo = false;
 /** Cuándo se relanzó por última vez, para no hacerlo en bucle. */
 let ultimoRelanzado = -Infinity;
 let vigilante = null;
@@ -208,6 +210,7 @@ function abrir(p) {
     avisar = typeof o.avisar === 'function' ? o.avisar : () => {};
     resto = Buffer.alloc(0);
     mandando = false;
+    hubo = false;
     pico = 0;
     // El primer nivel sale en el primer pedazo, sin esperar la ventana de 80
     // ms de la entrada anterior: el medidor tiene que moverse apenas se elige.
@@ -321,6 +324,7 @@ function lanzar(ruta, rearme) {
 function recibir(datos) {
     const antes = ultimoDatoMs;
     ultimoDatoMs = reloj();
+    hubo = true;
     const trasHueco = ultimoDatoMs - antes > ATRASO_NORMAL_MS * 2;
     if (trabado) {
         trabado = false;
@@ -394,7 +398,16 @@ function revisar() {
     if (!hijo || !tasa) return;
     const ahora = reloj();
     const callado = ahora - ultimoDatoMs;
-    if (callado > TRABADO_MS && !trabado) {
+    // Antes de la PRIMERA muestra, que no llegue nada no es una caída. El tap
+    // arranca cuando algo suena, y en Preparar lo normal es que todavía no
+    // suene nada: avisar ahí es poner la pantalla en rojo por estar en
+    // silencio. Una vez que llegó algo sigue llegando —también el silencio,
+    // medido— así que ahí sí, un segundo y medio callado es que se trabó.
+    //
+    // Grabando importa igual aunque nunca haya llegado nada, porque entonces
+    // puede ser un tap que no enganchó: se dice, pero con el plazo largo.
+    const plazo = hubo ? TRABADO_MS : RELANZAR_TRAS_MS;
+    if (callado > plazo && !trabado && (hubo || mandando)) {
         trabado = true;
         avisar({ tipo: 'caido', codigo: 'sin-datos', senal: null });
     }
@@ -469,6 +482,7 @@ function cerrar() {
     mandando = false;
     if (vigilante) { clearInterval(vigilante); vigilante = null; }
     trabado = false;
+    hubo = false;
     ultimoRelanzado = -Infinity;
     tasa = 0;
     if (!hijo) return;
@@ -504,6 +518,7 @@ module.exports = {
         if (p.mandando) empezarAMandar();
         ultimoDatoMs = reloj();
         trabado = false;
+        hubo = Boolean(p.hubo);
         ultimoRelanzado = -Infinity;
     },
     _revisar: revisar,

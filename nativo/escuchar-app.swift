@@ -393,10 +393,19 @@ func escuchar(prefijo: String?, menos: String?) -> Never {
     }
 
     // Un tap solo no se puede leer: hay que colgarlo de un dispositivo
-    // agregado. El de salida del sistema va como reloj, que es lo que hace
-    // que las muestras lleguen a la velocidad a la que suenan.
+    // agregado. El de salida va como reloj, que es lo que hace que las
+    // muestras lleguen a la velocidad a la que suenan.
+    //
+    // **`DefaultOutputDevice` y no `DefaultSystemOutputDevice`**, que son dos
+    // cosas distintas y se parecen demasiado en el nombre. El segundo es el de
+    // los sonidos de alerta del sistema; el primero, por donde suenan las
+    // apps. Mientras coinciden no se nota, y en cuanto no —un monitor puesto
+    // como salida de alertas, que es lo que tenía la Mac donde se probó esto—
+    // el agregado queda colgado de un dispositivo por donde no pasa nada: el
+    // tap se crea, `AudioDeviceStart` dice que sí, el ayudante dice «listo» y
+    // no entrega UNA muestra. Silencio perfecto y sin un solo error.
     let salida = leerNumero(AudioObjectID(kAudioObjectSystemObject),
-                            kAudioHardwarePropertyDefaultSystemOutputDevice, AudioObjectID(0)) ?? 0
+                            kAudioHardwarePropertyDefaultOutputDevice, AudioObjectID(0)) ?? 0
     let uidSalida = leerTexto(salida, kAudioDevicePropertyDeviceUID) ?? ""
     let config: [String: Any] = [
         kAudioAggregateDeviceNameKey: "Note Taker — escucha",
@@ -404,14 +413,14 @@ func escuchar(prefijo: String?, menos: String?) -> Never {
         kAudioAggregateDeviceMainSubDeviceKey: uidSalida,
         kAudioAggregateDeviceIsPrivateKey: true,
         kAudioAggregateDeviceIsStackedKey: false,
-        // Con `--app` espera a que la app suene: con Zoom abierto fuera de una
-        // reunión, sin esto el arranque se quedaba esperando para siempre.
-        //
-        // Con `--sistema` tiene que ser lo contrario. Ahí lo normal es que no
-        // suene NADA cuando uno abre Preparar —la clase todavía no empezó— y
-        // esperar a que algo suene es colgarse hasta que el ayudante se da por
-        // muerto. Arranca ya y entrega silencio, que es lo que hay.
-        kAudioAggregateDeviceTapAutoStartKey: prefijo != nil,
+        // **No es opcional, y lo aprendí probándolo.** En `false`,
+        // `AudioDeviceStart` devuelve 'stop' (`kAudioHardwareNotRunningError`)
+        // y no arranca nada. Lo puse en false para el tap global creyendo que
+        // ahí convenía lo contrario —que no esperara a que algo sonara, porque
+        // al abrir Preparar lo normal es el silencio— y lo que se consigue es
+        // que no arranque nunca. El tap tiene que poder arrancar con el
+        // dispositivo; entregar silencio mientras nadie suena ya lo hace solo.
+        kAudioAggregateDeviceTapAutoStartKey: true,
         kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: uidSalida]],
         kAudioAggregateDeviceTapListKey: [[
             kAudioSubTapDriftCompensationKey: true,
@@ -473,10 +482,10 @@ func escuchar(prefijo: String?, menos: String?) -> Never {
                 "codigo": "salida-cambio"])
         exit(3)
     }
-    var dirSalida = direccion(kAudioHardwarePropertyDefaultSystemOutputDevice)
+    var dirSalida = direccion(kAudioHardwarePropertyDefaultOutputDevice)
     AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &dirSalida, cola) { _, _ in
         let nueva = leerNumero(AudioObjectID(kAudioObjectSystemObject),
-                               kAudioHardwarePropertyDefaultSystemOutputDevice, AudioObjectID(0)) ?? 0
+                               kAudioHardwarePropertyDefaultOutputDevice, AudioObjectID(0)) ?? 0
         if nueva != salida { irse() }
     }
     var dirViva = direccion(kAudioDevicePropertyDeviceIsAlive)
