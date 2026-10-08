@@ -398,9 +398,10 @@ function planear(sesiones, config) {
     // Dónde cae un instante de una clase adentro de las anidaciones.
     const enNido = (clase, ms) => clase.franja.desdeSeg + notasXml.aSegundos(ms, clase.sesion.ceroMs);
 
-    // Las fuentes que alguna toma usa. Una vista anidada enciende una sola —su
-    // grupo—; una suelta enciende una por captura, y se apilan por el orden de
-    // las pistas, que es lo que `ordenarFuentes` tiene que dejar bien.
+    // Las fuentes que alguna toma usa, más las que el menú dejó «en todas».
+    // Una vista anidada enciende una sola —su grupo—; una suelta enciende una
+    // por captura, y se apilan por el orden de las pistas, que es lo que
+    // `ordenarFuentes` tiene que dejar bien.
     //
     // `siempre` viaja con la fuente, no con la vista, porque es una propiedad de
     // la pista: ahí se decide si en las tomas de las demás vistas hay un clip
@@ -500,6 +501,28 @@ function planear(sesiones, config) {
         }
         clase.duracionSeg = cursor;
         if (!clase.cortes.length) avisos.push(`${clase.nombre} no tiene tomas que vayan al XML: no lleva precortada.`);
+    }
+
+    // **Una anidación «en todas» está aunque nadie haya llamado a su vista.**
+    //
+    // «En todas» es una decisión de la pista —ocupa su sitio en todas las tomas
+    // de la clase, apagada donde no toca— y no una consecuencia de que alguna
+    // toma la haya pedido: el editor la deja así justamente para tener el plano
+    // a mano y encenderlo en Premiere donde le haga falta. Pedir una anidación
+    // «en todas» y que no salga porque esa vista no se nombró en vivo deja al
+    // editor sin la única pista que el menú prometía que iba a estar, y sin la
+    // anidación no hay dónde acomodar el encuadre para la próxima clase.
+    //
+    // **Solo las anidaciones**, y no las capturas sueltas, porque una captura
+    // suelta es lo que toda vista tiene de fábrica: las vistas que el editor no
+    // tocó dicen «Captura 1, en todas» sin que nadie lo haya pedido, y tomarlo
+    // por un pedido reserva una pista que nadie quiso y, peor, le gana a la
+    // vista que sí eligió «solo suya» para esa misma captura. Una anidación, en
+    // cambio, no sale de fábrica: si está, alguien la armó en el menú.
+    for (const [vista, v] of Object.entries(config.vistas || {})) {
+        if (v.unidas && v.capturas.length > 1 && (v.siempre || []).length) {
+            anotar(v.capturas, vista, true);
+        }
     }
 
     // **En las anidaciones van las claquetas y nada más.**

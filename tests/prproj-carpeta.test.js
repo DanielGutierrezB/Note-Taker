@@ -497,6 +497,31 @@ module.exports = async function (t) {
         t.deep(plan.avisos, []);
     });
 
+    t.test('el menú de una clase de verdad: dos vistas llamadas y una anidación en todas', () => {
+        // La carpeta que trajo este caso: tres capturas, PV con la Captura 1,
+        // R suelta con la 1 encima de la 2, y una anidación de las tres en
+        // todas las tomas. En vivo solo se dijeron PV y R.
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0), toma(2, 30, 40, 'R', T0)] });
+        const config = carpetaPrproj.normalizar({
+            capturas: 3,
+            vistas: {
+                PV: { capturas: [1], unidas: false, siempre: [1] },
+                R: { capturas: [2, 1], unidas: false, siempre: [2, 1] },
+                S: { capturas: [1, 2, 3], unidas: true, siempre: [1, 2, 3] },
+                MG: { capturas: [1], unidas: false, siempre: [] },
+                X2: { capturas: [1], unidas: false, siempre: [] }
+            }
+        });
+        const plan = carpetaPrproj.planear([s], config);
+        // La Captura 2 queda debajo de la 1 porque es lo que pide R, que las
+        // lleva sueltas: con las pistas compartidas no hay otro orden posible.
+        t.deep(plan.fuentes.map(f => f.clave), ['2', '1', '1+2+3']);
+        t.deep(plan.grupos.map(g => g.clave), ['1+2+3'], 'la anidación sale sin tomas suyas');
+        t.deep(plan.fuentes.map(f => f.siempre), [true, true, true]);
+        t.deep(plan.avisos, []);
+    });
+
     t.test('dos vistas sueltas que se contradicen: manda la primera y se dice', () => {
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'R', T0), toma(2, 30, 40, 'X2', T0)] });
@@ -550,12 +575,43 @@ module.exports = async function (t) {
         t.deep(plan.grupos.map(g => g.nombre), ['Captura 2 sobre Captura 1', 'Captura 1 sobre Captura 2']);
     });
 
-    t.test('solo entran a la precortada las fuentes que alguna toma usa', () => {
+    t.test('una captura suelta entra solo si alguna toma la usa', () => {
+        // La Captura 2 es de R, y R no se llamó en toda la clase. Tampoco entra
+        // la Captura 1 de las vistas que el editor no tocó: «Captura 1, en
+        // todas» es lo que dicen de fábrica, no algo que alguien haya pedido.
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0)] });
-        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar({ capturas: 3, vistas: { R: [2], X2: [1, 3] } }));
+        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar({ capturas: 3, vistas: { R: [2] } }));
         t.deep(plan.fuentes.map(f => f.clave), ['1']);
-        t.eq(plan.grupos.length, 0, 'la Doble no tiene tomas');
+        t.eq(plan.grupos.length, 0);
+    });
+
+    t.test('una anidación «en todas» entra aunque su vista no se haya llamado', () => {
+        // Nadie dijo «X2» en vivo, pero el editor armó esa anidación y la dejó
+        // en todas las tomas: es la pista que va a encender en Premiere cuando
+        // le haga falta. Si no sale, el menú prometió una pista que no está.
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0)] });
+        const config = carpetaPrproj.normalizar({
+            capturas: 3, vistas: { X2: { capturas: [1, 3], unidas: true, siempre: [1, 3] } }
+        });
+        const plan = carpetaPrproj.planear([s], config);
+        t.deep(plan.fuentes.map(f => f.clave), ['1', '1+3']);
+        t.deep(plan.grupos.map(g => g.clave), ['1+3'], 'y es una anidación de verdad');
+        t.eq(plan.fuentes[1].siempre, true);
+    });
+
+    t.test('pero una anidación «solo suya» sin tomas no entra', () => {
+        // «Solo X2» es «solo en las tomas de X2», y no hubo ninguna: no hay
+        // dónde ponerla.
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0)] });
+        const config = carpetaPrproj.normalizar({
+            capturas: 3, vistas: { X2: { capturas: [1, 3], unidas: true, siempre: [] } }
+        });
+        const plan = carpetaPrproj.planear([s], config);
+        t.deep(plan.fuentes.map(f => f.clave), ['1']);
+        t.eq(plan.grupos.length, 0);
     });
 
     t.test('las anidaciones llevan las claquetas de cada clase, y nada más', () => {
@@ -741,6 +797,35 @@ module.exports = async function (t) {
         const precortada = p.porClase('Sequence').find(k => nombre(k) === `prueba_${T0}`);
         t.deep(capturasDeLasPistas(p, precortada), ['Captura 1', 'Captura 2', 'X2']);
         t.deep(clipsDeLasPistas(p, precortada), [1, 3, 3], 'la Captura 1 sola, solo en la toma de PV');
+    });
+
+    t.test('la anidación «en todas» llega al archivo aunque su vista no se haya llamado', async () => {
+        // El caso que trajo la carpeta de verdad: en vivo solo se dijeron PV, R
+        // y X2, y la anidación de S tiene que estar igual, con su clip apagado
+        // en cada toma, lista para encenderla en Premiere.
+        const dir = carpetaConClases(30);
+        const destino = path.join(dir, 'Proyecto', 'anidada.prproj');
+        const r = await carpetaPrproj.generar({
+            carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
+            config: {
+                capturas: 3,
+                vistas: {
+                    PV: { capturas: [1], unidas: false, siempre: [1] },
+                    R: { capturas: [2], unidas: false, siempre: [2] },
+                    X2: { capturas: [3], unidas: false, siempre: [3] },
+                    S: { capturas: [1, 2, 3], unidas: true, siempre: [1, 2, 3] }
+                }
+            }
+        });
+        t.ok(r.ok, r.error || '');
+
+        const p = prproj.Proyecto.leer(destino);
+        t.ok(p.verificar().ok, 'y el archivo queda sano');
+        const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
+        const precortada = p.porClase('Sequence').find(k => nombre(k) === `prueba_${T0}`);
+        t.deep(capturasDeLasPistas(p, precortada), ['Captura 1', 'Captura 2', 'Captura 3', 'S']);
+        // Tres tomas en la primera clase, y la anidación está en las tres.
+        t.deep(clipsDeLasPistas(p, precortada), [3, 3, 3, 3]);
     });
 
     t.test('una carpeta a otro fps que la plantilla se rechaza', async () => {
