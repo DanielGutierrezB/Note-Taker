@@ -39,11 +39,39 @@ const NIVEL_CADA_MS = 80;
 const ZOOM = 'us.zoom';
 
 /**
+ * El nuestro, para que el tap del sistema no nos grabe a nosotros.
+ *
+ * Escrito y no leído de Electron porque este módulo se prueba sin Electron, y
+ * porque es el mismo `appId` del empaquetado (`package.json`): si cambiara,
+ * `tests/dependencias.test.js` es el sitio donde se notaría.
+ */
+const NOSOTROS = 'com.codigo.notetaker';
+
+/**
  * Sin nada del ayudante por más que esto, la escucha está trabada: se avisa
  * como una caída aunque el proceso siga vivo (la salida del sistema se fue y el
  * dispositivo agregado dejó de dar la hora).
  */
 const TRABADO_MS = 1500;
+
+/**
+ * Cuánto se espera, trabado, antes de tirar el ayudante y volver a abrirlo.
+ *
+ * Avisar y nada más era quedarse mirando: el proceso seguía vivo con el tap
+ * tomado, el WAV se llenaba de silencio puesto y lo único que lo arreglaba era
+ * que alguien volviera a Preparar y eligiera la entrada otra vez, a mitad de
+ * una clase.
+ *
+ * Diez segundos y no uno y medio porque un rearme no es gratis: vuelve a crear
+ * el tap y el dispositivo agregado, y en ese hueco tampoco llega audio. Con el
+ * tap de una app, además, que no llegue nada un rato puede ser normal —Core
+ * Audio para el tap cuando la app deja de sonar—, así que un plazo corto sería
+ * relanzar en cada silencio largo de la clase.
+ */
+const RELANZAR_TRAS_MS = 10000;
+
+/** Y no más de uno por minuto: si no se arregla, insistir tampoco lo arregla. */
+const RELANZAR_CADA_MS = 60000;
 
 /**
  * Cuánto tiene que faltar, contra el reloj, para rellenar con silencio, y cuánto
@@ -62,7 +90,8 @@ let alPcm = () => {};
 let avisar = () => {};
 let ultimoNivel = 0;
 let pico = 0;
-let prefijoAbierto = null;
+/** Con qué se lanzó el ayudante, para poder relanzarlo igual al rearmar. */
+let comoAbrio = null;
 /** La tasa que dijo el ayudante: la del WAV. */
 let tasa = 0;
 
@@ -80,6 +109,8 @@ let mandadas = 0;
 let relleno = 0;
 let ultimoDatoMs = 0;
 let trabado = false;
+/** Cuándo se relanzó por última vez, para no hacerlo en bucle. */
+let ultimoRelanzado = -Infinity;
 let vigilante = null;
 let reloj = () => Number(process.hrtime.bigint() / 1000000n);
 
@@ -100,6 +131,12 @@ function ayudante() {
  * Es lo que la pantalla de Preparar pregunta para decir, antes de que nadie
  * elija nada, si Zoom está abierto.
  *
+ * `soportado` contesta por los DOS modos y no solo por el de Zoom: significa
+ * que el ayudante existe y corre, y el ayudante solo corre en macOS 14.2 o
+ * más, que es donde hay process taps de cualquier clase. El audio del sistema
+ * no necesita que ninguna app esté abierta, así que `abierta` y `sonando` no
+ * le dicen nada.
+ *
  * @returns {{soportado:boolean, abierta:boolean, sonando:boolean, error?:string}}
  */
 function estado(prefijo) {
@@ -107,7 +144,8 @@ function estado(prefijo) {
     const bin = ayudante();
     if (!bin.path) {
         return { soportado: false, abierta: false, sonando: false,
-            error: 'Falta el ayudante que escucha a Zoom (escuchar-app). Corré tools/bundle-binaries.sh.' };
+            error: 'Falta el ayudante que escucha el audio de otras apps (escuchar-app). '
+                + 'Corré tools/bundle-binaries.sh.' };
     }
     const r = spawnSync(bin.path, ['--listar'], { encoding: 'utf8', timeout: 5000 });
     if (r.status !== 0) {
@@ -135,10 +173,25 @@ function leerError(texto) {
 }
 
 /**
- * Empieza a escuchar a la app. Contesta cuando el ayudante dijo que está
- * listo, con la tasa a la que va a llegar el audio, o con el motivo si no.
+ * Con qué argumentos se llama al ayudante, según lo que se quiera escuchar.
  *
- * @param {object} p { prefijo, alPcm, avisar }
+ * Dos modos, y la diferencia importa más de lo que parece. `app` engancha el
+ * tap a los procesos de esa app QUE HAY EN ESE INSTANTE: si la app se
+ * reinicia, el tap apunta a procesos que ya no existen y la escucha se queda
+ * muda. `sistema` pide el tap global —todo lo que sale por la salida— y no
+ * toca ningún proceso ajeno: sirve igual para Zoom que para Meet, no hay nada
+ * debajo que se pueda reiniciar, y a cambio también graba las notificaciones.
+ */
+function argumentos(o) {
+    if (o.modo === 'sistema') return ['--sistema', '--menos', NOSOTROS];
+    return ['--app', o.prefijo || ZOOM];
+}
+
+/**
+ * Empieza a escuchar. Contesta cuando el ayudante dijo que está listo, con la
+ * tasa a la que va a llegar el audio, o con el motivo si no.
+ *
+ * @param {object} p { modo:'sistema'|'app', prefijo, alPcm, avisar }
  * @returns {Promise<{ok:boolean, sampleRate?:number, canales?:number, error?:string, codigo?:string}>}
  */
 function abrir(p) {
@@ -147,7 +200,8 @@ function abrir(p) {
     const bin = ayudante();
     if (!bin.path) {
         return Promise.resolve({ ok: false, codigo: 'sin-ayudante',
-            error: 'Falta el ayudante que escucha a Zoom. Corré tools/bundle-binaries.sh.' });
+            error: 'Falta el ayudante que escucha el audio de otras apps. '
+                + 'Corré tools/bundle-binaries.sh.' });
     }
 
     alPcm = typeof o.alPcm === 'function' ? o.alPcm : () => {};
@@ -158,7 +212,7 @@ function abrir(p) {
     // El primer nivel sale en el primer pedazo, sin esperar la ventana de 80
     // ms de la entrada anterior: el medidor tiene que moverse apenas se elige.
     ultimoNivel = 0;
-    prefijoAbierto = o.prefijo || ZOOM;
+    comoAbrio = argumentos(o);
     return lanzar(bin.path, false);
 }
 
@@ -183,19 +237,25 @@ function lanzar(ruta, rearme) {
             listo(r);
         };
 
-        const proc = spawn(ruta, ['--app', prefijoAbierto], { stdio: ['ignore', 'pipe', 'pipe'] });
+        const proc = spawn(ruta, comoAbrio, { stdio: ['ignore', 'pipe', 'pipe'] });
         proc.cerrando = false;
         hijo = proc;
 
-        // `kAudioAggregateDeviceTapAutoStartKey` hace esperar al arranque hasta
-        // que la app suene: con Zoom abierto fuera de una reunión, sin esto
-        // Preparar se quedaba esperando para siempre.
+        // Con `--app`, `kAudioAggregateDeviceTapAutoStartKey` hace esperar al
+        // arranque hasta que la app suene: con Zoom abierto fuera de una
+        // reunión, sin esto Preparar se quedaba esperando para siempre. Con
+        // `--sistema` no espera a nada —lo normal al abrir Preparar es que no
+        // suene nada— así que este plazo no debería vencer nunca, y si vence
+        // es otra cosa.
         const espera = setTimeout(() => {
             if (contestado) return;
             proc.cerrando = true;
             try { proc.kill('SIGTERM'); } catch (e) { /* ya se fue */ }
             contestar({ ok: false, codigo: 'sin-respuesta',
-                error: 'Zoom está abierto pero no entrega sonido. Entrá a la reunión y volvé a intentar.' });
+                error: comoAbrio.includes('--sistema')
+                    ? 'La escucha del audio del sistema no arrancó. Revisá Ajustes del Sistema → '
+                        + 'Privacidad y seguridad → Grabación de audio del sistema.'
+                    : 'Zoom está abierto pero no entrega sonido. Entrá a la reunión y volvé a intentar.' });
         }, ARRANQUE_MAX_MS);
 
         proc.stderr.setEncoding('utf8');
@@ -211,7 +271,7 @@ function lanzar(ruta, rearme) {
                     tasa = Math.round(j.sampleRate);
                     contestar({ ok: true, sampleRate: tasa, canales: 1, procesos: j.procesos,
                         tasaDelDispositivo: j.tasaDelDispositivo || null });
-                    if (rearme) avisar({ tipo: 'rearmada', mensaje: 'Cambió la salida de audio: la escucha de Zoom se rearmó sola.' });
+                    if (rearme) avisar({ tipo: 'rearmada', mensaje: 'Cambió la salida de audio: la escucha se rearmó sola.' });
                     vigilar();
                 } else if (j.error) {
                     codigoAlSalir = j.codigo || null;
@@ -338,6 +398,11 @@ function revisar() {
         trabado = true;
         avisar({ tipo: 'caido', codigo: 'sin-datos', senal: null });
     }
+    if (trabado && mandando && callado > RELANZAR_TRAS_MS
+        && ahora - ultimoRelanzado > RELANZAR_CADA_MS) {
+        ultimoRelanzado = ahora;
+        volverAAbrir();
+    }
     if (!mandando || callado < ATRASO_NORMAL_MS * 2) return;
     const falta = esperadas() - mandadas - resto.length / 2;
     if (falta < tasa * HUECO_MIN_MS / 1000) return;
@@ -347,6 +412,39 @@ function revisar() {
     avisar({ tipo: 'relleno', segundos: Math.round(poner / tasa * 10) / 10 });
     empaquetar(Buffer.alloc(poner * 2));
 }
+
+/**
+ * Tirar el ayudante trabado y abrir otro, sin cortar la grabación.
+ *
+ * Lo que se tira importa tanto como lo que se abre: mientras el proceso viejo
+ * siga vivo, el tap y el dispositivo agregado de Core Audio siguen tomados, y
+ * los dos son privados —no se ven en ninguna lista— así que un ayudante
+ * trabado y vivo es hardware ocupado que nadie puede encontrar.
+ *
+ * La grabación no se entera: `mandando` sigue puesto y el hueco lo rellena
+ * `revisar` con silencio, igual que en cualquier otro corte.
+ */
+function relanzar() {
+    const bin = ayudante();
+    if (!bin.path) return;
+    if (hijo) {
+        hijo.cerrando = true;
+        try { hijo.kill('SIGTERM'); } catch (e) { /* ya se había ido */ }
+        hijo = null;
+    }
+    trabado = false;
+    ultimoDatoMs = reloj();
+    avisar({ tipo: 'relanzando', mensaje: 'La escucha dejó de entregar audio: se está reabriendo.' });
+    lanzar(bin.path, true).then(r => {
+        if (!r.ok) avisar({ tipo: 'caido', codigo: r.codigo || 'relanzar', senal: null });
+    });
+}
+
+/**
+ * Quién relanza. Es `relanzar` salvo en las pruebas, que no pueden abrir un
+ * ayudante de verdad: crearía un tap de Core Audio y pediría permiso.
+ */
+let volverAAbrir = relanzar;
 
 function vigilar() {
     ultimoDatoMs = reloj();
@@ -371,6 +469,7 @@ function cerrar() {
     mandando = false;
     if (vigilante) { clearInterval(vigilante); vigilante = null; }
     trabado = false;
+    ultimoRelanzado = -Infinity;
     tasa = 0;
     if (!hijo) return;
     hijo.cerrando = true;
@@ -380,6 +479,8 @@ function cerrar() {
 
 module.exports = {
     ZOOM,
+    NOSOTROS,
+    argumentos,
     MUESTRAS_POR_PEDAZO,
     estado,
     abrir,
@@ -398,10 +499,12 @@ module.exports = {
         pico = 0;
         tasa = p.tasa || 48000;
         if (p.reloj) reloj = p.reloj;
+        volverAAbrir = p.relanzar || relanzar;
         mandando = false;
         if (p.mandando) empezarAMandar();
         ultimoDatoMs = reloj();
         trabado = false;
+        ultimoRelanzado = -Infinity;
     },
     _revisar: revisar,
     _mandadas: () => mandadas,

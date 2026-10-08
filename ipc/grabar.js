@@ -118,8 +118,9 @@ function registrar({ ipcMain, app, send, anotar }) {
      */
     ipcMain.handle('audio-app-estado', () => audioApp.estado());
 
-    ipcMain.handle('audio-app-abrir', async () => {
+    ipcMain.handle('audio-app-abrir', async (event, como) => {
         const r = await audioApp.abrir({
+            modo: como && como.modo,
             alPcm: chunk => grabacion.pcm(chunk),
             avisar: aviso => {
                 // Lo que le pasa a la escucha en medio de la clase va al
@@ -128,13 +129,14 @@ function registrar({ ipcMain, app, send, anotar }) {
                 // `error` más que ninguno: es un pedazo de audio que no se
                 // escribió, y al día siguiente es lo único que explica por qué
                 // el WAV es más corto que la clase.
-                if (aviso && ['ayudante', 'relleno', 'rearmada', 'caido', 'vuelve', 'error'].includes(aviso.tipo)) {
+                if (aviso && ['ayudante', 'relleno', 'rearmada', 'relanzando', 'caido', 'vuelve', 'error'].includes(aviso.tipo)) {
                     anotar(`audio-app.${aviso.tipo}`, aviso);
                 }
                 send('audio-app', aviso);
             }
         });
-        anotar('audio-app.abrir', { ok: r.ok, codigo: r.codigo || null, sampleRate: r.sampleRate || null,
+        anotar('audio-app.abrir', { modo: (como && como.modo) || 'app',
+            ok: r.ok, codigo: r.codigo || null, sampleRate: r.sampleRate || null,
             tasaDelDispositivo: r.tasaDelDispositivo || null });
         return r;
     });

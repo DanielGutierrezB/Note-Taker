@@ -1,7 +1,8 @@
-// escuchar-app — El sonido de UNA app, sin drivers.
+// escuchar-app — El sonido de otra app, o de toda la Mac, sin drivers.
 //
 //   escuchar-app --listar                 qué apps están sonando, en JSON
 //   escuchar-app --app us.zoom            PCM mono de 16 bits por stdout
+//   escuchar-app --sistema [--menos B]    lo mismo, pero todo lo que suene
 //
 // Existe por el escenario de esta app: la clase llega por una llamada de
 // Zoom, y quien toma notas la escucha con auriculares. Ningún micrófono la
@@ -14,6 +15,16 @@
 // que produce un proceso, y lo entrega sin tocar a dónde va. Quien escucha
 // sigue oyendo por sus auriculares, Zoom no se entera, y no se mezclan
 // notificaciones ni nada más que suene en la Mac.
+//
+// **Y hay dos maneras de pedirla, que no son la misma.** `--app` engancha el
+// tap a los procesos de esa app, de los que hay en ese instante: si la app se
+// reinicia, el tap apunta a procesos que ya no están. `--sistema` pide el tap
+// global —todo lo que sale por la salida del sistema— y no se engancha a
+// ningún proceso ajeno: sirve igual para Zoom, para Meet o para lo que sea,
+// no hay nada que se pueda reiniciar debajo, y a cambio también graba las
+// notificaciones y cualquier otro sonido de la Mac. `--menos` le saca al tap
+// global los procesos de un bundle, que es como Note Taker evita grabarse a
+// sí misma.
 //
 // El protocolo con quien lo lanza (`engine/audio-app.js`) es mínimo:
 //   · stderr, una línea JSON al arrancar: {"listo":true,"sampleRate":…} o
@@ -314,21 +325,63 @@ func apagarEntradasAjenas(_ agregado: AudioObjectID, _ proc: AudioDeviceIOProcID
     }
 }
 
-func escuchar(prefijo: String) -> Never {
+/** Cada cuánto se comprueba que Note Taker siga viva. */
+let VIGILAR_CADA_SEG: Double = 2
+
+/**
+ Si quien lanzó esto se fue, se suelta todo y se sale.
+
+ Esto es el arreglo de un problema real y feo: **un ayudante huérfano se queda
+ con el tap y el dispositivo agregado tomados para siempre**, y los dos son
+ privados, así que no se ven en ningún lado —ni en Configuración de Audio MIDI,
+ ni en ninguna lista— mientras siguen ocupando el hardware. Lo único que lo
+ arreglaba era encontrar el proceso y matarlo a mano.
+
+ Había una red y no alcanzaba: el hilo escritor se entera de que nadie lee
+ cuando el `write` devuelve EPIPE, pero si no hay sonido no escribe nunca, y
+ sin sonido es justamente cuando esto pasa. Y SIGTERM solo llega si la app
+ alcanzó a mandarlo: un cierre forzado, un cuelgue o un SIGKILL no mandan nada.
+
+ `getppid() == 1` es el padre adoptado por launchd, o sea que el de verdad ya
+ no está.
+ */
+func vigilarAlPadre() {
+    let cola = DispatchQueue(label: "notetaker.padre")
+    let reloj = DispatchSource.makeTimerSource(queue: cola)
+    reloj.schedule(deadline: .now() + VIGILAR_CADA_SEG, repeating: VIGILAR_CADA_SEG)
+    reloj.setEventHandler {
+        if getppid() == 1 { soltar(); exit(0) }
+    }
+    reloj.resume()
+    _ = Unmanaged.passRetained(reloj)
+}
+
+func escuchar(prefijo: String?, menos: String?) -> Never {
     guard #available(macOS 14.2, *) else {
-        fallar("Esta Mac tiene un macOS anterior a 14.2, que no sabe escuchar una app sola.", "no-soportado")
+        fallar("Esta Mac tiene un macOS anterior a 14.2, que no sabe escuchar el sonido de otra app.",
+               "no-soportado")
     }
 
-    let suyos = procesos().filter { $0.bundle.hasPrefix(prefijo) }
-    if suyos.isEmpty {
-        fallar("No encontré ninguna app que empiece con \(prefijo) entre las que usan audio. " +
-               "Si es Zoom, abrila y entrá a la reunión.", "sin-app")
+    // Una copia del sonido, mezclada a estéreo, que no le saca nada a nadie:
+    // `unmuted` es lo que hace que quien toma notas lo siga escuchando en sus
+    // auriculares. De los procesos de una app, o de todo menos los nuestros.
+    let descripcion: CATapDescription
+    var deQuien: [String] = []
+    if let prefijo = prefijo {
+        let suyos = procesos().filter { $0.bundle.hasPrefix(prefijo) }
+        if suyos.isEmpty {
+            fallar("No encontré ninguna app que empiece con \(prefijo) entre las que usan audio. " +
+                   "Si es Zoom, abrila y entrá a la reunión.", "sin-app")
+        }
+        deQuien = suyos.map { $0.bundle }
+        descripcion = CATapDescription(stereoMixdownOfProcesses: suyos.map { $0.objeto })
+    } else {
+        // Sin procesos que excluir se graba todo, incluido lo que suene en la
+        // propia app: quien llama manda su bundle en `--menos`.
+        let nuestros = menos == nil ? [] : procesos().filter { $0.bundle.hasPrefix(menos!) }
+        deQuien = ["(todo el sistema)"] + nuestros.map { "menos \($0.bundle)" }
+        descripcion = CATapDescription(stereoGlobalTapButExcludeProcesses: nuestros.map { $0.objeto })
     }
-
-    // Una copia del sonido de ESOS procesos, mezclada a estéreo, que no le
-    // saca nada a nadie: `unmuted` es lo que hace que quien toma notas lo siga
-    // escuchando en sus auriculares.
-    let descripcion = CATapDescription(stereoMixdownOfProcesses: suyos.map { $0.objeto })
     descripcion.name = "Note Taker"
     descripcion.isPrivate = true
     descripcion.muteBehavior = .unmuted
@@ -351,7 +404,14 @@ func escuchar(prefijo: String) -> Never {
         kAudioAggregateDeviceMainSubDeviceKey: uidSalida,
         kAudioAggregateDeviceIsPrivateKey: true,
         kAudioAggregateDeviceIsStackedKey: false,
-        kAudioAggregateDeviceTapAutoStartKey: true,
+        // Con `--app` espera a que la app suene: con Zoom abierto fuera de una
+        // reunión, sin esto el arranque se quedaba esperando para siempre.
+        //
+        // Con `--sistema` tiene que ser lo contrario. Ahí lo normal es que no
+        // suene NADA cuando uno abre Preparar —la clase todavía no empezó— y
+        // esperar a que algo suene es colgarse hasta que el ayudante se da por
+        // muerto. Arranca ya y entrega silencio, que es lo que hay.
+        kAudioAggregateDeviceTapAutoStartKey: prefijo != nil,
         kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: uidSalida]],
         kAudioAggregateDeviceTapListKey: [[
             kAudioSubTapDriftCompensationKey: true,
@@ -481,8 +541,10 @@ func escuchar(prefijo: String) -> Never {
         "sampleRate": TASA_DE_SALIDA,
         "tasaDelDispositivo": tasaEntrada,
         "canales": 1,
-        "procesos": suyos.map { $0.bundle }
+        "procesos": deQuien
     ])
+
+    vigilarAlPadre()
 
     // Hasta que lo paren. SIGTERM es lo que manda quien lo lanzó al terminar
     // la sesión; SIGPIPE, que quien leía se fue (la app se cerró de golpe), y
@@ -500,8 +562,12 @@ func escuchar(prefijo: String) -> Never {
 // ─── Entrada ─────────────────────────────────────────────────────────────
 
 let args = CommandLine.arguments
-if args.contains("--listar") { listar() }
-if let i = args.firstIndex(of: "--app"), i + 1 < args.count {
-    escuchar(prefijo: args[i + 1])
+func valorDe(_ bandera: String) -> String? {
+    guard let i = args.firstIndex(of: bandera), i + 1 < args.count else { return nil }
+    return args[i + 1]
 }
-fallar("Uso: escuchar-app --listar | --app <prefijo del bundle>", "uso")
+
+if args.contains("--listar") { listar() }
+if let app = valorDe("--app") { escuchar(prefijo: app, menos: nil) }
+if args.contains("--sistema") { escuchar(prefijo: nil, menos: valorDe("--menos")) }
+fallar("Uso: escuchar-app --listar | --app <prefijo> | --sistema [--menos <prefijo>]", "uso")

@@ -967,16 +967,33 @@ director de contenido escribe los suyos y la que el parser de
 los pares. Una clase grabada acá todavía puede pasar por aquel pipeline de
 corte.
 
-## El audio del Zoom
+## El audio de la llamada
 
-En el escenario de esta app la clase llega por una llamada de Zoom y quien toma
-notas la escucha con auriculares, así que **ningún micrófono la oye**. Por eso la
-primera entrada de la lista es **Audio de Zoom (la llamada)**: la app escucha el
-sonido de Zoom directo, sin drivers y sin tocar la configuración de Zoom.
+En el escenario de esta app la clase llega por una llamada y quien toma notas la
+escucha con auriculares, así que **ningún micrófono la oye**. Por eso las dos
+primeras entradas de la lista no son micrófonos:
 
-1. Abrir Zoom y entrar a la reunión.
-2. En Note Taker, pantalla **Preparar**: si Zoom está abierto, «Audio de Zoom»
-   ya viene elegido. Si no, «Buscar de nuevo» lo encuentra.
+| entrada | qué graba |
+|---|---|
+| **Audio del sistema (Zoom, Meet, lo que suene)** | todo lo que salga por los altavoces |
+| **Audio de Zoom (solo la llamada)** | el sonido que produce Zoom, y nada más |
+
+**La del sistema viene elegida de fábrica**, y la diferencia no es de comodidad.
+El tap de Zoom se cuelga de los procesos de Zoom **que haya en ese instante**:
+es un punto de contacto con una app que no es nuestra, y si Zoom se reinicia el
+tap queda apuntando a procesos que ya no existen y la escucha se queda muda sin
+que nadie se entere. El tap global no se engancha a ningún proceso ajeno —pide
+lo que sale por la salida del sistema— así que no hay nada debajo que se pueda
+reiniciar, y de paso sirve igual con Meet, con un vídeo o con lo que sea.
+
+Lo que se paga: **también entra lo demás que suene en la Mac**, notificaciones
+incluidas. Por eso la de Zoom se queda en la lista: cuando la clase es por Zoom
+y uno quiere solo la llamada, es más limpia. Lo único que el tap global NO graba
+es a Note Taker misma, que se excluye por su bundle.
+
+1. Entrar a la llamada, por donde sea.
+2. En Note Taker, pantalla **Preparar**: «Audio del sistema» ya viene elegido.
+   No hace falta que ninguna app esté abierta ni sonando.
 3. La primera vez, macOS pide permiso para **grabar el audio del sistema**. Hay
    que darlo: sin él, el sonido llega en silencio y no hay forma de preguntarlo
    de otra manera. Se revisa en Ajustes del Sistema → Privacidad y seguridad →
@@ -985,8 +1002,14 @@ sonido de Zoom directo, sin drivers y sin tocar la configuración de Zoom.
    Whisper entiende. Si ahí no aparece lo que dice el profesor, se termina y se
    elige otra entrada.
 
-Seguís oyendo la llamada en tus auriculares como siempre, y no se graba nada más
-de la Mac: ni notificaciones, ni otra app que suene.
+Seguís oyendo la llamada en tus auriculares como siempre: las dos entradas son
+una COPIA del sonido, no se lo quitan a nadie.
+
+Un detalle del modo sistema que no se ve pero importa: el dispositivo agregado
+**no espera a que algo suene** para arrancar. Con el tap de una app sí espera
+—con Zoom abierto fuera de una reunión, sin eso Preparar se quedaba esperando
+para siempre—, pero con el global lo normal al abrir Preparar es que no suene
+nada todavía, y esperar sería colgarse hasta darse por muerto.
 
 **Cómo funciona.** macOS 14.2 trae los *process taps*: se le pide a Core Audio
 una copia del sonido que produce una app, y lo entrega sin cambiar a dónde va.
@@ -1017,9 +1040,28 @@ entrega siempre 48 kHz.
 - Si la salida de audio cambia o desaparece (los AirPods al estuche), el
   ayudante sale con un código y Node lo vuelve a lanzar solo, sobre la salida
   nueva, sin cortar la grabación.
+- **Y si Note Taker se va de golpe, el ayudante se va con ella.** Esto es el
+  arreglo de algo feo: un ayudante huérfano se queda con el tap y el
+  dispositivo agregado tomados para siempre, y los dos son privados —no salen
+  en ninguna lista, ni en Configuración de Audio MIDI— así que es hardware
+  ocupado que nadie puede encontrar, y lo único que lo arreglaba era dar con el
+  proceso y matarlo a mano. La red que había no alcanzaba: el hilo escritor se
+  entera de que nadie lee cuando el `write` devuelve EPIPE, pero sin sonido no
+  escribe nunca, y sin sonido es justamente cuando esto pasa; y el SIGTERM solo
+  llega si la app alcanzó a mandarlo, que un cierre forzado no lo hace. Ahora
+  el ayudante mira cada dos segundos si su padre sigue ahí (`getppid() == 1` es
+  el padre adoptado por launchd) y, si no, suelta todo y sale.
 - Si no llega audio (una traba, un rearme), Node rellena el hueco con silencio
   para que el WAV no quede más corto que la clase; si lo que faltaba llega tarde,
   se descuenta del relleno. Se avisa en pantalla y queda en el registro.
+- Y si sigue sin llegar nada **diez segundos**, no se queda mirando: tira el
+  ayudante y abre otro. Antes solo se avisaba, y el proceso trabado seguía vivo
+  con el tap tomado mientras el WAV se llenaba de silencio puesto; lo único que
+  lo arreglaba era volver a Preparar y elegir la entrada otra vez, a mitad de
+  una clase. Diez y no uno y medio porque un rearme tampoco es gratis —hay que
+  crear otra vez el tap y el dispositivo agregado— y porque con el tap de una
+  app que no llegue nada un rato puede ser normal. Como mucho uno por minuto:
+  si no se arregla, insistir tampoco lo arregla.
 - La sesión compara cada segundo lo grabado contra el reloj (`vigilarDeriva`).
   Si se atrasa más de dos segundos, lo avisa. Es la pregunta que habría
   encontrado el error del doble de velocidad en el primer minuto.

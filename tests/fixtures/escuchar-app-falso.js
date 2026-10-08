@@ -19,6 +19,15 @@
 const modo = process.env.FALSO_MODO || 'ok';
 const args = process.argv.slice(2);
 
+// Con qué lo llamaron, para que la prueba pueda comprobar que el modo que la
+// pantalla eligió es el que llega hasta acá. Es lo único que no se puede ver
+// de otra forma: el de verdad hace cosas distintas con `--app` y `--sistema`
+// —un tap de unos procesos o el tap global— y desde afuera las dos suenan
+// igual.
+if (process.env.FALSO_ARGS) {
+    require('fs').writeFileSync(process.env.FALSO_ARGS, args.join(' '));
+}
+
 if (args.includes('--listar')) {
     process.stdout.write(JSON.stringify([
         { bundle: 'us.zoom.xos', pid: 123, sonando: modo !== 'callado' },

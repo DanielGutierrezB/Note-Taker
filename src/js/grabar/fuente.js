@@ -8,17 +8,40 @@
  * mismas cinco funciones, así las pantallas no preguntan nunca cuál es: abren,
  * miden, empiezan a mandar y cierran.
  *
- * **El audio de Zoom va primero en la lista, y no por gusto.** En el escenario
- * de esta app la clase llega por una llamada y quien toma notas la escucha con
- * auriculares, así que ningún micrófono la oye. La opción que sirve tiene que
- * ser la que se ve primero, y la que se elige sola si Zoom está abierto.
+ * **El audio que no viene de un micrófono va primero en la lista, y no por
+ * gusto.** En el escenario de esta app la clase llega por una llamada y quien
+ * toma notas la escucha con auriculares, así que ningún micrófono la oye. La
+ * opción que sirve tiene que ser la que se ve primero, y la que se elige sola.
  */
 
 import * as oido from './oido.js';
 import { avisar } from '../chrome.js';
 
-/** La entrada de Zoom, que no es un dispositivo y por eso no tiene un id suyo. */
-export const ZOOM = { id: 'app:zoom', nombre: 'Audio de Zoom (la llamada)', tipo: 'app' };
+/**
+ * Las dos entradas que no son dispositivos, y por eso no tienen un id suyo.
+ *
+ * **La del sistema va primera.** Graba lo que salga por los altavoces venga de
+ * donde venga —Zoom, Meet, un vídeo— y, sobre todo, **no se engancha a ningún
+ * proceso ajeno**: el tap de Zoom se cuelga de los procesos de Zoom que haya
+ * en ese momento, y eso es tanto un punto de contacto con una app que no es
+ * nuestra como algo que se rompe solo si Zoom se reinicia. El precio es que
+ * también entra lo demás que suene en la Mac, y por eso se dice en la lista.
+ *
+ * La de Zoom se queda: graba la llamada y nada más, que cuando se puede es
+ * mejor.
+ */
+export const SISTEMA = {
+    id: 'app:sistema',
+    nombre: 'Audio del sistema (Zoom, Meet, lo que suene)',
+    tipo: 'app',
+    modo: 'sistema'
+};
+export const ZOOM = {
+    id: 'app:zoom',
+    nombre: 'Audio de Zoom (solo la llamada)',
+    tipo: 'app',
+    modo: 'app'
+};
 
 let tipo = null;
 let info = { dispositivo: null, sampleRate: 48000, canales: 1 };
@@ -39,6 +62,11 @@ function engancharZoom() {
         // Los dos los resuelve el motor solo (`engine/audio-app.js`): se dicen
         // para que queden a la vista, no para que alguien haga algo.
         if (aviso.tipo === 'rearmada') avisar(aviso.mensaje);
+        // Este no lo resuelve el motor solo del todo: dejó de llegar audio
+        // durante diez segundos y se está reabriendo la escucha. Se dice para
+        // que quien graba sepa que ese pedazo de la clase va a salir en
+        // silencio, y pueda repetirlo si era importante.
+        if (aviso.tipo === 'relanzando') avisar(aviso.mensaje, 'error');
         if (aviso.tipo === 'relleno') {
             avisar(`No llegó audio de Zoom por ${aviso.segundos} s: se completó con silencio ` +
                 'para que el WAV no se atrase contra la cámara.', 'error');
@@ -82,11 +110,16 @@ export async function entradas() {
         window.nt.audioAppEstado ? window.nt.audioAppEstado() : Promise.resolve({ soportado: false })
     ]);
     const lista = (dispositivos.lista || []).map(d => ({ ...d, tipo: 'dispositivo' }));
+    // Las dos del ayudante van juntas y las dos dependen de lo mismo: que el
+    // ayudante corra, o sea macOS 14.2 o más. La del sistema no necesita que
+    // ninguna app esté abierta; la de Zoom sí, pero igual se ofrece para poder
+    // decir por qué no anda.
+    const delAyudante = zoom && zoom.soportado ? [SISTEMA, ZOOM] : [];
     return {
         ok: dispositivos.ok,
         error: dispositivos.error,
         zoom: zoom || { soportado: false },
-        lista: (zoom && zoom.soportado ? [ZOOM] : []).concat(lista)
+        lista: delAyudante.concat(lista)
     };
 }
 
@@ -103,7 +136,7 @@ export async function abrir(entrada, losAvisos) {
 
     if (entrada && entrada.tipo === 'app') {
         engancharZoom();
-        const r = await window.nt.audioAppAbrir();
+        const r = await window.nt.audioAppAbrir({ modo: entrada.modo || 'app' });
         if (!r.ok) return r;
         tipo = 'app';
         escuchandoZoom = true;

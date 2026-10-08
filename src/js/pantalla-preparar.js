@@ -83,12 +83,16 @@ export async function ver(opciones) {
     // que guardarlo sería guardar algo que mañana no apunta a nada; el nombre
     // ("BlackHole 2ch", "Audio de Zoom") sobrevive a desenchufar y enchufar.
     //
-    // Sin ninguna guardada y con Zoom abierto, se elige Zoom: en el escenario
-    // de esta app es la respuesta correcta, y la que alguien que la abre por
-    // primera vez no sabría encontrar entre seis micrófonos.
+    // Sin ninguna guardada se elige el audio del sistema: en el escenario de
+    // esta app es la respuesta correcta —la clase llega por una llamada y
+    // ningún micrófono la oye—, sirva la llamada por Zoom, por Meet o por lo
+    // que sea, y es la que alguien que abre la app por primera vez no sabría
+    // encontrar entre seis micrófonos. No hace falta que ninguna app esté
+    // abierta: el tap global graba lo que salga por los altavoces.
     if (!audio.abierto) {
         const previo = entradas.find(d => d.nombre === app.ajustes.dispositivo);
-        const porDefecto = previo || (zoom.abierta ? fuente.ZOOM : null);
+        const delSistema = entradas.find(d => d.id === fuente.SISTEMA.id);
+        const porDefecto = previo || delSistema || null;
         if (porDefecto) await abrirEntrada(porDefecto.id);
     }
 

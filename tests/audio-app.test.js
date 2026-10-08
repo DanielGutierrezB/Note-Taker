@@ -79,12 +79,16 @@ module.exports = async function (t) {
      */
     function simular(segundos, huecos) {
         const avisos = [];
+        const relanzados = [];
         let enviadas = 0;
         let ahora = 1000;
         audioApp._fingirHijo(true);
         audioApp._conectar({
             alPcm: () => {}, avisar: a => avisos.push(a), mandando: true,
-            tasa: 48000, reloj: () => ahora
+            tasa: 48000, reloj: () => ahora,
+            // Sin esto, un hueco largo abriría un ayudante DE VERDAD en medio
+            // de las pruebas: un tap de Core Audio y su pedido de permiso.
+            relanzar: () => relanzados.push(ahora)
         });
         let debe = 0;
         for (let ms = 0; ms < segundos * 1000; ms += 10) {
@@ -102,7 +106,7 @@ module.exports = async function (t) {
         }
         const rellenado = avisos.filter(a => a.tipo === 'relleno').reduce((x, a) => x + a.segundos, 0);
         audioApp._fingirHijo(false);
-        return { avisos, enviadas, rellenado };
+        return { avisos, enviadas, rellenado, relanzados };
     }
 
     t.test('una pausa de 3 s se rellena con silencio y no estira nada', () => {
@@ -135,6 +139,31 @@ module.exports = async function (t) {
         const r = simular(10, [[3, 2]]);
         const tipos = r.avisos.map(a => a.tipo).filter(x => x === 'caido' || x === 'vuelve');
         t.deep(tipos, ['caido', 'vuelve']);
+    });
+
+    t.test('un hueco corto NO relanza: un rearme tampoco es gratis', () => {
+        // Con el tap de una app, que no llegue nada un rato puede ser normal:
+        // Core Audio para el tap cuando la app deja de sonar.
+        const r = simular(20, [[5, 3]]);
+        t.eq(r.relanzados.length, 0, 'tres segundos callado se avisan y nada más');
+    });
+
+    t.test('un hueco largo tira el ayudante y abre otro', () => {
+        // Avisar y nada más era quedarse mirando: el proceso seguía vivo con
+        // el tap tomado y el WAV llenándose de silencio puesto, y lo único que
+        // lo arreglaba era volver a Preparar a mitad de una clase.
+        const r = simular(40, [[5, 30]]);
+        t.eq(r.relanzados.length, 1, `relanzó una vez (${r.relanzados.length})`);
+        t.ok(r.relanzados[0] >= 1000 + 15000,
+            'y después de los diez segundos, no al primer silencio');
+        t.ok(r.avisos.some(a => a.tipo === 'caido'), 'habiéndolo dicho antes');
+    });
+
+    t.test('y no insiste en bucle: uno por minuto', () => {
+        // Si no se arregla, insistir tampoco lo arregla, y cada intento es un
+        // tap y un dispositivo agregado más que crear y destruir.
+        const r = simular(120, [[5, 110]]);
+        t.eq(r.relanzados.length, 2, `dos minutos, dos intentos (${r.relanzados.length})`);
     });
 
     t.group('audio-app · el ayudante');
@@ -278,5 +307,74 @@ module.exports = async function (t) {
         const e = estados.deAudio({ abierto: false, error: 'Zoom no está abierto.' });
         t.eq(e.listo, 'mal');
         t.eq(e.porque, 'Zoom no está abierto.');
+    });
+
+    t.group('audio-app · escuchar la Mac entera y no una app');
+
+    t.test('cada modo llama al ayudante con lo suyo', () => {
+        // Son dos taps distintos de Core Audio: uno colgado de los procesos de
+        // una app y el otro global. Desde afuera suenan igual, así que esto es
+        // lo único que distingue haber pedido uno u otro.
+        t.deep(audioApp.argumentos({ modo: 'sistema' }),
+            ['--sistema', '--menos', audioApp.NOSOTROS],
+            'el del sistema se saca a sí misma: si no, la app se grabaría a ella');
+        t.deep(audioApp.argumentos({ modo: 'app' }), ['--app', audioApp.ZOOM]);
+        t.deep(audioApp.argumentos({}), ['--app', audioApp.ZOOM], 'sin modo, el de siempre');
+    });
+
+    t.test('el modo elegido llega hasta el ayudante', conFalso('ok', async () => {
+        const donde = path.join(require('os').tmpdir(), `nt-args-${Date.now()}`);
+        process.env.FALSO_ARGS = donde;
+        try {
+            const r = await audioApp.abrir({ modo: 'sistema', alPcm: () => {}, avisar: () => {} });
+            t.ok(r.ok, r.error);
+            t.eq(fs.readFileSync(donde, 'utf8'), `--sistema --menos ${audioApp.NOSOTROS}`);
+        } finally {
+            delete process.env.FALSO_ARGS;
+            fs.rmSync(donde, { force: true });
+        }
+    }));
+
+    t.test('el ayudante nativo sabe los dos modos', () => {
+        // El binario se compila aparte y las pruebas corren contra uno de
+        // mentira, así que lo único que se puede comprobar sin permisos de
+        // macOS es que el de verdad entienda lo que se le va a pedir.
+        const swift = fs.readFileSync(path.join(__dirname, '..', 'nativo', 'escuchar-app.swift'), 'utf8');
+        t.ok(/stereoGlobalTapButExcludeProcesses/.test(swift), 'el tap global existe');
+        t.ok(/valorDe\("--app"\)/.test(swift) && /args\.contains\("--sistema"\)/.test(swift),
+            'y las dos banderas se leen');
+        t.ok(/kAudioAggregateDeviceTapAutoStartKey: prefijo != nil/.test(swift),
+            'el del sistema NO espera a que algo suene: lo normal al abrir Preparar '
+            + 'es el silencio, y esperar sería colgarse');
+    });
+
+    t.test('un ayudante huérfano se suelta solo', () => {
+        // Esto es lo que ocupaba el hardware sin que se viera: el tap y el
+        // dispositivo agregado son privados —no salen en ninguna lista— y un
+        // ayudante que sobrevive a la app los deja tomados para siempre.
+        //
+        // La red que había no alcanzaba. El hilo escritor se entera de que
+        // nadie lee cuando el `write` devuelve EPIPE, pero sin sonido no
+        // escribe nunca, y sin sonido es cuando esto pasa. Y SIGTERM solo
+        // llega si la app alcanzó a mandarlo: un cierre forzado no manda nada.
+        const swift = fs.readFileSync(path.join(__dirname, '..', 'nativo', 'escuchar-app.swift'), 'utf8');
+        t.ok(/func vigilarAlPadre\(\)/.test(swift));
+        t.ok(/getppid\(\) == 1 \{ soltar\(\); exit\(0\) \}/.test(swift),
+            'padre adoptado por launchd: el de verdad ya no está');
+        t.ok(swift.indexOf('vigilarAlPadre()\n') < swift.indexOf('dispatchMain()'),
+            'y se arranca antes de quedarse esperando');
+    });
+
+    t.test('la lista de entradas ofrece las dos, y la del sistema primero', async () => {
+        const fuente = await import(`file://${path.join(__dirname, '..', 'src', 'js', 'grabar', 'fuente.js')}`);
+        t.eq(fuente.SISTEMA.modo, 'sistema');
+        t.eq(fuente.ZOOM.modo, 'app');
+        const codigo = fs.readFileSync(
+            path.join(__dirname, '..', 'src', 'js', 'grabar', 'fuente.js'), 'utf8');
+        t.ok(/\[SISTEMA, ZOOM\]/.test(codigo), 'en ese orden: la que sirve siempre va primero');
+        const preparar = fs.readFileSync(
+            path.join(__dirname, '..', 'src', 'js', 'pantalla-preparar.js'), 'utf8');
+        t.ok(/previo \|\| delSistema \|\| null/.test(preparar),
+            'y sin ninguna guardada se elige sola, sin depender de que haya una app abierta');
     });
 };

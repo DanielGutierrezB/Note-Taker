@@ -42,7 +42,7 @@ contextBridge.exposeInMainWorld('nt', {
 
     // El sonido de Zoom, que abre Node y no la ventana (`engine/audio-app.js`).
     audioAppEstado: () => ipcRenderer.invoke('audio-app-estado'),
-    audioAppAbrir: () => ipcRenderer.invoke('audio-app-abrir'),
+    audioAppAbrir: como => ipcRenderer.invoke('audio-app-abrir', como),
     audioAppMandar: si => ipcRenderer.invoke('audio-app-mandar', si),
     audioAppCerrar: () => ipcRenderer.invoke('audio-app-cerrar'),
     onAudioApp: callback => {
