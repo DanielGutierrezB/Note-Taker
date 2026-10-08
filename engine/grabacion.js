@@ -281,6 +281,12 @@ function iniciar(params) {
         // Hasta dónde ya se escuchó buscando señales.
         escuchadoHastaMs: ceroMs,
         buscando: false,
+        // Cómo le fue a la última pasada del ciclo, que es de donde sale el
+        // tope de la siguiente (ver `topeDeVentana`), y cuánto audio se saltearon
+        // entre todas, que es lo que la barra muestra cuando el ciclo no da.
+        ultimaPasadaMs: 0,
+        ultimaVentanaMs: CONTEXTO_MS,
+        salteadoMs: 0,
         timer: null,
         avisar: typeof p.avisar === 'function' ? p.avisar : () => {}
     };
@@ -371,6 +377,36 @@ function oirTramo(desdeMs, hastaMs, liviano, s) {
 const VENTANA_MAX_MS = 15000;
 
 /**
+ * Hasta dónde se puede ensanchar la ventana ESTA pasada.
+ *
+ * Ensanchar sirve para un tropiezo: una pasada que tardó ocho segundos deja
+ * ocho segundos de audio sin oír, y la siguiente los recupera pidiendo una
+ * ventana más larga. Para eso está `VENTANA_MAX_MS` y hay que dejarlo.
+ *
+ * **Pero cuando la máquina no da, ensanchar es lo peor que se puede hacer.** La
+ * ventana se clava en el tope justo cuando menos se puede pagar: 15 s de audio
+ * es dos veces y media el costo de los 6 s normales, y el audio de más no se
+ * recupera igual, porque `escuchadoHastaMs` salta a `hasta - COLA_MS` al
+ * terminar y lo que quedó antes del borde no lo oye nadie nunca. O sea que se
+ * paga el triple por tirar lo mismo, y cada pasada tarda más, y el agujero
+ * siguiente es más grande: de ahí no se sale.
+ *
+ * Medido en una sesión de verdad (8 de octubre, 17:42): las pasadas subieron de
+ * 2,5 s a 5,9 s sobre 6 s de ventana, la ventana se abrió a 15 s y las pasadas
+ * pasaron a 30,7 s y 34,2 s. El transcript dejó de avanzar y quien grababa no
+ * se enteró.
+ *
+ * Así que se ensancha mientras ensanchar gane terreno, y se deja de ensanchar
+ * cuando la pasada anterior costó más que el audio que se llevó: eso ya no es
+ * un tropiezo, es que no alcanza. El piso es `CONTEXTO_MS`, que es la ventana
+ * de siempre y lo mínimo con lo que Whisper acierta.
+ */
+function topeDeVentana(s) {
+    const perdiendoTerreno = s.ultimaPasadaMs > s.ultimaVentanaMs;
+    return perdiendoTerreno ? CONTEXTO_MS : VENTANA_MAX_MS;
+}
+
+/**
  * El ciclo de señales: escucha lo último y abre o cierra tomas.
  *
  * Nunca corre dos veces a la vez. Whisper tarda algo más de un segundo y el ciclo
@@ -387,7 +423,7 @@ async function buscarSenales() {
     const vive = () => sesion === s && s.viva && !s.terminando;
     const hasta = espejo.grabadoHastaMs(s);
     if (hasta - s.escuchadoHastaMs < NUEVO_MIN_MS) return;
-    const desde = Math.max(s.captura.desdeMs, hasta - VENTANA_MAX_MS,
+    const desde = Math.max(s.captura.desdeMs, hasta - topeDeVentana(s),
         Math.min(s.escuchadoHastaMs - SOLAPE_MS, hasta - CONTEXTO_MS));
 
     s.buscando = true;
@@ -438,11 +474,19 @@ async function buscarSenales() {
     } catch (err) {
         if (vive()) s.avisar({ tipo: 'error', mensaje: err.message });
     } finally {
+        // Lo que esta pasada costó y lo que se llevó, que es de donde sale el
+        // tope de la siguiente (ver `topeDeVentana`).
+        s.ultimaPasadaMs = Date.now() - empezoLaPasada;
+        s.ultimaVentanaMs = hasta - desde;
+        // El agujero: audio que quedó entre lo oído y el principio de esta
+        // ventana, y que nadie va a oír nunca. Se mide ANTES de avanzar, que es
+        // el único momento en que se puede.
+        anotarSiSeSalteo(s, desde);
         // Avanza aunque haya fallado: repetir la misma ventana cada vez más
         // larga no la arregla (ver `VENTANA_MAX_MS`).
         s.escuchadoHastaMs = Math.max(s.escuchadoHastaMs, hasta - COLA_MS);
         s.buscando = false;
-        anotarSiSeAtraso(s, Date.now() - empezoLaPasada, hasta - desde);
+        anotarSiSeAtraso(s, s.ultimaPasadaMs, s.ultimaVentanaMs);
         listo();
     }
 }
@@ -462,6 +506,34 @@ async function buscarSenales() {
  */
 const PASADA_LENTA_MS = 2 * CICLO_MS;
 const ENTRE_AVISOS_DE_LENTA_MS = 10000;
+
+/**
+ * El audio que se salteó, sumado y anotado.
+ *
+ * Cuando la ventana arranca después de donde se había dejado de oír, el audio
+ * del medio no entra en esta pasada y tampoco en la siguiente —`escuchadoHastaMs`
+ * ya pasó de largo—, así que no se transcribe nunca. Es la pérdida de verdad del
+ * ciclo atrasado, y hasta hoy no quedaba registrada en ningún sitio: en pantalla
+ * el transcript simplemente dejaba de crecer.
+ *
+ * Se guarda sumado en la sesión porque es lo que la barra muestra (ver
+ * `atrasoSec` en `espejo.resumen`): no importa que una pasada se saltee medio
+ * segundo, importa que en una clase se hayan salteado cuarenta.
+ *
+ * El total se suma siempre y al diario va de a uno cada diez segundos, igual
+ * que `pasada-lenta` y por lo mismo: mientras esto pasa, pasa en cada pasada.
+ */
+function anotarSiSeSalteo(s, desde) {
+    const salteado = desde - s.escuchadoHastaMs;
+    if (salteado <= 0) return;
+    s.salteadoMs = (s.salteadoMs || 0) + salteado;
+    if (s.ultimoSalteoMs && Date.now() - s.ultimoSalteoMs < ENTRE_AVISOS_DE_LENTA_MS) return;
+    s.ultimoSalteoMs = Date.now();
+    registro.anotar('main', 'senal.salteado', {
+        salteadoSec: Math.round(salteado / 100) / 10,
+        enTotalSec: Math.round(s.salteadoMs / 100) / 10
+    });
+}
 
 function anotarSiSeAtraso(s, tardo, ventanaMs) {
     if (tardo < PASADA_LENTA_MS) return;
@@ -904,6 +976,12 @@ function reanudar(json, params) {
 
 module.exports = {
     CICLO_MS,
+    SOLAPE_MS,
+    CONTEXTO_MS,
+    VENTANA_MAX_MS,
+    // La política del tope es pura y se prueba sin un WAV y sin un modelo, que
+    // es la única forma de probar lo que pasa cuando la máquina no da.
+    topeDeVentana,
     MARGEN_CLAQUETA_MS,
     activa,
     enCurso,

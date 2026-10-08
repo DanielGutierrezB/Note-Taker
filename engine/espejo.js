@@ -39,6 +39,19 @@ function grabadoHastaMs(sesion) {
     return sesion.captura.desdeMs + sesion.captura.segundos * 1000;
 }
 
+/**
+ * Cuánto atrás va el ciclo de señales: lo grabado menos lo ya escuchado.
+ *
+ * Sin `escuchadoHastaMs` no hay ciclo del que atrasarse y la respuesta es cero,
+ * que es lo correcto y además lo único seguro: restarle a una hora del día un
+ * cero daría un atraso de cincuenta y seis años y la pantalla avisaría de un
+ * problema que no existe.
+ */
+function atrasoDelCiclo(sesion) {
+    if (!sesion.escuchadoHastaMs) return 0;
+    return Math.max(0, Math.round((grabadoHastaMs(sesion) - sesion.escuchadoHastaMs) / 100) / 10);
+}
+
 /** Los WAV de esta sesión: el que se está escribiendo y los que ya se cerraron. */
 function archivosDeLaSesion(sesion) {
     return (sesion.captura ? [sesion.captura] : []).concat(sesion.estado.sesiones);
@@ -163,6 +176,14 @@ function resumen(sesion) {
         releyendo: sesion.cola.length + (sesion.rehaciendo ? 1 : 0),
         // Cerrando: el audio ya está cerrado y se releen las últimas tomas.
         terminando: Boolean(sesion.terminando),
+        // Cuánto atrás va el ciclo de señales, y cuánto audio se salteó sin
+        // oír. Lo normal es medio segundo de atraso y cero salteado; lo otro es
+        // que la máquina no está dando y el transcript dejó de ser confiable,
+        // que es exactamente lo que hay que poder ver MIENTRAS se graba. Sin
+        // esto, un ciclo atrasado se veía igual que un profesor callado: el
+        // texto no crecía y nada más (ver `topeDeVentana` en `grabacion.js`).
+        atrasoSec: atrasoDelCiclo(sesion),
+        salteadoSec: Math.round((sesion.salteadoMs || 0) / 100) / 10,
         abierta: abierta ? abierta.id : null,
         // La vista elegida para la toma que todavía no empezó, si se eligió
         // alguna. Es lo que la barra de arriba marca entre toma y toma: sin

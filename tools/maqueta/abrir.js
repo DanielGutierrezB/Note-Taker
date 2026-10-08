@@ -197,7 +197,7 @@ const ESCENARIOS = [
     // camino felíz: sin pantalla compartida, sin ninguna toma, y con el aviso
     // de que un vídeo se rompió a mitad.
     'semanal', 'semanal-primera-vez', 'semanal-sin-pantalla', 'semanal-grabando', 'semanal-sin-tomas',
-    'semanal-con-aviso', 'semanal-ficha', 'semanal-revisar',
+    'semanal-con-aviso', 'semanal-grabando,semanal-atrasado', 'semanal-ficha', 'semanal-revisar',
     'semanal-revisar-fuera', 'semanal-cortando', 'semanal-hecho',
     'iconos'
 ];

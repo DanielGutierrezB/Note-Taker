@@ -1366,8 +1366,23 @@ function aplicarSenales(estado, palabras, opciones) {
         }
 
         // Cierra. El OUT va ANTES de "Pausa": la señal tampoco es clase.
+        //
+        // **Y solo si se dijo DESPUÉS de donde arranca la toma.** Una señal
+        // anterior al IN no es el final de esta toma: es algo que se dijo antes
+        // de que existiera. Normalmente no puede pasar —el ciclo va un segundo
+        // atrás y las señales llegan en orden—, pero con el ciclo atrasado la
+        // cola llega toda junta y entonces sí: visto de verdad, con el
+        // transcript treinta segundos atrás, una «Pausa» de antes cerró una
+        // toma recién abierta a mano 0,10 s después de su IN, y el montaje la
+        // tiró por corta (`MINIMO_SEC`). Las notas de quien grababa se
+        // perdieron sin un error en ningún sitio.
+        //
+        // Es el mismo caso que `guardar` ya trataba para las palabras —"que
+        // pasa al abrir a mano durante el atraso del ciclo"—, que iba al
+        // colchón en vez de a la toma. Acá la toma se queda abierta: quien la
+        // abrió lo hizo a propósito, y la cierra la próxima «Pausa» o la mano.
         const toma = tomaAbierta(estado);
-        if (toma) {
+        if (toma && nuevas[marca.desde].t > toma.inMs) {
             toma.outMs = finDeToma(toma, nuevas[marca.desde].t);
             eventos.push({ tipo: 'cerrada', toma: toma.id });
         }

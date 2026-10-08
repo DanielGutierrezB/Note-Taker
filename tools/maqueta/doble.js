@@ -39,7 +39,7 @@ export const SE_HACEN = [
     'prproj', 'prproj-lleno', 'prproj-listo',
     'ajustes', 'ajustes-semanal', 'diagnostico', 'iconos',
     'semanal', 'semanal-primera-vez', 'semanal-sin-pantalla', 'semanal-grabando', 'semanal-sin-tomas',
-    'semanal-con-aviso', 'semanal-ficha', 'semanal-revisar', 'semanal-revisar-fuera',
+    'semanal-con-aviso', 'semanal-atrasado', 'semanal-ficha', 'semanal-revisar', 'semanal-revisar-fuera',
     'semanal-cortando', 'semanal-hecho'
 ];
 
@@ -857,7 +857,11 @@ const esLaSemana = () => [...escenarios].some(e => e.startsWith('semanal'));
 
 function laSesion() {
     if (vivo) return vivo;
-    return esLaSemana() ? estadoSemanal() : estadoEnVivo();
+    // El ciclo de señales que no llega: los números de la sesión del 8 de
+    // octubre, que es la que se perdió las notas (ver
+    // `tests/ciclo-que-no-llega.test.js`).
+    const atrasado = hay('semanal-atrasado') ? { atrasoSec: 31, salteadoSec: 19 } : {};
+    return esLaSemana() ? estadoSemanal(atrasado) : estadoEnVivo(atrasado);
 }
 
 /** La sesión con todas las tomas cerradas: lo que deja Terminar. */

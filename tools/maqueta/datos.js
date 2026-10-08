@@ -202,6 +202,10 @@ export function estadoEnVivo(extra) {
         segundos: 1043,
         releyendo: 0,
         terminando: false,
+        // El ciclo al día, que es lo normal: medio segundo de atraso y nada
+        // salteado. El escenario `semanal-atrasado` es el que los sube.
+        atrasoSec: 0.5,
+        salteadoSec: 0,
         abierta: null,
         sueltas: SUELTAS,
         historia: { atras: 3, adelante: 0, queAtras: 'poner la toma 4 en S', queAdelante: '' },

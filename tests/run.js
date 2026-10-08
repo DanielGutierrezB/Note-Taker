@@ -28,6 +28,7 @@ const FILES = [
     'dependencias.test.js',
     'insistir.test.js',
     'notas-vivo.test.js',
+    'ciclo-que-no-llega.test.js',
     'claquetas.test.js',
     'notas-xml.test.js',
     'formato.test.js',

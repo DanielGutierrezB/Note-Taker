@@ -506,6 +506,32 @@ module.exports = function (t) {
         t.ok(e.tomas[0].outMs != null);
     });
 
+    // El 8 de octubre, con el ciclo de señales treinta segundos atrás: quien
+    // grababa no veía avanzar el transcript, abrió la toma a mano, y la cola de
+    // Whisper llegó toda junta con una «Pausa» que se había dicho ANTES. Le
+    // cerró la toma 0,10 s después de su IN y el montaje la tiró por corta
+    // (`MINIMO_SEC`), así que lo que se grabó de ahí en adelante no salió en
+    // ningún sitio y no hubo un error en ninguna parte.
+    t.test('una «Pausa» anterior al IN no cierra la toma abierta a mano', () => {
+        const e = nuevo();
+        vivo.abrirToma(e, T0 + 30000);
+        const in0 = e.tomas[0].inMs;
+        vivo.aplicarSenales(e, palabras([[26000, 'bueno'], [27000, 'Pausa.'], [31000, 'listo']]));
+        t.ok(e.tomas[0].outMs == null, 'sigue abierta');
+        t.eq(e.tomas[0].inMs, in0, 'y con su IN donde se lo pusieron');
+    });
+
+    t.test('y la «Pausa» de después sí la cierra, con la de antes ya pasada', () => {
+        // El borde: la de antes no cuenta y la toma no queda condenada a no
+        // cerrarse nunca. Es la misma toma, dos pasadas del ciclo.
+        const e = nuevo();
+        vivo.abrirToma(e, T0 + 30000);
+        vivo.aplicarSenales(e, palabras([[26000, 'bueno'], [27000, 'Pausa.'], [31000, 'listo']]));
+        vivo.aplicarSenales(e, palabras([[32000, 'Hola'], [36000, 'Pausa.'], [40000, 'Che']]));
+        t.ok(e.tomas[0].outMs != null, 'cerrada');
+        t.ok(e.tomas[0].outMs > T0 + 30000, 'y el OUT va después del IN');
+    });
+
     t.test('el conteo vacía el colchón: lo de antes es de otra cosa', () => {
         const e = nuevo();
         vivo.aplicarSenales(e, palabras([[0, 'charla'], [400, 'suelta']]));

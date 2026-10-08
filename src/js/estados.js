@@ -112,6 +112,60 @@ export function dePalmada(palmada) {
 }
 
 /**
+ * A partir de cuánto atraso del ciclo de señales se empiezan a perder palabras.
+ *
+ * No es un número elegido: es `CONTEXTO_MS - SOLAPE_MS` de `grabacion.js`. La
+ * ventana de cada pasada son los últimos `CONTEXTO_MS` y se solapa `SOLAPE_MS`
+ * con la anterior, así que mientras una pasada tarde menos que esa diferencia
+ * las dos ventanas se tocan y no queda audio en el medio. Pasada esa marca
+ * aparece un agujero, y el audio del agujero no lo oye nadie nunca.
+ *
+ * Copiado y no requerido porque esto corre en la ventana, que no puede cargar el
+ * motor. Que no se separe del original lo cuida una prueba que requiere los dos
+ * y compara, igual que con `insistir.js`.
+ */
+const SE_PIERDEN_PALABRAS_SEC = (6000 - 1200) / 1000;
+
+/**
+ * El ciclo de señales que no llega, en los dos estados que importan.
+ *
+ * **Que se haya salteado audio se queda puesto hasta el final de la sesión**, y
+ * es el mismo trato que `audio.roto`: el agujero ya está hecho, deje o no de
+ * pasar, y lo que hay que saber al entregar es que está. Que vaya atrasado
+ * ahora mismo, en cambio, se va cuando el ciclo se pone al día.
+ */
+export function atrasado(estado) {
+    if (!estado) return null;
+    if (estado.salteadoSec > 0) {
+        return {
+            clave: 'sin audio',
+            palabra: 'transcript con huecos',
+            porque: `La app se quedó sin tiempo para escuchar y ${fmt(estado.salteadoSec)} s de ` +
+                'audio no se transcribieron. El audio y el vídeo están completos —no se perdió ' +
+                'nada de la grabación—, pero al texto le faltan trozos, así que los bordes de ' +
+                'las tomas de este rato pueden estar mal puestos: revisalos antes de exportar. ' +
+                'Si sigue subiendo, cerrá lo que esté pesando en la Mac.'
+        };
+    }
+    if (estado.atrasoSec > SE_PIERDEN_PALABRAS_SEC) {
+        return {
+            clave: 'releyendo',
+            palabra: `oyendo ${fmt(estado.atrasoSec)} s atrás`,
+            porque: 'La app está escuchando con atraso: lo que se dice tarda eso en aparecer. ' +
+                'Mientras dure, «3, 2, 1» y «Pausa» llegan tarde y abrir o cerrar una toma a ' +
+                'mano la puede dejar con el borde corrido. Suele ser otra cosa comiéndose la ' +
+                'Mac.'
+        };
+    }
+    return null;
+}
+
+/** Un segundo con coma, como se escribe acá. */
+function fmt(sec) {
+    return String(Math.round(sec * 10) / 10).replace('.', ',');
+}
+
+/**
  * Cómo está la sesión.
  *
  * Es lo que dice la pastilla grande de la barra, y es el único estado que se
@@ -140,6 +194,16 @@ export function deSesion(estado, audio) {
         };
     }
     if (audio && audio.caido) return { clave: 'sin audio', palabra: 'sin audio' };
+    // El ciclo que no llega, y va ANTES de «toma abierta» a propósito: es con
+    // una toma abierta cuando esto hace daño. Los bordes de una toma salen de
+    // las palabras, así que un transcript atrasado no es solo texto que tarda:
+    // es una toma que puede abrirse o cerrarse en el lugar equivocado. Pasó el
+    // 8 de octubre —el ciclo a treinta segundos, una toma cerrada por una
+    // «Pausa» de antes de abrirla, 0,10 s de duración y afuera del montaje— y
+    // en pantalla no se veía nada: el texto no crecía, igual que si el profesor
+    // estuviera callado.
+    const atras = atrasado(estado);
+    if (atras) return atras;
     if (estado.abierta != null) return { clave: 'abierta', palabra: 'toma abierta' };
     if (estado.releyendo) {
         return { clave: 'releyendo', palabra: `releyendo ${estado.releyendo}` };

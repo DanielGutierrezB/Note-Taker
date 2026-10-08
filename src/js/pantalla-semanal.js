@@ -40,6 +40,7 @@ import * as fichas from './grabar/lista-tomas.js';
 import * as montaje from './semanal/montaje.js';
 import * as corte from './semanal/corte.js';
 import * as tarjetas from './semanal/tarjetas.js';
+import * as estados from './estados.js';
 import { estiloDeVista } from './colores.js';
 
 let app = null;
@@ -1034,6 +1035,17 @@ async function repintarReloj() {
     await ponerLaVista(resumen);
     estado.sesion = resumen;
     $('#semanal-reloj').textContent = fmt.relojCorto(resumen.segundos);
+    // El atraso del ciclo, igual que el reloj y por lo mismo: los segundos
+    // suben solos y meterlos en la huella de abajo repintaría la tarjeta cada
+    // segundo, que es justo lo que la huella evita. Lo que entra en la huella
+    // es solo que el aviso aparezca o se vaya (ver `atrasado` en `estados.js`).
+    const atras = estados.atrasado(resumen);
+    if (atras) {
+        const pastilla = $('#semanal-pastilla');
+        const renglon = $('#semanal-atraso');
+        if (pastilla) { pastilla.textContent = atras.palabra; pastilla.title = atras.porque; }
+        if (renglon) renglon.textContent = atras.porque;
+    }
     // Se repinta la tarjeta solo cuando cambia lo que dice, no cada segundo:
     // repintar borraría el `<video>` de la vista previa y la dejaría en negro.
     //
@@ -1045,6 +1057,7 @@ async function repintarReloj() {
     const ahora = (resumen.tomas || [])
         .map(t => [t.id, t.inMs, t.outMs, t.vista, t.descartada ? 1 : 0,
             t.outMs == null ? '' : (t.palabras || []).length].join(':'))
+        .concat([atras ? atras.clave : ''])
         .join('|');
     if (ahora !== estado.ultimo) {
         estado.ultimo = ahora;

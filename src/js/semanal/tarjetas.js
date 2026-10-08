@@ -27,6 +27,7 @@ import { esc } from '../chrome.js';
 import { icono } from '../iconos.js';
 import * as fmt from '../formato.js';
 import * as fichas from '../grabar/lista-tomas.js';
+import * as estados from '../estados.js';
 import * as corte from './corte.js';
 import { estiloDeVista } from '../colores.js';
 
@@ -220,15 +221,25 @@ export function tarjetaListo(estado) {
 export function tarjetaGrabando(estado) {
     const abierta = (estado.sesion && estado.sesion.tomas || []).find(t => t.outMs == null);
     const cerradas = (estado.sesion && estado.sesion.tomas || []).filter(t => t.outMs != null && !t.descartada);
+    // El ciclo que no llega manda en la pastilla, por encima de «toma abierta»:
+    // con el transcript atrasado los bordes de las tomas salen mal puestos, y
+    // eso hay que verlo mientras se graba y no al exportar (ver `atrasado` en
+    // `estados.js`). Y se dice además en un renglón, porque la palabra sola no
+    // alcanza para algo que cambia si conviene seguir grabando.
+    const atras = estados.atrasado(estado.sesion);
     return `
-      <div class="tarjeta guarda" data-estado="${abierta ? 'abierta' : 'terminada'}">
+      <div class="tarjeta guarda" data-estado="${atras ? atras.clave : (abierta ? 'abierta' : 'terminada')}">
         <div class="tarjeta-cabeza">
-          <span class="pastilla" data-estado="${abierta ? 'abierta' : 'listo'}">
-            ${abierta ? 'toma abierta' : 'esperando el «3, 2, 1»'}</span>
+          <span class="pastilla" id="semanal-pastilla"
+                data-estado="${atras ? atras.clave : (abierta ? 'abierta' : 'listo')}"
+                title="${atras ? esc(atras.porque) : ''}">
+            ${atras ? esc(atras.palabra) : (abierta ? 'toma abierta' : 'esperando el «3, 2, 1»')}</span>
           <span class="crece"></span>
           <div class="nivel" id="semanal-nivel"><div class="nivel-barra"></div></div>
         </div>
         <div class="tarjeta-cuerpo">
+          ${atras ? `<p class="v3" id="semanal-atraso" style="margin:0 0 16px"
+            role="status">${esc(atras.porque)}</p>` : ''}
           <div class="contadores" style="margin-bottom:16px">
             <div class="contador"><span class="contador-num">${cerradas.length}</span>
               <span class="rotulo">toma${cerradas.length === 1 ? '' : 's'} grabada${cerradas.length === 1 ? '' : 's'}</span></div>
