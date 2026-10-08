@@ -257,14 +257,16 @@ function queDice() {
             'que reciba el sonido de la reunión (BlackHole o Loopback); si viene de una ' +
             'interfaz, su línea.' + (zoom.error ? ` ${esc(zoom.error)}` : '');
     }
-    if (!zoom.abierta && audio.clase !== 'llamada') {
-        return 'Por acá entra la clase. Si viene de un Zoom, abrí la reunión y tocá ' +
-            '«Buscar de nuevo»: aparece como «Audio de Zoom (la llamada)» y se escucha ' +
-            'directo, sin cambiar nada en Zoom y sin dejar de oírla en tus auriculares.';
-    }
-    return 'Por acá entra la clase. «Audio de Zoom» escucha la reunión directo: seguís ' +
-        'oyéndola en tus auriculares y no se mezcla nada más de la Mac. Un micrófono graba ' +
-        'la sala, que sirve solo si la clase es presencial.';
+    // Las dos entradas del ayudante hacen lo mismo visto desde afuera —graban
+    // la llamada sin que haya que tocar nada ni dejar de oírla— y lo que hay
+    // que explicar es en qué se diferencian, que es qué MÁS entra. Lo de Zoom
+    // ya no se dice aparte según esté abierto o no: el audio del sistema no
+    // depende de que ninguna app lo esté.
+    return 'Por acá entra la clase, y seguís oyéndola en tus auriculares: lo que se graba es ' +
+        'una copia. «Audio del sistema» toma todo lo que suene en la Mac, venga de Zoom, de ' +
+        'Meet o de un vídeo, y por eso también entran las notificaciones. «Audio de Zoom» ' +
+        'toma solo la llamada, que es más limpio cuando la clase es por ahí. Un micrófono ' +
+        'graba la sala, que sirve solo si la clase es presencial.';
 }
 
 function idiomaDicho(codigo) {
