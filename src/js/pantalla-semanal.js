@@ -375,8 +375,15 @@ function conUrls(m) {
         },
         // La pantalla puede ser varios tramos y cada toma usa el suyo, así que
         // su ruta viaja por toma y hay que hacerla URL también: sin esto el
-        // reproductor recibía una ruta del disco y no cargaba nada.
-        tomas: (m.tomas || []).map(t => ({ ...t, pantallaRuta: url(t.pantallaRuta) }))
+        // reproductor recibía una ruta del disco y no cargaba nada. Y lo mismo
+        // con los pedazos, que es la toma que cambió de ventana por el medio.
+        tomas: (m.tomas || []).map(t => ({
+            ...t,
+            pantallaRuta: url(t.pantallaRuta),
+            pantallaPartes: t.pantallaPartes
+                ? t.pantallaPartes.map(x => (x.negro ? x : { ...x, ruta: url(x.ruta) }))
+                : null
+        }))
     };
 }
 

@@ -69,6 +69,10 @@ let sola = false;
 let tictac = null;
 let avisar = null;
 let planPuesto = null;
+// Cuál de los pedazos de pantalla está puesto en `elPan`, para la toma de
+// ahora. `-1` es «ninguno todavía», y las tomas normales —un archivo y nada
+// más— no lo usan nunca.
+let piezaPuesta = -1;
 
 /**
  * Pone los dos vídeos dentro de un elemento, una sola vez.
@@ -177,6 +181,9 @@ export function irA(id, opciones) {
 
 function irAlIndice(i, o) {
     donde = i;
+    // De toma nueva, pedazo por averiguar: `buscar` lo decide enseguida y así
+    // nunca se arrastra el de la toma anterior.
+    piezaPuesta = -1;
     const t = laDeAhora();
     sola = Boolean(t && t.descartada);
     acomodar(t);
@@ -227,18 +234,50 @@ export function pausar() {
 function elMaestro(t) {
     if (!t) return null;
     if (t.conAudio && t.camaraDesde != null) return elCam;
+    // **Con la pantalla en pedazos manda la cámara aunque no suene.** Un pedazo
+    // nuevo es un `src` nuevo, y un `src` nuevo pone el reloj del elemento en
+    // cero: si el reloj de la toma saliera de ahí, cada cambio de ventana la
+    // haría saltar al principio. La cámara no se parte nunca, así que mide.
+    if (t.pantallaPartes && t.camaraDesde != null) return elCam;
     return t.fondo === 'camara' ? elCam : elPan;
+}
+
+/** El pedazo de pantalla que está puesto, si la toma va por pedazos. */
+function laPieza(t) {
+    return t && t.pantallaPartes ? t.pantallaPartes[piezaPuesta] || null : null;
+}
+
+/** Si lo que toca ahora mismo es el relevo en negro de un cambio de ventana. */
+function enElNegro(t) {
+    const p = laPieza(t);
+    return Boolean(p && p.negro);
+}
+
+/**
+ * En qué segundo de SU archivo cae un instante de la toma, para cada `<video>`.
+ *
+ * La única traducción entre el reloj de la toma y el de un archivo, y por eso
+ * está en un sitio: la usan buscar, el tic que los mantiene juntos y el clavado
+ * del final, y cuando cada una hacía su cuenta la pantalla en pedazos habría
+ * necesitado el arreglo en las tres.
+ */
+function enSuArchivo(t, v, dentro) {
+    if (v === elCam) return (t.camaraDesde || 0) + dentro;
+    const p = laPieza(t);
+    // El pedazo empieza en `enLaToma` y, dentro de su archivo, en `desdeSec`.
+    return p ? p.desdeSec + (dentro - p.enLaToma) : (t.pantallaDesde || 0) + dentro;
 }
 
 /** En qué segundo de su archivo empieza la toma, para el que lleva el tiempo. */
 function arranqueDe(t) {
-    return (elMaestro(t) === elCam ? t.camaraDesde : t.pantallaDesde) || 0;
+    return enSuArchivo(t, elMaestro(t), 0);
 }
 
 /** Cuánto se lleva reproducido de la toma de ahora. */
 function dentroDe(t) {
     const m = elMaestro(t);
-    return m && t ? Math.max(0, m.currentTime - arranqueDe(t)) : 0;
+    if (!m || !t) return 0;
+    return Math.max(0, m.currentTime - arranqueDe(t));
 }
 
 /**
@@ -257,22 +296,64 @@ function buscar(t, segundos) {
     // salta a la siguiente, que no es donde se hizo clic.
     const dentro = Math.max(0, Math.min(Number(segundos) || 0, t.segundos - AL_FILO * 2));
     if (elCam && elCam.dataset.ruta && t.camaraDesde != null) {
-        elCam.currentTime = t.camaraDesde + dentro;
+        elCam.currentTime = enSuArchivo(t, elCam, dentro);
     }
-    // **La pantalla puede ser otro archivo que en la toma anterior.** Cambiar de
-    // ventana mientras se graba la parte en tramos, y cada toma usa el que la
-    // cubre. Un `src` nuevo tira los metadatos, así que el reloj se pone cuando
-    // llegan: puesto en el mismo turno, se perdía y el tramo arrancaba de cero.
-    if (elPan && t.pantallaDesde != null) {
-        // En una local y no `elPan`: irse de la pantalla lo pone en `null`, y el
-        // oyente puede llegar después.
-        const pan = elPan;
-        const seg = t.pantallaDesde + dentro;
-        if (apuntar(pan, t.pantallaRuta)) {
-            pan.addEventListener('loadedmetadata', () => { pan.currentTime = seg; }, { once: true });
-        } else if (pan.dataset.ruta) {
-            pan.currentTime = seg;
-        }
+    if (elPan && t.pantallaDesde != null) verPieza(t, dentro);
+}
+
+/**
+ * Cuál de los pedazos de pantalla toca en este segundo de la toma.
+ *
+ * Solo las tomas que cambiaron de ventana por el medio tienen pedazos; las
+ * demás devuelven `-1` y siguen por el camino de siempre, que es una ruta y un
+ * `currentTime`.
+ */
+function piezaPara(t, dentro) {
+    const ps = t.pantallaPartes;
+    if (!ps || !ps.length) return -1;
+    let i = ps.findIndex(p => dentro < p.enLaToma + p.segundos);
+    if (i === -1) i = ps.length - 1;
+    // **Sin cámara, el reloj lo lleva la pantalla, y un pedazo en negro no
+    // tiene reloj que llevar.** Así que ahí el relevo se salta y se pasa
+    // directo a la ventana nueva. El vídeo exportado SÍ trae el negro: es la
+    // única cosa en la que esta vista previa no es lo que va a salir, y son las
+    // décimas que tarda el relevo. Con cámara —lo normal— no pasa: manda ella y
+    // el negro se ve igual que en el vídeo.
+    if (elMaestro(t) === elPan) {
+        while (i < ps.length - 1 && ps[i].negro) i++;
+    }
+    return i;
+}
+
+/**
+ * Pone en `elPan` el pedazo que toca, y lo apaga si el que toca es el negro.
+ *
+ * Un `src` nuevo tira los metadatos, así que el reloj se pone cuando llegan:
+ * puesto en el mismo turno se perdía y el archivo arrancaba de cero.
+ */
+function verPieza(t, dentro) {
+    // En una local y no `elPan`: irse de la pantalla lo pone en `null`, y el
+    // oyente de los metadatos puede llegar después.
+    const pan = elPan;
+    const i = piezaPara(t, dentro);
+    piezaPuesta = i;
+
+    // Sin pedazos, la toma entera sale de un archivo: es el caso de siempre.
+    const p = i === -1 ? { ruta: t.pantallaRuta, desdeSec: t.pantallaDesde, enLaToma: 0 } : t.pantallaPartes[i];
+    if (p.negro) {
+        // Se apaga y se para. Dejarlo corriendo escondido lo llevaría más allá
+        // del final de su archivo, y el que vuelve después del relevo es otro.
+        pan.style.display = 'none';
+        pan.playbackRate = 1;
+        pan.pause();
+        return;
+    }
+    pan.style.display = seVe(t) ? '' : 'none';
+    const seg = enSuArchivo(t, pan, dentro);
+    if (apuntar(pan, p.ruta)) {
+        pan.addEventListener('loadedmetadata', () => { pan.currentTime = seg; }, { once: true });
+    } else if (pan.dataset.ruta) {
+        pan.currentTime = seg;
     }
 }
 
@@ -287,17 +368,28 @@ function mirar() {
             pausar();
             // Clavado en el final y no pasado de largo: si el elemento se queda
             // corriendo, el siguiente play arranca dentro de la toma de al lado.
-            m.currentTime = arranqueDe(t) + Math.max(0, t.segundos - AL_FILO * 2);
+            m.currentTime = enSuArchivo(t, m, Math.max(0, t.segundos - AL_FILO * 2));
             decir();
             return;
         }
         irAlIndice(sigue, { reproducir: true });
         return;
     }
+    // El relevo de un cambio de ventana, si lo hay: entra el negro y después la
+    // ventana nueva, sin salir de la toma. Se mira acá y no con un temporizador
+    // porque el que manda es el reloj de la toma, no el de pared: moverle el
+    // borde o arrastrar la aguja tiene que caer en el pedazo que corresponde.
+    const dentro = dentroDe(t);
+    if (t.pantallaPartes && piezaPara(t, dentro) !== piezaPuesta) {
+        verPieza(t, dentro);
+        if (reproduciendo() && elPan.dataset.ruta) elPan.play().catch(() => {});
+    }
     // Y los dos juntos. Solo hace falta cuando los dos se ven a la vez —la toma
     // con recuadro—: si el otro está escondido, que se separe no se nota y
-    // buscarlo cada tanto sí se nota.
-    if (hayRecuadro(t) && elCam.dataset.ruta && elPan.dataset.ruta) juntarlos(t, m);
+    // buscarlo cada tanto sí se nota. En el relevo en negro no hay nada que
+    // juntar: el fondo no está en ningún archivo, así que preguntar por su
+    // posición daba `NaN` y el `NaN` terminaba en `playbackRate`.
+    if (hayRecuadro(t) && elCam.dataset.ruta && elPan.dataset.ruta && !enElNegro(t)) juntarlos(t, m);
     decir();
 }
 
@@ -318,9 +410,7 @@ function mirar() {
  */
 function juntarlos(t, maestro) {
     const esclavo = maestro === elCam ? elPan : elCam;
-    const desdeMaestro = maestro === elCam ? t.camaraDesde : t.pantallaDesde;
-    const desdeEsclavo = maestro === elCam ? t.pantallaDesde : t.camaraDesde;
-    const deberia = desdeEsclavo + (maestro.currentTime - desdeMaestro);
+    const deberia = enSuArchivo(t, esclavo, dentroDe(t));
     const que = corte.comoAlcanzar(esclavo.currentTime - deberia);
     if (que.buscar) esclavo.currentTime = deberia;
     esclavo.playbackRate = que.velocidad;
@@ -329,6 +419,14 @@ function juntarlos(t, maestro) {
 /** Los dos a velocidad normal: al cambiar de toma y al parar. */
 function aVelocidadNormal() {
     for (const v of [elPan, elCam]) if (v) v.playbackRate = 1;
+}
+
+/**
+ * Si la pantalla se ve en esta toma. En el relevo de un cambio de ventana se
+ * apaga aparte, en `verPieza`: eso es por pedazo y esto es por toma.
+ */
+function seVe(t) {
+    return Boolean(t && t.fondo !== 'camara' && t.pantallaDesde != null);
 }
 
 function hayRecuadro(t) {
@@ -345,7 +443,7 @@ function acomodar(t) {
         return;
     }
     const camaraDeFondo = t.fondo === 'camara';
-    elPan.style.display = camaraDeFondo || t.pantallaDesde == null ? 'none' : '';
+    elPan.style.display = seVe(t) ? '' : 'none';
     elCam.style.display = camaraDeFondo || hayRecuadro(t) ? '' : 'none';
     // De fondo ocupa todo y se recorta —a una cara le sobra pared por los
     // lados—; una pantalla entra entera, con negro si hace falta, porque

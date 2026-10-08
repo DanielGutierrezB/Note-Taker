@@ -241,32 +241,36 @@ function repartir(p) {
 
         const cubre = v => v && videoCrudo.cubre(v, enLaPared.desdeMs) && videoCrudo.cubre(v, enLaPared.hastaMs);
 
-        // **El tramo de pantalla que cubre esta toma entera, si hay alguno.**
-        // Entera y no a medias: un trozo no puede salir mitad de una ventana y
-        // mitad de otra, así que una toma que se quedó a caballo entre dos
-        // tramos —cambió de ventana sin cerrarla— no tiene pantalla y se va al
-        // repuesto, que es la cámara. Es lo mismo que hace una toma que quedó
-        // fuera de lo grabado, y por el mismo motivo.
-        const pantalla = pantallas.find(cubre) || null;
+        // Los dos fondos posibles, cada uno con sus pedazos. La cámara es
+        // siempre uno solo: no se la puede cambiar sin parar. La pantalla puede
+        // ser varios, con negro en los cambios de ventana (ver `conNegro`).
+        const deCamara = cubre(camara) ? [{ video: camara, ...enLaPared }] : null;
+        const dePantalla = conNegro(pantallas, enLaPared);
 
         // La que pide la vista primero, y la otra como repuesto: una toma que
         // pedía la cámara y no la tiene sale con la pantalla, que es mucho
         // mejor que no salir.
-        const pedida = mandaLaCamara(toma.vista) ? camara : pantalla;
-        const otra = pedida === camara ? pantalla : camara;
-        const fondo = cubre(pedida) ? pedida : (cubre(otra) ? otra : null);
+        const quiereCamara = mandaLaCamara(toma.vista);
+        const pedida = quiereCamara ? deCamara : dePantalla;
+        const fondo = pedida || (quiereCamara ? dePantalla : deCamara);
         if (!fondo) {
             avisos.push(`La toma ${toma.id} queda fuera de lo que se grabó: no entra en el vídeo.`);
             continue;
         }
-        if (fondo !== pedida) {
-            avisos.push(`La toma ${toma.id} pedía ${pedida === camara ? 'tu cámara' : 'tu pantalla'} `
+        if (!pedida) {
+            avisos.push(`La toma ${toma.id} pedía ${quiereCamara ? 'tu cámara' : 'tu pantalla'} `
                 + 'y ese trozo no está grabado: va con la otra fuente.');
+        }
+        const esCamara = fondo === deCamara;
+        const negroSeg = fondo.reduce((s, x) => s + (x.negro ? (x.hastaMs - x.desdeMs) / 1000 : 0), 0);
+        if (negroSeg > 0) {
+            avisos.push(`La toma ${toma.id} tiene un cambio de ventana en el medio: `
+                + `${conComa(tres(negroSeg))} s en negro mientras entra la otra.`);
         }
         // Encima solo cuando el fondo es la pantalla. Una toma de profesor es la
         // cámara sola: no hay nada que superponerle.
-        const encima = fondo !== camara && cubre(camara) ? camara : null;
-        if (!encima && fondo !== camara) {
+        const encima = !esCamara && cubre(camara) ? camara : null;
+        if (!encima && !esCamara) {
             avisos.push(`La toma ${toma.id} va sin la cámara en la esquina: ese trozo no está grabado.`);
         }
 
@@ -278,18 +282,81 @@ function repartir(p) {
             continue;
         }
 
+        // Los pedazos del fondo, ya en segundos dentro de su archivo. El
+        // primero nunca es negro —`conNegro` lo exige—, así que sirve para
+        // decir de qué fuente es el fondo sin tener que mirar la lista.
+        const pedazos = fondo.map(x => (x.negro
+            ? { cual: 'negro', segundos: tres((x.hastaMs - x.desdeMs) / 1000) }
+            : enArchivo(x.video, x)));
+
         trozos.push({
             toma: toma.id,
             vista: toma.vista,
             // Lo que va a durar el trozo lo manda el vídeo, que es la imagen: el
             // audio se recorta al mismo largo y `concat` no admite discrepancias.
             segundos: (enLaPared.hastaMs - enLaPared.desdeMs) / 1000,
-            fondo: enArchivo(fondo, enLaPared),
+            // El primer pedazo arriba y la lista aparte: casi todas las tomas
+            // tienen uno solo, y quien no sepa de pedazos —el reproductor
+            // cuando el plan es de antes— sigue leyendo `ruta` y `desdeSec`.
+            fondo: { ...pedazos[0], partes: pedazos },
             encima: encima ? enArchivo(encima, enLaPared) : null,
             audio: enArchivo(audio.archivo, audio.tramo)
         });
     }
     return { trozos, avisos };
+}
+
+/**
+ * La pantalla de una toma, en pedazos, con negro donde cambió de ventana.
+ *
+ * **La toma mantiene su vista aunque la pantalla se haya partido.** Antes acá
+ * se pedía un tramo solo que cubriera la toma entera, y una toma a caballo
+ * entre dos ventanas se caía al repuesto: salía con la cámara a pantalla
+ * completa, o sea convertida en una toma de profesor sin que nadie lo pidiera.
+ * Un cambio de ventana son milisegundos y costaba la vista de la toma entera.
+ *
+ * Ahora el hueco se rellena con negro y la vista se queda: se ve la ventana de
+ * antes, un parpadeo en negro mientras entra la otra, y la ventana nueva. El
+ * audio no se parte —sale del WAV o de la cámara, que cubren la toma entera—,
+ * así que la persona se sigue oyendo durante el negro y se lee como un corte.
+ *
+ * **Lo que no se rellena son los bordes.** Si la pantalla no estaba grabando
+ * cuando la toma empezó, o ya no estaba cuando terminó, esto devuelve `null` y
+ * la toma se va al repuesto como siempre. La diferencia no es de cuánto dura
+ * sino de qué es: un hueco en el medio es un cambio de ventana, y por como se
+ * hace el cambio (ver `cambiarPantalla` en `src/js/grabar/filmar.js`, que pide
+ * la ventana nueva antes de soltar la vieja) dura lo que tarda el relevo. Un
+ * hueco en el borde es metraje que no existe, y de eso el negro no salva.
+ *
+ * @returns {object[]|null} pedazos `{video, desdeMs, hastaMs}` o
+ *   `{negro:true, desdeMs, hastaMs}`, en orden y sin solaparse; el primero
+ *   nunca es negro. `null` si la pantalla no sirve de fondo para esta toma.
+ */
+function conNegro(pantallas, ventana) {
+    const partes = [];
+    let reloj = ventana.desdeMs;
+    for (const v of pantallas || []) {
+        // Mientras graba no tiene cierre: cubre hasta donde haga falta, igual
+        // que en `videoCrudo.cubre`.
+        const fin = v.cerradoMs == null ? Infinity : v.cerradoMs;
+        if (fin <= reloj) continue;
+        if (v.empezoMs >= ventana.hastaMs) break;
+        if (v.empezoMs > reloj) {
+            const hastaElHueco = Math.min(v.empezoMs, ventana.hastaMs);
+            partes.push({ negro: true, desdeMs: reloj, hastaMs: hastaElHueco });
+            reloj = hastaElHueco;
+        }
+        const hasta = Math.min(fin, ventana.hastaMs);
+        if (hasta > reloj) {
+            partes.push({ video: v, desdeMs: reloj, hastaMs: hasta });
+            reloj = hasta;
+        }
+        if (reloj >= ventana.hastaMs) break;
+    }
+    // Un negro de entrada es la pantalla que todavía no estaba, y no llegar al
+    // final es la que ya no está: las dos son borde, no cambio de ventana.
+    if (!partes.length || partes[0].negro || reloj < ventana.hastaMs) return null;
+    return partes;
 }
 
 /**
@@ -384,7 +451,6 @@ function grafo(p) {
     let cuantosRecuadros = 0;
 
     trozos.forEach((t, i) => {
-        const fondo = indiceDe(t.fondo.ruta);
         // Llenar el cuadro (escalar de más y recortar) o entrar entero (escalar
         // de menos y rellenar con negro). Ver el comentario de `repartir`.
         //
@@ -395,8 +461,32 @@ function grafo(p) {
             ? `scale=${ANCHO}:${ALTO}:force_original_aspect_ratio=increase,crop=${ANCHO}:${ALTO}`
             : `scale=${ANCHO}:${ALTO}:force_original_aspect_ratio=decrease,`
                 + `pad=${ANCHO}:${ALTO}:(ow-iw)/2:(oh-ih)/2`;
-        partes.push(`[${fondo}:v]trim=start=${tres(t.fondo.desdeSec)}:end=${tres(t.fondo.hastaSec)},`
-            + `setpts=PTS-STARTPTS,fps=${FPS},${encuadre},setsar=1[f${i}]`);
+        const pedazos = t.fondo.partes || [t.fondo];
+        const recorte = (x, etiqueta) => `[${indiceDe(x.ruta)}:v]`
+            + `trim=start=${tres(x.desdeSec)}:end=${tres(x.hastaSec)},`
+            + `setpts=PTS-STARTPTS,fps=${FPS},${encuadre},setsar=1${etiqueta}`;
+
+        if (pedazos.length === 1) {
+            partes.push(recorte(t.fondo, `[f${i}]`));
+        } else {
+            // **El fondo de esta toma son varios pedazos pegados.** Pasa cuando
+            // se cambió de ventana con la toma abierta: la pantalla de antes,
+            // el negro del relevo y la pantalla nueva. Se pegan ACÁ, antes de
+            // la cámara, para que el recuadro de la esquina cruce el negro sin
+            // enterarse: lo que se corta es el fondo, no la toma.
+            //
+            // `format` explícito en los dos lados porque `concat` no convierte:
+            // si el negro saliera en otro formato que el vídeo, falla con
+            // «Input link parameters do not match».
+            pedazos.forEach((x, k) => {
+                partes.push(x.cual === 'negro'
+                    ? `color=c=black:s=${ANCHO}x${ALTO}:d=${tres(x.segundos)}:r=${FPS},`
+                        + `format=yuv420p,setsar=1[f${i}_${k}]`
+                    : `${recorte(x, '')},format=yuv420p[f${i}_${k}]`);
+            });
+            partes.push(`${pedazos.map((_x, k) => `[f${i}_${k}]`).join('')}`
+                + `concat=n=${pedazos.length}:v=1:a=0[f${i}]`);
+        }
 
         if (t.encima) {
             const enc = indiceDe(t.encima.ruta);
@@ -641,6 +731,31 @@ function montajeDeSesion(json) {
         return x ? tres(x.desdeSec) : null;
     };
 
+    /**
+     * Los pedazos del fondo de pantalla, con dónde empieza cada uno DENTRO de
+     * la toma. Eso último es lo que el reproductor no puede calcular solo: los
+     * pedazos viven cada uno en su archivo y lo que él mide es el segundo de la
+     * toma, así que necesita la equivalencia.
+     *
+     * Devuelve nada cuando hay uno solo, que es casi siempre: el reproductor ya
+     * sabe seguir una ruta sola y no hace falta hacerle recorrer una lista de
+     * uno en cada tic.
+     */
+    const partesDePantalla = t => {
+        if (t.fondo.cual !== 'pantalla') return null;
+        const ps = t.fondo.partes || [];
+        if (ps.length < 2) return null;
+        let reloj = 0;
+        return ps.map(x => {
+            const dura = x.cual === 'negro' ? x.segundos : x.hastaSec - x.desdeSec;
+            const p = x.cual === 'negro'
+                ? { negro: true, enLaToma: tres(reloj), segundos: tres(dura) }
+                : { ruta: x.ruta, desdeSec: tres(x.desdeSec), enLaToma: tres(reloj), segundos: tres(dura) };
+            reloj += dura;
+            return p;
+        });
+    };
+
     return {
         ok: true,
         // Lo que faltó va primero, igual que en el corte: una pantalla que salió
@@ -665,6 +780,8 @@ function montajeDeSesion(json) {
             pantallaDesde: enCual(t, 'pantalla'),
             // Cuál de los tramos de pantalla usa esta toma.
             pantallaRuta: (deCual(t, 'pantalla') || {}).ruta || null,
+            // Y, si cambió de ventana a mitad de toma, todos con su sitio.
+            pantallaPartes: partesDePantalla(t),
             // El sonido solo si sale de la cámara. Cuando sale del WAV el
             // montaje va mudo: sincronizar un tercer archivo en una vista
             // previa no paga lo que cuesta, y para eso está el aviso.

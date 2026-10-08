@@ -628,6 +628,33 @@ module.exports = function (t) {
         t.ok(/border-radius:\$\{recuadro\.redondeo \* 100\}%/.test(mod));
     });
 
+    t.test('el reproductor cambia de archivo a mitad de toma, sin perder el reloj', () => {
+        // Una toma que cruza un cambio de ventana sale de dos archivos con un
+        // negro en medio, y el reproductor tiene que seguirla igual. Lo que no
+        // se puede romper es el reloj: un `src` nuevo pone el del elemento en
+        // cero, así que si el de la toma saliera de ahí, cada cambio la haría
+        // saltar al principio.
+        const mod = leer('src', 'js', 'semanal', 'montaje.js');
+        t.ok(/if \(t\.pantallaPartes && t\.camaraDesde != null\) return elCam;/.test(mod),
+            'con pedazos manda la cámara, que no se parte nunca');
+        t.ok(/function enSuArchivo\(t, v, dentro\)/.test(mod),
+            'y la traducción entre el reloj de la toma y el del archivo está en un sitio');
+        for (const quien of ['arranqueDe', 'juntarlos']) {
+            t.ok(new RegExp(`function ${quien}\\([\\s\\S]{0,420}enSuArchivo\\(`).test(mod),
+                `${quien} la usa en vez de hacer su propia cuenta`);
+        }
+    });
+
+    t.test('en el relevo de un cambio de ventana no se sincroniza nada', () => {
+        // El fondo no está en ningún archivo mientras dura el negro, así que
+        // preguntar por su posición daba `NaN` y el `NaN` terminaba en
+        // `playbackRate`. Lo destapó reproducir de corrido, no una prueba.
+        const mod = leer('src', 'js', 'semanal', 'montaje.js');
+        t.ok(/&& !enElNegro\(t\)\) juntarlos\(t, m\);/.test(mod), 'el tic lo saltea');
+        t.ok(/pan\.pause\(\);/.test(mod),
+            'y la pantalla se para: escondida y corriendo se iría más allá de su archivo');
+    });
+
     t.test('abajo hay una sola toma: la que se está mirando', async () => {
         // Dibujando dos tomas y parándose en la segunda: abajo tiene que
         // aparecer esa y nada más. Una lista de todas era lo de la pantalla de

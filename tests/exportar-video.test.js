@@ -123,10 +123,11 @@ module.exports = function (t) {
         t.eq(r.trozos[1].fondo.desdeSec, 9, 'y el sitio se mide contra SU arranque');
     });
 
-    t.test('una toma partida entre dos ventanas sale con la cámara, y se dice', () => {
-        // El cambio cayó dentro de la toma, así que ningún tramo la cubre
-        // entera: un trozo no puede salir mitad de una ventana y mitad de otra.
-        // Es el precio que la pantalla de grabar avisa antes de cambiar.
+    t.test('una toma partida entre dos ventanas mantiene su vista, con negro en el medio', () => {
+        // El cambio cayó dentro de la toma. Antes eso la convertía en una toma
+        // de profesor —cámara a pantalla completa— sin que nadie lo pidiera, y
+        // un relevo de un segundo costaba la vista de la toma entera. Ahora el
+        // hueco se rellena con negro y la vista se queda.
         const r = exportar.repartir({
             tomas: [toma(1, 25, 35)],
             pantallas: [video('pantalla', 0, 30), video('pantalla', 31, 60, 2)],
@@ -135,10 +136,93 @@ module.exports = function (t) {
             wavs: [wav(0, 60)]
         });
         t.eq(r.trozos.length, 1);
-        t.eq(r.trozos[0].fondo.cual, 'camara', 'sale con la cámara, que es mucho mejor que no salir');
-        t.eq(r.trozos[0].encima, null, 'y sin recuadro: no se superpone a sí misma');
+        const f = r.trozos[0].fondo;
+        t.eq(f.cual, 'pantalla', 'sigue siendo una toma de pantalla');
+        t.deep(f.partes.map(x => x.cual), ['pantalla', 'negro', 'pantalla']);
+        t.deep(f.partes.map(x => x.ruta || null),
+            ['/tmp/pantalla.mp4', null, '/tmp/pantalla-2.mp4']);
+        t.eq(f.partes[0].desdeSec, 25, 'la ventana de antes, desde donde empieza la toma');
+        t.eq(f.partes[0].hastaSec, 30, 'hasta donde se cerró ese tramo');
+        t.eq(f.partes[1].segundos, 1, 'el negro dura lo que duró el relevo');
+        t.eq(f.partes[2].desdeSec, 0, 'y la ventana nueva, desde su principio');
+        t.eq(f.partes[2].hastaSec, 4);
+        // Lo que no se parte es lo de encima: la cámara cruza el negro entera,
+        // así que el recuadro de la esquina no parpadea.
+        t.ok(r.trozos[0].encima && /camara/.test(r.trozos[0].encima.ruta), 'y la cámara sigue en la esquina');
+        t.eq(r.trozos[0].encima.desdeSec, 25);
+        t.eq(r.trozos[0].encima.hastaSec, 35);
+    });
+
+    t.test('los pedazos del fondo suman exactamente lo que dura la toma', () => {
+        // Es la condición que `concat` no perdona: el audio se recorta al largo
+        // del vídeo, y si los pedazos sumaran de menos la toma saldría corta y
+        // todas las siguientes se correrían.
+        const r = exportar.repartir({
+            tomas: [toma(1, 25, 35)],
+            pantallas: [video('pantalla', 0, 30), video('pantalla', 31, 60, 2)],
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        const t0 = r.trozos[0];
+        const suma = t0.fondo.partes.reduce(
+            (s, x) => s + (x.cual === 'negro' ? x.segundos : x.hastaSec - x.desdeSec), 0);
+        t.near(suma, t0.segundos, 0.001, `${suma} contra ${t0.segundos}`);
+    });
+
+    t.test('el cambio de ventana dentro de una toma se dice, con cuánto negro', () => {
+        const r = exportar.repartir({
+            tomas: [toma(1, 25, 35)],
+            pantallas: [video('pantalla', 0, 30), video('pantalla', 31, 60, 2)],
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
         t.eq(r.avisos.length, 1);
-        t.ok(/toma 1 pedía tu pantalla/.test(r.avisos[0]), r.avisos[0]);
+        t.ok(/toma 1 tiene un cambio de ventana/.test(r.avisos[0]), r.avisos[0]);
+        t.ok(/1 s en negro/.test(r.avisos[0]), r.avisos[0]);
+    });
+
+    t.test('un hueco en el borde no se rellena: eso es metraje que no existe', () => {
+        // La diferencia no es cuánto dura sino qué es. En el medio, un hueco es
+        // un relevo de ventana y dura lo que tarda. En el borde es que la
+        // pantalla todavía no estaba —o ya no está—, y de eso el negro no
+        // salva: arrancar una toma con tres segundos de nada es peor que
+        // arrancarla con la cara de quien habla.
+        const antes = exportar.repartir({
+            tomas: [toma(1, 10, 20)],
+            pantallas: [video('pantalla', 15, 60)],
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.eq(antes.trozos[0].fondo.cual, 'camara', 'la pantalla entró tarde: va con la cámara');
+        t.ok(/pedía tu pantalla/.test(antes.avisos[0]), antes.avisos[0]);
+
+        const despues = exportar.repartir({
+            tomas: [toma(1, 10, 20)],
+            pantallas: [video('pantalla', 0, 15)],
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.eq(despues.trozos[0].fondo.cual, 'camara', 'y si se fue antes de terminar, lo mismo');
+    });
+
+    t.test('dos cambios dentro de una misma toma son dos negros', () => {
+        const r = exportar.repartir({
+            tomas: [toma(1, 5, 55)],
+            pantallas: [
+                video('pantalla', 0, 20),
+                video('pantalla', 21, 40, 2),
+                video('pantalla', 41, 60, 3)
+            ],
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.deep(r.trozos[0].fondo.partes.map(x => x.cual),
+            ['pantalla', 'negro', 'pantalla', 'negro', 'pantalla']);
     });
 
     t.test('sumar la pantalla a mitad de grabación deja las de antes con la cámara', () => {
@@ -537,6 +621,9 @@ module.exports = function (t) {
         };
         const pantalla = hacer('pantalla', 'color=c=red', 12);
         const camara = hacer('camara', 'color=c=lime', 12);
+        // El segundo tramo de pantalla, de otro color, para las pruebas del
+        // cambio de ventana: azul contra el rojo del primero.
+        const pantalla2 = o.conCambioDeVentana ? hacer('pantalla-2', 'color=c=blue', 12) : null;
         const audio = path.join(workspace.audioDir(dir), `${secuencia}-1.wav`);
         spawnSync(ffmpeg.path, ['-v', 'error', '-y', '-f', 'lavfi', '-i',
             'sine=frequency=440:sample_rate=48000:duration=12', audio]);
@@ -545,9 +632,16 @@ module.exports = function (t) {
         estado.terminada = T0 + 12000;
         estado.sesiones = [{ archivo: audio, desdeMs: T0, segundos: 12, sampleRate: 48000, canales: 1 }];
         estado.videos = [
-            { cual: 'pantalla', archivo: pantalla, tipo: 'video/mp4', empezoMs: T0, cerradoMs: T0 + 12000 },
+            // Con cambio de ventana el primer tramo se corta en el segundo 6 y
+            // el siguiente entra en el 7: un segundo de relevo, en el medio.
+            { cual: 'pantalla', archivo: pantalla, tipo: 'video/mp4',
+              empezoMs: T0, cerradoMs: T0 + (pantalla2 ? 6000 : 12000) },
             { cual: 'camara', archivo: camara, tipo: 'video/mp4', empezoMs: T0, cerradoMs: T0 + 12000 }
         ];
+        if (pantalla2) {
+            estado.videos.push({ cual: 'pantalla', archivo: pantalla2, tipo: 'video/mp4',
+                empezoMs: T0 + 7000, cerradoMs: T0 + 12000 });
+        }
         // `R` es la vista de pantalla: pantalla de fondo con la cámara en la
         // esquina, que es lo que estas pruebas miran en la imagen.
         estado.tomas = o.tomas || [
@@ -634,6 +728,53 @@ module.exports = function (t) {
             const p = pixel(Math.round(x), Math.round(y));
             t.ok(p[1] > 100 && p[0] < 80, `${donde}: la cámara (verde), no la pantalla · ${p}`);
         }
+    });
+
+    t.test('una toma que cruza un cambio de ventana sale con negro en el medio', async () => {
+        // La prueba de verdad de todo esto, y en la imagen: la toma va del
+        // segundo 4 al 9, el primer tramo se cortó en el 6 y el siguiente entró
+        // en el 7. Tienen que salir dos segundos de la ventana de antes, uno en
+        // negro y dos de la nueva, sin dejar de ser una toma de pantalla.
+        //
+        // Antes esto salía como cinco segundos de cámara a pantalla completa:
+        // un relevo de un segundo convertía la toma en una de profesor.
+        const sitio = sembrar({
+            conCambioDeVentana: true,
+            tomas: [{ id: 1, vista: 'R', inMs: T0 + 4000, outMs: T0 + 9000, palabras: [], comentarios: [] }]
+        });
+        const r = await exportar.deSesion(sitio.json);
+        t.ok(r.ok, r.error || '');
+        t.eq(r.segundos, 5, 'dura lo que dura la toma: el negro no la alarga ni la acorta');
+
+        const medio = (seg) => {
+            const r2 = spawnSync(paths.ffmpeg().path, ['-v', 'error', '-ss', String(seg),
+                '-i', r.ruta, '-frames:v', '1',
+                '-vf', `crop=4:4:${exportar.ANCHO / 2}:${exportar.ALTO / 2},scale=1:1`,
+                '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 24 });
+            return [r2.stdout[0], r2.stdout[1], r2.stdout[2]];
+        };
+        const antes = medio(1);
+        t.ok(antes[0] > 100 && antes[2] < 80, `al segundo 1, la ventana de antes (roja): ${antes}`);
+        const relevo = medio(2.5);
+        t.ok(relevo[0] < 40 && relevo[1] < 40 && relevo[2] < 40, `al 2,5, el negro del relevo: ${relevo}`);
+        const despues = medio(4);
+        t.ok(despues[2] > 100 && despues[0] < 80, `al 4, la ventana nueva (azul): ${despues}`);
+
+        // Y la cara sigue en la esquina durante el negro: lo que se corta es el
+        // fondo, no la toma. Es lo que hace que se lea como un corte y no como
+        // que el vídeo se rompió.
+        const esquina = (seg) => {
+            const r2 = spawnSync(paths.ffmpeg().path, ['-v', 'error', '-ss', String(seg),
+                '-i', r.ruta, '-frames:v', '1',
+                '-vf', `crop=4:4:${exportar.ANCHO - exportar.MARGEN - 180}:`
+                    + `${exportar.ALTO - exportar.MARGEN - 180},scale=1:1`,
+                '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 24 });
+            return [r2.stdout[0], r2.stdout[1], r2.stdout[2]];
+        };
+        const cara = esquina(2.5);
+        t.ok(cara[1] > 100 && cara[0] < 80, `la cámara (verde) cruza el negro: ${cara}`);
+
+        t.ok(r.avisos.some(a => /cambio de ventana/.test(a)), r.avisos.join(' · '));
     });
 
     t.test('un vídeo de cero bytes no mata la exportación: sale con el otro y se dice', async () => {

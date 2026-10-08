@@ -407,6 +407,12 @@ window.nt = {
      * si dijeran 56 s y el tramo durara ocho, el salto a la toma siguiente no se
      * podría probar. La toma 3 se queda sin pantalla a propósito: es el caso feo
      * —una fuente que no cubre esa toma— y hay que poder ver cómo se dice.
+     *
+     * Y la toma 4 cruza un cambio de ventana: sale de la primera pantalla, pasa
+     * por medio segundo en negro y termina en la segunda, sin dejar de ser una
+     * toma de pantalla. Es el único sitio de la maqueta donde se puede ver que
+     * el reproductor cambia de archivo a mitad de toma y que el recuadro de la
+     * cámara cruza el negro sin parpadear.
      */
     semanalMontaje: async () => {
         if (hay('semanal-sin-tomas')) return { ok: true, tomas: [], avisos: [] };
@@ -416,17 +422,24 @@ window.nt = {
         // vería que cada trozo mide lo que dura.
         const LARGOS = [7, 3, 9, 5];
         let desde = 1;
+        // La primera que sirva: de pantalla, que esté en el corte y que no sea
+        // la que ya retrata el caso de la fuente que falta. Elegirla así y no
+        // por número es lo que hace que siga saliendo si mañana cambian las
+        // tomas de la sesión falsa.
+        const laPartida = cerradas.find(t => t.id !== 3 && t.vista !== 'PV' && !t.descartada);
         return {
             ok: true,
             avisos: hay('semanal-con-aviso')
                 ? ['La toma 3 va sin la cámara: ese trozo no está grabado.'] : [],
             archivos: {
                 camara: '/maqueta/semanal-camara.mp4',
-                pantalla: '/maqueta/semanal-pantalla.mp4'
+                pantalla: '/maqueta/semanal-pantalla.mp4',
+                pantallas: ['/maqueta/semanal-pantalla.mp4', '/maqueta/semanal-pantalla-2.mp4']
             },
             recuadro: { lado: 0.1875, margen: 0.025, redondeo: 0.125 },
             tomas: cerradas.map((t, i) => {
                 const sinPantalla = t.id === 3;
+                const partida = Boolean(laPartida) && t.id === laPartida.id;
                 const pide = t.vista === 'PV' ? 'camara' : 'pantalla';
                 const largo = LARGOS[i % LARGOS.length];
                 const arranca = desde;
@@ -439,6 +452,15 @@ window.nt = {
                     fondo: sinPantalla ? 'camara' : pide,
                     camaraDesde: arranca,
                     pantallaDesde: sinPantalla ? null : arranca,
+                    pantallaRuta: sinPantalla ? null : '/maqueta/semanal-pantalla.mp4',
+                    // La mitad en una ventana, medio segundo en negro y el
+                    // resto en la otra: los tres suman lo que dura la toma,
+                    // que es lo que el reproductor no perdona.
+                    pantallaPartes: partida ? [
+                        { ruta: '/maqueta/semanal-pantalla.mp4', desdeSec: arranca, enLaToma: 0, segundos: largo / 2 },
+                        { negro: true, enLaToma: largo / 2, segundos: 0.5 },
+                        { ruta: '/maqueta/semanal-pantalla-2.mp4', desdeSec: 2, enLaToma: largo / 2 + 0.5, segundos: largo / 2 - 0.5 }
+                    ] : null,
                     conAudio: true
                 };
             })
