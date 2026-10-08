@@ -23,6 +23,8 @@ import * as ojo from './grabar/ojo.js';
 const QUIEN = 'clase';
 
 let donde = { carpeta: null, secuencia: null };
+/** Si esta clase se está grabando: sin eso, la cámara no se enciende nunca. */
+let grabando = false;
 let tengo = new Map();
 let sinFoto = new Set();
 let sacando = false;
@@ -52,6 +54,7 @@ export async function entrar(sesion) {
     await salir();
     if (!s.carpeta || !s.secuencia) return;
     donde = { carpeta: s.carpeta, secuencia: s.secuencia };
+    grabando = s.grabando !== false;
 
     const r = await window.nt.fotosListar(s.carpeta, s.secuencia);
     for (const f of (r && r.fotos) || []) tengo.set(f.toma, { ruta: f.ruta, mini: f.mini });
@@ -64,9 +67,36 @@ export async function entrar(sesion) {
     if (!abierta.ok) avisar(`${abierta.error} Las tomas de esta clase no van a tener foto.`, 'error');
 }
 
+/**
+ * En Ajustes cambiaron la cámara en medio de la clase.
+ *
+ * Se obedece en el acto. Antes no: la cámara se leía una sola vez, al entrar a
+ * En vivo, así que elegir «Ninguna» a mitad de una clase guardaba el ajuste y
+ * no apagaba nada —la cámara seguía encendida y las tomas que venían seguían
+ * llevando foto hasta el final—. El caso que lo pide es el que pasa: quedó
+ * activada por error y uno se da cuenta cuando ya empezó.
+ *
+ * **Lo ya grabado no se toca.** Las fotos que están en el disco se quedan, y
+ * siguen apareciendo en sus bloques: se sacaron cuando la cámara estaba puesta
+ * y son lo que el editor va a mirar al retomar. Lo que cambia es de acá en
+ * adelante, que es lo que se pidió.
+ */
+export async function cambiarCamara(camara) {
+    if (!donde.carpeta) return;
+    if (!grabando || !camara) {
+        await ojo.soltar(QUIEN);
+        return;
+    }
+    const abierta = await ojo.tomar(QUIEN, camara, {
+        alCaerse: mensaje => avisar(mensaje, 'error')
+    });
+    if (!abierta.ok) avisar(`${abierta.error} Las tomas que sigan no van a tener foto.`, 'error');
+}
+
 /** Salir de la clase: la cámara se suelta y lo que se sabía se olvida. */
 export async function salir() {
     donde = { carpeta: null, secuencia: null };
+    grabando = false;
     tengo = new Map();
     sinFoto = new Set();
     await ojo.soltar(QUIEN);

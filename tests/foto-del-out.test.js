@@ -83,6 +83,40 @@ module.exports = function (t) {
         t.ok(/return \{ ok: false/.test(guardar));
     });
 
+    t.test('apagarla en Ajustes a mitad de clase la apaga de verdad', () => {
+        // El ajuste se leía UNA vez, al entrar a En vivo (`fotos.entrar`), así
+        // que elegir «Ninguna» a mitad de una clase guardaba el cambio y no
+        // soltaba nada: la cámara seguía encendida y las tomas que venían
+        // seguían llevando foto hasta el final de la sesión. El caso que lo
+        // pide es el que pasa: quedó activada por error.
+        const app = leer('src', 'js', 'app.js');
+        const cambio = tramo(app, "$('#aj-camara').addEventListener", '\n    });');
+        t.ok(/fotos\.cambiarCamara\(app\.ajustes\.camara\)/.test(cambio),
+            'el cambio de Ajustes llega a la clase en curso');
+        t.ok(cambio.indexOf('fotos.cambiarCamara') < cambio.indexOf('verLaCamara'),
+            'y antes que la vista previa, para no abrir la cámara dos veces');
+        const fn = tramo(fotos, 'export async function cambiarCamara', '\n}');
+        t.ok(/if \(!grabando \|\| !camara\) \{[\s\S]{0,80}ojo\.soltar\(QUIEN\)/.test(fn),
+            'sin cámara, se suelta la de la clase');
+        t.ok(/ojo\.tomar\(QUIEN, camara/.test(fn), 'y con otra, se toma esa');
+    });
+
+    t.test('lo ya fotografiado se queda, aunque se apague la cámara', () => {
+        // Las fotos viven en el disco y nadie las borra: sacarlas al apagar la
+        // cámara sería perder las de las tomas que sí se grabaron con ella.
+        const fn = tramo(fotos, 'export async function cambiarCamara', '\n}');
+        t.ok(!/tengo = /.test(fn) && !/sinFoto = /.test(fn),
+            'no toca lo que ya se sabe de las fotos');
+        t.ok(!/borrar|Borrar/.test(fn), 'ni borra ninguna');
+    });
+
+    t.test('una clase que se abre para mirar tampoco enciende nada desde Ajustes', () => {
+        // El mismo `grabando` que en `entrar`, y por el mismo motivo.
+        t.ok(/grabando = s\.grabando !== false;/.test(fotos));
+        t.ok(/grabando = false;/.test(tramo(fotos, 'export async function salir', '\n}')),
+            'y al salir se olvida: la clase siguiente decide de nuevo');
+    });
+
     t.test('la cámara la suelta cada pantalla por su nombre', () => {
         // Es lo que deja que cerrar Ajustes no apague la cámara de una clase
         // que está grabando con esa misma cámara.

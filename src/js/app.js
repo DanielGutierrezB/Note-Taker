@@ -32,6 +32,7 @@ import * as cierre from './pantalla-cierre.js';
 import * as semanal from './pantalla-semanal.js';
 import * as dependencias from './dependencias.js';
 import * as ojo from './grabar/ojo.js';
+import * as fotos from './fotos.js';
 
 const app = {
     ajustes: null,
@@ -238,6 +239,12 @@ function conectarAjustes() {
         : { idioma: e.target.value }));
     $('#aj-camara').addEventListener('change', async e => {
         await guardar({ camara: e.target.value || null });
+        // La clase que esté en curso se entera en el acto. Antes el ajuste se
+        // leía una sola vez, al entrar a En vivo: elegir «Ninguna» a mitad de
+        // una clase guardaba el cambio y no apagaba nada, así que las tomas que
+        // seguían llevaban foto igual hasta el final. Va antes de la vista
+        // previa para que soltar y volver a tomar no abran la cámara dos veces.
+        await fotos.cambiarCamara(app.ajustes.camara);
         await verLaCamara();
     });
     $('#btn-log').addEventListener('click', async () => {

@@ -819,6 +819,15 @@ y la clase sigue igual, sin fotos. Si la cámara se desconecta en medio, se dice
 y las tomas que sigan se quedan sin foto. No hay ningún camino en el que una
 foto detenga, retrase o cambie lo que se graba.
 
+**Y apagarla en Ajustes a mitad de clase la apaga de verdad.** El ajuste se
+leía una sola vez, al entrar a En vivo, así que elegir «Ninguna» empezada la
+grabación guardaba el cambio y no soltaba nada: la cámara seguía encendida y
+las tomas que venían seguían llevando foto hasta el final de la sesión. El caso
+que lo pide es el que pasa —quedó activada por error y uno se da cuenta cuando
+ya empezó—, y la regla es la que uno esperaría: **lo ya fotografiado se queda**
+en el disco y en sus bloques, porque se sacó cuando la cámara estaba puesta y
+es lo que el editor va a mirar al retomar; lo que cambia es de ahí en adelante.
+
 ## El XML
 
 Se importa en Premiere tal cual. Lleva **dos cosas**, y las dos hacen falta:
