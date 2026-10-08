@@ -40,6 +40,7 @@ import * as fichas from './grabar/lista-tomas.js';
 import * as montaje from './semanal/montaje.js';
 import * as corte from './semanal/corte.js';
 import * as tarjetas from './semanal/tarjetas.js';
+import * as menuPalabra from './grabar/menu-de-palabra.js';
 import * as estados from './estados.js';
 import { estiloDeVista } from './colores.js';
 
@@ -93,6 +94,14 @@ export function conectar(contexto) {
     $('#semanal-cuerpo').addEventListener('change', alCambio);
     $('#semanal-cuerpo').addEventListener('pointerdown', arrastrarPorLaLinea);
     document.addEventListener('keydown', alTeclado);
+    // El clic derecho sobre UNA palabra pone ahí el IN o el OUT, igual que en
+    // una clase y con el mismo módulo. Por `ponerBorde`, que es por donde entra
+    // el arrastre: las dos maneras tienen que pedir lo mismo.
+    menuPalabra.conectar({
+        raiz: '#vista-semanal',
+        alCerrar: () => { if (pendiente) pintar(); },
+        alElegir: q => ponerBorde(q.cual, q.toma, q.borde, q.ms)
+    });
     // El color de cada vista es el del marcador que va a aparecer en Premiere, y
     // quien los sabe es el motor: así lo que se ve mientras se graba es lo mismo
     // que el editor va a ver después. No se espera: si tardan, los botones
@@ -331,7 +340,19 @@ const MOMENTOS = {
     hecho: { titulo: 'Tu vídeo está listo', tarjeta: tarjetas.tarjetaHecho }
 };
 
+/**
+ * Lo que no se pintó mientras el menú de una palabra estaba abierto.
+ *
+ * El menú habla de una palabra de un texto que se rehace cada segundo, y debajo
+ * de «poner el OUT acá» tiene que seguir estando lo mismo hasta que se elija o
+ * se cierre. Repintar lo tiraría: el `<button>` del menú sobrevive porque vive
+ * fuera de `<main>`, pero la palabra de la que habla, no.
+ */
+let pendiente = false;
+
 function pintar() {
+    if (menuPalabra.hay()) { pendiente = true; return; }
+    pendiente = false;
     const momento = MOMENTOS[estado.paso];
     $('#semanal-reloj').hidden = estado.paso !== 'grabando';
     $('#semanal-titulo').textContent = momento.titulo;
@@ -456,6 +477,20 @@ function aguja(datos) {
  */
 let textosPuestos = new Map();
 
+/**
+ * Qué transcript está abajo del todo, por texto.
+ *
+ * Lo que decide si lo nuevo lo arrastra consigo o si se queda quieto. Se guarda
+ * acá y no se mide en el momento porque al remontar el nodo ya se perdió:
+ * sacarlo del DOM y volver a meterlo le borra el scroll.
+ */
+const alFondo = new Map();
+
+/** Abajo con holgura: dos renglones de margen, que es lo que falla si no. */
+function estaAlFondo(rollo) {
+    return rollo.scrollHeight - rollo.scrollTop - rollo.clientHeight < 8;
+}
+
 function montarTextos() {
     const previos = textosPuestos;
     textosPuestos = new Map();
@@ -475,30 +510,63 @@ function montarTextos() {
         textosPuestos.set(clave, nodo);
         // Lo nuevo entra abajo, así que abajo es donde hay que mirar. En una
         // toma ya cerrada no: lo que se busca ahí es el principio.
+        //
+        // **Salvo que alguien haya subido**, y eso es lo que hace usable el
+        // clic derecho: para poner el IN diez frases atrás hay que poder subir
+        // a buscar la palabra, y hasta acá el texto se iba al fondo una vez por
+        // segundo, así que no se llegaba. El que estaba abajo del todo se queda
+        // abajo y se sigue escribiendo solo; el que alguien movió se queda donde
+        // lo dejó. Es la misma regla que `recordarRollos` en la pantalla de
+        // clase, donde el gesto ya existía.
         const rollo = cual === 'cerrada' ? null : nodo.querySelector('.transcript');
-        if (rollo) rollo.scrollTop = rollo.scrollHeight;
+        if (rollo && (previo !== nodo || alFondo.get(clave) !== false)) {
+            rollo.scrollTop = rollo.scrollHeight;
+        }
+        if (rollo) {
+            rollo.onscroll = () => alFondo.set(clave, estaAlFondo(rollo));
+        }
     }
 }
 
-/**
- * Un texto, con lo que su borde hace al soltarse.
- *
- * Los tres son el mismo gesto —poner el borde en esta palabra— y cambia a qué
- * se le pide, que es lo mismo que decide `ponerBorde` en la pantalla de clase:
- *
- *   espera   no hay toma abierta: el IN soltado la ABRE desde esa palabra
- *   abierta  el OUT la CIERRA ahí
- *   cerrada  los dos corren su borde, con la toma ya grabada
- */
 /** Las tomas con su texto: las de la sesión viva, o las de la ya grabada. */
 function lasTomas() {
     if (estado.paso === 'revisar') return (estado.grabada && estado.grabada.tomas) || [];
     return (estado.sesion && estado.sesion.tomas) || [];
 }
 
+/**
+ * Poner un borde en una palabra, venga del arrastre o del clic derecho.
+ *
+ * Los tres casos son el mismo gesto —poner el borde en esta palabra— y cambia a
+ * qué se le pide, que es lo mismo que decide `ponerBorde` en la pantalla de
+ * clase:
+ *
+ *   espera   no hay toma abierta: el IN soltado la ABRE desde esa palabra
+ *   abierta  el OUT la CIERRA ahí
+ *   cerrada  los dos corren su borde, con la toma ya grabada
+ *
+ * **Una sola puerta para las dos maneras**, igual que allá y por lo mismo: con
+ * el menú hablando con el motor por su cuenta, el mismo cambio entraría por dos
+ * caminos distintos y el deshacer vería dos cosas.
+ *
+ * Y el reparto mira el borde, no solo el texto. En la toma abierta solo el OUT
+ * la cierra; el IN le corre el principio y eso es una edición como las demás.
+ * Antes acá los dos iban a `grabarCerrarToma`, así que correr el IN de la toma
+ * abierta la cerraba en esa palabra — arrastrando ya se podía, y el menú lo
+ * ofrece sobre cualquier palabra del medio.
+ */
+function ponerBorde(cual, tomaId, borde, ms) {
+    const contesta = r => { if (r) { estado.sesion = r; pintar(); } };
+    if (cual === 'espera') return window.nt.grabarAbrirToma(ms).then(contesta);
+    if (cual === 'abierta' && borde === 'out') {
+        return window.nt.grabarCerrarToma(ms).then(contesta);
+    }
+    return cambiarFicha(tomaId, { tipo: 'borde', borde, paredMs: ms });
+}
+
 function unTexto(cual, toma, previo) {
     const tomas = lasTomas();
-    const contesta = r => { if (r) { estado.sesion = r; pintar(); } };
+    const suyo = (borde, ms) => ponerBorde(cual, toma && toma.id, borde, ms);
 
     if (cual === 'espera') {
         const cerradas = tomas.filter(t => t.outMs != null);
@@ -507,7 +575,7 @@ function unTexto(cual, toma, previo) {
             modo: 'inactiva',
             palabras: ((estado.sesion && estado.sesion.sueltas) || []).filter(w => w.t >= desde),
             vacio: 'Escuchando… lo que digas va a ir apareciendo acá.'
-        }, (borde, ms) => window.nt.grabarAbrirToma(ms).then(contesta), previo);
+        }, suyo, previo);
     }
 
     if (cual === 'abierta') {
@@ -518,7 +586,7 @@ function unTexto(cual, toma, previo) {
             limite: abierta ? abierta.inMs : 0,
             palabras: (abierta && abierta.palabras) || [],
             vacio: 'Todavía no se oyó nada de esta toma.'
-        }, (borde, ms) => window.nt.grabarCerrarToma(ms).then(contesta), previo);
+        }, suyo, previo);
     }
 
     if (cual === 'cerrada' && toma) {
@@ -528,7 +596,7 @@ function unTexto(cual, toma, previo) {
             palabras: toma.palabras,
             despues: toma.despues,
             vacio: 'Esta toma no tiene texto.'
-        }, (borde, ms) => cambiarFicha(toma.id, { tipo: 'borde', borde, paredMs: ms }), previo);
+        }, suyo, previo);
     }
 
     return null;
@@ -549,6 +617,10 @@ async function alTeclado(e) {
     if (!$('#vista-semanal').classList.contains('es-activa')) return;
     // Con Ajustes o Diagnóstico encima, el teclado es de ellos.
     if (document.querySelector('.telon.es-activa')) return;
+    // Y con el menú de una palabra abierto, del menú: Escape lo cierra y las
+    // flechas van de una opción a la otra. Sin esto, la «P» de una vista
+    // cambiaría la toma por detrás del menú.
+    if (menuPalabra.alTeclado(e)) return;
     if (e.repeat || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
     // Donde se escribe, se escribe: una «p» en un campo es una letra.
     const foco = document.activeElement;
@@ -1066,8 +1138,10 @@ async function repintarReloj() {
     }
     // El transcript sí cada segundo: es lo único que cambia mientras se habla,
     // y crece sin rehacerse. Salvo con una línea agarrada, que desaparecería
-    // de debajo del cursor justo mientras se busca dónde cortar.
-    if (!texto.arrastrando()) montarTextos();
+    // de debajo del cursor justo mientras se busca dónde cortar — o con el menú
+    // de una palabra abierto, que es el mismo caso con otro gesto: el menú
+    // habla de una palabra que tiene que seguir ahí hasta que se elija.
+    if (!texto.arrastrando() && !menuPalabra.hay()) montarTextos();
 }
 
 /**

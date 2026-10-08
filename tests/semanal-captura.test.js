@@ -289,8 +289,10 @@ module.exports = function (t) {
             'el hueco del texto de esa toma');
         t.ok(/pista-in">IN<[\s\S]{0,120}pista-out">OUT</.test(semanal),
             'con el IN y el OUT dichos');
-        t.ok(/cambiarFicha\(toma\.id, \{ tipo: 'borde', borde, paredMs: ms \}\)/.test(semanal),
-            'y soltarlos mueve el borde por la puerta que toque');
+        t.ok(/ponerBorde\(cual, toma && toma\.id, borde, ms\)/.test(semanal),
+            'y soltarlos va por `ponerBorde`, igual que el clic derecho');
+        t.ok(/return cambiarFicha\(tomaId, \{ tipo: 'borde', borde, paredMs: ms \}\)/.test(semanal),
+            'que para una toma cerrada mueve el borde por la puerta que toque');
     });
 
     t.test('la ficha del semanal no trae nada del XML', () => {

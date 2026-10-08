@@ -33,6 +33,7 @@ import * as estados from './estados.js';
 import * as fuente from './grabar/fuente.js';
 import { mostrador } from './grabar/turnos.js';
 import * as texto from './grabar/texto-toma.js';
+import * as menuPalabra from './grabar/menu-de-palabra.js';
 import * as fichas from './grabar/lista-tomas.js';
 import { PALABRA_Y_APLAUSO_MS } from './grabar/senales.js';
 import { estiloDeVista, coloresDeVista } from './colores.js';
@@ -141,14 +142,14 @@ export function conectar(contexto) {
     // Y el clic derecho sobre UNA palabra pone ahí el IN o el OUT. En la
     // pantalla entera para que el clic derecho en cualquier otro lado también
     // cierre el menú, y en el documento para que lo cierre el de afuera.
-    $('#vista-vivo').addEventListener('contextmenu', alClicDerecho);
-    $('#menu-palabra').addEventListener('click', alClic);
-    document.addEventListener('pointerdown', e => {
-        if (menuPalabra && !e.target.closest('#menu-palabra')) cerrarMenuDePalabra();
-    }, true);
-    // La ventana se fue a otro lado: un menú abierto encima de una pantalla que
-    // ya no se está mirando, y con el texto congelado detrás, no sirve a nadie.
-    window.addEventListener('blur', cerrarMenuDePalabra);
+    menuPalabra.conectar({
+        raiz: '#vista-vivo',
+        alCerrar: () => { if (pendiente) pintar(); },
+        // Por `ponerBorde`, igual que el arrastre: si el menú llamara al motor
+        // por su cuenta, el deshacer por campo vería dos cosas distintas para
+        // el mismo cambio.
+        alElegir: q => ponerBorde(q.cual, q.toma, q.borde, q.ms)
+    });
 
     $('#btn-compacto').addEventListener('click', () => {
         vista.compacto = !vista.compacto;
@@ -541,7 +542,7 @@ function pintar() {
     // Con el menú de una palabra abierto tampoco se repinta: el menú habla de
     // una palabra de un texto que se rehace cada segundo, y debajo de «poner el
     // OUT acá» tiene que seguir estando lo mismo hasta que se elija o se cierre.
-    if (pulsando || componiendo || menuPalabra) {
+    if (pulsando || componiendo || menuPalabra.hay()) {
         pendiente = true;
         return;
     }
@@ -1542,127 +1543,16 @@ async function alClic(e) {
             else await pedir(() => window.nt.grabarQuitarClaqueta(n));
             break;
         }
-        case 'borde-aqui': {
-            // La palabra y el texto se leyeron al abrir el menú: el texto no se
-            // repintó mientras estaba abierto, pero la elección ya está tomada
-            // y no depende de lo que haya debajo ahora.
-            const que = menuPalabra;
-            cerrarMenuDePalabra();
-            if (que) await ponerBorde(que.cual, que.toma, boton.dataset.borde, Number(boton.dataset.ms));
-            break;
-        }
     }
 }
 
 /* ─── El menú del clic derecho sobre una palabra ───────────────────────── */
-
-/**
- * Lo que el menú abierto va a hacer, o null.
- *
- * Se resuelve al abrirlo y no al elegir: mientras está abierto el texto no se
- * repinta, pero igual conviene que la opción lleve su palabra puesta, que es lo
- * que hace que elegir «poner el OUT» no dependa de dónde quedó el mouse.
+/*
+ * Vive en `grabar/menu-de-palabra.js`, con el transcript sobre el que abre: lo
+ * usan esta pantalla y la del vídeo de la semana, y tiene que ofrecer lo mismo
+ * en las dos. Acá queda solo lo que es de esta pantalla —a dónde vuelve el foco
+ * y qué estaba sin pintar—, que se le dice al conectarlo.
  */
-let menuPalabra = null;
-
-/**
- * Clic derecho sobre una palabra: poner ahí el IN o el OUT.
- *
- * Es la otra manera de hacer lo que hace el arrastre. Existe porque arrastrar
- * una línea treinta renglones hacia arriba pide pulso, y porque en una toma
- * larga el borde que se quiere mover puede estar fuera de la vista.
- *
- * **Seleccionar de corrido sigue siendo comentar.** Son dos gestos que no se
- * pisan: `alSeleccionar` ignora el botón derecho, y esto solo mira una palabra.
- */
-function alClicDerecho(e) {
-    const w = e.target.closest && e.target.closest('.palabra');
-    const donde = w && w.closest('.transcript.es-movible');
-    cerrarMenuDePalabra();
-    if (!w || !donde) return;
-    // Sin esto sale el menú del navegador encima del nuestro. Electron no pone
-    // ninguno propio (no hay `context-menu` en `main.js`), pero el de Chromium
-    // aparece igual mientras se mira la maqueta.
-    e.preventDefault();
-
-    const hueco = donde.closest('[data-texto]');
-    const cual = hueco.dataset.texto;
-    const toma = hueco.dataset.toma ? Number(hueco.dataset.toma) : null;
-    const opciones = texto.bordesQuePuede(donde, w).map(o => ({ ...o, ...comoSeLlama(cual, o.borde) }));
-    if (!opciones.length) return;
-    menuPalabra = { cual, toma };
-    abrirMenuDePalabra(opciones, w.textContent, e.clientX, e.clientY);
-}
-
-/**
- * Cómo se llama cada opción, que es lo que el motor va a hacer de verdad.
- *
- * Las reglas de qué se puede ofrecer están en `texto.bordesQuePuede`, con el
- * arrastre. Acá está solo el nombre, porque el nombre no depende de la geometría
- * sino de qué texto es: el mismo IN puesto en el campo de espera ABRE una toma,
- * y puesto en una toma abierta le mueve el principio. Sin toma abierta el menú
- * sale con una opción sola, y eso es correcto: el OUT de una toma que no existe
- * no es nada, y cerrar la abierta en su última palabra ya es el botón primario.
- */
-function comoSeLlama(cual, borde) {
-    if (borde === 'in') {
-        return cual === 'espera'
-            ? { icono: 'abrirToma', dice: 'Abrir la toma acá',
-                pista: 'La toma empieza en esta palabra. Es lo mismo que arrastrar el IN hasta acá' }
-            : { icono: 'abrirToma', dice: 'Poner el IN acá',
-                pista: 'La toma empieza en esta palabra, y lo de antes queda afuera' };
-    }
-    return cual === 'abierta'
-        ? { icono: 'cerrarToma', dice: 'Cerrar la toma acá',
-            pista: 'Esta palabra es la última de la toma, y la toma queda cerrada' }
-        : { icono: 'cerrarToma', dice: 'Poner el OUT acá',
-            pista: 'Esta palabra es la última de la toma, y lo de después queda afuera' };
-}
-
-function abrirMenuDePalabra(opciones, palabra, x, y) {
-    const menu = $('#menu-palabra');
-    menu.innerHTML = `<span class="menu-titulo">«${esc(recortar(palabra))}»</span>` +
-        opciones.map(o => `<button class="menu-fila" type="button" role="menuitem"
-            data-hace="borde-aqui" data-borde="${o.borde}" data-ms="${o.ms}"
-            title="${esc(o.pista)}">
-            <span class="hp-ico">${icono(o.icono)}</span>${o.dice}</button>`).join('');
-    menu.hidden = false;
-    // Medido y después acomodado: contra el borde de abajo o de la derecha se
-    // abre hacia el otro lado, que es lo que hace cualquier menú y lo que evita
-    // que la última palabra de un texto largo abra un menú fuera de la pantalla.
-    const caja = menu.getBoundingClientRect();
-    const margen = 8;
-    const izq = Math.max(margen, Math.min(x, window.innerWidth - caja.width - margen));
-    const arr = y + caja.height + margen > window.innerHeight
-        ? Math.max(margen, y - caja.height)
-        : y;
-    menu.style.left = `${Math.round(izq)}px`;
-    menu.style.top = `${Math.round(arr)}px`;
-    const primera = menu.querySelector('.menu-fila');
-    if (primera) primera.focus({ preventScroll: true });
-}
-
-/** El título del menú es para reconocer la palabra, no para leerla entera. */
-function recortar(palabra) {
-    const p = String(palabra || '').trim();
-    return p.length > 24 ? `${p.slice(0, 23)}…` : p;
-}
-
-function cerrarMenuDePalabra() {
-    if (!menuPalabra) return;
-    menuPalabra = null;
-    const menu = $('#menu-palabra');
-    // Si el foco estaba en una opción, vuelve a la pantalla: vaciar el menú con
-    // el foco adentro lo dejaba en el `body`, y desde ahí la K y el Enter
-    // siguen andando de casualidad, porque el teclado se escucha en el documento.
-    if (document.activeElement && menu.contains(document.activeElement)) {
-        $('#vista-vivo').focus({ preventScroll: true });
-    }
-    menu.hidden = true;
-    menu.innerHTML = '';
-    // Mientras estaba abierto no se repintó: lo que llegó espera acá.
-    if (pendiente) pintar();
-}
 
 /**
  * Un pedazo seleccionado del texto de una toma abre el campo para comentarlo.
@@ -1976,22 +1866,8 @@ async function alTeclado(e) {
     // Con Ajustes o Diagnóstico abiertos encima, el teclado es de ellos: una
     // «p» en el selector de idioma cambiaba la vista de una toma.
     if (document.querySelector('.telon.es-activa')) return;
-    // Con el menú de una palabra abierto, el teclado es del menú: Escape lo
-    // cierra sin tocar nada y las flechas van de una opción a la otra. Enter y
-    // espacio los atiende el botón solo, que es lo que hace un botón.
-    if (menuPalabra) {
-        if (e.key === 'Escape') { e.preventDefault(); return cerrarMenuDePalabra(); }
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-            e.preventDefault();
-            const filas = [...$('#menu-palabra').querySelectorAll('.menu-fila')];
-            const i = filas.indexOf(document.activeElement);
-            const paso = e.key === 'ArrowDown' ? 1 : -1;
-            const cual = filas[(Math.max(0, i) + paso + filas.length) % filas.length];
-            if (cual) cual.focus({ preventScroll: true });
-            return;
-        }
-        if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Tab') return;
-    }
+    // Con el menú de una palabra abierto, el teclado es del menú.
+    if (menuPalabra.alTeclado(e)) return;
     if (escribiendo()) {
         const campo = document.activeElement;
         if (campo.dataset.campo === 'comentario') {

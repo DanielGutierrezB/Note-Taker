@@ -126,24 +126,114 @@ module.exports = async t => {
 
     t.group('clic derecho · el camino y el menú del sistema');
 
+    const elModulo = () => fs.readFileSync(
+        path.join(RAIZ, 'src', 'js', 'grabar', 'menu-de-palabra.js'), 'utf8');
+    const laClase = () => fs.readFileSync(path.join(RAIZ, 'src', 'js', 'pantalla-vivo.js'), 'utf8');
+    const laSemana = () => fs.readFileSync(path.join(RAIZ, 'src', 'js', 'pantalla-semanal.js'), 'utf8');
+
     t.test('las dos maneras de mover un borde terminan en la misma llamada', () => {
         // Si el menú llamara al motor por su cuenta, el deshacer por campo vería
-        // dos cosas distintas para el mismo cambio.
-        const codigo = fs.readFileSync(path.join(RAIZ, 'src', 'js', 'pantalla-vivo.js'), 'utf8');
-        t.eq((codigo.match(/ponerBorde\(/g) || []).length, 3,
-            'una definición y dos usos: el arrastre y el menú');
-        t.ok(/case 'borde-aqui':[\s\S]{0,400}await ponerBorde\(/.test(codigo),
-            'el menú no habla con el motor: pasa por ponerBorde');
-        t.ok(/function ponerBorde[\s\S]{0,700}grabarCerrarToma[\s\S]{0,200}tipo: 'borde'/.test(codigo),
-            'ponerBorde es el único que reparte entre abrir, cerrar y mover');
+        // dos cosas distintas para el mismo cambio. Vale en las dos pantallas:
+        // cada una tiene su `ponerBorde` porque le pide a motores distintos
+        // —una clase en curso y un vídeo de la semana no se editan igual—, pero
+        // dentro de cada una hay una sola puerta.
+        for (const [quien, codigo] of [['clase', laClase()], ['semana', laSemana()]]) {
+            t.ok(/function ponerBorde\(cual, tomaId, borde, ms\)/.test(codigo),
+                `${quien}: la puerta existe y recibe lo mismo`);
+            t.ok(/alElegir: q => ponerBorde\(q\.cual, q\.toma, q\.borde, q\.ms\)/.test(codigo),
+                `${quien}: el menú no habla con el motor, pasa por ponerBorde`);
+            t.ok(/function ponerBorde[\s\S]{0,900}grabarCerrarToma[\s\S]{0,300}tipo: 'borde'/.test(codigo),
+                `${quien}: ponerBorde es el único que reparte entre abrir, cerrar y mover`);
+        }
+        t.ok(/suyo = \(borde, ms\) => ponerBorde\(/.test(laSemana()),
+            'y en la semana el arrastre entra por la misma puerta que el menú');
     });
 
     t.test('el menú del sistema no sale encima', () => {
-        const codigo = fs.readFileSync(path.join(RAIZ, 'src', 'js', 'pantalla-vivo.js'), 'utf8');
-        t.ok(/function alClicDerecho[\s\S]{0,900}e\.preventDefault\(\)/.test(codigo),
+        t.ok(/export function alClicDerecho[\s\S]{0,900}e\.preventDefault\(\)/.test(elModulo()),
             'el contextmenu se cancela antes de abrir el nuestro');
         const main = fs.readFileSync(path.join(RAIZ, 'main.js'), 'utf8');
         t.ok(!/context-menu/.test(main), 'Electron no tiene ningún menú propio que competir');
+    });
+
+    t.test('el menú es uno solo y lo usan las dos pantallas', () => {
+        // Estaba dentro de `pantalla-vivo.js` cuando era de una. Copiarlo en la
+        // otra habría dejado dos menús que se separan: el mismo transcript lo
+        // dibuja un solo módulo y el menú que abre encima tiene que ser uno.
+        for (const [quien, codigo] of [['clase', laClase()], ['semana', laSemana()]]) {
+            t.ok(/import \* as menuPalabra from '\.\/grabar\/menu-de-palabra\.js'/.test(codigo),
+                `${quien}: lo importa`);
+            t.ok(/menuPalabra\.conectar\(\{/.test(codigo), `${quien}: y se conecta`);
+        }
+        t.ok(!/function comoSeLlama/.test(laClase()) && !/function comoSeLlama/.test(laSemana()),
+            'y ninguna se quedó con una copia de los nombres de las opciones');
+    });
+
+    t.test('cada pantalla recibe lo de su propio menú y no lo de la otra', () => {
+        // Las dos se conectan al arrancar la app, seguidas, y `#menu-palabra` es
+        // uno solo en el documento. Con una sola dueña ganaría la última en
+        // conectarse y el menú de la semana le pediría el borde a la clase.
+        const m = elModulo();
+        t.ok(/const dueños = new Map\(\)/.test(m), 'hay un registro y no una dueña sola');
+        t.ok(/\[\.\.\.dueños\.values\(\)\]\.find\(d => w\.closest\(d\.raiz\)\)/.test(m),
+            'y se enruta por dónde se hizo el clic, que no depende del orden');
+        t.ok(/abierto = \{ cual, toma, dueño \}/.test(m),
+            'el menú abierto se queda con su dueña, por si la otra pantalla aparece en el medio');
+        const app = fs.readFileSync(path.join(RAIZ, 'src', 'js', 'app.js'), 'utf8');
+        t.ok(app.indexOf('vivo.conectar(app)') < app.indexOf('semanal.conectar(app)'),
+            'las dos se conectan al arrancar: es la situación que esto resuelve');
+    });
+
+    t.test('con el menú abierto, debajo no se mueve nada', () => {
+        // El menú habla de una palabra: si el texto se rehace, la palabra de la
+        // que habla ya no está. En la semana son dos sitios, porque el reloj
+        // remonta el transcript aparte del repintado de la tarjeta.
+        t.ok(/pulsando \|\| componiendo \|\| menuPalabra\.hay\(\)/.test(laClase()),
+            'clase: no repinta');
+        const semana = laSemana();
+        t.ok(/if \(menuPalabra\.hay\(\)\) \{ pendiente = true; return; \}/.test(semana),
+            'semana: no repinta la tarjeta');
+        t.ok(/!texto\.arrastrando\(\) && !menuPalabra\.hay\(\)/.test(semana),
+            'semana: y tampoco remonta el transcript, que es lo que el reloj hace cada segundo');
+        for (const [quien, codigo] of [['clase', laClase()], ['semana', semana]]) {
+            t.ok(/alCerrar: \(\) => \{ if \(pendiente\) pintar\(\); \}/.test(codigo),
+                `${quien}: y al cerrarlo se pinta lo que esperaba`);
+        }
+    });
+
+    t.test('el teclado con el menú abierto es del menú, en las dos', () => {
+        t.ok(/export function alTeclado[\s\S]{0,400}e\.key === 'Escape'/.test(elModulo()),
+            'Escape lo cierra');
+        for (const [quien, codigo] of [['clase', laClase()], ['semana', laSemana()]]) {
+            t.ok(/if \(menuPalabra\.alTeclado\(e\)\) return;/.test(codigo),
+                `${quien}: la pantalla le cede la tecla`);
+        }
+    });
+
+    t.test('en la semana se puede subir a buscar la palabra', () => {
+        // Lo que hace usable el clic derecho: para poner el IN diez frases
+        // atrás hay que llegar hasta ellas, y el transcript se iba al fondo una
+        // vez por segundo. El que está abajo sigue abajo —lo nuevo entra ahí—,
+        // el que alguien movió se queda quieto.
+        const semana = laSemana();
+        t.ok(/alFondo\.get\(clave\) !== false/.test(semana),
+            'solo se va al fondo el que estaba al fondo');
+        t.ok(/rollo\.onscroll = \(\) => alFondo\.set\(clave, estaAlFondo\(rollo\)\)/.test(semana),
+            'y se recuerda al moverlo, porque remontar el nodo le borra el scroll');
+        t.ok(/previo !== nodo \|\| /.test(semana),
+            'un texto que se rehace entero sí arranca abajo: no hay dónde haber subido');
+    });
+
+    t.test('en la toma abierta solo el OUT la cierra, también en la semana', () => {
+        // El menú ofrece «poner el IN acá» sobre cualquier palabra del medio de
+        // la toma abierta. Con los dos bordes yendo a `grabarCerrarToma` —que es
+        // como estaba— correr el IN la habría cerrado en esa palabra.
+        const semana = laSemana();
+        t.ok(/if \(cual === 'abierta' && borde === 'out'\)[\s\S]{0,120}grabarCerrarToma/.test(semana),
+            'el OUT cierra');
+        const puerta = semana.slice(semana.indexOf('function ponerBorde(cual, tomaId'));
+        t.ok(/grabarCerrarToma[\s\S]{0,200}return cambiarFicha\(tomaId/.test(puerta),
+            'y el IN cae en la edición de siempre, que le corre el principio');
     });
 
     t.test('seleccionar de corrido sigue siendo comentar, y el derecho no', () => {
