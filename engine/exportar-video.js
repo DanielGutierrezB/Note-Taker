@@ -212,11 +212,17 @@ function enLosDosRelojes(toma, wavs) {
  *     (`overlay` termina con la más corta);
  *   · el audio es el de la cámara si lo tiene y cubre, y si no el del WAV.
  *
- * @param {object} p { tomas, pantalla, camara, camaraConAudio, wavs }
+ * @param {object} p { tomas, pantallas, camara, camaraConAudio, wavs } —
+ *   `pantallas` son los tramos, del más viejo al más nuevo; se acepta
+ *   `pantalla` suelta porque es lo que había cuando la pantalla era una sola
  * @returns {{trozos:object[], avisos:string[]}}
  */
 function repartir(p) {
-    const { tomas, pantalla, camara, wavs } = p;
+    const { tomas, camara, wavs } = p;
+    // La pantalla puede ser varios archivos: cambiar de ventana mientras se
+    // graba cierra uno y abre el siguiente. Cuál le toca a cada toma lo decide
+    // la hora, abajo, y no hay una «la pantalla» para toda la sesión.
+    const pantallas = p.pantallas || (p.pantalla ? [p.pantalla] : []);
     const avisos = [];
     const trozos = [];
 
@@ -234,6 +240,14 @@ function repartir(p) {
         const { wav, enElAudio, enLaPared } = enLosDosRelojes(toma, wavs);
 
         const cubre = v => v && videoCrudo.cubre(v, enLaPared.desdeMs) && videoCrudo.cubre(v, enLaPared.hastaMs);
+
+        // **El tramo de pantalla que cubre esta toma entera, si hay alguno.**
+        // Entera y no a medias: un trozo no puede salir mitad de una ventana y
+        // mitad de otra, así que una toma que se quedó a caballo entre dos
+        // tramos —cambió de ventana sin cerrarla— no tiene pantalla y se va al
+        // repuesto, que es la cámara. Es lo mismo que hace una toma que quedó
+        // fuera de lo grabado, y por el mismo motivo.
+        const pantalla = pantallas.find(cubre) || null;
 
         // La que pide la vista primero, y la otra como repuesto: una toma que
         // pedía la cámara y no la tiene sale con la pantalla, que es mucho
@@ -542,7 +556,7 @@ function alLado(ruta) {
  * por eso el montaje y el export caen en el mismo fotograma.
  *
  * @param {string} json el sidecar
- * @returns {object} `{ ok, avisos, archivos: {camara, pantalla}, tomas, recuadro }`
+ * @returns {object} `{ ok, avisos, archivos: {camara, pantalla, pantallas}, tomas, recuadro }`
  *   o `{ ok: false, avisos, error }` si no hay ni un vídeo que mirar
  */
 /**
@@ -567,15 +581,18 @@ function abrirLaSesion(json) {
     return {
         sitio, estado, vacios,
         camara,
-        pantalla: videoCrudo.de(videos, 'pantalla'),
+        // Todos los tramos: cambiar de ventana mientras se graba parte la
+        // pantalla en varios archivos, y cuál le toca a cada toma lo decide
+        // `repartir` por la hora.
+        pantallas: videoCrudo.todas(videos, 'pantalla'),
         camaraConAudio: Boolean(camara) && tieneAudio(camara.ruta),
         wavs: wavsDe(estado, sitio)
     };
 }
 
 function montajeDeSesion(json) {
-    const { estado, vacios, camara, pantalla, camaraConAudio, wavs } = abrirLaSesion(json);
-    if (!pantalla && !camara) {
+    const { estado, vacios, camara, pantallas, camaraConAudio, wavs } = abrirLaSesion(json);
+    if (!pantallas.length && !camara) {
         // El mismo fallo que da el corte, y no un editor vacío con `ok: true`.
         // Eran dos contratos distintos para la misma entrada en el mismo módulo.
         return {
@@ -603,11 +620,12 @@ function montajeDeSesion(json) {
     // montaje que se mira y el vídeo que sale eligen fondo, recuadro y encuadre
     // con la misma regla, incluidos los repuestos —la toma que pedía la cámara
     // y no la tiene— y lo que se ve es de verdad lo que va a salir.
-    const { trozos, avisos } = repartir({ tomas, pantalla, camara, camaraConAudio, wavs });
+    const { trozos, avisos } = repartir({ tomas, pantallas, camara, camaraConAudio, wavs });
 
-    // Dos archivos y, por toma, dónde cae en cada uno: es lo único que la
-    // ventana necesita para buscar con `currentTime`. Mandar la ruta en cada
-    // toma la obligaría a deducir cuál es cuál en cada cambio de vista.
+    // Dónde cae cada toma en cada archivo, y además de QUÉ archivo de pantalla
+    // se trata: con los tramos ya no hay una sola, así que la ventana tiene que
+    // saber a cuál apuntar su `<video>` en cada toma. La de la cámara sigue
+    // siendo una y va suelta, como siempre.
     //
     // Solo el fondo y lo de encima, nunca el audio. Si el audio sale de la
     // cámara, la cámara ya está en uno de esos dos —`repartir` solo la elige
@@ -617,11 +635,10 @@ function montajeDeSesion(json) {
     // evitaba que un número del reloj equivocado acabara en un `currentTime` era
     // que una ruta `.wav` nunca es igual a una `.mp4`. Un límite de relojes no
     // se sostiene con una comparación de texto.
+    const deCual = (t, cual) => [t.fondo, t.encima].find(x => x && x.cual === cual) || null;
     const enCual = (t, cual) => {
-        for (const x of [t.fondo, t.encima]) {
-            if (x && x.cual === cual) return tres(x.desdeSec);
-        }
-        return null;
+        const x = deCual(t, cual);
+        return x ? tres(x.desdeSec) : null;
     };
 
     return {
@@ -632,7 +649,10 @@ function montajeDeSesion(json) {
         avisos: vacios.concat(avisos),
         archivos: {
             camara: camara ? camara.ruta : null,
-            pantalla: pantalla ? pantalla.ruta : null
+            // El primer tramo, que es el único que hay cuando nadie cambió de
+            // ventana. Lo que manda de verdad es `pantallaRuta` de cada toma.
+            pantalla: pantallas.length ? pantallas[0].ruta : null,
+            pantallas: pantallas.map(v => v.ruta)
         },
         tomas: trozos.map(t => ({
             id: t.toma,
@@ -643,6 +663,8 @@ function montajeDeSesion(json) {
             fondo: t.fondo.cual,
             camaraDesde: enCual(t, 'camara'),
             pantallaDesde: enCual(t, 'pantalla'),
+            // Cuál de los tramos de pantalla usa esta toma.
+            pantallaRuta: (deCual(t, 'pantalla') || {}).ruta || null,
             // El sonido solo si sale de la cámara. Cuando sale del WAV el
             // montaje va mudo: sincronizar un tercer archivo en una vista
             // previa no paga lo que cuesta, y para eso está el aviso.
@@ -705,7 +727,7 @@ function wavsDe(estado, sitio) {
  */
 async function deSesion(json, opciones) {
     const o = opciones || {};
-    const { sitio, estado, vacios, pantalla, camara, camaraConAudio, wavs }
+    const { sitio, estado, vacios, pantallas, camara, camaraConAudio, wavs }
         = abrirLaSesion(json);
 
     const tomas = tomasDe(vivo.tomasQueQuedan(estado));
@@ -717,7 +739,7 @@ async function deSesion(json, opciones) {
         };
     }
 
-    if (!pantalla && !camara) {
+    if (!pantallas.length && !camara) {
         return {
             ok: false,
             tomas: tomas.length,
@@ -752,7 +774,7 @@ async function deSesion(json, opciones) {
                 + `${conComa(silencios.LARGO_MIN_SEC)} s que quitar.`);
     }
 
-    const reparto = repartir({ tomas: pedazos, pantalla, camara, camaraConAudio, wavs });
+    const reparto = repartir({ tomas: pedazos, pantallas, camara, camaraConAudio, wavs });
     const trozos = reparto.trozos;
     // Lo que faltó va primero: es la causa de todo lo que venga detrás.
     const avisos = vacios.concat(reparto.avisos, quitados);

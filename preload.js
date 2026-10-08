@@ -92,7 +92,10 @@ contextBridge.exposeInMainWorld('nt', {
     // hora que alinea el vídeo con el audio (ver `engine/video-crudo.js`).
     semanalAbrir: pedido => ipcRenderer.invoke('semanal-abrir', pedido),
     semanalTrozo: (cual, trozo) => ipcRenderer.send('semanal-trozo', cual, trozo),
-    semanalCerrar: () => ipcRenderer.invoke('semanal-cerrar'),
+    // Sin `cual` cierra los dos, que es terminar de grabar. Con uno cierra solo
+    // esa fuente: es cambiar de ventana, que parte la pantalla en tramos y deja
+    // la cámara andando.
+    semanalCerrar: cual => ipcRenderer.invoke('semanal-cerrar', cual || null),
     // Devuelve RUTAS del disco, no `data:`. La ventana las resuelve contra su
     // propia página —que en la app es `file:`— y se las da a los dos `<video>`
     // del editor. Son dos vídeos de decenas de megas: meterlos por el puente

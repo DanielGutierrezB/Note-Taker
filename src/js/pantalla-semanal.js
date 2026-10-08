@@ -365,12 +365,18 @@ function pegarElMontaje() {
  */
 function conUrls(m) {
     const a = m.archivos || {};
+    const url = r => (r ? tarjetas.urlDeArchivo(r) : null);
     return {
         ...m,
         archivos: {
-            camara: a.camara ? tarjetas.urlDeArchivo(a.camara) : null,
-            pantalla: a.pantalla ? tarjetas.urlDeArchivo(a.pantalla) : null
-        }
+            camara: url(a.camara),
+            pantalla: url(a.pantalla),
+            pantallas: (a.pantallas || []).map(url).filter(Boolean)
+        },
+        // La pantalla puede ser varios tramos y cada toma usa el suyo, así que
+        // su ruta viaja por toma y hay que hacerla URL también: sin esto el
+        // reproductor recibía una ruta del disco y no cargaba nada.
+        tomas: (m.tomas || []).map(t => ({ ...t, pantallaRuta: url(t.pantallaRuta) }))
     };
 }
 
@@ -597,6 +603,7 @@ async function alClic(e) {
         pintar();
         return;
     }
+    if (hace === 'cambiar-pantalla') return cambiarPantalla(boton);
     if (hace === 'vista') return cambiarVista(boton.dataset.vista);
     if (hace === 'borde') return bordeDeToma();
     if (hace === 'plegar') return plegar(Number(boton.dataset.toma));
@@ -817,6 +824,44 @@ async function traerElMontaje() {
     estado.montaje = conUrls(m);
     for (const a of m.avisos || []) avisar(a, 'aviso');
     return true;
+}
+
+/**
+ * Cambiar de ventana sin parar de grabar.
+ *
+ * El botón se apaga mientras dura, y eso no es cosmético: el selector del
+ * sistema tarda lo que tarde la persona, y dos cambios a la vez dejarían dos
+ * grabadores escribiendo en el mismo tramo.
+ *
+ * **Con una toma abierta se cambia igual y se dice lo que va a pasar.** La
+ * tarjeta ya lo advierte antes de apretar (ver `laVentana` en `tarjetas.js`);
+ * esto lo repite después, cuando ya es un hecho y con el número de la toma, que
+ * es el momento en que todavía se puede arreglar cerrando la toma y volviendo a
+ * decir el «3, 2, 1».
+ */
+async function cambiarPantalla(boton) {
+    const abierta = (estado.sesion && estado.sesion.tomas || []).find(t => t.outMs == null);
+    boton.disabled = true;
+    let r;
+    try {
+        r = await filmar.cambiarPantalla();
+    } finally {
+        boton.disabled = false;
+    }
+    if (!r.ok) {
+        if (r.error) avisar(r.error, 'error');
+        return undefined;
+    }
+    estado.pantalla = { nombre: r.nombre, ancho: r.ancho, alto: r.alto };
+    if (abierta) {
+        avisar(`Ahora se graba ${r.nombre}. La toma ${abierta.id} quedó partida entre dos `
+            + 'ventanas, así que va a salir con tu cámara: si la querés con pantalla, cerrala '
+            + 'y volvé a abrirla.', 'aviso');
+    } else {
+        avisar(`Ahora se graba ${r.nombre}.`);
+    }
+    pintar();
+    return undefined;
 }
 
 /**
@@ -1082,7 +1127,11 @@ async function irAlEditor(json) {
     // hay cierre, y sin esto se caía al respaldo —la carpeta que se eligió, que
     // ahora es la madre de todas— y abría el Finder en el sitio equivocado.
     if (!estado.brutos.length) {
-        estado.brutos = [m.archivos.camara, m.archivos.pantalla].filter(Boolean);
+        // Todos los tramos de pantalla, no solo el primero: `ver-brutos` abre el
+        // Finder en el primero de la lista, y si faltaran los demás no habría
+        // forma de llegar a lo que se grabó después de cambiar de ventana.
+        estado.brutos = [m.archivos.camara, ...(m.archivos.pantallas || [m.archivos.pantalla])]
+            .filter(Boolean);
     }
     for (const a of m.avisos || []) avisar(a, 'aviso');
     // Y el texto de cada toma, que es con lo que se edita: el montaje dice

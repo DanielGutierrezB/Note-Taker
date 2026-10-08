@@ -146,15 +146,23 @@ function dondeVa() {
  *
  * Van al estado —y de ahí al sidecar— porque son el material del corte: con el
  * archivo y su hora de arranque se puede volver a exportar el MP4 más tarde sin
- * grabar nada otra vez. Si un `cual` ya estaba apuntado se reemplaza, que es lo
- * que pasa al reanudar: el vídeo nuevo es el que vale.
+ * grabar nada otra vez.
+ *
+ * **Lo que identifica a un vídeo es su archivo, no su fuente.** Antes era el
+ * `cual`, y así una pantalla nueva reemplazaba a la anterior, que es lo que
+ * hace falta al reanudar: el archivo se vuelve a abrir con el mismo nombre y
+ * se sobreescribe, así que el apunte viejo ya no describe nada. Con el archivo
+ * como identidad eso sigue pasando igual —mismo nombre, mismo apunte— y además
+ * caben los tramos: cambiar de ventana a mitad de grabación deja varios
+ * archivos de pantalla, cada uno con su hora de arranque, y los dos hacen
+ * falta para cubrir las tomas de antes y las de después.
  */
 function anotarVideos(videos) {
     if (!sesion || !videos || !videos.length) return [];
     const puestos = sesion.estado.videos || [];
     for (const v of videos) {
         if (!v || !v.cual) continue;
-        const i = puestos.findIndex(x => x.cual === v.cual);
+        const i = puestos.findIndex(x => x.archivo === v.archivo);
         if (i === -1) puestos.push(v); else puestos[i] = v;
     }
     sesion.estado.videos = puestos;

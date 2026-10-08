@@ -49,6 +49,31 @@ module.exports = function (t) {
         }
     });
 
+    t.test('los tramos de pantalla se guardan todos: el archivo es la identidad', () => {
+        // La pantalla puede partirse en varios archivos —cambiar de ventana
+        // cierra uno y abre otro—, así que apuntarlos por `cual` haría que el
+        // segundo borrara al primero y la mitad de la grabación desapareciera
+        // del sidecar sin que nadie se enterara. Lo que no puede repetirse es
+        // el archivo: reanudar vuelve a escribir el mismo y ese sí se pisa.
+        const dir = carpeta();
+        try {
+            grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
+            grabacion.anotarVideos([
+                { cual: 'camara', archivo: '/tmp/a-camara.mp4', segundos: 60 },
+                { cual: 'pantalla', archivo: '/tmp/a-pantalla.mp4', segundos: 30 }
+            ]);
+            const dos = grabacion.anotarVideos([{ cual: 'pantalla', archivo: '/tmp/a-pantalla-2.mp4', segundos: 29 }]);
+            t.deep(dos.map(v => v.archivo),
+                ['/tmp/a-camara.mp4', '/tmp/a-pantalla.mp4', '/tmp/a-pantalla-2.mp4'],
+                'los dos tramos conviven con la cámara');
+            const otra = grabacion.anotarVideos([{ cual: 'pantalla', archivo: '/tmp/a-pantalla.mp4', segundos: 31 }]);
+            t.eq(otra.length, 3, 'y volver a cerrar el mismo archivo no lo duplica');
+            t.eq(otra[1].segundos, 31, 'lo reemplaza con lo último que se supo');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
     t.test('el audio va a xml/Audio y crece con cada pedazo', () => {
         const dir = carpeta();
         try {

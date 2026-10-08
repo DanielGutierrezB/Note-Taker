@@ -30,11 +30,12 @@ const notasXml = require('../engine/notas-xml');
 const T0 = Date.parse('2026-10-03T10:00:00');
 
 /** Un vídeo ya grabado, como lo deja `video-crudo.cerrar`. */
-function video(cual, desdeS, hastaS) {
+function video(cual, desdeS, hastaS, tramo) {
+    const n = tramo && tramo > 1 ? `-${tramo}` : '';
     return {
         cual,
-        archivo: `/tmp/${cual}.mp4`,
-        ruta: `/tmp/${cual}.mp4`,
+        archivo: `/tmp/${cual}${n}.mp4`,
+        ruta: `/tmp/${cual}${n}.mp4`,
         empezoMs: T0 + desdeS * 1000,
         cerradoMs: T0 + hastaS * 1000
     };
@@ -101,6 +102,72 @@ module.exports = function (t) {
         t.ok(/pantalla/.test(r.trozos[0].fondo.ruta), 'el fondo es la pantalla');
         t.ok(/camara/.test(r.trozos[0].encima.ruta), 'y la cámara va encima');
         t.eq(r.trozos[0].segundos, 10);
+    });
+
+    t.test('cambiar de ventana parte la pantalla en tramos, y cada toma usa el suyo', () => {
+        // Se grabó la ventana A hasta el segundo 30 y la B desde el 31: cada
+        // toma tiene que salir de la que estaba puesta cuando se grabó.
+        const r = exportar.repartir({
+            tomas: [toma(1, 10, 20), toma(2, 40, 50)],
+            pantallas: [video('pantalla', 0, 30), video('pantalla', 31, 60, 2)],
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.deep(r.avisos, [], r.avisos.join(' · '));
+        t.eq(r.trozos.length, 2);
+        t.eq(r.trozos[0].fondo.ruta, '/tmp/pantalla.mp4', 'la primera, con la ventana de antes');
+        t.eq(r.trozos[1].fondo.ruta, '/tmp/pantalla-2.mp4', 'y la segunda, con la nueva');
+        // Cada tramo tiene su propia hora de arranque, así que la posición
+        // dentro del archivo se cuenta desde la suya y no desde la del primero.
+        t.eq(r.trozos[1].fondo.desdeSec, 9, 'y el sitio se mide contra SU arranque');
+    });
+
+    t.test('una toma partida entre dos ventanas sale con la cámara, y se dice', () => {
+        // El cambio cayó dentro de la toma, así que ningún tramo la cubre
+        // entera: un trozo no puede salir mitad de una ventana y mitad de otra.
+        // Es el precio que la pantalla de grabar avisa antes de cambiar.
+        const r = exportar.repartir({
+            tomas: [toma(1, 25, 35)],
+            pantallas: [video('pantalla', 0, 30), video('pantalla', 31, 60, 2)],
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.eq(r.trozos.length, 1);
+        t.eq(r.trozos[0].fondo.cual, 'camara', 'sale con la cámara, que es mucho mejor que no salir');
+        t.eq(r.trozos[0].encima, null, 'y sin recuadro: no se superpone a sí misma');
+        t.eq(r.avisos.length, 1);
+        t.ok(/toma 1 pedía tu pantalla/.test(r.avisos[0]), r.avisos[0]);
+    });
+
+    t.test('sumar la pantalla a mitad de grabación deja las de antes con la cámara', () => {
+        // Se empezó sin pantalla y se eligió una después: las tomas anteriores
+        // no la tienen y las siguientes sí. Es un tramo como cualquier otro.
+        const r = exportar.repartir({
+            tomas: [toma(1, 5, 15), toma(2, 40, 50)],
+            pantallas: [video('pantalla', 30, 60, 2)],
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.eq(r.trozos[0].fondo.cual, 'camara', 'la de antes de elegirla');
+        t.eq(r.trozos[1].fondo.cual, 'pantalla', 'y la de después');
+    });
+
+    t.test('una pantalla sola sigue entrando por donde entraba', () => {
+        // La forma vieja —`pantalla` en singular— es la que usan las sesiones
+        // grabadas antes de que la pantalla pudiera partirse, y el reparto
+        // tiene que seguir entendiéndola.
+        const r = exportar.repartir({
+            tomas: [toma(1, 10, 20)],
+            pantalla: video('pantalla', 0, 60),
+            camara: video('camara', 0, 60),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.deep(r.avisos, []);
+        t.eq(r.trozos[0].fondo.ruta, '/tmp/pantalla.mp4');
     });
 
     t.test('una toma de profesor es la cámara sola: ni pantalla de fondo ni recuadro', () => {

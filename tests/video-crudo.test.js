@@ -37,6 +37,36 @@ module.exports = function (t) {
         videoCrudo.cerrarTodo();
     });
 
+    t.test('cambiar de ventana abre un tramo nuevo sin pisar el de antes', () => {
+        // Cada vez que se cambia de ventana se cierra un archivo y se abre
+        // otro. Si el nombre no llevara el número, el segundo se escribiría
+        // encima del primero y lo grabado antes del cambio se perdería.
+        const dir = carpeta();
+        const uno = videoCrudo.abrir({ dir, nombre: 'cambio', cual: 'pantalla', empezoMs: T0 });
+        videoCrudo.escribir(uno.id, Buffer.from('ventana-A'));
+        videoCrudo.cerrar(uno.id, T0 + 30000);
+        const dos = videoCrudo.abrir({ dir, nombre: 'cambio', cual: 'pantalla', empezoMs: T0 + 31000, tramo: 2 });
+        videoCrudo.escribir(dos.id, Buffer.from('ventana-B'));
+        videoCrudo.cerrar(dos.id, T0 + 60000);
+        t.eq(path.basename(uno.archivo), 'cambio-pantalla.mp4', 'el primero se llama como siempre');
+        t.eq(path.basename(dos.archivo), 'cambio-pantalla-2.mp4', 'y el segundo lleva el número');
+        t.eq(fs.readFileSync(uno.archivo, 'utf8'), 'ventana-A', 'lo de antes del cambio sigue ahí');
+        t.eq(fs.readFileSync(dos.archivo, 'utf8'), 'ventana-B');
+    });
+
+    t.test('los tramos se leen en orden de grabación, no en el que estén guardados', () => {
+        // El montaje elige por toma el tramo que la cubre, y para eso los mira
+        // en orden. Vienen de un mapa, así que el orden hay que ponerlo.
+        const videos = [
+            { cual: 'pantalla', archivo: '/tmp/b.mp4', empezoMs: T0 + 31000 },
+            { cual: 'camara', archivo: '/tmp/c.mp4', empezoMs: T0 },
+            { cual: 'pantalla', archivo: '/tmp/a.mp4', empezoMs: T0 }
+        ];
+        t.deep(videoCrudo.todas(videos, 'pantalla').map(v => v.archivo), ['/tmp/a.mp4', '/tmp/b.mp4']);
+        t.deep(videoCrudo.todas(videos, 'camara').map(v => v.archivo), ['/tmp/c.mp4'], 'la cámara nunca se parte');
+        t.deep(videoCrudo.todas([], 'pantalla'), [], 'y sin pantalla no hay ninguno');
+    });
+
     t.test('la extensión la decide lo que la ventana pudo grabar', () => {
         t.eq(videoCrudo.extensionDe('video/mp4;codecs="avc1.42E01E,mp4a.40.2"'), 'mp4');
         t.eq(videoCrudo.extensionDe('video/webm;codecs=vp8'), 'webm');

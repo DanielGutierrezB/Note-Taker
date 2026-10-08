@@ -254,6 +254,7 @@ export function tarjetaGrabando(estado) {
             ${escena(estado, abierta ? (abierta.vista || estado.vista) : estado.vista)}
             <div class="crece">${elegirVista(estado, abierta)}</div>
           </div>
+          ${laVentana(estado, abierta)}
           <div class="campo" style="margin-top:16px">
             <span class="rotulo">${abierta ? `Lo que va diciendo la toma ${abierta.id}`
                 : 'Lo que se está oyendo'}</span>
@@ -275,6 +276,47 @@ export function tarjetaGrabando(estado) {
           </div>
         </div>
       </div>`;
+}
+
+/**
+ * Qué ventana se está grabando, y el botón para cambiarla sin parar.
+ *
+ * **La pantalla sale en tramos, uno por ventana**, y eso decide cuándo conviene
+ * cambiar: el exportador le da a cada toma el tramo que la cubre ENTERA, así
+ * que una toma que empieza con una ventana y termina con otra no tiene ninguno
+ * y sale con la cámara. Entre tomas, en cambio, el cambio no cuesta nada: ese
+ * rato queda fuera de todas las tomas y el corte lo tira igual.
+ *
+ * Por eso con una toma abierta se avisa en vez de apagar el botón. Apagarlo
+ * dejaría a quien está hablando sin salida —tendría que cerrar la toma para
+ * poder cambiar, y eso es justo lo que no se puede hacer con naturalidad a
+ * mitad de una frase—, y el precio de cambiar igual no es perder la grabación
+ * sino que esa toma salga con la cara en vez de la pantalla.
+ *
+ * Sin pantalla elegida el botón sirve para sumarla a mitad de grabación: las
+ * tomas de antes saldrán con la cámara y las de después con la pantalla, que es
+ * lo mismo que hace cualquier otro tramo.
+ */
+function laVentana(estado, abierta) {
+    const hay = Boolean(estado.pantalla);
+    return `
+      <div class="campo-fila" style="margin-top:16px; align-items:flex-start">
+        <div class="crece">
+          <span class="rotulo">De tu pantalla se está grabando</span>
+          <span class="v2">${hay
+        ? esc(estado.pantalla.nombre)
+        : 'Nada: el vídeo sale con tu cámara a pantalla completa.'}</span>
+        </div>
+        <button class="btn" type="button" data-hace="cambiar-pantalla"
+                title="${hay
+        ? 'Abre el selector de macOS para grabar otra ventana. La de ahora sigue grabando '
+            + 'mientras elegís, así que no se pierde nada en el medio.'
+        : 'Abre el selector de macOS para sumar tu pantalla a partir de acá'}">
+          ${hay ? 'Cambiar ventana…' : 'Elegir pantalla…'}</button>
+      </div>
+      ${abierta ? `<span class="v3">Con la toma ${abierta.id} abierta, cambiar de ventana ahora
+        la deja a caballo entre dos y esa toma saldría con tu cámara. Cerrala primero y cambiá
+        antes de abrir la que viene.</span>` : ''}`;
 }
 
 /**

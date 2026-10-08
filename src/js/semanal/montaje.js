@@ -131,15 +131,27 @@ export function poner(m) {
     archivos = m.archivos || archivos;
     recuadro = m.recuadro || null;
     apuntar(elCam, archivos.camara);
+    // La pantalla la vuelve a apuntar cada toma, con el tramo que le toca. Esto
+    // no sobra: es de lo que vive un plan sin `pantallaRuta` por toma —uno de
+    // antes de que la pantalla pudiera partirse, o el de la maqueta—, donde
+    // `buscar` no tiene a dónde apuntar y se queda con este.
     apuntar(elPan, archivos.pantalla);
     const sigue = antes ? plan.findIndex(t => t.id === antes.id) : -1;
     irAlIndice(sigue === -1 ? corte.primera(plan) : sigue, { reproducir: iba });
 }
 
+/**
+ * Apunta un `<video>` a un archivo. Devuelve si lo cambió.
+ *
+ * Importa quién lo cambió y cuándo, porque un `src` nuevo tira los metadatos:
+ * el `currentTime` que se ponga en el mismo turno se pierde, y hay que esperar
+ * a `loadedmetadata`. Lo necesita la pantalla, que puede ser varios tramos.
+ */
 function apuntar(v, ruta) {
-    if (!v || !ruta || v.dataset.ruta === ruta) return;
+    if (!v || !ruta || v.dataset.ruta === ruta) return false;
     v.dataset.ruta = ruta;
     v.src = ruta;
+    return true;
 }
 
 function laDeAhora() {
@@ -247,8 +259,20 @@ function buscar(t, segundos) {
     if (elCam && elCam.dataset.ruta && t.camaraDesde != null) {
         elCam.currentTime = t.camaraDesde + dentro;
     }
-    if (elPan && elPan.dataset.ruta && t.pantallaDesde != null) {
-        elPan.currentTime = t.pantallaDesde + dentro;
+    // **La pantalla puede ser otro archivo que en la toma anterior.** Cambiar de
+    // ventana mientras se graba la parte en tramos, y cada toma usa el que la
+    // cubre. Un `src` nuevo tira los metadatos, así que el reloj se pone cuando
+    // llegan: puesto en el mismo turno, se perdía y el tramo arrancaba de cero.
+    if (elPan && t.pantallaDesde != null) {
+        // En una local y no `elPan`: irse de la pantalla lo pone en `null`, y el
+        // oyente puede llegar después.
+        const pan = elPan;
+        const seg = t.pantallaDesde + dentro;
+        if (apuntar(pan, t.pantallaRuta)) {
+            pan.addEventListener('loadedmetadata', () => { pan.currentTime = seg; }, { once: true });
+        } else if (pan.dataset.ruta) {
+            pan.currentTime = seg;
+        }
     }
 }
 

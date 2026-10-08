@@ -222,16 +222,18 @@ async function acotar(pista) {
 }
 
 /**
- * Abre el selector del sistema y se queda con la pantalla o la ventana elegida.
+ * Abre el selector del sistema y devuelve la pantalla elegida, ya comprobada.
  *
  * Tiene que venir de un clic: el navegador no deja pedir la pantalla sin que la
- * persona lo haya pedido. Se elige ANTES de grabar, a propósito, para que se
- * vea en la vista previa qué es lo que va a quedar grabado.
+ * persona lo haya pedido. No toca `estado`: devuelve el stream y quien llama
+ * decide qué hacer con él. Eso es lo que deja cambiar de ventana a mitad de
+ * grabación sin riesgo —la de antes sigue grabando mientras el selector está
+ * abierto, y si se cancela no se tocó nada.
  */
-export async function elegirPantalla() {
-    await soltarPantalla();
+async function pedirPantalla(enSeguida) {
+    let stream;
     try {
-        estado.pantalla = await navigator.mediaDevices.getDisplayMedia({
+        stream = await navigator.mediaDevices.getDisplayMedia({
             video: {
                 frameRate: { ideal: 30 },
                 width: { max: MAX_ANCHO },
@@ -247,20 +249,27 @@ export async function elegirPantalla() {
             ? { ok: false, cancelado: true }
             : { ok: false, error: `No se pudo tomar la pantalla: ${e.message}` };
     }
-    const pista = estado.pantalla.getVideoTracks()[0];
-    pista.onended = () => {
-        // «Dejar de compartir» desde la barra del sistema.
-        estado.pantalla = null;
-        estado.tipos.pantalla = null;
-        estado.alAviso({ tipo: 'pantalla-soltada' });
-    };
+    const pista = stream.getVideoTracks()[0];
+    // **Antes de grabar se adopta acá, y no al volver.** Comprobar el
+    // codificador son cientos de milisegundos, y en todo ese rato
+    // `tienePantalla()` diría que no hay ninguna aunque la persona ya la haya
+    // elegido. De eso depende que aparezca el botón de Grabar, así que
+    // adoptarla al final dejaba una ventana en la que apretarlo contestaba «no
+    // hay ni cámara ni pantalla que grabar».
+    //
+    // Cambiando de ventana a mitad de grabación es justo al revés: adoptarla
+    // temprano pisaría la que todavía está grabando, y es lo que hace que
+    // cancelar el selector no cueste nada. Por eso esto va por parámetro.
+    if (enSeguida) quedarse(stream, pista);
     const puesta = await acotar(pista);
 
-    // Se comprueba acá, con la persona mirando y todavía sin grabar: si esta
-    // pantalla no se puede codificar, hay que decirlo ahora.
-    estado.tipos.pantalla = await formatoQueAguanta(estado.pantalla, false, 'pantalla');
-    if (!estado.tipos.pantalla) {
-        await soltarPantalla();
+    // Se comprueba contra ESTA fuente, no una vez por sesión: cada ventana entra
+    // a su tamaño y el codificador rechaza unos y acepta otros, así que la
+    // ventana nueva hay que probarla igual que la primera.
+    const tipo = await formatoQueAguanta(stream, false, 'pantalla');
+    if (!tipo) {
+        if (enSeguida) await soltarPantalla();
+        else for (const p of stream.getTracks()) p.stop();
         return {
             ok: false,
             error: `Este Mac no puede grabar esa pantalla (${puesta.width}×${puesta.height}): `
@@ -268,12 +277,133 @@ export async function elegirPantalla() {
                 + 'pantalla entera, o bajá la resolución en Ajustes del sistema.'
         };
     }
+    if (enSeguida) estado.tipos.pantalla = tipo;
     return {
         ok: true,
+        stream,
+        pista,
+        tipo,
         nombre: pista.label || 'la pantalla',
         ancho: puesta.width || null,
         alto: puesta.height || null
     };
+}
+
+/**
+ * Se queda con la pantalla: la pone en `estado` y escucha si la sueltan.
+ *
+ * El tipo no entra acá porque los dos caminos lo saben en momentos distintos:
+ * eligiendo se adopta antes de comprobarlo y se guarda después, y cambiando de
+ * ventana ya viene comprobado.
+ */
+function quedarse(stream, pista) {
+    estado.pantalla = stream;
+    pista.onended = () => {
+        // «Dejar de compartir» desde la barra del sistema.
+        estado.pantalla = null;
+        estado.tipos.pantalla = null;
+        estado.alAviso({ tipo: 'pantalla-soltada' });
+    };
+}
+
+/**
+ * Elige la pantalla antes de grabar, para que se vea en la vista previa qué es
+ * lo que va a quedar grabado.
+ */
+export async function elegirPantalla() {
+    await soltarPantalla();
+    const elegida = await pedirPantalla(true);
+    if (!elegida.ok) return elegida;
+    return { ok: true, nombre: elegida.nombre, ancho: elegida.ancho, alto: elegida.alto };
+}
+
+/**
+ * Cambia de ventana sin parar la grabación.
+ *
+ * **La pantalla sale en tramos: un archivo por ventana.** Una pista de
+ * `getDisplayMedia` está atada a la ventana que se eligió y no se la puede
+ * repuntar, y `MediaRecorder` graba el juego de pistas que tenía al llamar a
+ * `start()` —meterle una pista nueva al stream no la toma—. Así que cambiar es
+ * cerrar un archivo y abrir el siguiente, cada uno con su hora de arranque.
+ * `repartir`, en el exportador, elige para cada toma el tramo que la cubre.
+ *
+ * **La ventana nueva se pide ANTES de cerrar la que estaba**, y ese orden es
+ * todo lo que hace que esto sirva. Mientras el selector del sistema está
+ * abierto, la pantalla de antes sigue grabando: el hueco no es lo que tarde la
+ * persona en elegir —que pueden ser varios segundos— sino lo que tarde el
+ * cambio, que son los milisegundos de cerrar un archivo y abrir otro. Y si
+ * cancela el selector, o si el codificador rechaza la ventana que eligió, la
+ * grabación sigue intacta porque todavía no se tocó nada.
+ *
+ * Con una toma abierta el cambio igual se hace, porque pararlo sería peor: lo
+ * que pasa es que esa toma queda a caballo entre dos tramos y ninguno la cubre
+ * entera, así que sale con la cámara. Avisarlo es cosa de la pantalla, que es
+ * quien sabe si hay una toma abierta.
+ */
+export async function cambiarPantalla() {
+    // Antes de grabar, cambiar de ventana y elegirla son lo mismo.
+    if (!grabando()) return elegirPantalla();
+
+    const elegida = await pedirPantalla(false);
+    if (!elegida.ok) return elegida;
+
+    // Desde acá empieza el hueco, y todo lo que hay en medio es lo que lo
+    // alarga: ni un `await` que no haga falta.
+    const viejo = estado.grabadores.get('pantalla');
+    const anterior = estado.pantalla;
+    if (viejo) {
+        await new Promise(listo => {
+            if (viejo.state === 'inactive') return listo();
+            // `onstop` entrega el pedazo que tenía a medias, y sin él el tramo
+            // pierde sus últimos segundos.
+            viejo.onstop = listo;
+            try { viejo.stop(); } catch (e) { listo(); }
+            return undefined;
+        });
+        estado.grabadores.delete('pantalla');
+        // Los trozos viajan por `send`: un turno del bucle los deja llegar
+        // antes de pedir el cierre del archivo, igual que en `terminar`.
+        await new Promise(r => setTimeout(r, 50));
+        await window.nt.semanalCerrar('pantalla');
+    }
+
+    const abierto = await window.nt.semanalAbrir({
+        cual: 'pantalla', tipo: elegida.tipo, empezoMs: Date.now()
+    });
+    if (!abierto.ok) {
+        // El tramo nuevo no se pudo abrir y el viejo ya está cerrado: lo que
+        // hay grabado hasta acá se queda, y se dice que desde ahora no hay
+        // pantalla. Peor sería seguir como si nada y no grabar nada más.
+        for (const p of elegida.stream.getTracks()) p.stop();
+        if (anterior) await soltarPantalla();
+        estado.salud.delete('pantalla');
+        estado.alAviso({ tipo: 'roto', cual: 'pantalla', error: abierto.error });
+        return { ok: false, error: abierto.error };
+    }
+
+    let grabador;
+    try {
+        grabador = new MediaRecorder(elegida.stream, {
+            mimeType: elegida.tipo, videoBitsPerSecond: CALIDAD.pantalla
+        });
+    } catch (e) {
+        for (const p of elegida.stream.getTracks()) p.stop();
+        return { ok: false, error: `No se pudo preparar la pantalla nueva: ${e.message}` };
+    }
+    enganchar({ cual: 'pantalla', grabador, stream: elegida.stream, tipo: elegida.tipo, conAudio: false });
+    grabador.start(CADA_MS);
+
+    // Y recién ahora se suelta la de antes: soltarla primero habría dejado un
+    // hueco más largo por nada.
+    if (anterior) {
+        for (const p of anterior.getTracks()) { p.onended = null; p.stop(); }
+    }
+    quedarse(elegida.stream, elegida.pista);
+    estado.tipos.pantalla = elegida.tipo;
+    window.nt.anotar('semanal.cambio-de-ventana', {
+        nombre: elegida.nombre, ancho: elegida.ancho, alto: elegida.alto, tramo: abierto.tramo
+    });
+    return { ok: true, nombre: elegida.nombre, ancho: elegida.ancho, alto: elegida.alto };
 }
 
 export function laPantalla() {
@@ -334,6 +464,52 @@ function tomarElPulso() {
         });
         estado.alAviso({ tipo: 'roto', cual, error });
     }
+}
+
+/**
+ * Le pone a un grabador el pulso, el diario y la salida de pedazos.
+ *
+ * Está suelto porque lo usan las dos vías que arrancan un grabador: `empezar`,
+ * con los dos de la sesión, y `cambiarPantalla`, con el tramo nuevo. Mientras
+ * estaba escrito dentro del bucle de `empezar`, un tramo nuevo habría quedado
+ * grabando sin pulso y sin nadie escuchando sus pedazos.
+ *
+ * No llama a `start()`: en `empezar` los dos `start()` van juntos al final y
+ * esa distancia es el desfase entre los dos vídeos.
+ */
+function enganchar(l) {
+    const pistas = (l.stream.getVideoTracks && l.stream.getVideoTracks()) || [];
+    estado.salud.set(l.cual, { bytes: 0, desdeMs: Date.now(), avisado: false, pistas });
+    // Con qué entra cada fuente, anotado antes del primer fotograma. Es el
+    // dato que faltaba la vez que la cámara terminó en cero: sin él no hubo
+    // forma de saber a qué tamaño estaba grabando.
+    const pista = pistas[0];
+    const puesta = (pista && pista.getSettings && pista.getSettings()) || {};
+    window.nt.anotar('semanal.fuente', {
+        cual: l.cual,
+        tipo: l.tipo,
+        ancho: puesta.width || null,
+        alto: puesta.height || null,
+        fps: puesta.frameRate ? Math.round(puesta.frameRate) : null,
+        nombre: (pista && pista.label) || null,
+        conAudio: l.conAudio
+    });
+
+    l.grabador.ondataavailable = async e => {
+        if (!e.data || !e.data.size) return;
+        const salud = estado.salud.get(l.cual);
+        if (salud) salud.bytes += e.data.size;
+        const bytes = new Uint8Array(await e.data.arrayBuffer());
+        window.nt.semanalTrozo(l.cual, bytes);
+    };
+    l.grabador.onerror = e => {
+        estado.alAviso({
+            tipo: 'roto',
+            cual: l.cual,
+            error: (e.error && e.error.message) || 'el grabador se detuvo'
+        });
+    };
+    estado.grabadores.set(l.cual, l.grabador);
 }
 
 /**
@@ -415,40 +591,7 @@ export async function empezar(avisos) {
         abiertos.push(l);
     }
 
-    for (const l of abiertos) {
-        const pistas = (l.stream.getVideoTracks && l.stream.getVideoTracks()) || [];
-        estado.salud.set(l.cual, { bytes: 0, desdeMs: Date.now(), avisado: false, pistas });
-        // Con qué entra cada fuente, anotado antes del primer fotograma. Es el
-        // dato que faltaba la vez que la cámara terminó en cero: sin él no hubo
-        // forma de saber a qué tamaño estaba grabando.
-        const pista = pistas[0];
-        const puesta = (pista && pista.getSettings && pista.getSettings()) || {};
-        window.nt.anotar('semanal.fuente', {
-            cual: l.cual,
-            tipo: l.tipo,
-            ancho: puesta.width || null,
-            alto: puesta.height || null,
-            fps: puesta.frameRate ? Math.round(puesta.frameRate) : null,
-            nombre: (pista && pista.label) || null,
-            conAudio: l.conAudio
-        });
-
-        l.grabador.ondataavailable = async e => {
-            if (!e.data || !e.data.size) return;
-            const salud = estado.salud.get(l.cual);
-            if (salud) salud.bytes += e.data.size;
-            const bytes = new Uint8Array(await e.data.arrayBuffer());
-            window.nt.semanalTrozo(l.cual, bytes);
-        };
-        l.grabador.onerror = e => {
-            estado.alAviso({
-                tipo: 'roto',
-                cual: l.cual,
-                error: (e.error && e.error.message) || 'el grabador se detuvo'
-            });
-        };
-        estado.grabadores.set(l.cual, l.grabador);
-    }
+    for (const l of abiertos) enganchar(l);
     // Los dos a la vez. La hora que se mandó arriba es esta, con el error de un
     // `await` de IPC en medio: medido, el primer fotograma cae a 43 ms.
     for (const l of abiertos) l.grabador.start(CADA_MS);

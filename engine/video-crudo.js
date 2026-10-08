@@ -45,9 +45,22 @@ function extensionDe(tipo) {
 }
 
 /**
+ * Cómo se llama el archivo de un tramo.
+ *
+ * **El primero se llama como se llamó siempre.** Cambiar de ventana a mitad de
+ * grabación parte la pantalla en varios archivos, y numerarlos todos habría
+ * renombrado el único que tienen las grabaciones de antes. El sufijo empieza en
+ * el segundo, que es el primero que no existía.
+ */
+function nombreDeArchivo(nombre, cual, tramo, extension) {
+    const n = Math.floor(Number(tramo) || 1);
+    return `${workspace.safeName(nombre || 'video')}-${cual}${n > 1 ? `-${n}` : ''}.${extension}`;
+}
+
+/**
  * Abre un archivo para uno de los dos vídeos.
  *
- * @param {object} params { dir, nombre, cual, tipo, empezoMs }
+ * @param {object} params { dir, nombre, cual, tipo, empezoMs, tramo }
  * @returns {{id:number, cual:string, archivo:string, empezoMs:number}}
  */
 function abrir(params) {
@@ -59,7 +72,7 @@ function abrir(params) {
 
     const id = ++proximo;
     const archivo = path.join(p.dir,
-        `${workspace.safeName(p.nombre || 'video')}-${cual}.${extensionDe(p.tipo)}`);
+        nombreDeArchivo(p.nombre, cual, p.tramo, extensionDe(p.tipo)));
     const fd = fs.openSync(archivo, 'w');
 
     const crudo = {
@@ -148,14 +161,30 @@ function de(videos, cual) {
     return (videos || []).find(v => v && v.cual === cual) || null;
 }
 
+/**
+ * Todos los tramos de una fuente, del más viejo al más nuevo.
+ *
+ * La pantalla puede ser varios archivos: cambiar de ventana mientras se graba
+ * cierra uno y abre el siguiente. Van en orden de arranque porque quien los usa
+ * busca «el que cubre esta toma», y con dos tramos solapados —no puede pasar,
+ * pero no cuesta nada ser predecible— gana el que empezó antes.
+ */
+function todas(videos, cual) {
+    return (videos || [])
+        .filter(v => v && v.cual === cual)
+        .sort((a, b) => (a.empezoMs || 0) - (b.empezoMs || 0));
+}
+
 module.exports = {
     CUALES,
     extensionDe,
+    nombreDeArchivo,
     abrir,
     escribir,
     cerrar,
     cerrarTodo,
     cubre,
     posicionDe,
-    de
+    de,
+    todas
 };

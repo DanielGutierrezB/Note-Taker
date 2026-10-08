@@ -37,6 +37,18 @@ function registrar({ ipcMain, send, anotar }) {
     const grabando = new Map();
 
     /**
+     * Cuántos tramos se abrieron de cada fuente en ESTA sesión.
+     *
+     * La pantalla puede ser varios archivos: cambiar de ventana a mitad de
+     * grabación cierra uno y abre el siguiente, y cada uno necesita su nombre
+     * para no pisar al anterior. La cuenta vive acá —no en `grabando`, que solo
+     * sabe de lo que está abierto ahora mismo— y se reinicia al cambiar de
+     * sesión, que es lo que hace que cada grabación empiece otra vez por el
+     * archivo sin sufijo.
+     */
+    let tramos = { secuencia: null, cuenta: new Map() };
+
+    /**
      * Abre el archivo de uno de los dos vídeos.
      *
      * `empezoMs` lo manda la ventana con el `Date.now()` de su llamada a
@@ -48,20 +60,27 @@ function registrar({ ipcMain, send, anotar }) {
         const p = pedido || {};
         const donde = grabacion.dondeVa();
         if (!donde) return { ok: false, error: 'No hay ninguna grabación en curso.' };
+        if (tramos.secuencia !== donde.secuencia) {
+            tramos = { secuencia: donde.secuencia, cuenta: new Map() };
+        }
+        const tramo = (tramos.cuenta.get(p.cual) || 0) + 1;
         try {
             const info = videoCrudo.abrir({
                 dir: workspace.videoDir(donde.dir),
                 nombre: donde.secuencia,
                 cual: p.cual,
                 tipo: p.tipo,
-                empezoMs: p.empezoMs
+                empezoMs: p.empezoMs,
+                tramo
             });
+            tramos.cuenta.set(info.cual, tramo);
             grabando.set(info.cual, info);
             anotar('semanal.graba', {
-                cual: info.cual, tipo: info.tipo, archivo: path.basename(info.archivo),
+                cual: info.cual, tipo: info.tipo, tramo,
+                archivo: path.basename(info.archivo),
                 desdeElCero: info.empezoMs - donde.ceroMs
             });
-            return { ok: true, ...info };
+            return { ok: true, ...info, tramo };
         } catch (err) {
             anotar('semanal.falla', { cual: p.cual, error: err.message });
             return { ok: false, error: err.message };
@@ -88,15 +107,25 @@ function registrar({ ipcMain, send, anotar }) {
      *
      * Devuelve lo que quedó en el disco para que la pantalla pueda decir en
      * palabras qué se grabó, que es lo único que la persona puede comprobar.
+     *
+     * **Con un `cual` cierra solo esa fuente y deja la otra grabando.** Es lo
+     * que hace cambiar de ventana a mitad de grabación: se cierra el tramo de
+     * pantalla que estaba y se abre el siguiente, mientras la cámara y el audio
+     * siguen sin enterarse. El apunte va a la sesión en el momento y no al
+     * final, porque si la app se cayera después, ese tramo ya está en el
+     * sidecar con su hora y el corte lo puede usar.
      */
-    ipcMain.handle('semanal-cerrar', () => {
+    ipcMain.handle('semanal-cerrar', (event, cual) => {
+        const cuales = cual ? [String(cual)] : [...grabando.keys()];
         const cerrados = [];
-        for (const [cual, abierto] of grabando) {
+        for (const c of cuales) {
+            const abierto = grabando.get(c);
+            if (!abierto) continue;
             const r = videoCrudo.cerrar(abierto.id, Date.now());
             if (r) cerrados.push(r);
-            anotar('semanal.cerrado', { cual, bytes: r ? r.bytes : 0 });
+            grabando.delete(c);
+            anotar('semanal.cerrado', { cual: c, bytes: r ? r.bytes : 0 });
         }
-        grabando.clear();
         const puestos = grabacion.anotarVideos(cerrados);
         return { ok: true, videos: cerrados, enLaSesion: puestos.length };
     });

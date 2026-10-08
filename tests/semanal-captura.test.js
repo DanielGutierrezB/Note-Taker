@@ -67,6 +67,53 @@ module.exports = function (t) {
             'y se encuadra después, que es la vía que no depende del selector del sistema');
     });
 
+    t.test('cambiar de ventana pide la nueva ANTES de soltar la de antes', () => {
+        // El orden es todo el diseño. Mientras el selector del sistema está
+        // abierto —y la persona puede tardar lo que quiera en elegir— la
+        // ventana vieja SIGUE grabando, así que el hueco es el cambio en sí y
+        // no la duda. Y si cancela el selector o el codificador rechaza la
+        // ventana nueva, no se tocó nada: la grabación sigue intacta.
+        const cambiar = filmar.slice(filmar.indexOf('export async function cambiarPantalla'));
+        const pide = cambiar.indexOf('await pedirPantalla(false)');
+        const suelta = cambiar.indexOf("estado.grabadores.get('pantalla')");
+        t.ok(pide !== -1 && suelta !== -1, 'las dos cosas están');
+        t.ok(pide < suelta, 'y pedir va primero');
+        t.ok(/const elegida = await pedirPantalla\(false\);\s*\n\s*if \(!elegida\.ok\) return elegida;/
+            .test(cambiar), 'cancelar el selector se devuelve sin haber tocado la grabación');
+    });
+
+    t.test('eligiendo, la pantalla se adopta antes de comprobar el codificador', () => {
+        // Al revés —adoptarla al volver, como hace el cambio de ventana— deja
+        // medio segundo largo, el que tarda `aguanta`, en el que la persona ya
+        // eligió pero `tienePantalla()` dice que no hay. Apretar Grabar ahí
+        // contestaba «No hay ni cámara ni pantalla que grabar». Pasó.
+        const pedir = filmar.slice(filmar.indexOf('async function pedirPantalla'));
+        const adopta = pedir.indexOf('if (enSeguida) quedarse(stream, pista);');
+        const prueba = pedir.indexOf('formatoQueAguanta(stream');
+        t.ok(adopta !== -1 && prueba !== -1, 'las dos cosas están');
+        t.ok(adopta < prueba, 'y adoptarla va primero');
+        t.ok(/pedirPantalla\(true\)/.test(filmar), 'eligiendo se pide así');
+        t.ok(/pedirPantalla\(false\)/.test(filmar), 'y cambiando de ventana, al revés');
+        t.ok(/if \(enSeguida\) await soltarPantalla\(\);/.test(filmar),
+            'y si el codificador la rechaza, la adoptada se suelta');
+    });
+
+    t.test('el tramo viejo se cierra entero antes de abrir el nuevo', () => {
+        const cambiar = filmar.slice(filmar.indexOf('export async function cambiarPantalla'));
+        t.ok(/viejo\.onstop = listo;/.test(cambiar),
+            'se espera el último pedazo, que si no el tramo pierde sus segundos finales');
+        t.ok(/await window\.nt\.semanalCerrar\('pantalla'\)/.test(cambiar),
+            'y se cierra SOLO la pantalla, no la cámara');
+        const cierra = cambiar.indexOf("semanalCerrar('pantalla')");
+        const abre = cambiar.indexOf('semanalAbrir(');
+        t.ok(cierra !== -1 && abre !== -1 && cierra < abre, 'en ese orden, que si no se pisan el archivo');
+    });
+
+    t.test('antes de grabar, cambiar de ventana y elegirla son lo mismo', () => {
+        t.ok(/if \(!grabando\(\)\) return elegirPantalla\(\);/.test(filmar),
+            'sin grabación no hay tramo que cerrar ni hueco que cuidar');
+    });
+
     t.test('una cámara clavada chica se sube, no solo se baja la grande', () => {
         // Leer los nombres de las cámaras con `video: true` dejaba el
         // dispositivo negociado a 640×480 y el pedido de verdad lo heredaba.
@@ -89,8 +136,16 @@ module.exports = function (t) {
         t.ok(/async function aguanta\(/.test(filmar), 'la prueba existe');
         t.ok(/grabador\.onerror = \(\) => \{ roto = true; \};/.test(filmar),
             'y lo que mira es el error, no si llegaron datos');
-        t.ok(/formatoQueAguanta\(estado\.pantalla, false, 'pantalla'\)/.test(filmar),
+        t.ok(/formatoQueAguanta\(stream, false, 'pantalla'\)/.test(filmar),
             'la pantalla se comprueba al elegirla, con la persona todavía sin grabar');
+        // Y por eso la comprobación vive en `pedirPantalla`: así la ventana
+        // nueva de un cambio a mitad de grabación se prueba igual que la
+        // primera, que es cuando más importa —si el codificador la rechaza, la
+        // de antes todavía está grabando y no se pierde nada.
+        const pedir = filmar.slice(filmar.indexOf('async function pedirPantalla'));
+        t.ok(pedir.indexOf('formatoQueAguanta(stream') !== -1
+            && pedir.indexOf('formatoQueAguanta(stream') < pedir.indexOf('\nfunction quedarse'),
+            'y está en el camino que usan las dos, elegir y cambiar');
         t.ok(/const PRUEBA_MS = 200;/.test(filmar), 'con el margen medido');
     });
 
@@ -414,6 +469,42 @@ module.exports = function (t) {
             'y sin pantalla la cámara llena el cuadro aunque la vista sea R');
     });
 
+    t.test('mientras se graba se puede cambiar de ventana, y se dice cuál es', async () => {
+        const tarjetas = await cargarTarjetas();
+        const base = {
+            paso: 'grabando', vista: 'R', vistas: [], avisos: [],
+            pantalla: { nombre: 'Keynote', ancho: 1920, alto: 1080 }
+        };
+        const html = tarjetas.tarjetaGrabando({ ...base, sesion: { tomas: [], sueltas: [] } });
+        t.ok(html.includes('data-hace="cambiar-pantalla"'), 'hay por dónde cambiar');
+        t.ok(html.includes('Keynote'), 'y se ve qué se está grabando, que si no no se sabe');
+        t.ok(html.includes('Cambiar ventana…'));
+
+        const sin = tarjetas.tarjetaGrabando({ ...base, pantalla: null, sesion: { tomas: [], sueltas: [] } });
+        t.ok(sin.includes('data-hace="cambiar-pantalla"'),
+            'y si se empezó sin pantalla, el mismo botón la suma a mitad de camino');
+        t.ok(sin.includes('Elegir pantalla…'));
+    });
+
+    t.test('con una toma abierta, el aviso dice lo que va a costar el cambio', async () => {
+        // La decisión fue dejar cambiar igual, pero avisando en el momento: un
+        // cambio dentro de una toma la parte entre dos archivos y el corte la
+        // resuelve con la cámara. Decirlo acá es lo que hace que la persona
+        // pueda cerrar la toma antes y no pagarlo.
+        const tarjetas = await cargarTarjetas();
+        const base = {
+            paso: 'grabando', vista: 'R', vistas: [], avisos: [],
+            pantalla: { nombre: 'Keynote', ancho: 1920, alto: 1080 }
+        };
+        const abierta = { id: 7, vista: 'R', inMs: 1000, outMs: null, palabras: [] };
+        const con = tarjetas.tarjetaGrabando({ ...base, sesion: { tomas: [abierta], sueltas: [] } });
+        t.ok(/toma 7[\s\S]{0,180}saldría con tu cámara/.test(con), 'nombra la toma y lo que pasaría');
+        t.ok(con.includes('data-hace="cambiar-pantalla"'), 'pero el botón sigue ahí: avisa, no prohíbe');
+
+        const sin = tarjetas.tarjetaGrabando({ ...base, sesion: { tomas: [], sueltas: [] } });
+        t.ok(!/saldría con tu cámara/.test(sin), 'y entre tomas no avisa de nada, porque no cuesta nada');
+    });
+
     t.group('modo semanal · volver a lo último que se grabó');
 
     /** Lo mínimo que `tarjetaListo` necesita para dibujarse. */
@@ -486,8 +577,10 @@ module.exports = function (t) {
         // ahora es la madre de todas las grabaciones. Sin esto el Finder abría
         // un nivel más arriba y había que buscar cuál de todas era.
         const s = leer('src', 'js', 'pantalla-semanal.js');
-        t.ok(/if \(!estado\.brutos\.length\) \{\s*estado\.brutos = \[m\.archivos\.camara, m\.archivos\.pantalla\]/
+        t.ok(/if \(!estado\.brutos\.length\) \{[\s\S]{0,400}estado\.brutos = \[m\.archivos\.camara/
             .test(s), 'los saca del montaje, que leyó el disco');
+        t.ok(/\.\.\.\(m\.archivos\.pantallas \|\| \[m\.archivos\.pantalla\]\)/.test(s),
+            'y entran todos los tramos de pantalla, no solo el primero');
     });
 
     t.group('modo semanal · revisar antes de cortar');
