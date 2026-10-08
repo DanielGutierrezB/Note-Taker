@@ -88,6 +88,41 @@ function escribir(sesion) {
 }
 
 /**
+ * Cuántas palabras sueltas cruzan el puente, como mucho.
+ *
+ * Eran 120, y 120 es lo que se habla en menos de un minuto. Alcanzaba mientras
+ * las sueltas fueran solo el ratito entre dos tomas, pero **correr el IN de la
+ * toma abierta hacia adelante convierte en sueltas todo el principio de la
+ * toma de golpe** (`moverInAbierta`): una toma de tres minutos son unas
+ * cuatrocientas palabras, y las que pasaban de 120 no llegaban a la ventana.
+ * O sea que el gesto se llevaba de la pantalla justo el texto contra el que
+ * uno estaba decidiendo dónde poner el borde, y no volvía hasta cerrar la
+ * toma. Seiscientas son unos cinco minutos: más larga que eso, una toma ya no
+ * es una toma.
+ *
+ * El tope sigue existiendo porque sin ninguna toma cerrada las sueltas son
+ * todo lo que se oyó, y el motor se guarda diez minutos
+ * (`VENTANA_DE_SUELTAS_SEC`): mandar eso en cada estado es mandar media clase
+ * por el puente una vez por segundo.
+ */
+const SUELTAS_QUE_CRUZAN = 600;
+
+/**
+ * Las sueltas que la ventana puede usar, que no son todas.
+ *
+ * Lo anterior al OUT de la última toma cerrada ya es texto de una toma, y la
+ * ventana lo descarta apenas llega (`sueltasLibres` en `pantalla-vivo.js`):
+ * mandarlo es mandar palabras para que las tiren del otro lado. Filtrar acá
+ * además hace que el tope de arriba se gaste en lo que sirve.
+ */
+function sueltasQueSirven(e) {
+    const lista = e.sueltas || [];
+    const cerradas = (e.tomas || []).filter(t => t.outMs != null);
+    const piso = cerradas.length ? Math.max(...cerradas.map(t => t.outMs)) : -Infinity;
+    return lista.filter(w => w.t >= piso).slice(-SUELTAS_QUE_CRUZAN);
+}
+
+/**
  * Lo que la ventana necesita para dibujar.
  *
  * Va todo en cada aviso y no los cambios: una sesión tiene unas decenas de tomas
@@ -129,11 +164,11 @@ function resumen(sesion) {
         // Cerrando: el audio ya está cerrado y se releen las últimas tomas.
         terminando: Boolean(sesion.terminando),
         abierta: abierta ? abierta.id : null,
-        // Lo que se oyó sin ninguna toma abierta, de los últimos segundos. Es
-        // el texto de la tarjeta de "Ahora" cuando no hay toma —el que se va
-        // escribiendo y se desvanece arriba— y, con una toma abierta, lo gris
-        // de antes de su IN: lo que deja arrastrar el IN hacia atrás.
-        sueltas: (e.sueltas || []).slice(-120),
+        // Lo que se oyó sin ninguna toma abierta. Es el texto de la tarjeta de
+        // "Ahora" cuando no hay toma —el que se va escribiendo y se desvanece
+        // arriba— y, con una toma abierta, lo gris de antes de su IN: lo que
+        // deja arrastrar el IN hacia atrás.
+        sueltas: sueltasQueSirven(e),
         // Qué hay para deshacer y para rehacer, con el nombre del paso que toca:
         // es lo que deja que los dos botones se apaguen cuando no hay nada y
         // digan en su título qué van a revertir antes de apretarlos.

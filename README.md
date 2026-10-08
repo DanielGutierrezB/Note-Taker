@@ -535,6 +535,21 @@ toma cuando no hay otra abierta, para cuando «Pausa» cerró de más.
 para leer solo el texto de la toma; apagado, se ve el antes y el después para
 validar dónde quedó cada borde. El campo de espera no cambia: ahí todo es gris.
 
+**Lo gris de antes del IN de la toma abierta no son las palabras de la toma:
+son las que el motor tiene sueltas**, más las de la toma anterior. Importa
+porque correr el IN hacia adelante —con el clic derecho o arrastrándolo— saca
+de la toma todo lo que queda atrás y lo convierte en sueltas de golpe
+(`moverInAbierta`). El puente mandaba las últimas 120, que es menos de un
+minuto de habla, así que en una toma de un par de minutos el gesto se llevaba
+de la pantalla justo el texto contra el que uno estaba decidiendo dónde poner
+el borde, y encima el transcript se acortaba debajo del rollo y saltaba al
+fondo. Volvía recién al cerrar la toma, cuando la relectura rellena el `antes`
+con sus 12 s de orilla. Ahora cruzan 600, que son unos cinco minutos, y lo
+anterior al OUT de la última toma cerrada no cruza: la ventana lo descarta
+apenas llega (`sueltasLibres`), así que mandarlo era mandar palabras para que
+las tiren del otro lado. El tope sigue existiendo porque sin ninguna toma
+cerrada las sueltas son todo lo que se oyó, y el motor se guarda diez minutos.
+
 **Comentar un pedazo**: seleccionar palabras del texto de una toma abre un campo
 para comentarlas. El comentario va al XML como un marcador blanco en ese tramo,
 además de la nota de la toma entera, y las palabras comentadas quedan subrayadas.
