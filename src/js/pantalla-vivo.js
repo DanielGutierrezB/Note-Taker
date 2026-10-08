@@ -1101,11 +1101,21 @@ function pintarAtajos() {
         ? 'Cerrar la toma en la última palabra dicha. Tecla: Enter'
         : 'Abrir una toma acá. Si el profesor ya venía hablando, el IN retrocede hasta donde arrancó la frase. Tecla: Enter';
 
-    // La vista de la toma sobre la que caen las teclas, encendida.
+    // Sobre qué toma caen las vistas, y cuál está puesta. Con una toma abierta
+    // es la suya; entre dos tomas es la de la que todavía no empezó, que es lo
+    // que cambió: antes la barra editaba la última cerrada, o sea una toma que
+    // ya se hizo y que el editor no estaba mirando.
     const laDeTeclas = laDeLasTeclas();
+    const puesta = laDeTeclas ? laDeTeclas.vista : (estado.vistaProxima || laQueHeredaria());
     for (const b of cajaVistas.children) {
-        b.classList.toggle('es-elegida', Boolean(laDeTeclas) && laDeTeclas.vista === b.dataset.vista);
+        const v = (estado.vistas || []).find(x => x.nombre === b.dataset.vista) || {};
+        b.classList.toggle('es-elegida', puesta === b.dataset.vista);
+        b.title = (laDeTeclas
+            ? `Poner la toma ${laDeTeclas.id} en ${b.dataset.vista}`
+            : `La toma que viene empieza en ${b.dataset.vista}`)
+            + ` (${v.titulo || ''}). Tecla: ${b.dataset.vista[0]}`;
     }
+    $('#atajo-vistas-de').textContent = laDeTeclas ? `toma ${laDeTeclas.id}` : 'la que viene';
 
     const h = estado.historia || {};
     $('#atajo-deshacer').disabled = !h.atras;
@@ -1489,13 +1499,7 @@ async function alClic(e) {
         // Los atajos de la barra: lo mismo que las teclas, con el mouse.
         case 'borde': await bordeDeToma(); break;
         case 'deshacer': await volver('deshacer'); break;
-        case 'vista-tecla': {
-            const suya = laDeLasTeclas();
-            if (!suya) break;
-            vista.elegida = suya.id;
-            await editar({ tipo: 'vista', toma: suya.id, vista: boton.dataset.vista });
-            break;
-        }
+        case 'vista-tecla': await ponerVista(boton.dataset.vista); break;
         case 'abrir': await abrir(); break;
         case 'cerrar': await pedir(() => window.nt.grabarCerrarToma()); break;
         case 'ver-foto': {
@@ -1921,16 +1925,42 @@ async function volver(cual) {
 /* ─── Las teclas ──────────────────────────────────────────────────────── */
 
 /**
- * Sobre la toma elegida, que es la que el editor tocó por última vez; si no
- * tocó ninguna, la abierta; si no hay abierta, la última que no esté
- * desactivada. Sin esa cadena, una tecla apretada mientras se abre la toma
- * siguiente cae sobre otra.
+ * Sobre qué toma caen las teclas de vista, o `null` si sobre ninguna todavía.
+ *
+ * **Primero la que se está grabando.** Es la que el editor está mirando, y es
+ * lo que pidió: «si uso el shortcut y hay una toma activa, ahí sí es sobre la
+ * activa actual».
+ *
+ * Después, una toma hecha que el editor haya DESPLEGADO a mano: abrir su fila
+ * es decir «esta», y ahí la tecla la corrige sin tener que buscarle el botón.
+ * También lo pidió así: «la última puesta, si debo abrirla y ponerlo manual».
+ *
+ * Y si no hay ninguna de las dos, `null`: la elección es para la toma que
+ * todavía no empezó (`vistaProxima` en el motor). Acá estaba el error que el
+ * editor reportó —había un último escalón que devolvía la última toma no
+ * desactivada, así que entre dos tomas la barra le cambiaba la vista a la que
+ * se acababa de cerrar, que ya está hecha y que nadie estaba mirando—.
  */
 function laDeLasTeclas() {
     if (!estado) return null;
     const por = id => estado.tomas.find(t => t.id === id);
-    return por(vista.elegida) || por(estado.abierta)
-        || [...estado.tomas].reverse().find(t => !t.descartada) || null;
+    const grabando = por(estado.abierta);
+    if (grabando) return grabando;
+    const desplegada = por(vista.elegida);
+    return desplegada && vista.abierta === `t${desplegada.id}` ? desplegada : null;
+}
+
+/**
+ * Qué vista va a llevar la toma que venga si nadie elige ninguna.
+ *
+ * Copia de `vistaHeredada` en `engine/notas-vivo.js`, que es quien decide de
+ * verdad. Vive acá otra vez para que la barra pueda encender el botón que
+ * corresponde antes de que la toma exista: encender ninguno diría que no hay
+ * vista, y sí la hay.
+ */
+function laQueHeredaria() {
+    const previa = [...(estado.tomas || [])].reverse().find(t => !t.descartada && t.vista);
+    return previa ? previa.vista : (estado.vistas && estado.vistas.length ? estado.vistas[0].nombre : null);
 }
 
 /** Cuánto se siguen tragando las letras después de que el campo desapareció. */
@@ -2026,12 +2056,30 @@ async function alTeclado(e) {
     }
 
     const v = (estado.vistas || []).find(x => x.nombre[0].toLowerCase() === tecla);
-    const toma = laDeLasTeclas();
-    if (v && toma) {
+    if (v) {
         e.preventDefault();
-        vista.elegida = toma.id;
-        await editar({ tipo: 'vista', toma: toma.id, vista: v.nombre });
+        await ponerVista(v.nombre);
     }
+}
+
+/**
+ * Elegir una vista desde la barra o con la tecla: lo mismo por los dos lados.
+ *
+ * Si hay una toma sobre la que caer, se le cambia la suya; si no, la elección
+ * queda para la que todavía no empezó y es el motor quien se la guarda
+ * (`vistaDeLaProxima`), porque una toma se abre sola cuando el profesor cuenta
+ * «3, 2, 1» y una elección que viviera en la pantalla llegaría tarde.
+ */
+async function ponerVista(cual) {
+    const suya = laDeLasTeclas();
+    if (suya) {
+        vista.elegida = suya.id;
+        return editar({ tipo: 'vista', toma: suya.id, vista: cual });
+    }
+    // En una clase ya grabada no hay ninguna toma por venir, así que no hay
+    // nada que elegir: lo que se puede es desplegar una y corregirla.
+    if (esDeMirar()) return undefined;
+    return editar({ tipo: 'vista-proxima', vista: cual });
 }
 
 /* ─── Terminar ────────────────────────────────────────────────────────── */

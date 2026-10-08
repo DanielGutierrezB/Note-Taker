@@ -853,6 +853,12 @@ function cerradaDelTodo() {
 /** Un cambio sobre una toma de la sesión viva: para VER que el gesto llega. */
 function cambiarEnVivo(c) {
     const base = laSesion();
+    // La vista de la toma que todavía no empezó: no es de ninguna toma, así
+    // que no la busca. Es lo que la barra marca entre toma y toma.
+    if (c && c.tipo === 'vista-proxima') {
+        vivo = { ...base, vistaProxima: c.vista };
+        return vivo;
+    }
     if (!c || !Number.isFinite(Number(c.toma))) return base;
     const toma = base.tomas.find(t => t.id === Number(c.toma));
     if (!toma) return base;

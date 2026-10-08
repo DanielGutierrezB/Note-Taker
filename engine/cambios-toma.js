@@ -33,6 +33,10 @@ const vivo = require('./notas-vivo');
  *   borrar-comentario { indice }
  *   eliminar          —                               descartar: sacarla de la sesión
  *
+ * Y uno que no es de ninguna toma, así que no lleva `toma`:
+ *
+ *   vista-proxima     { vista }                       la de la que todavía no empezó
+ *
  * Y uno que no es de ninguna toma, porque la fila de al lado tampoco lo es:
  *
  *   nota-claqueta     { n, texto }                    la nota de la claqueta n
@@ -48,6 +52,14 @@ function editar(sesion, cambio) {
     if (!sesion) return null;
     const c = cambio || {};
     if (c.tipo === 'nota-claqueta') return notaDeClaqueta(sesion, c);
+    // La vista de la toma que todavía no empezó. No es de ninguna toma, así que
+    // no pasa por el portero del historial ni escribe el XML: no hay nada
+    // escrito que cambiar. Es una elección pendiente, y deshacer tiene que
+    // deshacer lo que pasó, no lo que todavía no.
+    if (c.tipo === 'vista-proxima') {
+        vivo.vistaDeLaProxima(sesion.estado, c.vista);
+        return espejo.resumen(sesion);
+    }
     const toma = sesion.estado.tomas.find(t => t.id === c.toma);
     if (!toma) return espejo.resumen(sesion);
 
@@ -171,6 +183,7 @@ function comoSeLlama(c) {
         case 'nota': return `la nota de ${cual}`;
         case 'descartar': return `${c.descartada ? 'desactivar' : 'activar'} ${cual}`;
         case 'comentar': return `comentar «${vivo.limpio(String(c.texto || '')).slice(0, 30)}»`;
+        case 'editar-comentario': return `corregir un comentario de ${cual}`;
         case 'borrar-comentario': return `quitar un comentario de ${cual}`;
         case 'borde': return `mover el ${c.borde === 'in' ? 'IN' : 'OUT'} de ${cual}`;
         case 'reabrir': return `reabrir ${cual}`;

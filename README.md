@@ -392,17 +392,36 @@ con la tecla o con el mouse, sin tener que acordarse de cuál era. El de Enter
 dice qué va a hacer —«abrir toma» o «cerrar toma»— en vez de las dos cosas, y el
 de vista muestra encendida la de la toma sobre la que caen las teclas.
 
+**Y la barra dice de qué toma está hablando**, porque son tres casos y el botón
+encendido no distingue entre ellos:
+
+- Con una toma grabando, la vista es la suya. Dice «toma 7».
+- Con una toma hecha **desplegada**, es la de ella: abrir su fila es decir
+  «esta», y ahí la tecla la corrige sin buscarle el botón.
+- Sin ninguna de las dos, es la de **la que todavía no empezó**. Dice «la que
+  viene», y la elección se guarda en el motor (`vistaProxima`) hasta que la
+  toma se abra, porque una toma se abre sola cuando el profesor cuenta «3, 2,
+  1»: si viviera en la pantalla, la elección llegaría tarde.
+
+Ese tercer caso no existía. Entre dos tomas, la barra caía sobre la última no
+desactivada, o sea que apretar una vista le cambiaba la vista **a la toma que
+se acababa de cerrar** —una que ya está hecha y que nadie estaba mirando—
+cuando lo que uno estaba diciendo era «la que viene va así».
+
 El botón primario de la pantalla es siempre el borde que toca: **Abrir toma**
 cuando no hay ninguna, **Cerrar toma** cuando la hay. Y es el único de la fila
 de la toma: **Claqueta** está arriba, en la barra, junto a los controles de la
 sesión. Ahí es global —se aprieta con toma abierta o sin ella— y deja de estar
 pegado a «Cerrar toma», que es cómo se anotaban claquetas sin querer.
 
-**Cada toma nueva arranca con la vista de la anterior.** Una clase se graba por
-tramos con la misma vista —varias de profesor seguidas, después varias de
-pantalla— así que heredarla acierta casi siempre, y cuando no, se corrige con
-una tecla. Con todas arrancando en `PV` había que elegir la vista en cada toma, y
-la que se olvidaba llegaba al XML del color equivocado.
+**Cada toma nueva arranca con la vista de la anterior**, salvo que se haya
+elegido una para ella. Una clase se graba por tramos con la misma vista
+—varias de profesor seguidas, después varias de pantalla— así que heredarla
+acierta casi siempre, y cuando no, se corrige con una tecla. Con todas
+arrancando en `PV` había que elegir la vista en cada toma, y la que se olvidaba
+llegaba al XML del color equivocado. La elegida gana sobre la heredada y vale
+**una vez**: es una decisión sobre esa toma, no un modo nuevo en el que
+quedarse.
 
 **El conteo tiene que terminar en uno y llevar por lo menos dos números.** "Uno
 de los problemas más comunes" abre clases de verdad, y "tenemos uno, dos, tres
@@ -1559,6 +1578,11 @@ salir con cero no es una red, es un informe que nadie lee. Lo que SÍ se puede
 probar sin navegador se prueba sin navegador: `semanal/corte.js` y
 `semanal/tarjetas.js` no tocan el DOM, así que `tests/corte-del-editor.test.js`
 los importa, los llama y comprueba lo que devuelven.
+Y `node tools/probar-vistas.js` comprueba sobre qué toma caen las vistas de la
+barra en los tres casos —grabando, con una fila desplegada y entre dos tomas—,
+incluida la parte que no se ve en una captura: que apretar una vista entre dos
+tomas no le cambie la vista a NINGUNA de las que ya están hechas.
+
 Lo mismo del lado de las notas: `node tools/probar-comentarios.js` comprueba
 que el doble clic abra el comentario con lo que ya decía, que Escape no mande
 nada al motor y que Enter mande `editar-comentario` con la toma y el índice del

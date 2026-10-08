@@ -164,6 +164,11 @@ function resumen(sesion) {
         // Cerrando: el audio ya está cerrado y se releen las últimas tomas.
         terminando: Boolean(sesion.terminando),
         abierta: abierta ? abierta.id : null,
+        // La vista elegida para la toma que todavía no empezó, si se eligió
+        // alguna. Es lo que la barra de arriba marca entre toma y toma: sin
+        // esto marcaría la de la última cerrada, que ya no es la que se está
+        // decidiendo.
+        vistaProxima: e.vistaProxima || null,
         // Lo que se oyó sin ninguna toma abierta. Es el texto de la tarjeta de
         // "Ahora" cuando no hay toma —el que se va escribiendo y se desvanece
         // arriba— y, con una toma abierta, lo gris de antes de su IN: lo que

@@ -1444,6 +1444,16 @@ select {
   flex: 0 0 auto;
 }
 
+/* Sobre qué toma caen las vistas. Pegado a los botones y en tono secundario:
+   no es un atajo, es el sujeto de la frase que los botones completan. */
+.atajo-vistas-de {
+  flex: 0 0 auto;
+  margin-left: var(--sp-2);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .atajo-vistas .atajo {
   box-shadow: inset 0 -2px 0 var(--vista);
 }

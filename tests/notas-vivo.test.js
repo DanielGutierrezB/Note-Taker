@@ -142,6 +142,49 @@ module.exports = function (t) {
         t.eq(e.tomas[1].vista, 'MG');
     });
 
+    t.group('notas-vivo · la vista elegida para la toma que todavía no empezó');
+
+    t.test('gana sobre la herencia, y una sola vez', () => {
+        // Entre toma y toma, apretar una vista arriba es decir «la que viene va
+        // así». Antes eso le cambiaba la vista a la última CERRADA, que ya está
+        // hecha y que nadie estaba mirando.
+        const e = nuevo();
+        const a = vivo.abrirToma(e, T0).toma;
+        vivo.aplicar(a, { tipo: 'vista', vista: 'S' });
+        a.outMs = T0 + 1000;
+        vivo.vistaDeLaProxima(e, 'MG');
+        vivo.abrirToma(e, T0 + 2000);
+        t.eq(e.tomas[1].vista, 'MG', 'la que se pidió, no la heredada');
+        t.eq(e.tomas[0].vista, 'S', 'y la de antes quedó como estaba');
+        e.tomas[1].outMs = T0 + 3000;
+        vivo.abrirToma(e, T0 + 4000);
+        t.eq(e.tomas[2].vista, 'MG', 'la siguiente vuelve a heredar, que ahora es MG igual');
+        t.eq(e.vistaProxima, null, 'y la elección ya se gastó');
+    });
+
+    t.test('el conteo hablado también la respeta', () => {
+        // Es el caso que importa: la toma se abre sola cuando el profesor
+        // cuenta, y por eso la elección vive en el motor y no en la pantalla.
+        const e = nuevo();
+        vivo.vistaDeLaProxima(e, 'X2');
+        vivo.aplicarSenales(e, palabras([[0, '3,'], [400, '2,'], [800, '1.'], [1600, 'Hola']]));
+        t.eq(e.tomas[0].vista, 'X2');
+    });
+
+    t.test('una vista que no existe no se guarda', () => {
+        const e = nuevo();
+        t.ok(!vivo.vistaDeLaProxima(e, 'ZZ'), 'lo dice');
+        t.eq(e.vistaProxima, null);
+        vivo.abrirToma(e, T0);
+        t.eq(e.tomas[0].vista, 'PV', 'y la toma arranca como siempre');
+    });
+
+    t.test('elegir la misma dos veces no cuenta como cambio', () => {
+        const e = nuevo();
+        t.ok(vivo.vistaDeLaProxima(e, 'R'));
+        t.ok(!vivo.vistaDeLaProxima(e, 'R'), 'la segunda no cambia nada');
+    });
+
     t.group('notas-vivo · la pausa cierra');
 
     t.test('"Pausa" con silencio detrás cierra la toma', () => {

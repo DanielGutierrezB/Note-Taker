@@ -177,6 +177,10 @@ function estadoNuevo(params) {
         sesiones: [],
         tomas: [],
         proximaToma: 0,
+        // La vista elegida entre toma y toma, para la que todavía no empezó
+        // (`vistaDeLaProxima`). Se gasta al abrirse. No va al XML ni al
+        // sidecar: cuando el XML se escribe, la toma ya tiene la suya.
+        vistaProxima: null,
         /**
          * Lo que se oyó SIN una toma abierta, de los últimos minutos
          * (`VENTANA_DE_SUELTAS_SEC`).
@@ -509,10 +513,34 @@ function vistaHeredada(estado) {
     return previa ? previa.vista : VISTA_POR_DEFECTO;
 }
 
+/**
+ * La vista que se eligió para la toma que todavía no empezó.
+ *
+ * Entre toma y toma, apretar una vista arriba es decir «la que viene va así»:
+ * la última ya se hizo y cambiarle la vista desde la barra era cambiar algo
+ * que el editor no estaba mirando. Para corregir una toma hecha está su propia
+ * fila, que lleva su `data-toma` y no se confunde con nada.
+ *
+ * Se guarda acá y no en la ventana porque quien decide la vista de una toma
+ * nueva es `nuevaToma`, y una toma se abre sola cuando el profesor cuenta «3,
+ * 2, 1»: si viviera en la pantalla, la elección llegaría tarde.
+ *
+ * Vale UNA vez. Gana sobre la herencia y se gasta al abrirse la toma, porque
+ * es una decisión sobre esa toma y no un modo nuevo en el que quedarse.
+ */
+function vistaDeLaProxima(estado, vista) {
+    if (!VISTAS.some(v => v.nombre === vista)) return false;
+    if (estado.vistaProxima === vista) return false;
+    estado.vistaProxima = vista;
+    return true;
+}
+
 function nuevaToma(estado, inMs, cuenta) {
+    const pedida = estado.vistaProxima;
+    estado.vistaProxima = null;
     return {
         id: (estado.proximaToma = estado.proximaToma + 1),
-        vista: vistaHeredada(estado),
+        vista: pedida || vistaHeredada(estado),
         comentario: '',
         cuenta: cuenta || '',
         inMs,
@@ -1737,6 +1765,7 @@ module.exports = {
     CLAQUETA,
     SILENCIO_TRAS_PAUSA_SEC,
     vistaHeredada,
+    vistaDeLaProxima,
     repartir,
     cerrarProvisional,
     recordarQuitada,
