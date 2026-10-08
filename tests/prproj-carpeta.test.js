@@ -396,7 +396,7 @@ module.exports = async function (t) {
 
     t.group('prproj de la carpeta · capturas y grupos');
 
-    t.test('una vista de dos capturas es un grupo, y los grupos van después de las solas', () => {
+    t.test('una vista de dos capturas es un grupo, y las capturas van antes que las anidaciones', () => {
         const dir = carpeta();
         const s = sesion(dir, {
             cero: T0, tomas: [toma(1, 10, 20, 'X2', T0), toma(2, 30, 40, 'R', T0), toma(3, 50, 60, 'PV', T0)]
@@ -484,16 +484,17 @@ module.exports = async function (t) {
         t.deep(plan.clases[0].cortes[1].fuentes, ['1'], 'la de PV solo la suya');
     });
 
-    t.test('las pistas se ordenan para que la de encima quede arriba', () => {
+    t.test('las pistas de una vista van en su orden, para que la de encima quede arriba', () => {
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'R', T0)] });
         const config = carpetaPrproj.normalizar({
             capturas: 3, vistas: { R: { capturas: [1, 3, 2], unidas: false } }
         });
         const plan = carpetaPrproj.planear([s], config);
-        // Las dos listas van de abajo hacia arriba, que es como se reparten las
-        // pistas: la vista pide 1, después 3 y la 2 encima de todo.
-        t.deep(plan.fuentes.map(f => f.clave), ['1', '3', '2']);
+        // La lista de la vista va de abajo hacia arriba, que es como se
+        // reparten las pistas: pide la 1, después la 3 y la 2 encima de todo.
+        t.deep(plan.pistas.map(p => p.clave), ['1', '3', '2']);
+        t.deep(plan.pistas.map(p => p.vista), ['R', 'R', 'R'], 'las tres son de R');
         t.deep(plan.avisos, []);
     });
 
@@ -514,15 +515,20 @@ module.exports = async function (t) {
             }
         });
         const plan = carpetaPrproj.planear([s], config);
-        // La Captura 2 queda debajo de la 1 porque es lo que pide R, que las
-        // lleva sueltas: con las pistas compartidas no hay otro orden posible.
-        t.deep(plan.fuentes.map(f => f.clave), ['2', '1', '1+2+3']);
+        // PV se queda con V1, R con V2 y V3 —la Captura 1 encima de la 2, que
+        // es su apilado— y la anidación de S con V4 aunque nadie la haya
+        // llamado. MG y X2 son «solo cuando las llamen»: no ponen nada.
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'R:2', 'R:1', 'S:1+2+3']);
+        t.deep(plan.pistas.map(p => p.siempre), [true, true, true, true]);
         t.deep(plan.grupos.map(g => g.clave), ['1+2+3'], 'la anidación sale sin tomas suyas');
-        t.deep(plan.fuentes.map(f => f.siempre), [true, true, true]);
+        t.deep(plan.fuentes.map(f => f.clave), ['1', '2', '1+2+3'], 'tres medios para cuatro pistas');
         t.deep(plan.avisos, []);
     });
 
-    t.test('dos vistas sueltas que se contradicen: manda la primera y se dice', () => {
+    t.test('dos vistas sueltas con apilados contrarios: cada una tiene el suyo', () => {
+        // Antes esto era irresoluble y salía con un aviso: las pistas eran una
+        // sola lista y la Captura 1 no podía estar a la vez encima y debajo de
+        // la 2. Con una pista por vista las dos quedan como las pidieron.
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'R', T0), toma(2, 30, 40, 'X2', T0)] });
         const config = carpetaPrproj.normalizar({
@@ -530,13 +536,13 @@ module.exports = async function (t) {
             vistas: { R: { capturas: [1, 2], unidas: false }, X2: { capturas: [2, 1], unidas: false } }
         });
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.fuentes.map(f => f.clave), ['1', '2'], 'la 2 encima, que es lo que pidió R');
-        t.eq(plan.avisos.length, 1);
-        t.ok(/X2|Doble/.test(plan.avisos[0]), plan.avisos[0]);
-        t.ok(/anid/.test(plan.avisos[0]), 'y dice cómo arreglarlo');
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['R:1', 'R:2', 'X2:2', 'X2:1'],
+            'R con la 2 encima de la 1, y X2 al revés');
+        t.deep(plan.avisos, [], 'y no hay nada que avisar');
+        t.deep(plan.fuentes.map(f => f.clave), ['1', '2'], 'pero los medios siguen siendo dos');
     });
 
-    t.test('cada fuente sabe si se queda puesta en todas las tomas', () => {
+    t.test('cada pista sabe si se queda puesta en todas las tomas', () => {
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'R', T0), toma(2, 30, 40, 'PV', T0)] });
         const config = carpetaPrproj.normalizar({
@@ -544,13 +550,15 @@ module.exports = async function (t) {
             vistas: { PV: { capturas: [1], siempre: [1] }, R: { capturas: [2], siempre: [] } }
         });
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.fuentes.map(f => [f.clave, f.siempre]), [['1', true], ['2', false]]);
+        t.deep(plan.pistas.map(p => [p.vista, p.clave, p.siempre]), [['PV', '1', true], ['R', '2', false]]);
         t.deep(plan.avisos, []);
     });
 
-    t.test('dos vistas que comparten una fuente y no piden lo mismo: queda puesta y se dice', () => {
-        // La Captura 2 sola es la MISMA pista para las dos vistas: no hay forma
-        // de que esté en todas las tomas para una y solo en las suyas para la otra.
+    t.test('dos vistas con la misma captura, cada una con su «en todas»', () => {
+        // Antes la Captura 2 sola era la MISMA pista para las dos vistas, así
+        // que no había forma de que estuviera en todas las tomas para una y
+        // solo en las suyas para la otra: quedaba puesta y se avisaba. Ahora
+        // son dos pistas del mismo medio y cada una hace lo que le pidieron.
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'S', T0), toma(2, 30, 40, 'MG', T0)] });
         const config = carpetaPrproj.normalizar({
@@ -558,10 +566,9 @@ module.exports = async function (t) {
             vistas: { S: { capturas: [2], siempre: [2] }, MG: { capturas: [2], siempre: [] } }
         });
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.fuentes.map(f => [f.clave, f.siempre]), [['2', true]]);
-        t.eq(plan.avisos.length, 1);
-        t.ok(/MG|Mano/.test(plan.avisos[0]), plan.avisos[0]);
-        t.ok(/una sola pista/.test(plan.avisos[0]), 'y dice por qué');
+        t.deep(plan.pistas.map(p => [p.vista, p.clave, p.siempre]), [['S', '2', true], ['MG', '2', false]]);
+        t.deep(plan.fuentes.map(f => f.clave), ['2'], 'y la Captura 2 se importa una sola vez');
+        t.deep(plan.avisos, []);
     });
 
     t.test('la misma pareja al revés es otro grupo, con otra anidación', () => {
@@ -582,7 +589,7 @@ module.exports = async function (t) {
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0)] });
         const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar({ capturas: 3, vistas: { R: [2] } }));
-        t.deep(plan.fuentes.map(f => f.clave), ['1']);
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1']);
         t.eq(plan.grupos.length, 0);
     });
 
@@ -596,9 +603,20 @@ module.exports = async function (t) {
             capturas: 3, vistas: { X2: { capturas: [1, 3], unidas: true, siempre: [1, 3] } }
         });
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.fuentes.map(f => f.clave), ['1', '1+3']);
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'X2:1+3']);
         t.deep(plan.grupos.map(g => g.clave), ['1+3'], 'y es una anidación de verdad');
-        t.eq(plan.fuentes[1].siempre, true);
+        t.eq(plan.pistas[1].siempre, true);
+    });
+
+    t.test('una toma con una vista que el menú no conoce igual tiene su pista', () => {
+        // `vistaLeida` devuelve lo que diga el marcador, y un XML tocado a mano
+        // puede traer una sigla inventada. Que esa toma saliera sin una sola
+        // pista de vídeo sería peor que ponerle la Captura 1 y seguir.
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0), toma(2, 30, 40, 'ZZ', T0)] });
+        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar({ capturas: 2 }));
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'ZZ:1']);
+        t.deep(plan.clases[0].cortes[1].fuentes, ['1'], 'y su toma apunta a esa fuente');
     });
 
     t.test('pero una anidación «solo suya» sin tomas no entra', () => {
@@ -610,7 +628,7 @@ module.exports = async function (t) {
             capturas: 3, vistas: { X2: { capturas: [1, 3], unidas: true, siempre: [] } }
         });
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.fuentes.map(f => f.clave), ['1']);
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1']);
         t.eq(plan.grupos.length, 0);
     });
 
@@ -823,9 +841,42 @@ module.exports = async function (t) {
         t.ok(p.verificar().ok, 'y el archivo queda sano');
         const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
         const precortada = p.porClase('Sequence').find(k => nombre(k) === `prueba_${T0}`);
-        t.deep(capturasDeLasPistas(p, precortada), ['Captura 1', 'Captura 2', 'Captura 3', 'S']);
+        // En el orden de VISTAS: PV, R, S y X2, cada una dueña de su pista.
+        t.deep(capturasDeLasPistas(p, precortada), ['Captura 1', 'Captura 2', 'S', 'Captura 3']);
         // Tres tomas en la primera clase, y la anidación está en las tres.
         t.deep(clipsDeLasPistas(p, precortada), [3, 3, 3, 3]);
+    });
+
+    t.test('la misma captura en dos vistas son dos pistas, cada una con su apilado', async () => {
+        // El caso que trajo la carpeta de verdad. PV lleva la Captura 1 sola y
+        // R lleva la 1 encima de la 2, sueltas. Antes esto era irresoluble: la
+        // Captura 1 era UNA pista y, para poder tapar a la 2 en las tomas de R,
+        // se iba a V2 y dejaba a PV sin su V1. Ahora son dos renglones.
+        const dir = carpetaConClases(30);
+        const destino = path.join(dir, 'Proyecto', 'duena.prproj');
+        const r = await carpetaPrproj.generar({
+            carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
+            config: {
+                capturas: 2,
+                vistas: {
+                    PV: { capturas: [1], unidas: false, siempre: [1] },
+                    R: { capturas: [2, 1], unidas: false, siempre: [2, 1] },
+                    X2: { capturas: [2], unidas: false, siempre: [] }
+                }
+            }
+        });
+        t.ok(r.ok, r.error || '');
+
+        const p = prproj.Proyecto.leer(destino);
+        t.ok(p.verificar().ok, 'y el archivo queda sano');
+        const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
+        const precortada = p.porClase('Sequence').find(k => nombre(k) === `prueba_${T0}`);
+        // V1 de PV, V2 y V3 de R con la Captura 1 arriba, V4 de X2.
+        t.deep(capturasDeLasPistas(p, precortada), ['Captura 1', 'Captura 2', 'Captura 1', 'Captura 2']);
+        // Las de «en todas» en las tres tomas; la de X2 solo en la suya.
+        t.deep(clipsDeLasPistas(p, precortada), [3, 3, 3, 1]);
+        // Y la Captura 1 se importó una sola vez, por más que esté en dos pistas.
+        t.eq(p.porClase('Sequence').filter(k => nombre(k) === 'Captura 1').length, 1);
     });
 
     t.test('una carpeta a otro fps que la plantilla se rechaza', async () => {

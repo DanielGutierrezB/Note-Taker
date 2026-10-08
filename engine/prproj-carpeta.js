@@ -398,33 +398,33 @@ function planear(sesiones, config) {
     // Dónde cae un instante de una clase adentro de las anidaciones.
     const enNido = (clase, ms) => clase.franja.desdeSeg + notasXml.aSegundos(ms, clase.sesion.ceroMs);
 
-    // Las fuentes que alguna toma usa, más las que el menú dejó «en todas».
-    // Una vista anidada enciende una sola —su grupo—; una suelta enciende una
-    // por captura, y se apilan por el orden de las pistas, que es lo que
-    // `ordenarFuentes` tiene que dejar bien.
+    // **Una fuente es un medio; una pista es un sitio.** Son dos cosas y antes
+    // eran una sola, y de ahí salía el enredo que esto arregla.
     //
-    // `siempre` viaja con la fuente, no con la vista, porque es una propiedad de
-    // la pista: ahí se decide si en las tomas de las demás vistas hay un clip
-    // apagado o no hay nada. Se anota también quién pidió qué, para poder
-    // decirlo cuando dos vistas comparten una fuente y no piden lo mismo.
+    // La fuente es lo que se importa o se anida una vez y se usa donde haga
+    // falta: la Captura 1 es un solo clip maestro aunque la pidan tres vistas.
+    // La pista es el renglón de la precortada, y de ese sí **cada vista es
+    // dueña**: la Captura 1 de PV y la Captura 1 de R son el mismo medio en dos
+    // renglones distintos, cada uno con su apilado y su «en todas».
+    //
+    // `usadas` junta los medios, sin repetir. Quién los pide se anota para
+    // poder nombrar una anidación por las vistas que la comparten.
     const usadas = new Map();
     const quienPide = new Map();
-    const anotar = (ids, vista, siempre) => {
+    const anotar = (ids, vista) => {
         const clave = claveDeFuente(ids);
         if (!usadas.has(clave)) {
-            usadas.set(clave, { clave, ids, nombre: nombreDeFuente(ids), siempre: false });
-            quienPide.set(clave, { siempre: new Set(), suya: new Set() });
+            usadas.set(clave, { clave, ids, nombre: nombreDeFuente(ids) });
+            quienPide.set(clave, new Set());
         }
-        if (siempre) usadas.get(clave).siempre = true;
-        quienPide.get(clave)[siempre ? 'siempre' : 'suya'].add(vista);
+        quienPide.get(clave).add(vista);
         return clave;
     };
     const fuentesDe = vista => {
-        const v = config.vistas[vista] || { capturas: [1], unidas: false, siempre: [1] };
-        const puestas = v.siempre || [];
+        const v = config.vistas[vista] || vistaSaneada(null, config.capturas);
         return v.unidas && v.capturas.length > 1
-            ? [anotar(v.capturas, vista, puestas.length > 0)]
-            : v.capturas.map(id => anotar([id], vista, puestas.includes(id)));
+            ? [anotar(v.capturas, vista)]
+            : v.capturas.map(id => anotar([id], vista));
     };
 
     for (const clase of clases) {
@@ -503,27 +503,7 @@ function planear(sesiones, config) {
         if (!clase.cortes.length) avisos.push(`${clase.nombre} no tiene tomas que vayan al XML: no lleva precortada.`);
     }
 
-    // **Una anidación «en todas» está aunque nadie haya llamado a su vista.**
-    //
-    // «En todas» es una decisión de la pista —ocupa su sitio en todas las tomas
-    // de la clase, apagada donde no toca— y no una consecuencia de que alguna
-    // toma la haya pedido: el editor la deja así justamente para tener el plano
-    // a mano y encenderlo en Premiere donde le haga falta. Pedir una anidación
-    // «en todas» y que no salga porque esa vista no se nombró en vivo deja al
-    // editor sin la única pista que el menú prometía que iba a estar, y sin la
-    // anidación no hay dónde acomodar el encuadre para la próxima clase.
-    //
-    // **Solo las anidaciones**, y no las capturas sueltas, porque una captura
-    // suelta es lo que toda vista tiene de fábrica: las vistas que el editor no
-    // tocó dicen «Captura 1, en todas» sin que nadie lo haya pedido, y tomarlo
-    // por un pedido reserva una pista que nadie quiso y, peor, le gana a la
-    // vista que sí eligió «solo suya» para esa misma captura. Una anidación, en
-    // cambio, no sale de fábrica: si está, alguien la armó en el menú.
-    for (const [vista, v] of Object.entries(config.vistas || {})) {
-        if (v.unidas && v.capturas.length > 1 && (v.siempre || []).length) {
-            anotar(v.capturas, vista, true);
-        }
-    }
+    const pistas = repartirPistas(clases, config, anotar);
 
     // **En las anidaciones van las claquetas y nada más.**
     //
@@ -554,24 +534,23 @@ function planear(sesiones, config) {
         }
     }
 
-    // Dos vistas pueden compartir una fuente —la Captura 2 sola es la misma
-    // pista para «Pantalla» y para «Mano grande»— y pedirle cosas distintas. Es
-    // una sola pista: queda puesta, que es lo que no pierde ningún plano, y se
-    // dice cuál vista quedó sin cumplir.
-    for (const [clave, pide] of quienPide) {
-        if (!pide.siempre.size || !pide.suya.size) continue;
-        avisos.push(`${[...pide.siempre].join(' y ')} deja la ${usadas.get(clave).nombre} puesta en todas las tomas`
-            + ` y ${[...pide.suya].join(' y ')} la quiere solo en las suyas.`
-            + ' Es una sola pista, así que quedó puesta en todas, apagada donde no toca.');
-    }
-
-    const fuentes = ordenarFuentes([...usadas.values()], config, avisos);
+    // Los medios que hay que armar: las capturas sueltas y las anidaciones. El
+    // orden acá no decide nada de la precortada —eso lo decide `pistas`—, pero
+    // sí el de la carpeta de Premiere, así que van las capturas por número y
+    // después las anidaciones, y no en el orden en que la primera clase las
+    // fue nombrando, que cambia con cada grabación.
+    const anidacion = f => (f.ids.length > 1 ? 1 : 0);
+    const fuentes = [...usadas.values()].sort((a, b) =>
+        anidacion(a) - anidacion(b)
+        || a.ids[0] - b.ids[0]
+        || a.ids.join(',').localeCompare(b.ids.join(','), 'en', { numeric: true }));
     const grupos = fuentes.filter(f => f.ids.length > 1);
 
-    // Cada anidación de vista se llama como la vista o las vistas que la usan.
+    // Cada anidación se llama como la vista o las vistas que la usan: dos
+    // vistas que armaron el mismo apilado comparten el medio aunque cada una
+    // tenga su propia pista.
     for (const g of grupos) {
-        const pide = quienPide.get(g.clave);
-        g.vistas = [...new Set([...pide.siempre, ...pide.suya])];
+        g.vistas = [...quienPide.get(g.clave)];
         g.titulo = nombreDeAnidacion(g.vistas);
     }
 
@@ -590,88 +569,71 @@ function planear(sesiones, config) {
     for (const f of fuentes) {
         if (f.ids.length === 1) f.color = colorDeCaptura.get(f.ids[0]);
     }
+    for (const p of pistas) p.color = usadas.get(p.clave).color;
 
-    return { clases, largoSeg, fuentes, grupos, colorDeCaptura, marcadoresDeCaptura, avisos };
+    return { clases, largoSeg, fuentes, pistas, grupos, colorDeCaptura, marcadoresDeCaptura, avisos };
 }
 
 /**
- * En qué orden van las pistas de vídeo de la precortada, de abajo hacia arriba.
+ * Las pistas de vídeo de la precortada, de V1 para arriba.
  *
- * Las capturas sueltas van abajo y los grupos encima, y eso no importa: de una
- * toma solo se enciende lo suyo, y lo apagado no tapa nada.
+ * **Cada vista es dueña de sus pistas, y no las comparte con nadie.** Las de
+ * una vista van juntas y en su orden, de abajo hacia arriba, así que la última
+ * del menú es la que tapa. Después empieza la vista siguiente, en el orden de
+ * `VISTAS`: primero las pistas de PV, después las de R, y así.
  *
- * **Lo que sí importa es el orden entre capturas sueltas, porque es su
- * apilado.** Una vista suelta con la Captura 1 sobre la 2 necesita que la pista
- * de la 1 esté más arriba que la de la 2, y las pistas son una sola lista para
- * toda la precortada: lo que pide una vista se lo come la otra. Así que se
- * ordenan respetando lo que piden todas (un orden topológico, con el número de
- * captura para desempatar y que dos corridas den lo mismo).
+ * Esto es lo que antes se hacía al revés, y era el enredo. Las pistas eran una
+ * sola lista para toda la precortada y la Captura 1 era UNA pista, la misma
+ * para todas las vistas que la pidieran. Entonces dos vistas con apilados
+ * distintos —PV con la Captura 1 sola, R con la 1 encima de la 2— se peleaban
+ * por el mismo renglón: había que ordenarlas con un orden topológico, la
+ * Captura 1 terminaba en V2 para que pudiera tapar a la 2 en las tomas de R, y
+ * cuando dos vistas pedían lo contrario no había orden posible y una se quedaba
+ * sin su apilado, con un aviso de consuelo. Repitiendo la pista por vista nada
+ * de eso puede pasar: el medio se comparte —la Captura 1 se importa una vez—
+ * pero el renglón no, y cada vista queda con el apilado que pidió.
  *
- * **Dos vistas sueltas pueden pedir cosas contrarias** —una la 1 sobre la 2 y
- * la otra al revés— y entonces no hay orden que las deje contentas a las dos.
- * Se respeta la primera, se dice cuál quedó sin cumplir y se dice también cómo
- * arreglarlo, que es anidar una de las dos: una anidación tiene sus propias
- * pistas y ahí sí caben los dos apilados.
+ * **Una vista entra si alguna toma la llamó.** Y además, aunque no la hayan
+ * llamado, si armó una anidación y la dejó «en todas»: esa es la pista que el
+ * editor va a encender a mano en Premiere, y sin ella el menú prometió algo que
+ * no está. Las capturas sueltas no entran por ese camino, porque una captura
+ * suelta es lo que toda vista tiene de fábrica —las que nadie tocó dicen
+ * «Captura 1, en todas» sin que nadie lo haya pedido— y reservarían un renglón
+ * por vista que nadie quiso. Una anidación no sale de fábrica: si está, alguien
+ * la armó en el menú.
  */
-function ordenarFuentes(fuentes, config, avisos) {
-    const solas = fuentes.filter(f => f.ids.length === 1).sort((a, b) => a.ids[0] - b.ids[0]);
-    const grupos = fuentes.filter(f => f.ids.length > 1)
-        .sort((a, b) => a.ids.join(',').localeCompare(b.ids.join(','), 'en', { numeric: true }));
+function repartirPistas(clases, config, anotar) {
+    const conTomas = new Set();
+    for (const clase of clases) {
+        for (const corte of clase.cortes) conTomas.add(corte.vista);
+    }
 
-    // Lo que pide cada vista suelta: sus capturas vienen de abajo hacia arriba,
-    // así que cada una tapa a la anterior.
-    const pide = [];
-    for (const [vista, v] of Object.entries(config.vistas || {})) {
-        if (v.unidas || v.capturas.length < 2) continue;
-        for (let i = 1; i < v.capturas.length; i++) {
-            pide.push({ vista, arriba: v.capturas[i], abajo: v.capturas[i - 1] });
+    // Las del menú, más cualquiera que haya salido de una toma y no esté ahí:
+    // `vistaLeida` devuelve lo que diga el marcador, así que un XML tocado a
+    // mano puede traer una sigla que el menú no conoce. Sin esto esa toma se
+    // quedaría sin una sola pista de vídeo, que es el peor final posible.
+    const orden = vivo.VISTAS.map(v => v.nombre);
+    const enOrden = [...new Set([...Object.keys(config.vistas || {}), ...conTomas])].sort((a, b) => {
+        const ia = orden.indexOf(a);
+        const ib = orden.indexOf(b);
+        return (ia === -1 ? orden.length : ia) - (ib === -1 ? orden.length : ib) || (a < b ? -1 : 1);
+    });
+
+    const pistas = [];
+    for (const vista of enOrden) {
+        const v = (config.vistas || {})[vista] || vistaSaneada(null, config.capturas);
+        const puestas = v.siempre || [];
+        const anidada = v.unidas && v.capturas.length > 1;
+        if (!conTomas.has(vista) && !(anidada && puestas.length)) continue;
+        if (anidada) {
+            pistas.push({ vista, clave: anotar(v.capturas, vista), ids: v.capturas.slice(), siempre: puestas.length > 0 });
+        } else {
+            for (const id of v.capturas) {
+                pistas.push({ vista, clave: anotar([id], vista), ids: [id], siempre: puestas.includes(id) });
+            }
         }
     }
-    if (!pide.length) return solas.concat(grupos);
-
-    const hay = new Set(solas.map(f => f.ids[0]));
-    const debajoDe = new Map([...hay].map(id => [id, new Set()]));
-    const deQuien = new Map();
-    for (const p of pide) {
-        if (!hay.has(p.arriba) || !hay.has(p.abajo)) continue;
-        // Antes de aceptarla se mira que no cierre un círculo con las que ya
-        // están: aceptarla y arrepentirse después dejaría a medias un orden que
-        // nadie pidió.
-        if (alcanza(debajoDe, p.abajo, p.arriba)) {
-            const otra = deQuien.get(`${p.abajo}>${p.arriba}`);
-            avisos.push(`${p.vista} quiere la Captura ${p.arriba} sobre la ${p.abajo}`
-                + `${otra ? ` y ${otra} las quiere al revés` : ' y otra vista suelta pide lo contrario'}.`
-                + ' Las vistas sueltas comparten las pistas, así que quedó el primer apilado:'
-                + ' anidá una de las dos para tener los dos.');
-            continue;
-        }
-        debajoDe.get(p.arriba).add(p.abajo);
-        deQuien.set(`${p.arriba}>${p.abajo}`, p.vista);
-    }
-
-    // De abajo hacia arriba: primero las que nadie tiene debajo suyo.
-    const puestas = [];
-    const quedan = solas.slice();
-    while (quedan.length) {
-        const i = quedan.findIndex(f => [...debajoDe.get(f.ids[0])].every(id => puestas.includes(id)));
-        const elegida = quedan.splice(i === -1 ? 0 : i, 1)[0];
-        puestas.push(elegida.ids[0]);
-    }
-    return puestas.map(id => solas.find(f => f.ids[0] === id)).concat(grupos);
-}
-
-/** ¿Se llega de `desde` a `hasta` siguiendo «va debajo de»? */
-function alcanza(debajoDe, desde, hasta) {
-    const vistos = new Set();
-    const pendientes = [desde];
-    while (pendientes.length) {
-        const k = pendientes.pop();
-        if (k === hasta) return true;
-        if (vistos.has(k)) continue;
-        vistos.add(k);
-        for (const sig of debajoDe.get(k) || []) pendientes.push(sig);
-    }
-    return false;
+    return pistas;
 }
 
 // ─── El armado ───────────────────────────────────────────────────────
@@ -787,12 +749,12 @@ function armarGrupos(taller, plan, capturas, bin) {
 /**
  * La precortada de una clase.
  *
- * En cada toma entran las fuentes de su vista —varias cuando va suelta, una
- * pista por captura, y una sola cuando va anidada— encendidas, y las demás
- * apagadas: cambiar de plano es encender la que ya está, como hace Class Cut, y
- * lo apagado no tapa a la buena.
+ * **Cada vista tiene sus propias pistas**, y en una toma se encienden las de su
+ * vista y nada más: cambiar de plano es encender el clip que ya está, como hace
+ * Class Cut, y lo apagado no tapa a la buena. Como el renglón no se comparte
+ * entre vistas, el apilado de cada una es el que pidió el menú.
  *
- * **Salvo las fuentes que el menú dejó «solo en sus tomas»**, que en las tomas
+ * **Salvo las pistas que el menú dejó «solo en sus tomas»**, que en las tomas
  * de las otras vistas no ponen nada. Es la línea de tiempo limpia de quien
  * prefiere ver solo lo que va a salir; el precio es que para cambiar de plano
  * ahí ya no hay un clip que encender.
@@ -803,27 +765,26 @@ function armarGrupos(taller, plan, capturas, bin) {
 function armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bin) {
     const seq = taller.crearSecuencia({
         nombre: clase.nombre,
-        pistasVideo: Math.max(1, plan.fuentes.length),
+        pistasVideo: Math.max(1, plan.pistas.length),
         pistasAudio: 2,
         duracionSeg: clase.duracionSeg
     });
     taller.guardarEn(bin, seq.itemDelPanel);
 
-    const pistaDe = new Map(plan.fuentes.map((f, i) => [f.clave, seq.pistasVideo[i]]));
     const c1 = capturas.get(1);
     let cortes = 0;
     for (const corte of clase.cortes) {
-        for (const f of plan.fuentes) {
-            const suya = corte.fuentes.includes(f.clave);
-            if (!suya && !f.siempre) continue;
+        plan.pistas.forEach((p, i) => {
+            const suya = p.vista === corte.vista;
+            if (!suya && !p.siempre) return;
             taller.colocarCorte({
-                pista: pistaDe.get(f.clave), medio: fuentes.get(f.clave).comoFuente,
+                pista: seq.pistasVideo[i], medio: fuentes.get(p.clave).comoFuente,
                 desdeSeg: corte.desdeSeg, hastaSeg: corte.hastaSeg, entradaSeg: corte.entradaSeg,
-                etiqueta: f.color,
+                etiqueta: p.color,
                 sonando: suya
             });
             cortes++;
-        }
+        });
         taller.colocarCorte({
             pista: seq.pistasAudio[0], medio: c1.comoFuente,
             desdeSeg: corte.desdeSeg, hastaSeg: corte.hastaSeg, entradaSeg: corte.entradaSeg,
