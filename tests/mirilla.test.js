@@ -186,6 +186,33 @@ module.exports = function (t) {
             .test(leer('src', 'js', 'mirilla.js')), 'del otro lado tampoco se da por hecho');
     });
 
+    t.group('la mirilla · el punto de grabando');
+
+    t.test('se enciende con la toma abierta y se apaga al cerrarla', () => {
+        const css = leer('src', 'css', 'mirilla.css');
+        t.ok(/\.rec \{[\s\S]*?display: none;/.test(css), 'apagado de entrada');
+        t.ok(/\.marco\[data-toma='abierta'\] \.rec \{ display: block; \}/.test(css),
+            'y encendido por el mismo dato que ya cambia el botón de abajo');
+        t.ok(/marco\.dataset\.toma = info\.abierta \? 'abierta' : 'no';/
+            .test(leer('src', 'js', 'mirilla.js')), 'que lo pone el espejo');
+    });
+
+    t.test('es un rojo propio y no el de la vista', () => {
+        // `--vista` ya es rojo en «Yo»: un punto del color del marco sería un
+        // punto que desaparece justo en una de las dos vistas.
+        const css = leer('src', 'css', 'mirilla.css');
+        const rec = css.slice(css.indexOf('.rec {'), css.indexOf('.marco[data-toma=\'abierta\'] .rec'));
+        t.ok(/background: #ff3b30;/.test(rec), 'el rojo de grabar');
+        t.ok(!/var\(--vista\)/.test(rec), 'y nada que dependa de la vista');
+    });
+
+    t.test('late, pero no para quien pidió que no', () => {
+        const css = leer('src', 'css', 'mirilla.css');
+        t.ok(/animation: rec-late/.test(css), 'un punto quieto se vuelve mobiliario');
+        t.ok(/prefers-reduced-motion: reduce\) \{\n  \.rec \{ animation: none; \}/.test(css),
+            'y quien pidió menos movimiento se queda con el punto, que es lo que importa');
+    });
+
     t.test('la vista que muestra es la de la toma abierta, no la del próximo', () => {
         // Es la misma cuenta que hace la escena de la tarjeta: con una toma
         // abierta manda la suya, porque es la que se está grabando.

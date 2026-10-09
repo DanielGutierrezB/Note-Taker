@@ -82,6 +82,51 @@ html, body {
   background: #000;
 }
 
+/**
+ * El punto de grabando: estás DENTRO de una toma, esto se está guardando.
+ *
+ * El borde ya dice en qué vista estás, pero no si lo que hablás va a salir, y
+ * son dos cosas distintas: la mitad de lo que se dice delante de esta ventana
+ * es entre tomas. Rojo y arriba a la derecha, que es donde lo pone cualquier
+ * cámara desde hace cuarenta años.
+ *
+ * **Rojo propio, no el de la vista.** `--vista` ya es rojo cuando estás en
+ * «Yo», y un punto del mismo color que el marco sería un punto que desaparece
+ * justo en una de las dos vistas. Este es el rojo saturado de grabar, que no
+ * es ninguno de los dos colores de marcador.
+ *
+ * Y late, despacio. Un punto quieto en una esquina se vuelve parte del
+ * mobiliario a los dos minutos; lo que hay que notar de reojo, sin dejar de
+ * mirar a cámara, es que CAMBIÓ.
+ */
+.rec {
+  position: absolute;
+  top: 7%;
+  right: 7%;
+  width: 11%;
+  height: 11%;
+  max-width: 14px;
+  max-height: 14px;
+  border-radius: 50%;
+  background: #ff3b30;
+  /* El aro oscuro lo despega de una pared blanca o de una lámpara, que es
+     justo lo que suele haber detrás de alguien grabándose. */
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45), 0 0 10px rgba(255, 59, 48, 0.75);
+  display: none;
+  animation: rec-late 2s ease-in-out infinite;
+}
+.marco[data-toma='abierta'] .rec { display: block; }
+
+@keyframes rec-late {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Quien pidió menos movimiento se queda con el punto, que es lo que importa. */
+@media (prefers-reduced-motion: reduce) {
+  .rec { animation: none; }
+}
+
 /* Cuando no hay cámara que mostrar, se dice y no se deja un cuadro negro. */
 .aviso {
   position: absolute;

@@ -13,6 +13,9 @@
        y no hay nada que leer; lo que sí se lee son los botones. -->
   <div class="marco" id="marco" data-vista="R">
     <video id="camara" muted playsinline aria-hidden="true"></video>
+    <!-- El punto de grabando. `aria-hidden` porque no es una tercera verdad:
+         lo mismo lo dice el botón de abajo, que pasa a «Cerrar toma». -->
+    <span class="rec" id="rec" aria-hidden="true" title="Estás dentro de una toma"></span>
     <p class="aviso" id="aviso" role="status"></p>
     <div class="mandos" id="mandos">
       <button class="mando mando-toma" type="button" data-hace="toma" id="btn-toma">···</button>
