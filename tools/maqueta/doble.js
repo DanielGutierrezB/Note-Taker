@@ -39,7 +39,7 @@ export const SE_HACEN = [
     'prproj', 'prproj-lleno', 'prproj-listo',
     'ajustes', 'ajustes-semanal', 'diagnostico', 'iconos',
     'semanal', 'semanal-primera-vez', 'semanal-sin-pantalla', 'semanal-grabando', 'semanal-sin-tomas',
-    'semanal-con-aviso', 'semanal-atrasado', 'semanal-ficha', 'semanal-revisar', 'semanal-revisar-fuera',
+    'semanal-con-aviso', 'semanal-atrasado', 'semanal-carpeta', 'semanal-ficha', 'semanal-revisar', 'semanal-revisar-fuera',
     'semanal-cortando', 'semanal-hecho'
 ];
 
@@ -766,6 +766,13 @@ async function aplicar() {
         await espera(120);
         // La pantalla de inicio, con la tarjeta de lo último grabado y sin ella.
         if (hay('semanal') || hay('semanal-primera-vez')) return;
+        // Y con una carpeta elegida a mano: lo que se encontró ahí, para
+        // elegir con cuál seguir.
+        if (hay('semanal-carpeta')) {
+            await apretar('[data-hace="elegir-carpeta"]', 'Elegir carpeta…');
+            await espera(200);
+            return;
+        }
 
         // Arrancar tarda: antes de grabar se comprueba que el codificador
         // acepte cada fuente (`aguanta` en `src/js/grabar/filmar.js`), y son
@@ -806,7 +813,13 @@ async function aplicar() {
         // revisión, y conviene decirlo: antes esto era un `if (cortar)` que
         // tapaba por igual este caso legítimo y cualquier botón que se hubiera
         // dejado de dibujar por error.
-        if (document.querySelector('[data-hace="ver-brutos"]')) return;
+        //
+        // Pregunta por «Grabar otro», que es de la tarjeta del final y de
+        // ninguna otra. Antes preguntaba por «Ver lo que se grabó», y el día
+        // que el editor también tuvo su botón al Finder esto empezó a decir
+        // «ya está» estando en la revisión: el escenario del vídeo hecho se
+        // quedaba a medio camino.
+        if (document.querySelector('[data-hace="otro"]')) return;
         await apretar('[data-hace="exportar"]', 'Cortar y exportar');
         // El corte falso va por cinco pasos de barra. Antes acá se volvía en el
         // acto y las herramientas dormían 300 ms, que alcanzaban por poco:

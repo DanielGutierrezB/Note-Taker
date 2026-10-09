@@ -72,6 +72,9 @@ const estado = {
     json: null,              // el sidecar de lo que se acaba de grabar
     ultima: null,            // la última grabación que hay en la carpeta, para
                              // poder volver a ella al abrir la app
+    buscada: null,            // la carpeta que se eligió a mano esta vez, si se
+                              // eligió alguna. No es la de los ajustes
+    encontradas: [],          // las grabaciones que había ahí, para elegir una
     montaje: null,           // dónde cae cada toma en los dos vídeos crudos
     enVivo: null,            // dónde va el montaje: { toma, montado, total, … }
     ocultarFuera: false,     // si la línea de tomas esconde las desactivadas
@@ -142,7 +145,22 @@ function seRompio(aviso) {
 /** Entrar al modo: se mira qué hay conectado y se espera. */
 export async function ver() {
     verVista('vista-semanal');
+    // Entrar a la pantalla con algo a medias no borra nada: es volver a mirar
+    // lo que está pasando, no empezar de nuevo. Dejarla a propósito sí, y eso
+    // es `alPanel`, que es la decisión y no el paso de vuelta.
     if (grabando()) { pintar(); return; }
+    await alPanel();
+}
+
+/**
+ * El panel de antes de grabar, limpio.
+ *
+ * Está aparte de `ver()` porque son dos cosas distintas que acababan en el
+ * mismo sitio: entrar a la pantalla y abandonar lo que se estaba haciendo.
+ * `ver()` se protege —con la revisión a medias no toca nada— y por eso no
+ * servía para el botón de volver, que lo que quiere es justamente dejarla.
+ */
+async function alPanel() {
     montaje.soltar();
     estado.paso = 'listo';
     estado.hecho = null;
@@ -153,6 +171,11 @@ export async function ver() {
     estado.brutos = [];
     estado.cortes = 0;
     estado.vistaHasta = 0;
+    // La carpeta que se miró a mano no sobrevive al volver al panel: es de
+    // «esta vez», y dejar la lista de ayer arriba de la de la carpeta de
+    // siempre sería prometer que sigue mirando ahí.
+    estado.buscada = null;
+    estado.encontradas = [];
     pintar();
     // Las dos en paralelo: mirar qué micrófonos y cámaras hay tarda —hay que
     // abrir los elegidos para poder verlos— y leer el disco no tiene por qué
@@ -184,23 +207,35 @@ async function buscarLaUltima() {
         const lista = await window.nt.grabarListar([casa]);
         const ultima = (lista || [])[0];
         if (!ultima || !ultima.archivos || !ultima.archivos.json) return;
-        const resumen = ultima.resumen || {};
-        estado.ultima = {
-            json: ultima.archivos.json,
-            nombre: ultima.secuencia,
-            cuandoMs: ultima.ceroMs || null,
-            // Las descartadas CUENTAN acá. `resumen.tomas` son las que iban en
-            // el vídeo, y la tarjeta tiene que decir qué se va a encontrar al
-            // abrirla: el editor las abre todas, con las de fuera marcadas. Decir
-            // «2 tomas» y abrir tres es hacer dudar de si es la grabación buena.
-            tomas: (resumen.tomas || 0) + (resumen.descartadas || 0),
-            fuera: resumen.descartadas || 0,
-            segundos: resumen.segundos || 0,
-            carpeta: ultima.carpeta
-        };
+        estado.ultima = deLaLista(ultima);
     } catch (err) {
         estado.ultima = null;
     }
+}
+
+/**
+ * Una sesión de `grabarListar` como la línea que esta pantalla dibuja.
+ *
+ * Es una sola función porque son la misma línea: la última de la carpeta de
+ * siempre y las de una carpeta elegida a mano se leen igual, y dos lecturas
+ * parecidas se habrían separado en cuanto una contara las tomas distinto.
+ *
+ * Las descartadas CUENTAN. `resumen.tomas` son las que iban en el vídeo, y la
+ * línea tiene que decir qué se va a encontrar al abrirla: el editor las abre
+ * todas, con las de fuera marcadas. Decir «2 tomas» y abrir tres es hacer dudar
+ * de si es la grabación buena.
+ */
+function deLaLista(s) {
+    const resumen = s.resumen || {};
+    return {
+        json: s.archivos.json,
+        nombre: s.secuencia,
+        cuandoMs: s.ceroMs || null,
+        tomas: (resumen.tomas || 0) + (resumen.descartadas || 0),
+        fuera: resumen.descartadas || 0,
+        segundos: resumen.segundos || 0,
+        carpeta: s.carpeta
+    };
 }
 
 export async function salir() {
@@ -721,11 +756,16 @@ async function alClic(e) {
     if (hace === 'terminar') return terminar(boton);
     if (hace === 'exportar') return exportar(boton);
     if (hace === 'ajustar') return ajustar();
+    if (hace === 'atras') return atras();
     if (hace === 'mostrar') return window.nt.reveal(estado.hecho.ruta);
     if (hace === 'abrir') return window.nt.openPath(estado.hecho.ruta);
     if (hace === 'ver-brutos') return window.nt.reveal(dondeEstanLosBrutos());
     if (hace === 'otro') return ver();
     if (hace === 'abrir-ultima') return abrirLaUltima(boton);
+    if (hace === 'elegir-carpeta') return elegirCarpeta(boton);
+    if (hace === 'abrir-hallada') {
+        return abrirLaUltima(boton, (estado.encontradas || [])[Number(boton.dataset.cual)]);
+    }
     return undefined;
 }
 
@@ -1320,17 +1360,62 @@ async function irAlEditor(json) {
  * volver sobre una grabación de la semana pasada no puede perder la que ya se
  * había mandado.
  */
-async function abrirLaUltima(boton) {
-    if (!estado.ultima) return;
+async function abrirLaUltima(boton, cual) {
+    const u = cual || estado.ultima;
+    if (!u) return;
     boton.disabled = true;
     try {
         estado.cortes = 0;
         estado.brutos = [];
-        await irAlEditor(estado.ultima.json);
+        await irAlEditor(u.json);
     } catch (err) {
-        avisar(`No pude abrir «${estado.ultima.nombre}»: ${err.message}`, 'error');
+        avisar(`No pude abrir «${u.nombre}»: ${err.message}`, 'error');
         boton.disabled = false;
     }
+}
+
+/**
+ * Abrir un vídeo de otra carpeta.
+ *
+ * «Lo último que grabaste» mira solo la carpeta de los ajustes, así que un
+ * vídeo que vive en otro sitio —otra semana, otro disco, la carpeta de otra
+ * persona— no tenía por dónde abrirse. Esto lo pide prestado para esta vez: no
+ * toca `ajustes.semanal.carpeta`, porque elegir dónde buscar hoy no es mudarse.
+ *
+ * Y busca con el mismo `grabarListar` que la última, que ya baja por la
+ * carpeta sola (`dondeBuscar`): da igual que se apunte a la carpeta del vídeo o
+ * a la que la contiene, que es justo lo que no se sabe de memoria al estar
+ * frente al diálogo del Finder.
+ *
+ * Con uno solo entra directo. Con varios los muestra y elige quien sabe cuál
+ * quería (ver `deLaCarpeta` en `semanal/tarjetas.js`).
+ */
+async function elegirCarpeta(boton) {
+    const dir = await window.nt.pickFolder({
+        titulo: 'Elegí la carpeta donde grabaste ese vídeo',
+        boton: 'Buscar acá'
+    });
+    if (!dir) return;
+    boton.disabled = true;
+    estado.buscada = dir;
+    estado.encontradas = [];
+    try {
+        estado.encontradas = (await window.nt.grabarListar([dir]) || [])
+            .filter(s => s.archivos && s.archivos.json)
+            .map(deLaLista);
+    } catch (err) {
+        avisar(`No pude leer esa carpeta: ${err.message}`, 'error');
+        estado.buscada = null;
+    }
+    boton.disabled = false;
+    if (estado.encontradas.length === 1) {
+        const sola = estado.encontradas[0];
+        estado.encontradas = [];
+        estado.buscada = null;
+        return abrirLaUltima(boton, sola);
+    }
+    pintar();
+    return undefined;
 }
 
 /**
@@ -1349,6 +1434,34 @@ async function abrirLaUltima(boton) {
 function ajustar() {
     estado.paso = 'revisar';
     pintar();
+}
+
+/**
+ * Arrepentirse de haber entrado al editor.
+ *
+ * Es el camino que faltaba: al editor se entra por tres sitios y de los tres se
+ * salía exportando, así que entrar por error costaba un corte entero o cerrar
+ * la app. Vuelve adonde se vino, que es lo que hace que sea un «atrás» y no
+ * otro botón que lleva a otro sitio:
+ *
+ *   · Si hay un vídeo ya cortado, a él. Nada que hacer más que cambiar de
+ *     paso: el MP4 no se pisó —`alLado` nunca pisa— y el montaje sigue
+ *     cargado, así que ir y volver es gratis las veces que haga falta.
+ *   · Si no, al panel de antes de grabar, que es `ver()` y ya limpia todo lo
+ *     que hay que limpiar. Lo grabado queda en el disco y vuelve a abrirse con
+ *     «Seguir con esa» o con «Elegir carpeta…».
+ *
+ * Lo que se ajustó no se pierde en ninguno de los dos casos: cada cambio ya
+ * está escrito en el sidecar (`cambiarFicha`), no en esta pantalla.
+ */
+function atras() {
+    if (estado.hecho && estado.hecho.ok) {
+        montaje.pausar();
+        estado.paso = 'hecho';
+        pintar();
+        return undefined;
+    }
+    return alPanel();
 }
 
 /** Y recién acá se corta. */

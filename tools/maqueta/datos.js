@@ -234,6 +234,20 @@ export const SEMANALES = [
             json: '/Users/vos/Vídeos/Grabación-2026-10-04_19-29-01/xml/Datos/semana_notas-en-vivo.json'
         },
         resumen: { tomas: 3, descartadas: 1, claquetas: 0, segundos: 162, sinReleer: 0, estado: 'terminada' }
+    },
+    // La de la semana anterior. Está para que «Elegir carpeta…» tenga más de
+    // una cosa que mostrar: con una sola entra directo y el caso de elegir no
+    // se vería nunca en la maqueta.
+    {
+        secuencia: 'semana_2026-09-27_18-40-12',
+        curso: 'semana',
+        ceroMs: new Date('2026-09-27T18:40:12').getTime(),
+        carpeta: '/Volumes/Rodaje/Grabación-2026-09-27_18-40-12',
+        archivos: {
+            xml: '/Volumes/Rodaje/Grabación-2026-09-27_18-40-12/xml/semana.xml',
+            json: '/Volumes/Rodaje/Grabación-2026-09-27_18-40-12/xml/Datos/semana_notas-en-vivo.json'
+        },
+        resumen: { tomas: 5, descartadas: 0, claquetas: 0, segundos: 304, sinReleer: 0, estado: 'terminada' }
     }
 ];
 

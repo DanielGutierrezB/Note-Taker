@@ -95,7 +95,7 @@ export function escena(estado, vista) {
 }
 
 /**
- * La última grabación que hay en la carpeta, para volver a ella.
+ * Las grabaciones de antes, para volver a ellas.
  *
  * Va ARRIBA de todo y no al pie, porque al abrir la app lo normal no es grabar
  * otro vídeo: es terminar el de ayer. Mirarlo, sacarle una toma que no iba,
@@ -103,31 +103,99 @@ export function escena(estado, vista) {
  * que quedaba era el Finder, donde lo que hay son cinco archivos sueltos y no
  * un proyecto.
  *
- * No es un botón primario: el primario de esta pantalla es Grabar, y sigue
+ * La última sale sola y es la de siempre. **Y además se puede elegir una
+ * carpeta**, que es lo que faltaba: la última solo mira la carpeta de los
+ * ajustes, así que un vídeo de otra semana que vive en otro sitio no tenía
+ * forma de abrirse. Elegir una carpeta no cambia la de siempre: es mirar ahí
+ * esta vez, no mudarse.
+ *
+ * No hay botón primario acá: el primario de esta pantalla es Grabar, y sigue
  * siendo uno solo.
  *
- * Y es UNA línea, no una tarjeta con cabeza y cuerpo como las demás. La hice
- * así primero y a 840 px de alto empujaba Grabar abajo del borde: una pantalla
+ * Y son LÍNEAS, no tarjetas con cabeza y cuerpo como las demás. Las hice así
+ * primero y a 840 px de alto empujaban Grabar abajo del borde: una pantalla
  * donde no se ve el botón de grabar es peor que una sin este atajo. Lo que se
- * perdió al apretarla —que se abre donde se dejó, que el vídeo ya exportado no
- * se pisa— está en el `title` del botón, que es donde se lee si hace falta.
+ * pierde al apretarlas —que se abre donde se dejó, que el vídeo ya exportado
+ * no se pisa— está en el `title` de cada botón, que es donde se lee si hace
+ * falta.
  */
 function tarjetaDeLaUltima(estado) {
-    const u = estado.ultima;
-    if (!u) return '';
+    const halladas = estado.encontradas || [];
+    // Sin nada que seguir y sin carpeta mirada todavía, la tarjeta entera se va:
+    // una línea que dice «no hay nada» no ayuda a grabar, que es lo que se viene
+    // a hacer cuando no hay nada.
+    if (!estado.ultima && !halladas.length && !estado.buscada) return '';
+    return `
+      <div class="tarjeta semanal-ultima">
+        ${halladas.length || estado.buscada ? deLaCarpeta(estado, halladas) : ''}
+        ${estado.ultima && !halladas.length ? filaDeSesion(estado.ultima, {
+            rotulo: 'Lo último que grabaste',
+            hace: 'abrir-ultima',
+            boton: 'Seguir con esa',
+            dice: 'Vuelve al editor de esa grabación: qué toma va, qué se ve en cada una, y '
+                + 'cortarla nueva. Se abre donde se dejó, y el vídeo que ya sacaste no se pisa.'
+        }) : ''}
+        ${halladas.length ? '' : `
+        <div class="campo-fila">
+          <span class="v3 crece">¿El vídeo que buscás está en otra carpeta?</span>
+          <button class="btn btn-tenue" type="button" data-hace="elegir-carpeta"
+                  title="Abre una carpeta donde hayas grabado y te deja seguir con lo que haya ahí, sin cambiar la carpeta de siempre">
+            ${icono('carpeta')} Elegir carpeta…</button>
+        </div>`}
+      </div>`;
+}
+
+/**
+ * Lo que se encontró en una carpeta que se eligió a mano.
+ *
+ * Con un vídeo solo no se pregunta: se abre. Con varios hay que elegir, y el
+ * único que podría elegir es quien sabe cuál quería. Abrir el más nuevo por su
+ * cuenta sería acertar la mitad de las veces y hacer perder el corte la otra
+ * mitad.
+ *
+ * Con ninguno, lo dice y deja volver: una carpeta equivocada es el caso normal
+ * de buscar algo, no un error.
+ */
+function deLaCarpeta(estado, halladas) {
+    const donde = esc(String(estado.buscada || '').split('/').pop());
+    if (!halladas.length) {
+        return `
+          <div class="campo-fila">
+            ${icono('carpeta')}
+            <span class="v2 crece">En <b>${donde}</b> no hay ningún vídeo grabado.</span>
+            <button class="btn btn-tenue" type="button" data-hace="elegir-carpeta"
+                    title="Probar con otra carpeta">Elegir otra…</button>
+          </div>`;
+    }
+    return `
+      <div class="campo-fila" style="margin-bottom:8px">
+        ${icono('carpeta')}
+        <span class="v2 crece">${halladas.length} vídeos en <b>${donde}</b></span>
+        <button class="btn btn-tenue" type="button" data-hace="elegir-carpeta"
+                title="Probar con otra carpeta">Elegir otra…</button>
+      </div>
+      ${halladas.map((u, i) => filaDeSesion(u, {
+          rotulo: esc(u.nombre),
+          hace: 'abrir-hallada',
+          cual: i,
+          boton: 'Seguir con esa',
+          dice: 'Abre el editor de esa grabación. El vídeo que ya hayas sacado de ahí no se pisa.'
+      })).join('')}`;
+}
+
+/** Una grabación en una línea: cuándo fue, qué trae, y la puerta a su editor. */
+function filaDeSesion(u, o) {
     const cuantas = `${u.tomas} toma${u.tomas === 1 ? '' : 's'}`;
     const fuera = u.fuera ? ` (${u.fuera} fuera)` : '';
     const cuanto = u.segundos ? ` · ${esc(fmt.duracion(u.segundos))} grabados` : '';
     return `
-      <div class="tarjeta semanal-ultima">
-        <div class="campo-fila">
-          ${icono('camara')}
-          <span class="v2">Lo último que grabaste</span>
-          <span class="v3 crece">${esc(fmt.cuando(u.cuandoMs))} · ${cuantas}${fuera}${cuanto}</span>
-          <button class="btn" type="button" data-hace="abrir-ultima"
-                  title="Vuelve al editor de esa grabación: qué toma va, qué se ve en cada una, y cortarla nueva. Se abre donde se dejó, y el vídeo que ya sacaste no se pisa.">
-            Seguir con esa</button>
-        </div>
+      <div class="campo-fila">
+        ${icono('camara')}
+        <span class="v2">${o.rotulo}</span>
+        <span class="v3 crece">${esc(fmt.cuando(u.cuandoMs))} · ${cuantas}${fuera}${cuanto}</span>
+        <button class="btn" type="button" data-hace="${o.hace}"
+                ${o.cual == null ? '' : `data-cual="${o.cual}"`}
+                title="${esc(o.dice)}">${o.boton}</button>
       </div>`;
 }
 
@@ -508,6 +576,7 @@ export function tarjetaRevisar(estado) {
     const van = todas.filter(t => !t.descartada);
     const t = corte.laParada(todas, estado.ficha);
     return `
+      ${salidasDelEditor(estado)}
       <div class="tarjeta">
         <div class="tarjeta-cuerpo revisar-fila">
           <div class="revisar-espejo" aria-hidden="true"></div>
@@ -526,6 +595,40 @@ export function tarjetaRevisar(estado) {
             dejaste fuera, o grabá otro.</span>
         </div>
       </div>`}`;
+}
+
+/**
+ * Las dos puertas del editor: para atrás, y a la carpeta.
+ *
+ * **Para atrás no había ninguna.** Al editor se entra por tres sitios —terminar
+ * de grabar, «Seguir con esa» y «Ajustar y cortar de nuevo»— y de los tres se
+ * salía exportando: arrepentirse de haber entrado no era un gesto que
+ * existiera. Lo contó quien lo usa: «no me permite arrepentirme».
+ *
+ * El botón dice ADÓNDE vuelve y no «Atrás», porque no vuelve siempre al mismo
+ * sitio: si hay un vídeo ya cortado, vuelve a él —es de donde se vino, y sigue
+ * ahí sin que lo haya pisado nadie—, y si no, al panel de antes de grabar. Un
+ * «Atrás» a secas obliga a apretarlo para saber qué hace.
+ *
+ * Y «Mostrar en Finder», que estaba solo al final: mientras se ajusta es
+ * cuando hace falta mirar lo que hay en el disco —si la pantalla se grabó, si
+ * el tramo nuevo está—, y no después de cortar.
+ */
+function salidasDelEditor(estado) {
+    const hay = Boolean(estado.hecho && estado.hecho.ok);
+    return `
+      <div class="campo-fila" style="margin-bottom:12px">
+        <button class="btn btn-tenue" type="button" data-hace="atras"
+                title="${hay
+        ? 'Vuelve al vídeo que ya cortaste, tal como quedó. Lo que ajustaste acá se mantiene.'
+        : 'Vuelve a la pantalla de antes de grabar. La grabación queda en el disco y se '
+            + 'puede volver a abrir con «Seguir con esa».'}">
+          ${icono('volver')} ${hay ? 'Volver al vídeo' : 'Volver al panel'}</button>
+        <span class="crece"></span>
+        <button class="btn btn-tenue" type="button" data-hace="ver-brutos"
+                title="Abre la carpeta donde está quedando todo: la cámara, la pantalla y el audio tal como se grabaron">
+          ${icono('finder')} Mostrar en Finder</button>
+      </div>`;
 }
 
 /**
