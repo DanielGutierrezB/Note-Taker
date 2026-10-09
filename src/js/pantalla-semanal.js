@@ -626,10 +626,14 @@ function unTexto(cual, toma, previo) {
 
     if (cual === 'abierta') {
         const abierta = tomas.find(t => t.outMs == null);
+        // Sin `limite`: es la marca «fin de la toma N» que frena el IN, y acá no
+        // tiene nada que frenar porque `antes` va vacío —este modo no enseña lo
+        // que se dijo antes del IN—. Iba un `inMs` suelto, que es un número
+        // donde `texto-toma` espera `{toma, ms, color}`, y la pastilla salía
+        // dibujada en el vídeo diciendo «fin de la toma undefined».
         return texto.textoDe({
             modo: 'abierta',
             antes: [],
-            limite: abierta ? abierta.inMs : 0,
             palabras: (abierta && abierta.palabras) || [],
             vacio: 'Todavía no se oyó nada de esta toma.'
         }, suyo, previo);

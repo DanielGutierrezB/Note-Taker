@@ -167,6 +167,82 @@ function aPared(ms, wav) {
     return wav.desdeMs + (ms - wav.desdeMs) * derivaDe(wav);
 }
 
+/** Y de vuelta: de la pared al reloj del audio, para recortar en los dos a la vez. */
+function alAudio(ms, wav) {
+    if (!wav || wav.desdeMs == null) return ms;
+    return wav.desdeMs + (ms - wav.desdeMs) / derivaDe(wav);
+}
+
+/**
+ * Hasta dónde hay metraje, mirando todas las fuentes juntas.
+ *
+ * Sirve para recortar una toma a lo que de verdad se grabó en vez de tirarla.
+ * Es la unión y no la intersección a propósito: adentro de esta ventana hay
+ * ALGO —la cámara, la pantalla, o las dos—, y de elegir cuál ya se encarga el
+ * reparto, con su repuesto y sus negros. Recortar contra la intersección
+ * cortaría tomas que una de las dos fuentes sí tiene enteras.
+ */
+function hastaDondeHay(fuentes) {
+    let desdeMs = Infinity;
+    let hastaMs = -Infinity;
+    for (const v of fuentes) {
+        if (!v || v.empezoMs == null) continue;
+        desdeMs = Math.min(desdeMs, v.empezoMs);
+        // Sin cierre es que todavía está grabando: cubre hasta donde haga falta,
+        // igual que en `videoCrudo.cubre`.
+        hastaMs = v.cerradoMs == null ? Infinity : Math.max(hastaMs, v.cerradoMs);
+    }
+    return desdeMs < hastaMs ? { desdeMs, hastaMs } : null;
+}
+
+/**
+ * La toma recortada a lo que hay, en los DOS relojes.
+ *
+ * **Antes esto no existía y la toma se perdía entera.** Una toma que se salía
+ * del metraje aunque fuera por un instante no tenía fondo, y el reparto la
+ * dejaba fuera con un aviso. Pasó de verdad, y costó un vídeo: catorce
+ * segundos hablados desaparecieron porque el último segundo y medio no tenía
+ * imagen. El aviso estaba, pero un aviso no es lo mismo que el vídeo.
+ *
+ * Y no es un caso raro, es estructural. Al terminar, los vídeos se cierran
+ * ANTES que el audio (ver `terminar` en `pantalla-semanal.js`), así que una
+ * toma que siga abierta al apretar Terminar SIEMPRE termina un poco después
+ * del último fotograma. Lo normal es que sean milisegundos y no se note; con
+ * el audio atrasado —que es cuando el reloj se estira— son segundos.
+ *
+ * Se recorta en los dos relojes y con la misma cuenta al revés, porque si el
+ * vídeo se recorta y el audio no, lo que sale está desfasado, que es peor que
+ * corto.
+ *
+ * @returns {{enElAudio, enLaPared, recortadoMs}|null} `null` si no queda nada
+ */
+function recortarALoQueHay(toma, wav, limite) {
+    const enLaPared = {
+        id: toma.id,
+        desdeMs: aPared(toma.desdeMs, wav),
+        hastaMs: aPared(toma.hastaMs, wav)
+    };
+    if (!limite) return { enElAudio: toma, enLaPared, recortadoMs: 0 };
+
+    const desdeMs = Math.max(enLaPared.desdeMs, limite.desdeMs);
+    const hastaMs = Math.min(enLaPared.hastaMs, limite.hastaMs);
+    const recortadoMs = (desdeMs - enLaPared.desdeMs) + (enLaPared.hastaMs - hastaMs);
+    if (recortadoMs <= 0) return { enElAudio: toma, enLaPared, recortadoMs: 0 };
+    // Lo que queda tiene que ser una toma y no un fotograma suelto: por debajo
+    // del mínimo que ya usa `tomasDe`, recortar sería fingir que se salvó algo.
+    if (hastaMs - desdeMs < MINIMO_SEC * 1000) return null;
+
+    return {
+        enElAudio: {
+            ...toma,
+            desdeMs: alAudio(desdeMs, wav),
+            hastaMs: alAudio(hastaMs, wav)
+        },
+        enLaPared: { id: toma.id, desdeMs, hastaMs },
+        recortadoMs
+    };
+}
+
 /**
  * Una toma, con sus dos tramos: el del reloj del audio y el del de pared.
  *
@@ -236,8 +312,22 @@ function repartir(p) {
         }
     }
 
+    // Hasta dónde hay imagen. Una toma que se pase de ahí se recorta a lo que
+    // hay en vez de perderse: ver `recortarALoQueHay`.
+    const limite = hastaDondeHay([camara, ...pantallas]);
+
     for (const toma of tomas) {
-        const { wav, enElAudio, enLaPared } = enLosDosRelojes(toma, wavs);
+        const wav = ajustar.elWavDe(wavs, toma.desdeMs, toma.hastaMs);
+        const cabe = recortarALoQueHay(toma, wav, limite);
+        if (!cabe) {
+            avisos.push(`La toma ${toma.id} queda fuera de lo que se grabó: no entra en el vídeo.`);
+            continue;
+        }
+        const { enElAudio, enLaPared, recortadoMs } = cabe;
+        if (recortadoMs > 0) {
+            avisos.push(`A la toma ${toma.id} le faltaba imagen en el borde: se le recortaron `
+                + `${conComa(tres(recortadoMs / 1000))} s y el resto entra entero.`);
+        }
 
         const cubre = v => v && videoCrudo.cubre(v, enLaPared.desdeMs) && videoCrudo.cubre(v, enLaPared.hastaMs);
 

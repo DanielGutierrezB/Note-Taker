@@ -24,6 +24,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 
 const exportar = require('../engine/exportar-video');
+const dom = require('./fixtures/dom');
 
 const RAIZ = path.join(__dirname, '..');
 const leer = (...partes) => fs.readFileSync(path.join(RAIZ, ...partes), 'utf8');
@@ -405,6 +406,33 @@ module.exports = function (t) {
             .test(tarjeta), 'y es el del borde');
         t.ok(/data-hace="terminar"/.test(tarjeta) && !/btn-primario" type="button" data-hace="terminar"/
             .test(tarjeta), 'Terminar queda como un botón normal');
+    });
+
+    t.test('la caja de la toma abierta no dibuja la pared de la toma anterior', async () => {
+        // Iba un `inMs` suelto donde `texto-toma` espera `{toma, ms, color}`, y
+        // la pastilla salía diciendo «fin de la toma undefined». Se vio en el
+        // MP4 de alguien grabándose: el fallo se exportó dentro del vídeo.
+        //
+        // Y acá esa marca no tiene trabajo: es la pared que frena el IN contra
+        // la toma de antes, y este modo no enseña nada de antes del IN.
+        const semanal = laPantalla();
+        const caja = semanal.slice(semanal.indexOf("if (cual === 'abierta')"),
+            semanal.indexOf("if (cual === 'cerrada'"));
+        t.ok(/antes: \[\]/.test(caja), 'sigue sin enseñar lo de antes del IN');
+        t.ok(!/limite:/.test(caja), 'así que no se le pasa ningún límite');
+
+        // Y que no sea una casualidad del texto: con un número, el módulo de
+        // verdad escribe el «undefined» que se vio.
+        dom.fingir();
+        const texto = await import(
+            pathToFileURL(path.join(RAIZ, 'src', 'js', 'grabar', 'texto-toma.js')).href);
+        const conNumero = texto.textoDe({ modo: 'abierta', antes: [], limite: 123456,
+            palabras: [], vacio: 'x' }, () => {});
+        t.ok(/undefined/.test(conNumero.textContent),
+            'un número ahí escribe «undefined»: por eso no va ninguno');
+        const sinNada = texto.textoDe({ modo: 'abierta', antes: [], palabras: [], vacio: 'x' },
+            () => {});
+        t.ok(!/undefined/.test(sinNada.textContent), 'y sin él, no');
     });
 
     t.group('modo semanal · la escena en vivo');

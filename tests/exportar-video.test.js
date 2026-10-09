@@ -153,6 +153,94 @@ module.exports = function (t) {
         t.eq(r.trozos[0].encima.hastaSec, 35);
     });
 
+    t.group('exportar vídeo · una toma que se pasa del metraje');
+
+    t.test('se recorta a lo que hay en vez de perderse entera', () => {
+        // Pasó de verdad y costó un vídeo: catorce segundos hablados
+        // desaparecieron porque el último segundo y medio no tenía imagen. El
+        // aviso estaba; el vídeo no.
+        const r = exportar.repartir({
+            tomas: [toma(1, 5, 20)],
+            pantallas: [video('pantalla', 0, 18)],
+            camara: video('camara', 0, 18),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.eq(r.trozos.length, 1, 'la toma entra');
+        t.eq(r.trozos[0].segundos, 13, 'con los 13 s que sí se grabaron');
+        t.ok(r.avisos.some(a => /recortaron 2 s/.test(a)), r.avisos.join(' · '));
+    });
+
+    t.test('también por el principio, si el vídeo arrancó más tarde', () => {
+        // Los vídeos arrancan unos milisegundos después del cero de la sesión,
+        // así que una toma abierta en el primer instante se salía por abajo.
+        const r = exportar.repartir({
+            tomas: [toma(1, 0, 10)],
+            pantallas: [video('pantalla', 2, 30)],
+            camara: video('camara', 2, 30),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.eq(r.trozos.length, 1);
+        t.eq(r.trozos[0].segundos, 8);
+        t.eq(r.trozos[0].fondo.desdeSec, 0, 'empieza donde empieza el metraje');
+    });
+
+    t.test('el audio se recorta lo mismo que la imagen, y no queda desfasado', () => {
+        // Si se recortara el vídeo y no el audio, lo que sale está corrido:
+        // peor que corto. Con el reloj del audio estirado la cuenta no es la
+        // misma en los dos lados, y por eso se hace con la inversa exacta.
+        const r = exportar.repartir({
+            tomas: [toma(1, 5, 20)],
+            pantallas: [video('pantalla', 0, 18)],
+            camara: null,
+            camaraConAudio: false,
+            // 30 s de muestras en 60 s de pared: el reloj del audio va a la mitad.
+            wavs: [{ archivo: '/tmp/audio.wav', ruta: '/tmp/audio.wav',
+                desdeMs: T0, hastaMs: T0 + 60000, segundos: 30 }]
+        });
+        t.eq(r.trozos.length, 1);
+        const trozo = r.trozos[0];
+        t.near(trozo.audio.hastaSec - trozo.audio.desdeSec, trozo.segundos / 2, 0.01,
+            'el tramo del WAV dura lo mismo que la imagen, en SU reloj');
+        t.near(trozo.fondo.hastaSec - trozo.fondo.desdeSec, trozo.segundos, 0.01);
+    });
+
+    t.test('pero si no queda nada, sigue sin entrar y se dice', () => {
+        const r = exportar.repartir({
+            tomas: [toma(1, 40, 50)],
+            pantallas: [video('pantalla', 0, 18)],
+            camara: video('camara', 0, 18),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.eq(r.trozos.length, 0);
+        t.ok(r.avisos.some(a => /queda fuera de lo que se grabó/.test(a)), r.avisos.join(' · '));
+    });
+
+    t.test('y lo que apenas asoma tampoco: un fotograma suelto no es una toma', () => {
+        const r = exportar.repartir({
+            tomas: [toma(1, 17.95, 30)],
+            pantallas: [video('pantalla', 0, 18)],
+            camara: video('camara', 0, 18),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.eq(r.trozos.length, 0, `por debajo de ${exportar.MINIMO_SEC} s no se finge que se salvó algo`);
+    });
+
+    t.test('una toma que cabe entera no se toca', () => {
+        const r = exportar.repartir({
+            tomas: [toma(1, 5, 15)],
+            pantallas: [video('pantalla', 0, 30)],
+            camara: video('camara', 0, 30),
+            camaraConAudio: true,
+            wavs: [wav(0, 60)]
+        });
+        t.eq(r.avisos.length, 0, 'ni un aviso de recorte donde no hubo recorte');
+        t.eq(r.trozos[0].segundos, 10);
+    });
+
     t.test('los pedazos del fondo suman exactamente lo que dura la toma', () => {
         // Es la condición que `concat` no perdona: el audio se recorta al largo
         // del vídeo, y si los pedazos sumaran de menos la toma saldría corta y
