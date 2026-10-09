@@ -1,0 +1,153 @@
+/**
+ * mirilla.css — La ventanita que te deja verte mientras grabás.
+ *
+ * Hoja aparte y no un rincón de `style.css` porque esta ventana no comparte
+ * nada con la app: no tiene cromo, ni tarjetas, ni tipografía de lectura. Es
+ * un recuadro de vídeo del tamaño exacto que va a tener en el export y tres
+ * botones encima. Traerse las 2.400 líneas de la otra para usar cuatro
+ * variables habría sido cargar toda la app en una ventana de 300 px.
+ *
+ * Los colores sí son los mismos, copiados: son cuatro y no cambian nunca.
+ */
+
+:root {
+  --tinta: #e9edf2;
+  --fondo-mando: rgba(9, 10, 13, 0.72);
+  --error: #ff8a8a;
+  /* El borde lo pone el JS con el color del marcador de la vista
+     (`coloresDeVista` en js/colores.js), que es el mismo que verá el editor. */
+  --vista: #ff8a8a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  /* Transparente: lo que se ve alrededor del recuadro es tu escritorio, que es
+     justamente el fondo que va a tener el vídeo. */
+  background: transparent;
+  overflow: hidden;
+  font: 500 11px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--tinta);
+  /* La ventana no es movable: arrastrarla la sacaría de la esquina donde va a
+     estar en el export, que es lo único que esta ventana promete. */
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+/**
+ * El recuadro, con el redondeo del export.
+ *
+ * `exportar-video.js` redondea un octavo del lado (45 de 360), así que acá va
+ * la misma fracción y no un número suelto: cambiando el lado, el redondeo se
+ * acompaña solo.
+ */
+.marco {
+  position: relative;
+  height: 100%;
+  border-radius: 12.5%;
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+/**
+ * El borde dice en qué vista estás: rojo «Yo», naranja «Mi pantalla».
+ *
+ * No es una elección de acá —son los colores de los marcadores de Premiere—
+ * así que lo que ves mientras grabás es lo que el editor va a ver después.
+ *
+ * Y va en una capa propia y no en un `box-shadow: inset` del recuadro, que es
+ * como estaba: la sombra interior la pinta el padre por debajo de sus hijos, y
+ * el `<video>` llena el recuadro entero, así que el borde no se veía. Se
+ * descubrió mirando una captura de la ventana de verdad, no leyendo el CSS.
+ */
+.marco::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 4px var(--vista);
+  pointer-events: none;
+}
+
+#camara {
+  width: 100%;
+  height: 100%;
+  /* Recortado al cuadrado y centrado, igual que `crop` en el export: de un
+     16:9 de cámara, la mitad es pared. */
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+
+/* Cuando no hay cámara que mostrar, se dice y no se deja un cuadro negro. */
+.aviso {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 14%;
+  text-align: center;
+  color: var(--error);
+  background: #000;
+}
+.marco[data-aviso='si'] .aviso { display: flex; }
+
+/**
+ * Los tres mandos, abajo y dentro del recuadro.
+ *
+ * Dentro y no debajo porque la ventana ES el recuadro: una fila de botones por
+ * fuera agrandaría la ventana y entonces lo que tapa en pantalla ya no sería
+ * lo que tapa en el vídeo.
+ *
+ * Están siempre, y a media tinta hasta que te acercás. Probé a esconderlos del
+ * todo hasta el hover y queda más limpio, pero un botón que no se ve es un
+ * botón que no se sabe que está: el de la toma es el que hay que poder apretar
+ * a mitad de frase, y buscarlo moviendo el ratón a ver si aparece es justo lo
+ * que no se puede hacer hablando a cámara.
+ */
+.mandos {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 6%;
+  display: flex;
+  gap: 4px;
+  opacity: 0.62;
+  transition: opacity 120ms ease-out;
+}
+body:hover .mandos,
+.mandos:focus-within,
+.marco[data-toma='abierta'] .mandos { opacity: 1; }
+
+.mando {
+  flex: 1;
+  min-height: 24px;
+  padding: 4px 2px;
+  border: 1px solid rgba(233, 237, 242, 0.18);
+  border-radius: 7px;
+  background: var(--fondo-mando);
+  color: var(--tinta);
+  font: inherit;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.mando:hover { background: rgba(32, 38, 46, 0.86); }
+.mando:focus-visible { outline: 2px solid var(--vista); outline-offset: 1px; }
+.mando[aria-pressed='true'] {
+  border-color: var(--vista);
+  box-shadow: inset 0 0 0 1px var(--vista);
+}
+.mando[disabled] { opacity: 0.45; cursor: default; }
+
+/* El de la toma pesa el doble: es el que se aprieta a mitad de frase. */
+.mando-toma { flex: 2; }
+.marco[data-toma='abierta'] .mando-toma {
+  border-color: var(--error);
+  color: var(--error);
+}

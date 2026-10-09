@@ -13,7 +13,7 @@
  */
 
 const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, clipboard,
-    session, desktopCapturer } = require('electron');
+    session, desktopCapturer, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -26,9 +26,11 @@ const ipcGrabar = require('./ipc/grabar');
 const ipcPrproj = require('./ipc/prproj');
 const ipcReferencias = require('./ipc/referencias');
 const ipcSemanal = require('./ipc/semanal');
+const ipcMirilla = require('./ipc/mirilla');
 const devShot = require('./dev-shot');
 
 let mainWindow = null;
+let mirilla = null;
 let descargaEnCurso = null;
 
 function appVersion() {
@@ -39,9 +41,17 @@ function appVersion() {
     }
 }
 
-/** Avisarle algo a la ventana, si todavía está. */
+/**
+ * Avisarle algo a las ventanas que haya.
+ *
+ * Son dos y no una desde que existe la mirilla, y le llega lo MISMO que a la
+ * principal a propósito: sus tres botones hablan del estado del motor —si hay
+ * una toma abierta, qué vista va— y un segundo canal con un recorte sería la
+ * segunda versión de la verdad que esta app evita en todas partes.
+ */
 function send(channel, payload) {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+    if (mirilla) mirilla.avisar(channel, payload);
 }
 
 /** Una línea en el diario de la sesión (`engine/registro.js`). */
@@ -70,6 +80,14 @@ function createWindow() {
 
     permitirPedirLaPantalla();
     mainWindow.once('ready-to-show', () => mainWindow.show());
+    // La mirilla se va con ella. Es una ventana sin marco y sin botón de
+    // cerrar, pegada encima de todo lo demás: sola en la pantalla, sin la app
+    // que la mandó abrir, no habría forma de quitársela de encima. Y en macOS
+    // la app no se cierra al cerrar su ventana, así que esto no es hipotético.
+    mainWindow.on('closed', () => {
+        mainWindow = null;
+        if (mirilla) mirilla.cerrar();
+    });
     mainWindow.loadFile('src/index.html');
     // El arnés de desarrollo (capturas, JS inyectado) vive en `dev-shot.js` y
     // sin sus flags no hace nada.
@@ -359,3 +377,7 @@ ipcGrabar.registrar({ ipcMain, app, send, anotar });
 ipcPrproj.registrar({ ipcMain, dialog, ventana: () => mainWindow, send, anotar });
 ipcReferencias.registrar({ ipcMain, nativeImage, clipboard, anotar });
 ipcSemanal.registrar({ ipcMain, send, anotar });
+mirilla = ipcMirilla.registrar({
+    ipcMain, BrowserWindow, screen, desktopCapturer,
+    ventanaPrincipal: () => mainWindow, anotar
+});

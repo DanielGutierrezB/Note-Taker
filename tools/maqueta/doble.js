@@ -513,6 +513,19 @@ window.nt = {
     onSemanalProgreso: cb => progresoSemanal.push(cb),
     onSemanalAviso: cb => avisosSemanal.push(cb),
 
+    // La mirilla es una ventana del proceso principal, así que en el navegador
+    // no existe: acá se contesta que sí y no se abre nada. Lo que SÍ se puede
+    // ver en la maqueta es el botón —puesto o no— y que la semanal no se rompa
+    // mandando el espejo en cada repintado, que es lo que pasaba antes de que
+    // estas cuatro existieran.
+    mirillaPoner: async () => ({ ok: true, visible: true }),
+    mirillaPantalla: async () => ({ ok: true, monitor: null, sitio: null }),
+    mirillaEspejo: async () => ({ ok: true }),
+    mirillaQueMuestro: async () => ({}),
+    mirillaGesto: async () => ({ ok: true }),
+    onMirillaEspejo: () => {},
+    onMirillaGesto: () => {},
+
     registroDescargar: async () => ({ ok: true, archivo: '/tmp/log.md' }),
     onUpdateProgress: cb => progresoUpdate.push(cb),
     onUpdateReady: cb => listaUpdate.push(cb)

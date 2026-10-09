@@ -95,6 +95,29 @@ export function escena(estado, vista) {
 }
 
 /**
+ * El interruptor de la mirilla: la ventanita flotante donde te ves grabando.
+ *
+ * Va pegado a la escena y no en Ajustes porque es lo mismo que la escena, en
+ * otro sitio: acá se ve cómo va a quedar mientras se prepara, y la mirilla lo
+ * enseña encima del escritorio de verdad mientras se graba. Quien mira este
+ * recuadro es exactamente quien querría eso, y a mitad de grabación la tarjeta
+ * ya no está.
+ *
+ * Se apaga sola al terminar: es una ventana flotante sobre todo lo demás, y
+ * una que se quedara después de grabar sería una ventana que estorba.
+ */
+export function verme(puesta) {
+    return `
+      <button class="btn btn-tenue" type="button" data-hace="mirilla"
+              aria-pressed="${Boolean(puesta)}"
+              title="${puesta
+                  ? 'Cierra la ventanita flotante'
+                  : 'Abre una ventanita en esa misma esquina de tu pantalla, encima de todo, '
+                      + 'con tu cámara del tamaño en que va a salir. No se graba a sí misma'}">
+        ${icono('camara')} ${puesta ? 'Me estoy viendo' : 'Verme al grabar'}</button>`;
+}
+
+/**
  * Las grabaciones de antes, para volver a ellas.
  *
  * Va ARRIBA de todo y no al pie, porque al abrir la app lo normal no es grabar
@@ -252,9 +275,12 @@ export function tarjetaListo(estado) {
             <span class="rotulo">Así va a quedar</span>
             <div class="campo-fila">
               ${escena(estado, 'R')}
-              <span class="v3 crece">Es el vídeo, no la cámara: tu pantalla de fondo y tu cara
-                en la esquina, del tamaño y en el sitio en que van a salir. Si la cara tapa algo
-                que vas a explicar, movelo ahora.</span>
+              <div class="crece">
+                <span class="v3">Es el vídeo, no la cámara: tu pantalla de fondo y tu cara
+                  en la esquina, del tamaño y en el sitio en que van a salir. Si la cara tapa algo
+                  que vas a explicar, movelo ahora.</span>
+                <div class="campo-fila" style="margin-top:8px">${verme(estado.mirilla)}</div>
+              </div>
             </div>
           </div>
 
@@ -333,7 +359,10 @@ export function tarjetaGrabando(estado) {
           </div>
           <div class="campo-fila" style="margin-top:16px; align-items:flex-start">
             ${escena(estado, abierta ? (abierta.vista || estado.vista) : estado.vista)}
-            <div class="crece">${elegirVista(estado, abierta)}</div>
+            <div class="crece">
+              ${elegirVista(estado, abierta)}
+              <div class="campo-fila" style="margin-top:8px">${verme(estado.mirilla)}</div>
+            </div>
           </div>
           ${laVentana(estado, abierta)}
           <div class="campo" style="margin-top:16px">

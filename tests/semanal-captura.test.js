@@ -225,7 +225,7 @@ module.exports = function (t) {
 
     t.test('cada vista lleva el color del marcador que va a tener en Premiere', () => {
         const semanal = laPantalla();
-        t.ok(/import \{ estiloDeVista \} from '\.\/colores\.js';/.test(semanal),
+        t.ok(/import \{ estiloDeVista, coloresDeVista \} from '\.\/colores\.js';/.test(semanal),
             'el color sale del mismo sitio que en una clase');
         t.ok(/window\.nt\.grabarVistas\(\)\.then/.test(semanal),
             'y los colores los sabe el motor, no esta pantalla');

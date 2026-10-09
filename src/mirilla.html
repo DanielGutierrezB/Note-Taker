@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob: mediastream:">
+  <title>Note Taker · cómo te ves</title>
+  <link rel="stylesheet" href="css/mirilla.css">
+</head>
+<body>
+  <!-- El recuadro: la cámara con el redondeo y el borde del color de la vista,
+       igual que va a salir en el vídeo. `aria-hidden` porque esto es un espejo
+       y no hay nada que leer; lo que sí se lee son los botones. -->
+  <div class="marco" id="marco" data-vista="R">
+    <video id="camara" muted playsinline aria-hidden="true"></video>
+    <p class="aviso" id="aviso" role="status"></p>
+    <div class="mandos" id="mandos">
+      <button class="mando mando-toma" type="button" data-hace="toma" id="btn-toma">···</button>
+      <button class="mando" type="button" data-hace="vista" data-vista="R" id="btn-r">R</button>
+      <button class="mando" type="button" data-hace="vista" data-vista="PV" id="btn-pv">PV</button>
+    </div>
+  </div>
+  <script type="module" src="js/mirilla.js"></script>
+</body>
+</html>

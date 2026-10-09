@@ -42,7 +42,7 @@ import * as corte from './semanal/corte.js';
 import * as tarjetas from './semanal/tarjetas.js';
 import * as menuPalabra from './grabar/menu-de-palabra.js';
 import * as estados from './estados.js';
-import { estiloDeVista } from './colores.js';
+import { estiloDeVista, coloresDeVista } from './colores.js';
 
 let app = null;
 
@@ -88,6 +88,7 @@ const estado = {
     silencios: true,
     mejorarAudio: true,
     hecho: null,             // lo que devolvió el exportador
+    mirilla: false,          // si está abierta la ventanita flotante de verse
     avisos: []
 };
 
@@ -121,6 +122,14 @@ export function conectar(contexto) {
         if (estado.paso !== 'cortando') return;
         estado.corte = p;
         pintar();
+    });
+    // Los tres botones de la mirilla entran por acá y van a parar a las MISMAS
+    // funciones que sus botones de esta pantalla: apretar «PV» allá y apretarlo
+    // acá tienen que ser el mismo gesto, no dos caminos que un día discrepan.
+    window.nt.onMirillaGesto(g => {
+        if (!g) return;
+        if (g.hace === 'vista') cambiarVista(g.vista);
+        if (g.hace === 'toma') bordeDeToma();
     });
 }
 
@@ -176,6 +185,7 @@ async function alPanel() {
     // siempre sería prometer que sigue mirando ahí.
     estado.buscada = null;
     estado.encontradas = [];
+    if (estado.mirilla) laMirilla(false);
     pintar();
     // Las dos en paralelo: mirar qué micrófonos y cámaras hay tarda —hay que
     // abrir los elegidos para poder verlos— y leer el disco no tiene por qué
@@ -393,6 +403,7 @@ function pintar() {
     $('#semanal-titulo').textContent = momento.titulo;
     $('#semanal-cuerpo').innerHTML = momento.tarjeta(estado);
     if (momento.luego) momento.luego();
+    espejar();
 }
 
 /**
@@ -724,10 +735,12 @@ async function alClic(e) {
             return;
         }
         estado.pantalla = { nombre: r.nombre, ancho: r.ancho, alto: r.alto };
+        contarLaPantalla();
         pintar();
         return;
     }
     if (hace === 'cambiar-pantalla') return cambiarPantalla(boton);
+    if (hace === 'mirilla') return laMirilla(!estado.mirilla);
     if (hace === 'vista') return cambiarVista(boton.dataset.vista);
     if (hace === 'borde') return bordeDeToma();
     if (hace === 'plegar') return plegar(Number(boton.dataset.toma));
@@ -783,6 +796,69 @@ async function alClic(e) {
  * esto no cambia ninguna —se mira recién al cortar—. Repintar además le
  * sacaría el foco al botón que se acaba de apretar.
  */
+/**
+ * Encender o apagar la mirilla.
+ *
+ * El estado vive acá y no en el proceso principal porque el botón que lo dice
+ * está acá: la ventana del otro lado es el reflejo, no el original.
+ */
+async function laMirilla(encendida) {
+    try {
+        await window.nt.mirillaPoner(encendida);
+    } catch (e) {
+        avisar(`No se pudo abrir la ventanita: ${e.message}`, 'error');
+        return;
+    }
+    estado.mirilla = encendida;
+    if (encendida) { contarLaPantalla(); espejar(); }
+    pintar();
+}
+
+/**
+ * Qué pantalla se está grabando, para que la mirilla se mude a ese monitor.
+ *
+ * Lo que mira es `getSettings()` de la pista: ahí viene el `deviceId` del
+ * monitor cuando se comparte una pantalla entera. Compartiendo UNA ventana no
+ * viene, y da igual: en ese caso la mirilla no entra en la captura de ninguna
+ * manera, así que basta con que se vea.
+ */
+function contarLaPantalla() {
+    if (!estado.mirilla) return;
+    const stream = filmar.laPantalla();
+    const pista = stream instanceof MediaStream ? stream.getVideoTracks()[0] : null;
+    window.nt.mirillaPantalla(pista ? pista.getSettings() : null);
+}
+
+/**
+ * Contarle a la mirilla qué tiene que mostrar.
+ *
+ * Se manda entero en cada repintado en vez de llevar la cuenta de qué cambió:
+ * son cinco campos por un puente que ya mueve PCM, y un espejo que solo se
+ * actualiza cuando alguien se acuerda de avisarle es un espejo que un día
+ * muestra la vista de hace dos tomas.
+ *
+ * La cámara se manda solo si está ABIERTA de este lado. Es la regla medida: si
+ * la mirilla toma el dispositivo antes que nadie, negocia el formato y la
+ * grabación de verdad lo hereda —una cámara de 2560 entraba a 640×480—. Así,
+ * mientras acá no haya cámara, allá tampoco.
+ */
+function espejar() {
+    if (!estado.mirilla) return;
+    const abierta = (estado.sesion && estado.sesion.tomas || []).find(t => t.outMs == null);
+    const vista = abierta ? (abierta.vista || estado.vista) : estado.vista;
+    // Sin color cuando todavía no llegaron las vistas del motor, que es lo que
+    // contesta `coloresDeVista` y hay que respetar: con un `.color` suelto acá,
+    // el primer repintado de la pantalla se caía entero.
+    const c = coloresDeVista(estado.vistas, vista);
+    window.nt.mirillaEspejo({
+        camara: ojo.elStream() ? (estado.camara && estado.camara.nombre) || null : null,
+        vista,
+        color: c ? c.color : null,
+        abierta: Boolean(abierta),
+        puedeAbrir: estado.paso === 'grabando'
+    });
+}
+
 function alternarOpcion(boton) {
     const campo = boton.dataset.campo;
     const clave = campo === 'silencios' ? 'silencios' : 'mejorarAudio';
@@ -1045,6 +1121,9 @@ async function cambiarPantalla(boton) {
         return undefined;
     }
     estado.pantalla = { nombre: r.nombre, ancho: r.ancho, alto: r.alto };
+    // Si el cambio de ventana se fue a otro monitor, la mirilla se muda con él:
+    // la esquina que importa es la del monitor que se está grabando.
+    contarLaPantalla();
     if (abierta) {
         avisar(`Ahora se graba ${r.nombre}. La toma ${abierta.id} quedó partida entre dos `
             + 'ventanas, así que va a salir con tu cámara: si la querés con pantalla, cerrala '
@@ -1273,6 +1352,10 @@ async function terminar(boton) {
     boton.disabled = true;
     if (estado.reloj) clearInterval(estado.reloj);
     estado.reloj = null;
+    // La mirilla se cierra acá y no cuando le toque: es una ventana encima de
+    // todo lo demás y sin nada que grabar ya no es ayuda, es un estorbo que
+    // tapa el editor.
+    if (estado.mirilla) laMirilla(false);
     estado.paso = 'mirando';
     pintar();
 
