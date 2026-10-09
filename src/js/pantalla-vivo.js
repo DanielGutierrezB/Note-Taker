@@ -35,6 +35,7 @@ import { mostrador } from './grabar/turnos.js';
 import * as texto from './grabar/texto-toma.js';
 import * as menuPalabra from './grabar/menu-de-palabra.js';
 import * as fichas from './grabar/lista-tomas.js';
+import * as estadosToma from './grabar/estados-toma.js';
 import { PALABRA_Y_APLAUSO_MS } from './grabar/senales.js';
 import { estiloDeVista, coloresDeVista } from './colores.js';
 import * as fotos from './fotos.js';
@@ -988,23 +989,15 @@ function cuerpoToma(t) {
 }
 
 /**
- * Los tres estados de una toma, en un solo control porque son excluyentes.
+ * Los tres estados de la toma, el control compartido con el vídeo de la semana.
  *
- *   Mantener     va al XML
- *   Desactivar   no va al XML, pero sigue acá y se vuelve a mantener
- *   Descartar    sale de la sesión; se deshace con ⌘Z
+ * Descartar se esconde cuando la clase está cerrada: ahí no hay deshacer
+ * —`sesiones-grabadas.js` dice por qué— y antes el botón estaba igual y lo
+ * único que conseguía era un error, porque `aplicar` no sabe sacar una toma de
+ * una sesión que se relee del archivo en cada gesto.
  */
 function estadosDe(t) {
-    const activa = !t.descartada;
-    return `<span class="estados-toma" role="group" aria-label="Estado de la toma ${t.id}">
-      <button class="btn btn-tenue" type="button" data-hace="mantener" data-toma="${t.id}"
-              aria-pressed="${activa}" title="Va al XML">Mantener</button>
-      <button class="btn btn-tenue" type="button" data-hace="desactivar" data-toma="${t.id}"
-              aria-pressed="${!activa}"
-              title="No va al XML, pero sigue acá: con Mantener vuelve">Desactivar</button>
-      <button class="btn btn-tenue" type="button" data-hace="descartar" data-toma="${t.id}"
-              title="La saca de la sesión. Se deshace con ⌘Z">${icono('descartar')} Descartar</button>
-    </span>`;
+    return estadosToma.estadosDe(t, { donde: 'al XML', sePuedeDeshacer: !esDeMirar() });
 }
 
 /** Reabrir solo la última, y solo si no hay otra abierta: es lo único que el motor honra. */

@@ -267,8 +267,13 @@ window.nt = {
         : { ok: true, estado: conCambio(estadoDeNotas(json), c) }),
     grabarAbrirToma: async ms => abrirEn(ms),
     grabarCerrarToma: async ms => cerrarEn(ms),
-    grabarDeshacer: async () => ({ ok: true, que: 'poner la toma 4 en S', estado: estadoEnVivo() }),
-    grabarRehacer: async () => ({ ok: false, estado: estadoEnVivo() }),
+    // En la semanal devuelve la sesión que el doble viene guardando, para que
+    // deshacer un descarte REPONGA la toma y se pueda mirar de verdad; en la
+    // de clase sigue siendo la respuesta fija de siempre.
+    grabarDeshacer: async () => (esLaSemana()
+        ? { ok: true, que: 'descartar una toma', estado: deshacerSemanal() }
+        : { ok: true, que: 'poner la toma 4 en S', estado: estadoEnVivo() }),
+    grabarRehacer: async () => ({ ok: false, estado: esLaSemana() ? laSesion() : estadoEnVivo() }),
     grabarEstado: async () => laSesion(),
     grabarVistas: async () => estadoEnVivo().vistas,
     grabarListar: async () => sesiones(),
@@ -888,11 +893,41 @@ function cambiarEnVivo(c) {
     if (!c || !Number.isFinite(Number(c.toma))) return base;
     const toma = base.tomas.find(t => t.id === Number(c.toma));
     if (!toma) return base;
+    // Descartar saca la toma de la lista, igual que `eliminar` en el motor, y
+    // deja un paso atrás: es lo que la pantalla mira para encender «Deshacer».
+    // La abierta no, que el motor también se planta ahí.
+    if (c.tipo === 'eliminar') {
+        if (toma.outMs == null) return base;
+        vivo = {
+            ...base,
+            tomas: base.tomas.filter(t => t !== toma),
+            historia: { ...base.historia, atras: (base.historia.atras || 0) + 1,
+                queAtras: `descartar la toma ${toma.id}` }
+        };
+        return vivo;
+    }
     const cambiada = { ...toma };
     if (c.tipo === 'vista') cambiada.vista = c.vista;
     else if (c.tipo === 'descartar') cambiada.descartada = Boolean(c.descartada);
     else return base;
     vivo = { ...base, tomas: base.tomas.map(t => (t === toma ? cambiada : t)) };
+    return vivo;
+}
+
+/**
+ * Deshacer en la semanal: repone la lista de tomas de fábrica.
+ *
+ * No es una pila: es lo justo para que el botón haga algo que se vea, que es
+ * lo que hace falta para mirar la pantalla. La pila de verdad está en
+ * `engine/deshacer.js` y tiene sus pruebas.
+ */
+function deshacerSemanal() {
+    const base = laSesion();
+    vivo = {
+        ...base,
+        tomas: estadoSemanal().tomas,
+        historia: { atras: 0, adelante: 1, queAtras: '', queAdelante: base.historia.queAtras }
+    };
     return vivo;
 }
 

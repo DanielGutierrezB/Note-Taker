@@ -621,6 +621,15 @@ async function alTeclado(e) {
     // flechas van de una opción a la otra. Sin esto, la «P» de una vista
     // cambiaría la toma por detrás del menú.
     if (menuPalabra.alTeclado(e)) return;
+    // ⌘Z antes del portero de abajo, que apaga todo lo que lleve ⌘: es la
+    // tecla que hace que Descartar se pueda ofrecer sin preguntar, así que
+    // tiene que estar donde está el botón. Grabando nada más, que es donde el
+    // motor tiene la pila.
+    const meta = e.metaKey || e.ctrlKey;
+    if (meta && e.key.toLowerCase() === 'z' && hayHistoria()) {
+        e.preventDefault();
+        return volver(e.shiftKey ? 'rehacer' : 'deshacer');
+    }
     if (e.repeat || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
     // Donde se escribe, se escribe: una «p» en un campo es una letra.
     const foco = document.activeElement;
@@ -689,8 +698,12 @@ async function alClic(e) {
     if (hace === 'plegar') return plegar(Number(boton.dataset.toma));
     if (hace === 'vista-ficha') return cambiarFicha(Number(boton.dataset.toma),
         { tipo: 'vista', vista: boton.dataset.vista });
-    if (hace === 'fuera') return cambiarFicha(Number(boton.dataset.toma),
-        { tipo: 'descartar', descartada: boton.dataset.usar === 'no' });
+    if (hace === 'mantener') return cambiarFicha(Number(boton.dataset.toma),
+        { tipo: 'descartar', descartada: false });
+    if (hace === 'desactivar') return cambiarFicha(Number(boton.dataset.toma),
+        { tipo: 'descartar', descartada: true });
+    if (hace === 'descartar') return descartar(Number(boton.dataset.toma));
+    if (hace === 'deshacer' || hace === 'rehacer') return volver(hace);
     if (hace === 'reproducir') { montaje.alternar(); return undefined; }
     if (hace === 'opcion') return alternarOpcion(boton);
     if (hace === 'parar-en') {
@@ -852,6 +865,65 @@ function arrastrarPorLaLinea(e) {
 function plegar(id) {
     estado.ficha = estado.ficha === id ? null : id;
     pintar();
+}
+
+/**
+ * Descartar: sacar la toma de la sesión, el tercero de los tres estados.
+ *
+ * **No pregunta**, como el resto de esta pantalla y como la de clase: lo que
+ * evita el accidente es ⌘Z, y un cartel de confirmación a mitad de una
+ * grabación es un renglón que hay que leer con la cámara encendida. Por eso el
+ * aviso nombra la tecla: quien descartó sin querer no tiene por qué saberla.
+ *
+ * El motor se planta con la toma abierta —descartarla dejaría al ciclo de
+ * señales metiendo palabras en una toma que ya no existe—, así que acá no se
+ * supone que pasó: se mira si la toma quedó. Si sigue en la lista no hay nada
+ * que avisar, y la ficha abierta tampoco hay que cerrarla.
+ */
+async function descartar(id) {
+    await cambiarFicha(id, { tipo: 'eliminar' });
+    if (((estado.sesion && estado.sesion.tomas) || []).some(t => t.id === id)) return;
+    if (estado.ficha === id) estado.ficha = null;
+    avisar(`Toma ${id} descartada. ⌘Z la devuelve.`);
+    pintar();
+}
+
+/**
+ * Si este paso tiene pila: grabando sí, terminado no.
+ *
+ * Cuántos pasos hay es otra pregunta y la contesta el motor —`historia.atras`
+ * apaga el botón y `volver` recibe un `ok: false` si no quedaba nada—; esta es
+ * la de si existe la pila, que es de la pantalla porque es del paso en que
+ * está.
+ */
+function hayHistoria() {
+    return estado.paso === 'grabando' && Boolean(estado.sesion && estado.sesion.historia);
+}
+
+/**
+ * Deshacer y rehacer, lo mismo que en la clase y por el mismo motor.
+ *
+ * Todo lo que cambia una toma pasa por `cambios-toma.js`, que deja su paso en
+ * el historial de la sesión; esta pantalla no guardaba nada por su cuenta, así
+ * que lo único que le faltaba era la puerta. Es lo que hace que Descartar se
+ * pueda ofrecer sin preguntar.
+ *
+ * Solo mientras se graba: una sesión ya cerrada se relee del archivo en cada
+ * gesto y no tiene pila (ver `sesiones-grabadas.js`). Los dos botones viven en
+ * la tarjeta de grabar, así que en el editor no están, y la tecla pregunta lo
+ * mismo (`hayHistoria`).
+ */
+async function volver(cual) {
+    let r = null;
+    try {
+        r = cual === 'deshacer' ? await window.nt.grabarDeshacer() : await window.nt.grabarRehacer();
+    } catch (e) {
+        avisar(`No se pudo ${cual}: ${e.message}`, 'error');
+    }
+    if (!r) return;
+    if (r.estado) { estado.sesion = r.estado; pintar(); }
+    if (r.error) avisar(r.error, 'error');
+    else if (r.ok) avisar(`${cual === 'deshacer' ? 'Deshecho' : 'Rehecho'}: ${r.que}`);
 }
 
 /**

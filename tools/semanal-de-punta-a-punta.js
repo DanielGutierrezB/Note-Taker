@@ -363,10 +363,10 @@ async function laPasada({ win, arg }) {
     if (antesDePlay === despues) decir('✗ el montaje no se movió: no está reproduciendo');
     await js(`document.querySelector('[data-hace="reproducir"]').click()`);
 
-    decir('dejando fuera la toma 3…');
+    decir('desactivando la toma 3…');
     await js(`document.querySelector('.linea-toma[data-toma="3"]').click()`);
     await espera(350);
-    await js(`document.querySelector('[data-hace="fuera"][data-toma="3"]').click()`);
+    await js(`document.querySelector('[data-hace="desactivar"][data-toma="3"]').click()`);
     await espera(700);
     const linea = await js(`[...document.querySelectorAll('.linea-toma')]
         .map(b => b.dataset.toma + ':' + b.dataset.fuera).join(' ')`);

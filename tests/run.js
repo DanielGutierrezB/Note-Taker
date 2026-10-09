@@ -45,6 +45,7 @@ const FILES = [
     'vivo-interfaz.test.js',
     'senales-del-texto.test.js',
     'menu-de-palabra.test.js',
+    'tres-estados-en-la-semana.test.js',
     'transcript-que-crece.test.js',
     'tomas-que-no-se-pisan.test.js',
     'notas-de-antes.test.js',

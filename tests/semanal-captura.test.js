@@ -673,7 +673,10 @@ module.exports = function (t) {
             'y los dos botones de vista');
         t.ok(/data-vista="R"[^>]*aria-pressed="true"/s.test(html),
             'con la que SE VE marcada, no la que se pidió');
-        t.ok(html.includes('data-hace="fuera"'), 'y dejarla fuera');
+        t.ok(html.includes('data-hace="mantener"') && html.includes('data-hace="desactivar"'),
+            'y los dos estados que se pueden desandar apretando el otro');
+        t.ok(!html.includes('data-hace="descartar"'),
+            'pero no Descartar: la sesión ya está cerrada y acá no hay ⌘Z que la devuelva');
     });
 
     t.test('el espacio reproduce y pausa, y solo en el editor', () => {

@@ -27,6 +27,7 @@ import { esc } from '../chrome.js';
 import { icono } from '../iconos.js';
 import * as fmt from '../formato.js';
 import * as fichas from '../grabar/lista-tomas.js';
+import * as estadosToma from '../grabar/estados-toma.js';
 import * as estados from '../estados.js';
 import * as corte from './corte.js';
 import { estiloDeVista } from '../colores.js';
@@ -235,6 +236,7 @@ export function tarjetaGrabando(estado) {
                 title="${atras ? esc(atras.porque) : ''}">
             ${atras ? esc(atras.palabra) : (abierta ? 'toma abierta' : 'esperando el «3, 2, 1»')}</span>
           <span class="crece"></span>
+          ${laHistoria(estado.sesion)}
           <div class="nivel" id="semanal-nivel"><div class="nivel-barra"></div></div>
         </div>
         <div class="tarjeta-cuerpo">
@@ -290,6 +292,28 @@ export function tarjetaGrabando(estado) {
 }
 
 /**
+ * Deshacer y rehacer, con el nombre de lo que van a deshacer en el título.
+ *
+ * Los dos botones estaban solo en la clase, y acá hacían la misma falta por la
+ * misma razón: Descartar saca una toma de la sesión sin preguntar, y lo que lo
+ * hace seguro es poder volver. Van en la cabecera de la tarjeta de grabar, que
+ * es la barra de controles de este modo, igual que allá van en la de arriba.
+ *
+ * Sin `id`: la pantalla de clase busca los suyos por `#btn-deshacer` en todo el
+ * documento, y dos elementos con ese id harían que encontrara el de acá.
+ */
+function laHistoria(sesion) {
+    const h = (sesion && sesion.historia) || {};
+    const boton = (hace, hay, que, verbo) => `
+      <button class="btn btn-tenue btn-ico" type="button" data-hace="${hace}"
+              ${hay ? '' : 'disabled'} aria-label="${verbo}"
+              title="${hay ? `${verbo} «${esc(que)}»` : `No hay nada que ${verbo.toLowerCase()}`}"
+        >${icono(hace)}</button>`;
+    return boton('deshacer', h.atras, h.queAtras, 'Deshacer')
+        + boton('rehacer', h.adelante, h.queAdelante, 'Rehacer');
+}
+
+/**
  * Qué ventana se está grabando, y el botón para cambiarla sin parar.
  *
  * **La pantalla sale en tramos, uno por ventana**, y eso decide cuándo conviene
@@ -341,7 +365,7 @@ function laVentana(estado, abierta) {
  *
  * Lo que no trae de la clase son las notas y los comentarios al XML: acá no
  * hay nadie editando en Premiere después, así que lo único que se hace con una
- * toma es moverle los bordes, elegir qué se ve y dejarla fuera.
+ * toma es moverle los bordes, elegir qué se ve y decidir si cuenta.
  */
 export function lasFichas(estado) {
     const tomas = (estado.sesion && estado.sesion.tomas) || [];
@@ -358,8 +382,10 @@ export function lasFichas(estado) {
             alAbrir: 'lo que dijiste, con el IN y el OUT para moverlos, y qué se ve',
             cuerpo: t2 => cuerpoDeFicha(estado, t2)
         }))}</div>
-        <span class="v3">Abrí una para corregirle dónde empieza o termina, cambiarle
-          lo que se ve, o dejarla fuera del vídeo. También se puede al terminar.</span>
+        <span class="v3">Abrí una para corregirle dónde empieza o termina y cambiarle lo que
+          se ve. <b>Desactivar</b> la deja fuera del vídeo sin sacarla de acá, y
+          <b>Descartar</b> la saca de la lista; ⌘Z deshace cualquiera de las dos. También
+          se puede al terminar.</span>
       </div>`;
 }
 
@@ -376,7 +402,7 @@ export function cuerpoDeFicha(estado, t) {
         <div class="campo-fila" style="margin-top:8px">
           ${t.descartada ? '' : vistasDeFicha(estado, t)}
           <span class="crece"></span>
-          ${botonFuera(t)}
+          ${botonFuera(t, true)}
         </div>`;
 }
 
@@ -392,13 +418,16 @@ export function textoDeFicha(t) {
           donde querés que empiece o termine.</p>`;
 }
 
-export function botonFuera(t) {
-    return `<button class="btn btn-tenue" type="button" data-hace="fuera" data-toma="${t.id}"
-              data-usar="${t.descartada ? 'si' : 'no'}"
-              title="${t.descartada
-                  ? 'Volver a meter esta toma en el vídeo'
-                  : 'Esta toma no sale en el vídeo. Se puede volver a meter'}">
-        ${t.descartada ? 'Volver a usarla' : 'Dejarla fuera'}</button>`;
+/**
+ * Los tres estados de la toma, el mismo control que en la clase.
+ *
+ * `sePuedeDeshacer` es lo que decide si Descartar está: mientras se graba, sí
+ * —⌘Z la devuelve—, y en el editor la sesión ya está cerrada y se relee del
+ * archivo en cada gesto, así que ahí quedan los dos que se pueden desandar
+ * solos apretando el otro.
+ */
+export function botonFuera(t, grabando) {
+    return estadosToma.estadosDe(t, { donde: 'en el vídeo', sePuedeDeshacer: grabando === true });
 }
 
 /**

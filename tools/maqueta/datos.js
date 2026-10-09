@@ -177,7 +177,10 @@ export function estadoSemanal(extra) {
         secuencia: 'semana_2026-10-03_09-12-40',
         claquetas: [],
         segundos: 300,
-        historia: { atras: 0, adelante: 0, queAtras: '', queAdelante: '' },
+        // Con un paso atrás: la toma 2 de esta lista está desactivada, así que
+        // alguien la desactivó, y los dos botones se miran en la captura con
+        // uno encendido y el otro no.
+        historia: { atras: 1, adelante: 0, queAtras: 'desactivar la toma 2', queAdelante: '' },
         sueltas: SUELTAS_SEMANA,
         tomas: TOMAS_SEMANA
     }, extra || {}));
