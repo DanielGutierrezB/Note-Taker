@@ -92,6 +92,17 @@ module.exports = async t => {
         t.ok(/s\.ultimaVentanaMs = hasta - desde/.test(js), 'y lo que se llevó');
     });
 
+    t.test('una claqueta que falla al leerse le avisa a su sesión, no a la que haya', () => {
+        // Se lee después de un `await`: si la clase terminó y arrancó otra, la
+        // sesión del módulo ya es la nueva, y el error de la vieja le llegaba
+        // a ella.
+        const js = leer('engine', 'grabacion.js');
+        const cuerpo = js.slice(js.indexOf('async function leerClaqueta'), js.indexOf('function claqueta(palmadaMs)'));
+        t.ok(cuerpo.length > 0, 'se encuentra `leerClaqueta`');
+        t.ok(!/\bsesion\./.test(cuerpo), 'no mira la sesión del módulo');
+        t.ok(/s\.viva && !s\.terminando\) s\.avisar/.test(cuerpo), 'y avisa a la suya si sigue en pie');
+    });
+
     t.test('una sesión recién abierta ensancha como cualquiera', () => {
         // Sin pasadas todavía: `ultimaPasadaMs` arranca en 0 y no puede dar por
         // perdido un terreno que nadie pisó.

@@ -287,6 +287,10 @@ function iniciar(params) {
         ultimaPasadaMs: 0,
         ultimaVentanaMs: CONTEXTO_MS,
         salteadoMs: 0,
+        // Cuándo se anotó por última vez cada noticia del ciclo en el diario,
+        // que va de a una cada `ENTRE_AVISOS_MS` (ver `tocaAnotar`).
+        ultimoSalteoMs: 0,
+        ultimaLentaMs: 0,
         timer: null,
         avisar: typeof p.avisar === 'function' ? p.avisar : () => {}
     };
@@ -505,7 +509,20 @@ async function buscarSenales() {
  * ocupada llenaría el diario con la misma noticia.
  */
 const PASADA_LENTA_MS = 2 * CICLO_MS;
-const ENTRE_AVISOS_DE_LENTA_MS = 10000;
+const ENTRE_AVISOS_MS = 10000;
+
+/**
+ * ¿Toca anotar esta noticia, o ya se anotó hace menos de `ENTRE_AVISOS_MS`?
+ * Si toca, marca la hora en `s[campo]`.
+ */
+function tocaAnotar(s, campo) {
+    const ahora = Date.now();
+    if (s[campo] && ahora - s[campo] < ENTRE_AVISOS_MS) return false;
+    s[campo] = ahora;
+    return true;
+}
+
+const enDecimas = ms => Math.round(ms / 100) / 10;
 
 /**
  * El audio que se salteó, sumado y anotado.
@@ -526,22 +543,20 @@ const ENTRE_AVISOS_DE_LENTA_MS = 10000;
 function anotarSiSeSalteo(s, desde) {
     const salteado = desde - s.escuchadoHastaMs;
     if (salteado <= 0) return;
-    s.salteadoMs = (s.salteadoMs || 0) + salteado;
-    if (s.ultimoSalteoMs && Date.now() - s.ultimoSalteoMs < ENTRE_AVISOS_DE_LENTA_MS) return;
-    s.ultimoSalteoMs = Date.now();
+    s.salteadoMs += salteado;
+    if (!tocaAnotar(s, 'ultimoSalteoMs')) return;
     registro.anotar('main', 'senal.salteado', {
-        salteadoSec: Math.round(salteado / 100) / 10,
-        enTotalSec: Math.round(s.salteadoMs / 100) / 10
+        salteadoSec: enDecimas(salteado),
+        enTotalSec: enDecimas(s.salteadoMs)
     });
 }
 
 function anotarSiSeAtraso(s, tardo, ventanaMs) {
     if (tardo < PASADA_LENTA_MS) return;
-    if (s.ultimaLentaMs && Date.now() - s.ultimaLentaMs < ENTRE_AVISOS_DE_LENTA_MS) return;
-    s.ultimaLentaMs = Date.now();
+    if (!tocaAnotar(s, 'ultimaLentaMs')) return;
     registro.anotar('main', 'senal.pasada-lenta', {
         tardoMs: tardo,
-        ventanaSec: Math.round(ventanaMs / 100) / 10,
+        ventanaSec: enDecimas(ventanaMs),
         ciclo: CICLO_MS
     });
 }
@@ -674,8 +689,10 @@ async function leerClaqueta(ms, s) {
         const oido = await oirTramo(ms - MARGEN_CLAQUETA_MS, ms + MARGEN_CLAQUETA_MS, false, s);
         frase = (oido ? oido.palabras : []).map(w => w.texto).join(' ').trim();
     } catch (err) {
-        // El golpe se oyó igual: queda anotado sin frase, y se avisa.
-        if (sesion) sesion.avisar({ tipo: 'error', mensaje: err.message });
+        // El golpe se oyó igual: queda anotado sin frase, y se avisa. A ESTA
+        // sesión: si terminó mientras se esperaba, avisarle a la del módulo
+        // le mandaba a la grabación siguiente el error de la anterior.
+        if (s.viva && !s.terminando) s.avisar({ tipo: 'error', mensaje: err.message });
     }
     return {
         ms,
