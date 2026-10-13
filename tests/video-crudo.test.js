@@ -166,6 +166,22 @@ module.exports = function (t) {
         t.eq(videoCrudo.cubre({ cual: 'camara', empezoMs: T0, cerradoMs: null }, T0 + 99999), true);
     });
 
+    t.test('el tramo grabado de varios vídeos va del primer arranque al último cierre', () => {
+        const a = { cual: 'pantalla', empezoMs: T0 + 2000, cerradoMs: T0 + 10000 };
+        const b = { cual: 'pantalla', empezoMs: T0 + 11000, cerradoMs: T0 + 20000 };
+        t.deep(videoCrudo.tramoGrabado([a, b]), { desdeMs: T0 + 2000, hastaMs: T0 + 20000 });
+        t.eq(videoCrudo.tramoGrabado([null, { cual: 'camara' }]), null, 'sin nada grabado, nada');
+    });
+
+    t.test('y uno que sigue grabando lo deja abierto, venga antes o después de otro', () => {
+        // El que había antes leía en orden: el abierto ponía el fin en infinito
+        // y el cerrado de después lo volvía a bajar a su cierre.
+        const abierto = { cual: 'camara', empezoMs: T0, cerradoMs: null };
+        const cerrado = { cual: 'pantalla', empezoMs: T0, cerradoMs: T0 + 5000 };
+        t.eq(videoCrudo.tramoGrabado([abierto, cerrado]).hastaMs, Infinity);
+        t.eq(videoCrudo.tramoGrabado([cerrado, abierto]).hastaMs, Infinity);
+    });
+
     t.group('vídeo crudo · dónde vive en el disco');
 
     t.test('los brutos van a xml/Video, al lado del audio', () => {

@@ -229,6 +229,60 @@ module.exports = function (t) {
         t.eq(r.trozos.length, 0, `por debajo de ${exportar.MINIMO_SEC} s no se finge que se salvó algo`);
     });
 
+    // Los dos archivos se cierran al apretar Terminar, pero no en el mismo
+    // milisegundo. Recortando solo contra la unión, una toma de pantalla que
+    // llegaba a la cámara y no a la pantalla se quedaba sin su fondo y salía
+    // con la cámara a pantalla completa: 50 ms le costaban la vista entera.
+    const cierreDesparejo = (pantallaS, camaraS, t1) => exportar.repartir({
+        tomas: [t1],
+        pantallas: [video('pantalla', 0, pantallaS)],
+        camara: video('camara', 0, camaraS),
+        camaraConAudio: true,
+        wavs: [wav(0, 60)]
+    });
+
+    t.test('la pantalla cierra antes que la cámara: la toma sigue siendo de pantalla', () => {
+        const r = cierreDesparejo(18, 18.05, toma(1, 5, 20));
+        t.eq(r.trozos.length, 1);
+        t.eq(r.trozos[0].fondo.cual, 'pantalla', r.avisos.join(' · '));
+        t.ok(r.trozos[0].encima, 'con la cámara en la esquina');
+        t.eq(r.trozos[0].segundos, 13, 'recortada a donde están las dos');
+    });
+
+    t.test('la cámara cierra antes que la pantalla: la esquina no se pierde', () => {
+        const r = cierreDesparejo(18.05, 18, toma(1, 5, 20));
+        t.eq(r.trozos[0].fondo.cual, 'pantalla');
+        t.ok(r.trozos[0].encima, r.avisos.join(' · '));
+        t.eq(r.trozos[0].segundos, 13);
+    });
+
+    t.test('y vale aunque la toma no se pase de la unión, solo de una fuente', () => {
+        // Termina a los 18,03: hay cámara pero ya no pantalla. Antes ni se
+        // recortaba —no se salía de lo grabado— y se iba al repuesto igual.
+        const r = cierreDesparejo(18, 18.05, toma(1, 5, 18.03));
+        t.eq(r.trozos[0].fondo.cual, 'pantalla', r.avisos.join(' · '));
+        t.ok(r.trozos[0].encima);
+        t.eq(r.trozos[0].segundos, 13);
+    });
+
+    t.test('una toma de profesor se recorta a la cámara, no a la pantalla', () => {
+        const r = cierreDesparejo(18.05, 18, toma(1, 5, 20, 'PV'));
+        t.eq(r.trozos[0].fondo.cual, 'camara', r.avisos.join(' · '));
+        t.eq(r.trozos[0].segundos, 13);
+    });
+
+    t.test('pero la esquina no vale segundos de clase: sin cámara, la toma queda entera', () => {
+        // La cámara se cortó a los 10 s y la pantalla siguió hasta los 18. Para
+        // tener la esquina habría que tirar 7 s de una toma que no se salía de
+        // nada: sale entera, sin la esquina, y se dice, como siempre.
+        const r = cierreDesparejo(18, 10, toma(1, 5, 17));
+        t.eq(r.trozos[0].segundos, 12, 'ni un segundo menos');
+        t.eq(r.trozos[0].fondo.cual, 'pantalla');
+        t.eq(r.trozos[0].encima, null);
+        t.ok(r.avisos.some(a => /sin la cámara en la esquina/.test(a)), r.avisos.join(' · '));
+        t.ok(!r.avisos.some(a => /recortaron/.test(a)), 'y no se recortó nada');
+    });
+
     t.test('una toma que cabe entera no se toca', () => {
         const r = exportar.repartir({
             tomas: [toma(1, 5, 15)],

@@ -143,12 +143,39 @@ function cerrarTodo() {
     return [...abiertos.keys()].map(id => cerrar(id)).filter(Boolean);
 }
 
+/**
+ * Hasta dónde llega un vídeo en el reloj de pared. Sin cierre es que todavía
+ * está grabando: llega hasta donde haga falta.
+ */
+function finDe(video) {
+    return video.cerradoMs == null ? Infinity : video.cerradoMs;
+}
+
 /** Si lo que se grabó llega a cubrir ese momento del reloj de pared. */
 function cubre(video, paredMs) {
     if (!video || video.empezoMs == null) return false;
     const ms = Number(paredMs);
-    if (!(ms >= video.empezoMs)) return false;
-    return video.cerradoMs == null || ms <= video.cerradoMs;
+    return ms >= video.empezoMs && ms <= finDe(video);
+}
+
+/**
+ * Desde dónde hasta dónde hay metraje de alguno de estos vídeos.
+ *
+ * Es la unión y no la intersección: adentro hay ALGO, aunque no todo. Los
+ * huecos del medio —los cambios de ventana de la pantalla— quedan adentro, y
+ * de ellos se encarga quien arme el corte.
+ *
+ * @returns {{desdeMs:number, hastaMs:number}|null} `null` si no hay ninguno
+ */
+function tramoGrabado(videos) {
+    let desdeMs = Infinity;
+    let hastaMs = -Infinity;
+    for (const v of videos || []) {
+        if (!v || v.empezoMs == null) continue;
+        desdeMs = Math.min(desdeMs, v.empezoMs);
+        hastaMs = Math.max(hastaMs, finDe(v));
+    }
+    return desdeMs < hastaMs ? { desdeMs, hastaMs } : null;
 }
 
 /** Dónde cae ese momento del reloj de pared dentro del archivo, en segundos. */
@@ -183,7 +210,9 @@ module.exports = {
     escribir,
     cerrar,
     cerrarTodo,
+    finDe,
     cubre,
+    tramoGrabado,
     posicionDe,
     de,
     todas
