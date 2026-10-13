@@ -140,6 +140,23 @@ function pistasDeVideo(p, secuencia) {
         .map(m => prproj.clave(m[1] === 'U' ? 'UID' : 'ID', m[2]));
 }
 
+/**
+ * Un menú donde las vistas que no se nombran quedan en «solo suyas».
+ *
+ * De fábrica cada vista dice «Captura 1, en todas», y «en todas» entra aunque
+ * la vista no se llame: es lo que el menú promete. Las pruebas que miran UNA
+ * cosa del reparto ponen el resto en «solo», que es lo que haría quien no
+ * quiere esos renglones, para que no les sumen pistas que no están mirando.
+ */
+function soloLasDichas(config) {
+    const c = config || {};
+    const vistas = { ...(c.vistas || {}) };
+    for (const v of vivo.VISTAS) {
+        if (!(v.nombre in vistas)) vistas[v.nombre] = { capturas: [1], siempre: [] };
+    }
+    return { ...c, vistas };
+}
+
 function toma(id, desdeSeg, hastaSeg, vista, cero, extra) {
     return {
         id, vista, comentario: '', descartada: false,
@@ -310,7 +327,7 @@ module.exports = async function (t) {
             cero: T0 + UNA_HORA, segundos: 600,
             tomas: [toma(1, 100, 130, 'PV', T0 + UNA_HORA), toma(2, 200, 260, 'R', T0 + UNA_HORA)]
         });
-        const plan = carpetaPrproj.planear([a, b], carpetaPrproj.normalizar({ capturas: 2, vistas: { R: [2] } }));
+        const plan = carpetaPrproj.planear([a, b], carpetaPrproj.normalizar(soloLasDichas({ capturas: 2, vistas: { R: [2] } })));
         const cortes = plan.clases[1].cortes;
         t.eq(cortes.length, 2);
         t.eq(cortes[0].desdeSeg, 0);
@@ -450,7 +467,7 @@ module.exports = async function (t) {
         const s = sesion(dir, {
             cero: T0, tomas: [toma(1, 10, 20, 'X2', T0), toma(2, 30, 40, 'R', T0), toma(3, 50, 60, 'PV', T0)]
         });
-        const config = carpetaPrproj.normalizar({ capturas: 2, vistas: { PV: [1], R: [2], X2: [2, 1] } });
+        const config = carpetaPrproj.normalizar(soloLasDichas({ capturas: 2, vistas: { PV: [1], R: [2], X2: [2, 1] } }));
         const plan = carpetaPrproj.planear([s], config);
         t.deep(plan.fuentes.map(f => f.clave), ['1', '2', '2+1']);
         t.deep(plan.grupos.map(g => g.nombre), ['Captura 1 sobre Captura 2'], 'las claves van de abajo hacia arriba');
@@ -463,10 +480,10 @@ module.exports = async function (t) {
         // la otra, y el nombre tiene que decirlo antes de que pase.
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'X2', T0), toma(2, 30, 40, 'MG', T0)] });
-        const config = carpetaPrproj.normalizar({
+        const config = carpetaPrproj.normalizar(soloLasDichas({
             capturas: 2,
             vistas: { X2: { capturas: [2, 1], unidas: true }, MG: { capturas: [2, 1], unidas: true } }
-        });
+        }));
         const plan = carpetaPrproj.planear([s], config);
         t.eq(plan.grupos.length, 1, 'una sola anidación para las dos');
         t.eq(plan.grupos[0].titulo, 'MG y X2', 'en el orden de las vistas');
@@ -475,9 +492,9 @@ module.exports = async function (t) {
     t.test('cada anidación lleva su color, y las vecinas no repiten', () => {
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'X2', T0), toma(2, 30, 40, 'R', T0)] });
-        const config = carpetaPrproj.normalizar({
+        const config = carpetaPrproj.normalizar(soloLasDichas({
             capturas: 2, vistas: { R: [2], X2: { capturas: [2, 1], unidas: true } }
-        });
+        }));
         const plan = carpetaPrproj.planear([s], config);
         const colores = plan.fuentes.map(f => f.color);
         t.eq(colores.filter(Boolean).length, plan.fuentes.length, 'todas pintadas');
@@ -491,7 +508,7 @@ module.exports = async function (t) {
     t.test('las capturas, los colores que eligió el editor', () => {
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0)] });
-        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar({ capturas: 3, vistas: { PV: [1] } }));
+        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar(soloLasDichas({ capturas: 3, vistas: { PV: [1] } })));
         t.deep([1, 2, 3].map(id => plan.colorDeCaptura.get(id)), ['Cerulean', 'Lavender', 'Mango']);
     });
 
@@ -524,9 +541,9 @@ module.exports = async function (t) {
     t.test('una vista suelta enciende una fuente por captura, sin anidación', () => {
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'R', T0), toma(2, 30, 40, 'PV', T0)] });
-        const config = carpetaPrproj.normalizar({
+        const config = carpetaPrproj.normalizar(soloLasDichas({
             capturas: 2, vistas: { PV: { capturas: [1] }, R: { capturas: [1, 2], unidas: false } }
-        });
+        }));
         const plan = carpetaPrproj.planear([s], config);
         t.eq(plan.grupos.length, 0, 'suelta no arma anidación');
         t.deep(plan.clases[0].cortes[0].fuentes, ['1', '2'], 'la toma de R enciende las dos');
@@ -536,9 +553,9 @@ module.exports = async function (t) {
     t.test('las pistas de una vista van en su orden, para que la de encima quede arriba', () => {
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'R', T0)] });
-        const config = carpetaPrproj.normalizar({
+        const config = carpetaPrproj.normalizar(soloLasDichas({
             capturas: 3, vistas: { R: { capturas: [1, 3, 2], unidas: false } }
-        });
+        }));
         const plan = carpetaPrproj.planear([s], config);
         // La lista de la vista va de abajo hacia arriba, que es como se
         // reparten las pistas: pide la 1, después la 3 y la 2 encima de todo.
@@ -553,7 +570,7 @@ module.exports = async function (t) {
         // todas las tomas. En vivo solo se dijeron PV y R.
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0), toma(2, 30, 40, 'R', T0)] });
-        const config = carpetaPrproj.normalizar({
+        const config = carpetaPrproj.normalizar(soloLasDichas({
             capturas: 3,
             vistas: {
                 PV: { capturas: [1], unidas: false, siempre: [1] },
@@ -562,7 +579,7 @@ module.exports = async function (t) {
                 MG: { capturas: [1], unidas: false, siempre: [] },
                 X2: { capturas: [1], unidas: false, siempre: [] }
             }
-        });
+        }));
         const plan = carpetaPrproj.planear([s], config);
         // PV se queda con V1, R con V2 y V3 —la Captura 1 encima de la 2, que
         // es su apilado— y la anidación de S con V4 aunque nadie la haya
@@ -574,16 +591,48 @@ module.exports = async function (t) {
         t.deep(plan.avisos, []);
     });
 
+    t.test('el mismo menú en una clase donde solo se dijo R: PV sigue en V1', () => {
+        // El caso que se reportó, con la captura de Premiere delante: PV con la
+        // Captura 1 «en todas», y en vivo no se llamó PV ni una vez. La pista
+        // de PV no estaba, y el menú decía que iba en todas.
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'R', T0), toma(2, 30, 40, 'R', T0)] });
+        const config = carpetaPrproj.normalizar(soloLasDichas({
+            capturas: 3,
+            vistas: {
+                PV: { capturas: [1], unidas: false, siempre: [1] },
+                R: { capturas: [2, 1], unidas: false, siempre: [2, 1] },
+                S: { capturas: [1, 2, 3], unidas: true, siempre: [1, 2, 3] },
+                MG: { capturas: [1], unidas: false, siempre: [] },
+                X2: { capturas: [1], unidas: false, siempre: [] }
+            }
+        }));
+        const plan = carpetaPrproj.planear([s], config);
+        // Lo que se pidió, renglón por renglón: PV en el 1, R en el 2 y el 3 con
+        // la Captura 2 debajo y la 1 encima, S anidada en el 4, y MG y X2
+        // fuera porque son «solo si las nombran».
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'R:2', 'R:1', 'S:1+2+3']);
+
+        // Y en cada toma de R la pista de PV está puesta pero apagada: eso es
+        // «en todas». Se mira en el corte, que es lo que se le pasa al armado.
+        const corte = plan.clases[0].cortes[0];
+        t.eq(corte.vista, 'R');
+        const deEstaToma = plan.pistas.map(p => ({ vista: p.vista, puesta: p.vista === corte.vista || p.siempre,
+            encendida: p.vista === corte.vista }));
+        t.deep(deEstaToma.map(x => x.puesta), [true, true, true, true], 'las cuatro tienen clip');
+        t.deep(deEstaToma.map(x => x.encendida), [false, true, true, false], 'y solo las de R suenan');
+    });
+
     t.test('dos vistas sueltas con apilados contrarios: cada una tiene el suyo', () => {
         // Antes esto era irresoluble y salía con un aviso: las pistas eran una
         // sola lista y la Captura 1 no podía estar a la vez encima y debajo de
         // la 2. Con una pista por vista las dos quedan como las pidieron.
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'R', T0), toma(2, 30, 40, 'X2', T0)] });
-        const config = carpetaPrproj.normalizar({
+        const config = carpetaPrproj.normalizar(soloLasDichas({
             capturas: 2,
             vistas: { R: { capturas: [1, 2], unidas: false }, X2: { capturas: [2, 1], unidas: false } }
-        });
+        }));
         const plan = carpetaPrproj.planear([s], config);
         t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['R:1', 'R:2', 'X2:2', 'X2:1'],
             'R con la 2 encima de la 1, y X2 al revés');
@@ -594,10 +643,10 @@ module.exports = async function (t) {
     t.test('cada pista sabe si se queda puesta en todas las tomas', () => {
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'R', T0), toma(2, 30, 40, 'PV', T0)] });
-        const config = carpetaPrproj.normalizar({
+        const config = carpetaPrproj.normalizar(soloLasDichas({
             capturas: 2,
             vistas: { PV: { capturas: [1], siempre: [1] }, R: { capturas: [2], siempre: [] } }
-        });
+        }));
         const plan = carpetaPrproj.planear([s], config);
         t.deep(plan.pistas.map(p => [p.vista, p.clave, p.siempre]), [['PV', '1', true], ['R', '2', false]]);
         t.deep(plan.avisos, []);
@@ -610,10 +659,10 @@ module.exports = async function (t) {
         // son dos pistas del mismo medio y cada una hace lo que le pidieron.
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'S', T0), toma(2, 30, 40, 'MG', T0)] });
-        const config = carpetaPrproj.normalizar({
+        const config = carpetaPrproj.normalizar(soloLasDichas({
             capturas: 2,
             vistas: { S: { capturas: [2], siempre: [2] }, MG: { capturas: [2], siempre: [] } }
-        });
+        }));
         const plan = carpetaPrproj.planear([s], config);
         t.deep(plan.pistas.map(p => [p.vista, p.clave, p.siempre]), [['S', '2', true], ['MG', '2', false]]);
         t.deep(plan.fuentes.map(f => f.clave), ['2'], 'y la Captura 2 se importa una sola vez');
@@ -625,21 +674,69 @@ module.exports = async function (t) {
         const s = sesion(dir, {
             cero: T0, tomas: [toma(1, 10, 20, 'R', T0), toma(2, 30, 40, 'X2', T0)]
         });
-        const config = carpetaPrproj.normalizar({ capturas: 2, vistas: { R: [1, 2], X2: [2, 1] } });
+        const config = carpetaPrproj.normalizar(soloLasDichas({ capturas: 2, vistas: { R: [1, 2], X2: [2, 1] } }));
         const plan = carpetaPrproj.planear([s], config);
         t.deep(plan.grupos.map(g => g.clave), ['1+2', '2+1'], 'dos anidaciones, una por apilado');
         t.deep(plan.grupos.map(g => g.nombre), ['Captura 2 sobre Captura 1', 'Captura 1 sobre Captura 2']);
     });
 
-    t.test('una captura suelta entra solo si alguna toma la usa', () => {
-        // La Captura 2 es de R, y R no se llamó en toda la clase. Tampoco entra
-        // la Captura 1 de las vistas que el editor no tocó: «Captura 1, en
-        // todas» es lo que dicen de fábrica, no algo que alguien haya pedido.
+    t.test('una captura suelta «solo suya» de una vista sin tomas no entra', () => {
+        // «Solo R» es «solo en las tomas de R», y no hubo ninguna: el renglón
+        // quedaría vacío de punta a punta.
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0)] });
-        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar({ capturas: 3, vistas: { R: [2] } }));
+        const config = carpetaPrproj.normalizar(soloLasDichas({
+            capturas: 3,
+            vistas: {
+                PV: { capturas: [1], siempre: [1] },
+                R: { capturas: [2], siempre: [] },
+                S: { capturas: [1], siempre: [] },
+                MG: { capturas: [1], siempre: [] },
+                X2: { capturas: [1], siempre: [] }
+            }
+        }));
+        const plan = carpetaPrproj.planear([s], config);
         t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1']);
         t.eq(plan.grupos.length, 0);
+    });
+
+    t.test('pero «en todas» entra aunque su vista no se haya llamado, suelta o anidada', () => {
+        // Lo que dice el menú es lo que sale. Antes solo las anidaciones
+        // entraban así, y una captura suelta «en todas» se quedaba fuera.
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0)] });
+        const config = carpetaPrproj.normalizar(soloLasDichas({
+            capturas: 3,
+            vistas: {
+                PV: { capturas: [1], siempre: [1] },
+                R: { capturas: [2], siempre: [2] },
+                S: { capturas: [1], siempre: [] },
+                MG: { capturas: [1], siempre: [] },
+                X2: { capturas: [1], siempre: [] }
+            }
+        }));
+        const plan = carpetaPrproj.planear([s], config);
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'R:2']);
+        t.eq(plan.pistas[1].siempre, true, 'puesta en todas las tomas, apagada en las de PV');
+    });
+
+    t.test('una vista sin tomas con una «en todas» y una «solo»: entra la de todas', () => {
+        // R con la 2 «en todas» y la 1 «solo R», y R no se llamó. La 2 es un
+        // renglón con clips en cada toma; la 1 sería un renglón vacío.
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0)] });
+        const config = carpetaPrproj.normalizar(soloLasDichas({
+            capturas: 2,
+            vistas: {
+                PV: { capturas: [1], siempre: [1] },
+                R: { capturas: [2, 1], unidas: false, siempre: [2] },
+                S: { capturas: [1], siempre: [] },
+                MG: { capturas: [1], siempre: [] },
+                X2: { capturas: [1], siempre: [] }
+            }
+        }));
+        const plan = carpetaPrproj.planear([s], config);
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'R:2']);
     });
 
     t.test('una anidación «en todas» entra aunque su vista no se haya llamado', () => {
@@ -648,9 +745,9 @@ module.exports = async function (t) {
         // le haga falta. Si no sale, el menú prometió una pista que no está.
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0)] });
-        const config = carpetaPrproj.normalizar({
+        const config = carpetaPrproj.normalizar(soloLasDichas({
             capturas: 3, vistas: { X2: { capturas: [1, 3], unidas: true, siempre: [1, 3] } }
-        });
+        }));
         const plan = carpetaPrproj.planear([s], config);
         t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'X2:1+3']);
         t.deep(plan.grupos.map(g => g.clave), ['1+3'], 'y es una anidación de verdad');
@@ -663,7 +760,7 @@ module.exports = async function (t) {
         // pista de vídeo sería peor que ponerle la Captura 1 y seguir.
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0), toma(2, 30, 40, 'ZZ', T0)] });
-        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar({ capturas: 2 }));
+        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar(soloLasDichas({ capturas: 2 })));
         t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'ZZ:1']);
         t.deep(plan.clases[0].cortes[1].fuentes, ['1'], 'y su toma apunta a esa fuente');
     });
@@ -673,9 +770,9 @@ module.exports = async function (t) {
         // dónde ponerla.
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0)] });
-        const config = carpetaPrproj.normalizar({
+        const config = carpetaPrproj.normalizar(soloLasDichas({
             capturas: 3, vistas: { X2: { capturas: [1, 3], unidas: true, siempre: [] } }
-        });
+        }));
         const plan = carpetaPrproj.planear([s], config);
         t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1']);
         t.eq(plan.grupos.length, 0);
@@ -767,7 +864,7 @@ module.exports = async function (t) {
         const destino = path.join(dir, 'Proyecto', 'prueba.prproj');
         const r = await carpetaPrproj.generar({
             carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
-            config: { capturas: 2, vistas: { PV: [1], R: [2], X2: [2, 1] } }
+            config: soloLasDichas({ capturas: 2, vistas: { PV: [1], R: [2], X2: [2, 1] } })
         });
         t.ok(r.ok, r.error || '');
         t.eq(r.clases, 2);
@@ -832,7 +929,7 @@ module.exports = async function (t) {
         const destino = path.join(dir, 'Proyecto', 'pre.prproj');
         const r = await carpetaPrproj.generar({
             carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
-            config: { capturas: 2, vistas: { PV: [1], R: [2], X2: [2, 1] } }
+            config: soloLasDichas({ capturas: 2, vistas: { PV: [1], R: [2], X2: [2, 1] } })
         });
         t.ok(r.ok, r.error || '');
 
@@ -965,14 +1062,14 @@ module.exports = async function (t) {
         const destino = path.join(dir, 'Proyecto', 'solo.prproj');
         const r = await carpetaPrproj.generar({
             carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
-            config: {
+            config: soloLasDichas({
                 capturas: 2,
                 vistas: {
                     PV: { capturas: [1], siempre: [] },
                     R: { capturas: [2], siempre: [2] },
                     X2: { capturas: [2, 1], siempre: [2, 1] }
                 }
-            }
+            })
         });
         t.ok(r.ok, r.error || '');
 
@@ -993,7 +1090,7 @@ module.exports = async function (t) {
         const destino = path.join(dir, 'Proyecto', 'anidada.prproj');
         const r = await carpetaPrproj.generar({
             carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
-            config: {
+            config: soloLasDichas({
                 capturas: 3,
                 vistas: {
                     PV: { capturas: [1], unidas: false, siempre: [1] },
@@ -1001,7 +1098,7 @@ module.exports = async function (t) {
                     X2: { capturas: [3], unidas: false, siempre: [3] },
                     S: { capturas: [1, 2, 3], unidas: true, siempre: [1, 2, 3] }
                 }
-            }
+            })
         });
         t.ok(r.ok, r.error || '');
 
@@ -1024,14 +1121,14 @@ module.exports = async function (t) {
         const destino = path.join(dir, 'Proyecto', 'duena.prproj');
         const r = await carpetaPrproj.generar({
             carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
-            config: {
+            config: soloLasDichas({
                 capturas: 2,
                 vistas: {
                     PV: { capturas: [1], unidas: false, siempre: [1] },
                     R: { capturas: [2, 1], unidas: false, siempre: [2, 1] },
                     X2: { capturas: [2], unidas: false, siempre: [] }
                 }
-            }
+            })
         });
         t.ok(r.ok, r.error || '');
 

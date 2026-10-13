@@ -619,14 +619,19 @@ function planear(sesiones, config) {
  * de eso puede pasar: el medio se comparte —la Captura 1 se importa una vez—
  * pero el renglón no, y cada vista queda con el apilado que pidió.
  *
- * **Una vista entra si alguna toma la llamó.** Y además, aunque no la hayan
- * llamado, si armó una anidación y la dejó «en todas»: esa es la pista que el
- * editor va a encender a mano en Premiere, y sin ella el menú prometió algo que
- * no está. Las capturas sueltas no entran por ese camino, porque una captura
- * suelta es lo que toda vista tiene de fábrica —las que nadie tocó dicen
- * «Captura 1, en todas» sin que nadie lo haya pedido— y reservarían un renglón
- * por vista que nadie quiso. Una anidación no sale de fábrica: si está, alguien
- * la armó en el menú.
+ * **Lo que dice el menú es lo que sale.** «En todas» deja la captura puesta en
+ * todas las tomas de la clase, apagada donde no toca, y eso vale aunque la
+ * vista no se haya llamado ni una vez: es la pista que el editor va a encender
+ * a mano en Premiere. «Solo PV» la pone únicamente en las tomas de PV, así que
+ * si PV no se llamó no hay dónde ponerla y no reserva renglón.
+ *
+ * Antes una captura SUELTA «en todas» de una vista sin tomas no entraba —solo
+ * las anidaciones—, con el argumento de que «Captura 1, en todas» es lo que
+ * toda vista dice de fábrica y nadie lo había pedido. Pero ese menú es el mismo
+ * diálogo donde se aprieta Generar: lo que dice cada vista está a la vista en
+ * ese momento, y quien no quiere un renglón lo pone en «solo». Pasó así: PV
+ * con la Captura 1 «en todas», una clase donde solo se dijo R, y la pista de PV
+ * no estaba en Premiere.
  */
 function repartirPistas(clases, config, anotar) {
     const conTomas = new Set();
@@ -650,11 +655,15 @@ function repartirPistas(clases, config, anotar) {
         const v = (config.vistas || {})[vista] || vistaSaneada(null, config.capturas);
         const puestas = v.siempre || [];
         const anidada = v.unidas && v.capturas.length > 1;
-        if (!conTomas.has(vista) && !(anidada && puestas.length)) continue;
+        const llamada = conTomas.has(vista);
         if (anidada) {
+            if (!llamada && !puestas.length) continue;
             pistas.push({ vista, clave: anotar(v.capturas, vista), ids: v.capturas.slice(), siempre: puestas.length > 0 });
         } else {
             for (const id of v.capturas) {
+                // Sin tomas de su vista, una «solo suya» quedaría vacía de punta
+                // a punta: un renglón sin un solo clip.
+                if (!llamada && !puestas.includes(id)) continue;
                 pistas.push({ vista, clave: anotar([id], vista), ids: [id], siempre: puestas.includes(id) });
             }
         }
@@ -849,9 +858,10 @@ function armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bin) {
  *
  * **Y queda encendida una sola vista.** Las pistas son las de la precortada,
  * repetidas por vista, así que encenderlas todas dejaría ver solo la de arriba
- * y las otras tapadas debajo. Va encendida la primera vista y las demás quedan
- * puestas y apagadas, que es el mismo gesto que la precortada: cambiar de
- * plano es encender el clip que ya está.
+ * y las otras tapadas debajo. Va encendida la primera vista que se usó en esta
+ * clase —no la primera pista, que puede ser una «en todas» que nadie llamó— y
+ * las demás quedan puestas y apagadas, que es el mismo gesto que la
+ * precortada: cambiar de plano es encender el clip que ya está.
  */
 function armarPre(taller, clase, plan, fuentes, capturas, medios, bin) {
     const largoSeg = clase.franja.largoSeg;
@@ -866,9 +876,12 @@ function armarPre(taller, clase, plan, fuentes, capturas, medios, bin) {
     });
     taller.guardarEn(bin, seq.itemDelPanel);
 
-    // La vista que queda encendida: la primera que haya, en el orden de las
-    // pistas, que ya es el de `VISTAS`.
-    const encendida = pistas.length ? pistas[0].vista : null;
+    // La vista que queda encendida: la primera que se usó en esta clase, en el
+    // orden de las pistas, que ya es el de `VISTAS`. Una clase sin tomas no
+    // usó ninguna y se queda con la primera pista.
+    const usadas = new Set(clase.cortes.map(c => c.vista));
+    const primera = pistas.find(p => usadas.has(p.vista)) || pistas[0];
+    const encendida = primera ? primera.vista : null;
 
     let cortes = 0;
     pistas.forEach((p, i) => {
