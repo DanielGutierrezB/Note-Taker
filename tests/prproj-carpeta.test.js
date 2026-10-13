@@ -85,6 +85,55 @@ function clipsDeLasPistas(p, secuencia) {
         .filter(k => p.clase(k) === 'VideoClipTrackItem').length);
 }
 
+/**
+ * Los clips de vídeo de una secuencia, con su sitio y su entrada, en segundos.
+ *
+ * El sitio en la línea de tiempo va en el `TrackItem` (`Start`/`End`) y el
+ * pedazo del archivo que se ve va en el `VideoClip` que ese ítem referencia
+ * (`InPoint`): son dos objetos y hay que cruzarlos.
+ */
+function clipsConSitio(p, secuencia) {
+    const num = (texto, etiqueta) => Number((new RegExp(`<${etiqueta}>(\\d+)</${etiqueta}>`)
+        .exec(texto || '') || [])[1]);
+    return pistasDeVideo(p, secuencia).flatMap(pista => p.cierre([pista], { claseFrontera: ['Sequence'] })
+        .filter(k => p.clase(k) === 'VideoClipTrackItem')
+        .map(k => {
+            const clip = p.cierre([k], { claseFrontera: ['Sequence'] })
+                .find(x => p.clase(x) === 'VideoClip');
+            return {
+                desdeSeg: num(p.contenido(k), 'Start') / prproj.TICKS,
+                hastaSeg: num(p.contenido(k), 'End') / prproj.TICKS,
+                entradaSeg: num(clip && p.contenido(clip), 'InPoint') / prproj.TICKS
+            };
+        }));
+}
+
+/** Hasta qué segundo llega lo que hay puesto en la línea de tiempo. */
+function finDeLaLinea(p, secuencia) {
+    return Math.round(Math.max(0, ...clipsConSitio(p, secuencia).map(c => c.hastaSeg)));
+}
+
+/** Y por qué segundo de la anidación entra: lo mismo para todos sus clips. */
+function entradaDeLaLinea(p, secuencia) {
+    return Math.round(Math.min(...clipsConSitio(p, secuencia).map(c => c.entradaSeg)));
+}
+
+/**
+ * En qué segundo cae cada marcador de un contenedor.
+ *
+ * El contenedor solo lleva la lista; cada marcador es un objeto aparte con su
+ * JSON escapado dentro de un `<DVAMarker>`, y el tiempo está en el
+ * `mStartTime` de ese JSON y no en ninguna etiqueta del XML.
+ */
+function segundosDeLosMarcadores(p, marcas) {
+    return p.refsDe(marcas)
+        .filter(k => p.clase(k) === 'Marker')
+        .map(k => (/mStartTime[\s\S]*?ticks[^0-9]+(\d+)/.exec(p.contenido(k)) || [])[1])
+        .filter(t => t != null)
+        .map(t => Math.round(Number(t) / prproj.TICKS))
+        .sort((a, b) => a - b);
+}
+
 function pistasDeVideo(p, secuencia) {
     const grupo = p.refsDe(secuencia).find(k => p.clase(k) === 'VideoTrackGroup');
     return [...p.contenido(grupo).matchAll(/<Track Index="\d+" Object(U?)Ref="([^"]+)"/g)]
@@ -733,10 +782,19 @@ module.exports = async function (t) {
         const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
         const secuencias = p.porClase('Sequence').map(nombre);
         for (const s of ['Captura 1', 'Captura 2', 'X2']) t.ok(secuencias.includes(s), s);
-        t.eq(secuencias.length, 5, 'dos capturas, un grupo y dos precortadas');
+        t.eq(r.pres, 2, 'y cada clase con su versión sin cortar');
+        t.eq(secuencias.length, 7, 'dos capturas, un grupo, dos precortadas y dos PRE');
         t.deep(p.porClase('BinProjectItem').map(nombre).sort(),
             [carpetaPrproj.BIN_CAPTURAS, carpetaPrproj.BIN_PRECORTADAS, carpetaPrproj.BIN_AUDIO,
-                ...carpetaPrproj.BINS_DEL_EDITOR].sort());
+                carpetaPrproj.BIN_PRE, ...carpetaPrproj.BINS_DEL_EDITOR].sort());
+
+        // El bin de las PRE va DENTRO del de las precortadas, no al lado: es la
+        // misma clase y se busca desde ahí.
+        const bin = n => p.porClase('BinProjectItem').find(k => nombre(k) === n);
+        const dentroDe = k => p.refsDe(k).filter(x => p.clase(x) === 'BinProjectItem').map(nombre);
+        t.deep(dentroDe(bin(carpetaPrproj.BIN_PRECORTADAS)), [carpetaPrproj.BIN_PRE],
+            'colgado de las precortadas');
+        t.eq(dentroDe(bin(carpetaPrproj.BIN_CAPTURAS)).length, 0, 'y de nadie más');
 
         // El apilado del menú, leído del archivo: la X2 se pidió `[2, 1]`, o sea
         // la 2 abajo y la 1 encima, y así tienen que haber quedado las pistas.
@@ -763,6 +821,116 @@ module.exports = async function (t) {
         t.eq(cuantos, 7, 'con los marcadores de toda la sesión');
         t.ok(p.quienReferencia(marcas).filter(k => p.clase(k) === 'AudioClip').length > 1,
             'y es el mismo que usan los cortes de ese audio en las capturas');
+    });
+
+    t.test('la PRE es la clase entera, con las mismas pistas que su precortada', async () => {
+        // Lo que esto cuida es la correspondencia que se pidió: «los mismos
+        // renglones que la precortada, para poder copiar y pegar entre las dos
+        // sin que se corra nada». Si una de las dos cambia de reparto y la otra
+        // no, pegar un clip lo manda a otro plano.
+        const dir = carpetaConClases(30);
+        const destino = path.join(dir, 'Proyecto', 'pre.prproj');
+        const r = await carpetaPrproj.generar({
+            carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
+            config: { capturas: 2, vistas: { PV: [1], R: [2], X2: [2, 1] } }
+        });
+        t.ok(r.ok, r.error || '');
+
+        const p = prproj.Proyecto.leer(destino);
+        t.ok(p.verificar().ok, 'el archivo queda sano');
+        const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
+        const seq = n => p.porClase('Sequence').find(k => nombre(k) === n);
+
+        const precortada = seq(`prueba_${T0}`);
+        const pre = seq(carpetaPrproj.nombreDePre(`prueba_${T0}`));
+        t.ok(pre, 'la PRE de la primera clase está');
+
+        t.deep(capturasDeLasPistas(p, pre), capturasDeLasPistas(p, precortada),
+            'las mismas anidaciones, en el mismo renglón');
+        t.deep(coloresDeLasPistas(p, pre), coloresDeLasPistas(p, precortada),
+            'y del mismo color, que es lo que se lee de un vistazo');
+
+        // **Un solo clip por pista: eso es «sin cortar».** La precortada de
+        // esta clase tiene tres tomas, así que si acá aparecieran tres clips
+        // querría decir que se colaron los cortes.
+        t.deep(clipsDeLasPistas(p, pre), clipsDeLasPistas(p, pre).map(() => 1),
+            'de punta a punta');
+        t.ok(clipsDeLasPistas(p, precortada).some(n => n > 1),
+            'mientras la precortada sí va en pedazos');
+
+        // Y llega hasta el final de la clase, no hasta la suma de las tomas.
+        // Esta clase tiene tres tomas que suman 90 s (10-40, 50-80, 90-120) y
+        // 200 s de audio, así que la PRE tiene que pasar de 90 largo.
+        t.eq(finDeLaLinea(p, precortada), 90, 'la precortada dura lo que suman sus tomas');
+        t.eq(finDeLaLinea(p, pre), 200, 'y la PRE, lo que duró la clase');
+
+        // De la anidación se mira la franja de ESTA clase. La segunda clase va
+        // detrás de la primera con su aire en el medio, así que su PRE no entra
+        // en cero: si entrara, las dos PRE mostrarían el mismo material.
+        const segunda = seq(carpetaPrproj.nombreDePre(`prueba_${T0 + UNA_HORA}`));
+        t.eq(entradaDeLaLinea(p, pre), 0, 'la primera entra en el principio de la anidación');
+        t.ok(entradaDeLaLinea(p, segunda) >= 200, 'y la segunda, donde empieza su franja');
+    });
+
+    t.test('la PRE lleva todos los marcadores, en la hora en que se dijeron', async () => {
+        const dir = carpetaConClases(30);
+        const destino = path.join(dir, 'Proyecto', 'marcas.prproj');
+        const r = await carpetaPrproj.generar({
+            carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
+            config: { capturas: 1, vistas: { PV: [1] } }
+        });
+        t.ok(r.ok, r.error || '');
+
+        const p = prproj.Proyecto.leer(destino);
+        const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
+        const pre = p.porClase('Sequence').find(k => nombre(k) === carpetaPrproj.nombreDePre(`prueba_${T0}`));
+        const marcas = p.refsDe(pre).find(k => p.clase(k) === 'Markers');
+        t.ok(marcas, 'la PRE tiene su contenedor de marcadores');
+        // Los mismos que el XML le pone al WAV: una claqueta y tres tomas con
+        // su IN y su OUT. Es el juego completo, que es el que se pidió.
+        t.eq((p.contenido(marcas).match(/<Marker Version/g) || []).length, 7,
+            'todo lo que se dijo, sin recortar');
+
+        // Y en SU hora: la primera toma entra a los 10 s de la clase, así que
+        // su marcador cae en el segundo 10 y no pegado al principio como en la
+        // precortada, donde las tomas se juntan unas con otras.
+        const inicios = segundosDeLosMarcadores(p, marcas);
+        t.ok(inicios.includes(10), `la toma 1 marcada en el segundo 10: ${inicios.join(', ')}`);
+        t.ok(inicios.includes(90), 'y la toma 3 en el 90, donde se dijo');
+    });
+
+    t.test('una clase sin ninguna toma igual llega al proyecto, por la PRE', async () => {
+        // Sin tomas no hay precortada, y antes esa clase no aparecía en el
+        // proyecto por ningún lado: su audio y sus notas quedaban inalcanzables
+        // desde Premiere. Es justamente la clase que hay que poder cortar.
+        const dir = carpeta();
+        const secuencia = `prueba_${T0}`;
+        const s = sesion(dir, {
+            cero: T0, secuencia, segundos: 200, fps: 30,
+            tomas: [],
+            claquetas: [{ n: 1, ms: T0 + 3000, confirmada: true }]
+        });
+        const estado = { ...vivo.estadoNuevo({ secuencia, ceroMs: T0, fps: 30 }), ...s };
+        workspace.writeJson(workspace.archivosDeSesion(dir, secuencia).json, notasXml.sidecar(estado));
+
+        const destino = path.join(dir, 'Proyecto', 'sin-tomas.prproj');
+        const r = await carpetaPrproj.generar({
+            carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
+            config: { capturas: 1, vistas: { PV: [1] } }
+        });
+        t.ok(r.ok, r.error || '');
+        t.eq(r.precortadas, 0, 'no hay nada que precortar');
+        t.eq(r.pres, 1, 'pero la clase entera sí entra');
+        t.ok(r.avisos.some(a => /no tiene tomas que vayan al XML/.test(a)), 'y se sigue avisando');
+        // Y se cuenta donde el panel mira, que son las dos primeras líneas.
+        t.ok(r.cuenta.slice(0, 2).some(l => l.includes(`${carpetaPrproj.BIN_PRECORTADAS} › ${carpetaPrproj.BIN_PRE}`)),
+            `dice dónde quedó: ${r.cuenta.join(' | ')}`);
+
+        const p = prproj.Proyecto.leer(destino);
+        t.ok(p.verificar().ok, 'y el archivo queda sano');
+        const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
+        t.ok(p.porClase('Sequence').map(nombre).includes(carpetaPrproj.nombreDePre(secuencia)),
+            'con su secuencia sin cortar');
     });
 
     t.test('los bins del editor están, vacíos y en su orden', async () => {

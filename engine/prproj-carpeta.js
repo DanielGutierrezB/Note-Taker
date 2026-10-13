@@ -48,6 +48,26 @@ const BIN_PRECORTADAS = '02 Precortadas';
 const BIN_AUDIO = '03 Audio de referencia';
 
 /**
+ * Y adentro de las precortadas, la clase SIN cortar.
+ *
+ * La precortada tira todo lo que quedó fuera de las tomas, y eso casi siempre
+ * está bien: es el trabajo. Pero cuando está mal —una frase que valía y quedó
+ * afuera, un borde puesto dos palabras tarde, una clase que no se marcó— no
+ * había forma de llegar a ese audio desde Premiere. Había que volver a la app,
+ * mover el borde y rehacer el proyecto.
+ *
+ * Así que al lado de cada precortada va la misma clase de punta a punta, con
+ * las mismas pistas y todo lo que se dijo. Lo pidió así: «una dentro que se
+ * llame PRE, y dentro esté la secuencia previa a ser cortada».
+ */
+const BIN_PRE = 'PRE';
+
+/** Cómo se llama la secuencia sin cortar de una clase. */
+function nombreDePre(nombre) {
+    return `${nombre} PRE`;
+}
+
+/**
  * Y los que el proyecto deja vacíos, que son del editor.
  *
  * Los tres primeros los llena esta app; estos tres son donde va lo que llega
@@ -389,7 +409,13 @@ function planear(sesiones, config) {
             sesion,
             nombre: sesion.secuencia,
             wavs: wavs.filter(w => fs.existsSync(w.ruta)),
-            franja: { desdeSeg: reloj, largoSeg }
+            franja: { desdeSeg: reloj, largoSeg },
+            // Los de la clase sin cortar, que son los del XML tal cual: ya
+            // vienen en segundos desde el cero de la clase, que es justo el
+            // reloj de la PRE. No hace falta correrlos como en la precortada
+            // —donde cada toma se pega a la anterior— porque acá no se quitó
+            // nada: el minuto 12 de la clase es el minuto 12 de la secuencia.
+            marcadoresPre: marcas.map(deXml)
         });
         reloj += largoSeg + nidos.AIRE_SEG;
     }
@@ -808,6 +834,84 @@ function armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bin) {
 }
 
 /**
+ * La clase entera, sin cortar.
+ *
+ * Son las MISMAS pistas que la precortada y en el mismo orden, a pedido: así
+ * un clip se copia de una secuencia a la otra y cae en el renglón que le toca,
+ * sin tener que contar de nuevo cuál era cuál. La diferencia es que acá cada
+ * pista lleva un solo clip de punta a punta en vez de un pedazo por toma.
+ *
+ * **De la anidación se mira la franja de ESTA clase.** Las anidaciones son una
+ * sola línea de tiempo con todas las clases de la carpeta seguidas (ver
+ * `planear`), así que la PRE entra en `franja.desdeSeg` y dura `franja.largoSeg`:
+ * el minuto 12 de la clase es el minuto 12 de esta secuencia, que es lo que
+ * hace que los marcadores caigan donde se dijeron.
+ *
+ * **Y queda encendida una sola vista.** Las pistas son las de la precortada,
+ * repetidas por vista, así que encenderlas todas dejaría ver solo la de arriba
+ * y las otras tapadas debajo. Va encendida la primera vista y las demás quedan
+ * puestas y apagadas, que es el mismo gesto que la precortada: cambiar de
+ * plano es encender el clip que ya está.
+ */
+function armarPre(taller, clase, plan, fuentes, capturas, medios, bin) {
+    const largoSeg = clase.franja.largoSeg;
+    if (!(largoSeg > 0)) return 0;
+
+    const pistas = plan.pistas;
+    const seq = taller.crearSecuencia({
+        nombre: nombreDePre(clase.nombre),
+        pistasVideo: Math.max(1, pistas.length),
+        pistasAudio: 2,
+        duracionSeg: largoSeg
+    });
+    taller.guardarEn(bin, seq.itemDelPanel);
+
+    // La vista que queda encendida: la primera que haya, en el orden de las
+    // pistas, que ya es el de `VISTAS`.
+    const encendida = pistas.length ? pistas[0].vista : null;
+
+    let cortes = 0;
+    pistas.forEach((p, i) => {
+        taller.colocarCorte({
+            pista: seq.pistasVideo[i], medio: fuentes.get(p.clave).comoFuente,
+            desdeSeg: 0, hastaSeg: largoSeg, entradaSeg: clase.franja.desdeSeg,
+            etiqueta: p.color,
+            sonando: p.vista === encendida
+        });
+        cortes++;
+    });
+
+    // A1, el audio de la Captura 1, que es el que se oye en la precortada.
+    const c1 = capturas.get(1);
+    if (c1) {
+        taller.colocarCorte({
+            pista: seq.pistasAudio[0], medio: c1.comoFuente,
+            desdeSeg: 0, hastaSeg: largoSeg, entradaSeg: clase.franja.desdeSeg,
+            etiqueta: plan.colorDeCaptura.get(1), sonando: true
+        });
+        cortes++;
+    }
+
+    // Y A2, el audio de referencia entero y en su sitio: acá no se corta por
+    // toma como en la precortada, porque no hay tomas que seguir.
+    for (const w of clase.wavs) {
+        const medio = medios.get(w.ruta);
+        if (!medio) continue;
+        const desde = notasXml.aSegundos(w.desdeMs, clase.sesion.ceroMs);
+        taller.colocarCorte({
+            pista: seq.pistasAudio[1], medio,
+            desdeSeg: desde, hastaSeg: desde + w.segundos, entradaSeg: 0,
+            etiqueta: ETIQUETA_DE_REFERENCIA, sonando: true
+        });
+        cortes++;
+    }
+    taller.mutearPista(seq.pistasAudio[1]);
+
+    taller.ponerMarcadores(seq.secuencia, clase.marcadoresPre);
+    return cortes;
+}
+
+/**
  * Arma el `.prproj` de la carpeta.
  *
  * El destino llega resuelto, como en Class Cut: decidir si se pisa un proyecto
@@ -922,13 +1026,28 @@ async function generar(opciones) {
             fuentes.set(f.clave, f.ids.length > 1 ? grupos.get(f.clave) : capturas.get(f.ids[0]));
         }
 
+        // El bin de las PRE va DENTRO del de las precortadas, no al lado: es la
+        // misma clase y se busca desde ahí. Se crea aunque no haya ninguna que
+        // meter, igual que los bins del editor: un bin vacío no cuesta nada y
+        // un proyecto que a veces tiene la carpeta y a veces no se lee peor.
+        const binPre = taller.crearBin(BIN_PRE, { orden: 0 });
+        taller.guardarEn(bins[1], binPre);
+
         let cortes = 0;
         let precortadas = 0;
+        let pres = 0;
         plan.clases.forEach((clase, i) => {
-            if (!clase.cortes.length) return;
             decir(i, total, `Precortando ${clase.nombre}…`);
-            cortes += armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bins[1]);
-            precortadas++;
+            if (clase.cortes.length) {
+                cortes += armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bins[1]);
+                precortadas++;
+            }
+            // **La PRE se arma aunque la clase no tenga ni una toma.** Es
+            // justamente la clase a la que no se podía llegar: sin tomas no hay
+            // precortada, y su audio y sus notas no aparecían en el proyecto por
+            // ningún lado.
+            const suyos = armarPre(taller, clase, plan, fuentes, capturas, medios, binPre);
+            if (suyos) { cortes += suyos; pres++; }
         });
 
         const podados = taller.podarLaPlantilla();
@@ -944,6 +1063,7 @@ async function generar(opciones) {
             ruta: op.destino,
             clases: total,
             precortadas,
+            pres,
             capturas: config.capturas,
             grupos: plan.grupos.length,
             tomas,
@@ -954,7 +1074,12 @@ async function generar(opciones) {
                 `${total} clase(s) en ${config.capturas} captura(s)`
                     + (plan.grupos.length ? ` y ${plan.grupos.length} grupo(s)` : '')
                     + `, de ${Math.round(plan.largoSeg / 60)} minutos con ${nidos.AIRE_SEG / 60} de aire entre clases.`,
-                `${precortadas} precortada(s) con ${tomas} toma(s) y ${claquetas} claqueta(s) marcada(s) en las capturas.`,
+                // Las dos primeras líneas son las que el panel enseña
+                // (`slice(0, 2)` en `panel-prproj.js`), así que la PRE va en
+                // esta y no en una tercera: es un sitio nuevo del proyecto y
+                // hay que saber que está.
+                `${precortadas} precortada(s) con ${tomas} toma(s) y ${claquetas} claqueta(s) marcada(s)`
+                    + ` en las capturas, y ${pres} clase(s) enteras sin cortar en «${BIN_PRECORTADAS} › ${BIN_PRE}».`,
                 `Se quitaron ${descolgados} objeto(s) de la plantilla (${podados} borrado(s)).`
             ],
             error: null
@@ -978,9 +1103,11 @@ module.exports = {
     mismoFps,
     nombreDeCaptura,
     nombreDeFuente,
+    nombreDePre,
     BIN_CAPTURAS,
     BIN_PRECORTADAS,
     BIN_AUDIO,
+    BIN_PRE,
     BINS_DEL_EDITOR,
     COLORES_DE_CAPTURA,
     ETIQUETA_DE_VISTA,
