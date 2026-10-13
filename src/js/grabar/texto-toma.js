@@ -245,6 +245,32 @@ function malParada(texto, b) {
  *     posible por el otro camino. Hacia atrás es el IN contra la toma anterior,
  *     y hacia adelante el OUT contra la siguiente.
  */
+/** Un transcript abajo del todo, con holgura: dos renglones de margen, que es lo que falla si no. */
+export function estaAlFondo(rollo) {
+    return rollo.scrollHeight - rollo.scrollTop - rollo.clientHeight < 8;
+}
+
+/**
+ * Dónde dejar el scroll de un transcript al volver a ponerlo en la pantalla.
+ *
+ * Lo nuevo entra abajo, así que abajo es donde hay que mirar: un texto rehecho
+ * entero arranca ahí, y el que estaba abajo se queda abajo y se sigue
+ * escribiendo solo. **Salvo que alguien haya subido** a buscar una palabra,
+ * que se queda donde lo dejó. Y si el nodo se sacó y se volvió a meter —un
+ * repintado entero de la pantalla—, hay que devolvérselo: el DOM le borra el
+ * scroll al remontarlo, y sin esto quien había subido aparecía arriba del todo.
+ *
+ * @param {object} p
+ * @param {boolean} p.rehecho    el texto es otro nodo: no hay dónde haber subido
+ * @param {boolean} p.remontado  el mismo nodo, sacado y vuelto a meter
+ * @param {{fondo:boolean, arriba:number}|undefined} p.antes lo último que se vio
+ * @returns {'fondo'|number|null} abajo, ese `scrollTop`, o no tocarlo
+ */
+export function dondeQueda({ rehecho, remontado, antes }) {
+    if (rehecho || !antes || antes.fondo) return 'fondo';
+    return remontado ? antes.arriba : null;
+}
+
 export function bordesQuePuede(texto, w) {
     const lineaIn = texto.querySelector('.borde.es-in');
     const lineaOut = texto.querySelector('.borde.es-out');

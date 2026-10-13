@@ -534,18 +534,11 @@ function aguja(datos) {
 let textosPuestos = new Map();
 
 /**
- * Qué transcript está abajo del todo, por texto.
- *
- * Lo que decide si lo nuevo lo arrastra consigo o si se queda quieto. Se guarda
- * acá y no se mide en el momento porque al remontar el nodo ya se perdió:
- * sacarlo del DOM y volver a meterlo le borra el scroll.
+ * Dónde estaba cada transcript, por texto: si abajo del todo y si no, a qué
+ * altura. Se guarda acá y no se mide en el momento porque al remontar el nodo
+ * ya se perdió: sacarlo del DOM y volver a meterlo le borra el scroll.
  */
-const alFondo = new Map();
-
-/** Abajo con holgura: dos renglones de margen, que es lo que falla si no. */
-function estaAlFondo(rollo) {
-    return rollo.scrollHeight - rollo.scrollTop - rollo.clientHeight < 8;
-}
+const rollos = new Map();
 
 function montarTextos() {
     const previos = textosPuestos;
@@ -562,25 +555,20 @@ function montarTextos() {
         // final, y si no devuelve uno nuevo. Crecer es lo que deja que la
         // selección y el arrastre aguanten mientras se habla, así que el que
         // vuelve igual se deja donde está en vez de volver a meterlo.
+        const remontado = nodo === previo && nodo.parentNode !== hueco;
         if (nodo !== previo || nodo.parentNode !== hueco) hueco.replaceChildren(nodo);
         textosPuestos.set(clave, nodo);
-        // Lo nuevo entra abajo, así que abajo es donde hay que mirar. En una
-        // toma ya cerrada no: lo que se busca ahí es el principio.
-        //
-        // **Salvo que alguien haya subido**, y eso es lo que hace usable el
-        // clic derecho: para poner el IN diez frases atrás hay que poder subir
-        // a buscar la palabra, y hasta acá el texto se iba al fondo una vez por
-        // segundo, así que no se llegaba. El que estaba abajo del todo se queda
-        // abajo y se sigue escribiendo solo; el que alguien movió se queda donde
-        // lo dejó. Es la misma regla que `recordarRollos` en la pantalla de
-        // clase, donde el gesto ya existía.
+        // Abajo, que es donde entra lo nuevo, salvo que alguien haya subido: eso
+        // es lo que hace usable el clic derecho, porque para poner el IN diez
+        // frases atrás hay que poder subir a buscar la palabra (ver
+        // `texto.dondeQueda`). En una toma ya cerrada no se toca: lo que se
+        // busca ahí es el principio.
         const rollo = cual === 'cerrada' ? null : nodo.querySelector('.transcript');
-        if (rollo && (previo !== nodo || alFondo.get(clave) !== false)) {
-            rollo.scrollTop = rollo.scrollHeight;
-        }
-        if (rollo) {
-            rollo.onscroll = () => alFondo.set(clave, estaAlFondo(rollo));
-        }
+        if (!rollo) continue;
+        const queda = texto.dondeQueda({ rehecho: nodo !== previo, remontado, antes: rollos.get(clave) });
+        if (queda === 'fondo') rollo.scrollTop = rollo.scrollHeight;
+        else if (queda != null) rollo.scrollTop = queda;
+        rollo.onscroll = () => rollos.set(clave, { fondo: texto.estaAlFondo(rollo), arriba: rollo.scrollTop });
     }
 }
 

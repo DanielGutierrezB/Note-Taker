@@ -1243,7 +1243,7 @@ function recordarRollos() {
         if (!t) continue;
         rollos.set(claveDe(hueco), {
             arriba: t.scrollTop,
-            alFondo: t.scrollHeight - t.scrollTop - t.clientHeight < 8
+            alFondo: texto.estaAlFondo(t)
         });
     }
     return rollos;

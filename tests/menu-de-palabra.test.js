@@ -215,13 +215,28 @@ module.exports = async t => {
         // atrás hay que llegar hasta ellas, y el transcript se iba al fondo una
         // vez por segundo. El que está abajo sigue abajo —lo nuevo entra ahí—,
         // el que alguien movió se queda quieto.
-        const semana = laSemana();
-        t.ok(/alFondo\.get\(clave\) !== false/.test(semana),
-            'solo se va al fondo el que estaba al fondo');
-        t.ok(/rollo\.onscroll = \(\) => alFondo\.set\(clave, estaAlFondo\(rollo\)\)/.test(semana),
-            'y se recuerda al moverlo, porque remontar el nodo le borra el scroll');
-        t.ok(/previo !== nodo \|\| /.test(semana),
+        const subido = { fondo: false, arriba: 120 };
+        t.eq(texto.dondeQueda({ rehecho: false, remontado: false, antes: { fondo: true, arriba: 0 } }), 'fondo',
+            'el que estaba al fondo sigue al fondo');
+        t.eq(texto.dondeQueda({ rehecho: false, remontado: false, antes: subido }), null,
+            'el que alguien movió se queda quieto');
+        t.eq(texto.dondeQueda({ rehecho: false, remontado: false, antes: undefined }), 'fondo',
+            'uno que nadie miró todavía arranca abajo');
+        t.eq(texto.dondeQueda({ rehecho: true, remontado: false, antes: subido }), 'fondo',
             'un texto que se rehace entero sí arranca abajo: no hay dónde haber subido');
+        const semana = laSemana();
+        t.ok(/rollo\.onscroll = \(\) => rollos\.set\(clave, \{ fondo: texto\.estaAlFondo\(rollo\), arriba: rollo\.scrollTop \}\)/
+            .test(semana), 'y la pantalla recuerda las dos cosas al moverlo');
+        t.ok(/texto\.dondeQueda\(\{ rehecho: nodo !== previo, remontado, antes: rollos\.get\(clave\) \}\)/
+            .test(semana), 'y usa la regla');
+    });
+
+    t.test('un repintado entero no te tira arriba del todo', () => {
+        // Repintar la pantalla saca el texto del DOM y lo vuelve a meter, y eso
+        // le borra el scroll. Quien había subido a buscar una palabra aparecía
+        // arriba del todo, y ahí se quedaba hasta bajar a mano.
+        t.eq(texto.dondeQueda({ rehecho: false, remontado: true, antes: { fondo: false, arriba: 120 } }), 120,
+            'vuelve a donde estaba');
     });
 
     t.test('en la toma abierta solo el OUT la cierra, también en la semana', () => {
