@@ -493,10 +493,9 @@ async function alApretarUpdate() {
 
 async function buscar(aMano) {
     if (aMano) $('#update-dice').textContent = 'Buscando…';
-    // Mientras se baja o espera para instalar, una comprobación nueva borraría
-    // lo que ya está en marcha.
-    if (update.estado === 'bajando' || update.estado === 'lista') {
-        if (aMano) $('#update-dice').textContent = update.estado === 'bajando' ? 'Bajando…' : 'Lista para instalar.';
+    // Mientras se baja, una comprobación nueva pisaría la descarga.
+    if (update.estado === 'bajando') {
+        if (aMano) $('#update-dice').textContent = 'Bajando…';
         return;
     }
 
@@ -507,6 +506,14 @@ async function buscar(aMano) {
         if (aMano) $('#update-dice').textContent = `No se pudo comprobar: ${e.message}`;
         return;
     }
+    // Una ya bajada sigue valiendo mientras sea la última. Antes, con una
+    // esperando para instalar no se volvía a mirar, y si en ese rato salía
+    // otra, el botón instalaba la vieja.
+    const yaBajada = update.estado === 'lista' && (!r || !r.hay || r.version === update.version);
+    if (yaBajada) {
+        if (aMano) $('#update-dice').textContent = 'Lista para instalar.';
+        return;
+    }
     if (!r || !r.hay) {
         update.estado = 'al-dia';
         pintarUpdate();
@@ -515,15 +522,17 @@ async function buscar(aMano) {
     }
 
     Object.assign(update, {
-        estado: 'hay', version: r.version, url: r.url, nombre: r.nombre, notas: r.notas || ''
+        estado: 'hay', version: r.version, url: r.url, nombre: r.nombre, notas: r.notas || '', ruta: null
     });
     pintarUpdate();
     $('#update-dice').textContent = `Hay la ${r.version}.`;
     if (aMano) return;
     // Una sola vez por versión se dice en voz alta; después queda el botón. Con
-    // una clase grabando no se dice nada: el botón está ahí y no molesta.
+    // algo grabando —una clase o el vídeo de la semana— no se dice nada: el
+    // botón está ahí y no molesta, y el aviso espera a la próxima consulta.
     const dicho = pref.leer('update.avisada', '');
-    if (dicho !== r.version && !$('#vista-vivo').classList.contains('es-activa')) {
+    const grabandoAlgo = $('#vista-vivo').classList.contains('es-activa') || semanal.grabando();
+    if (dicho !== r.version && !grabandoAlgo) {
         pref.guardar('update.avisada', r.version);
         avisar(`Hay una versión nueva (${r.version}). Está arriba, en «Actualizar».`);
     }
