@@ -28,6 +28,7 @@ import { icono } from '../iconos.js';
 import * as fmt from '../formato.js';
 import * as fichas from '../grabar/lista-tomas.js';
 import * as estadosToma from '../grabar/estados-toma.js';
+import * as historia from '../grabar/historia.js';
 import * as estados from '../estados.js';
 import * as corte from './corte.js';
 import { estiloDeVista } from '../colores.js';
@@ -404,7 +405,7 @@ function laHistoria(sesion) {
     const boton = (hace, hay, que, verbo) => `
       <button class="btn btn-tenue btn-ico" type="button" data-hace="${hace}"
               ${hay ? '' : 'disabled'} aria-label="${verbo}"
-              title="${hay ? `${verbo} «${esc(que)}»` : `No hay nada que ${verbo.toLowerCase()}`}"
+              title="${esc(historia.tituloDe(hay, que, verbo))}"
         >${icono(hace)}</button>`;
     return boton('deshacer', h.atras, h.queAtras, 'Deshacer')
         + boton('rehacer', h.adelante, h.queAdelante, 'Rehacer');
@@ -499,7 +500,7 @@ export function cuerpoDeFicha(estado, t) {
         <div class="campo-fila" style="margin-top:8px">
           ${t.descartada ? '' : vistasDeFicha(estado, t)}
           <span class="crece"></span>
-          ${botonFuera(t, true)}
+          ${estadosDe(estado, t)}
         </div>`;
 }
 
@@ -516,15 +517,25 @@ export function textoDeFicha(t) {
 }
 
 /**
- * Los tres estados de la toma, el mismo control que en la clase.
+ * Si este paso tiene pila: grabando sí, terminado no.
  *
- * `sePuedeDeshacer` es lo que decide si Descartar está: mientras se graba, sí
- * —⌘Z la devuelve—, y en el editor la sesión ya está cerrada y se relee del
- * archivo en cada gesto, así que ahí quedan los dos que se pueden desandar
- * solos apretando el otro.
+ * La pregunta es una para la tecla ⌘Z, para los botones y para Descartar,
+ * que aparece solo donde ⌘Z la devuelve: en el editor la sesión ya está
+ * cerrada y se relee del archivo en cada gesto, así que ahí quedan los dos
+ * que se pueden desandar solos apretando el otro.
+ *
+ * Cuántos pasos hay es otra pregunta y la contesta el motor —`historia.atras`
+ * apaga el botón y `volver` recibe un `ok: false` si no quedaba nada—; esta es
+ * la de si existe la pila, que es de la pantalla porque es del paso en que
+ * está.
  */
-export function botonFuera(t, grabando) {
-    return estadosToma.estadosDe(t, { donde: 'en el vídeo', sePuedeDeshacer: grabando === true });
+export function sePuedeDeshacer(estado) {
+    return estado.paso === 'grabando' && Boolean(estado.sesion && estado.sesion.historia);
+}
+
+/** Los tres estados de la toma, el mismo control que en la clase. */
+function estadosDe(estado, t) {
+    return estadosToma.estadosDe(t, { donde: 'en el vídeo', sePuedeDeshacer: sePuedeDeshacer(estado) });
 }
 
 /**
@@ -794,7 +805,7 @@ export function tarjetaDeLaToma(estado, t) {
                 ? 'Lo que elijas se ve arriba en el acto.'
                 : `Pediste ${esc(laVista(t.vista).titulo.toLowerCase())} y esa toma no lo tiene
                    grabado: sale con lo otro.`}</span>
-            ${botonFuera(t)}
+            ${estadosDe(estado, t)}
           </div>
           <div class="campo" style="margin-top:16px">
             <span class="rotulo">Lo que dijiste</span>

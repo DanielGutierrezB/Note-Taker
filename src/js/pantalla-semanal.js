@@ -41,6 +41,8 @@ import * as montaje from './semanal/montaje.js';
 import * as corte from './semanal/corte.js';
 import * as tarjetas from './semanal/tarjetas.js';
 import * as menuPalabra from './grabar/menu-de-palabra.js';
+import * as historia from './grabar/historia.js';
+import * as estadosToma from './grabar/estados-toma.js';
 import * as estados from './estados.js';
 import * as mirilla from './semanal/mirilla.js';
 import { estiloDeVista } from './colores.js';
@@ -601,11 +603,12 @@ function lasTomas() {
  */
 function ponerBorde(cual, tomaId, borde, ms) {
     const contesta = r => { if (r) { estado.sesion = r; pintar(); } };
-    if (cual === 'espera') return window.nt.grabarAbrirToma(ms).then(contesta);
-    if (cual === 'abierta' && borde === 'out') {
-        return window.nt.grabarCerrarToma(ms).then(contesta);
+    switch (texto.queHaceElBorde(cual, borde)) {
+        case 'abrir': return window.nt.grabarAbrirToma(ms).then(contesta);
+        case 'cerrar': return window.nt.grabarCerrarToma(ms).then(contesta);
+        case 'mover': return cambiarFicha(tomaId, { tipo: 'borde', borde, paredMs: ms });
+        default: return undefined;
     }
-    return cambiarFicha(tomaId, { tipo: 'borde', borde, paredMs: ms });
 }
 
 function unTexto(cual, toma, previo) {
@@ -683,8 +686,7 @@ async function alTeclado(e) {
     // tecla que hace que Descartar se pueda ofrecer sin preguntar, así que
     // tiene que estar donde está el botón. Grabando nada más, que es donde el
     // motor tiene la pila.
-    const meta = e.metaKey || e.ctrlKey;
-    if (meta && e.key.toLowerCase() === 'z' && hayHistoria()) {
+    if (historia.esDeshacer(e) && tarjetas.sePuedeDeshacer(estado)) {
         e.preventDefault();
         return volver(e.shiftKey ? 'rehacer' : 'deshacer');
     }
@@ -755,10 +757,9 @@ async function alClic(e) {
     if (hace === 'plegar') return plegar(Number(boton.dataset.toma));
     if (hace === 'vista-ficha') return cambiarFicha(Number(boton.dataset.toma),
         { tipo: 'vista', vista: boton.dataset.vista });
-    if (hace === 'mantener') return cambiarFicha(Number(boton.dataset.toma),
-        { tipo: 'descartar', descartada: false });
-    if (hace === 'desactivar') return cambiarFicha(Number(boton.dataset.toma),
-        { tipo: 'descartar', descartada: true });
+    if (hace === 'mantener' || hace === 'desactivar') {
+        return cambiarFicha(Number(boton.dataset.toma), estadosToma.cambioDe(hace));
+    }
     if (hace === 'descartar') return descartar(Number(boton.dataset.toma));
     if (hace === 'deshacer' || hace === 'rehacer') return volver(hace);
     if (hace === 'reproducir') { montaje.alternar(); return undefined; }
@@ -954,24 +955,13 @@ function plegar(id) {
  * que avisar, y la ficha abierta tampoco hay que cerrarla.
  */
 async function descartar(id) {
-    await cambiarFicha(id, { tipo: 'eliminar' });
+    await cambiarFicha(id, estadosToma.cambioDe('descartar'));
     if (((estado.sesion && estado.sesion.tomas) || []).some(t => t.id === id)) return;
     if (estado.ficha === id) estado.ficha = null;
-    avisar(`Toma ${id} descartada. ⌘Z la devuelve.`);
+    avisar(historia.avisoDeDescarte(id));
     pintar();
 }
 
-/**
- * Si este paso tiene pila: grabando sí, terminado no.
- *
- * Cuántos pasos hay es otra pregunta y la contesta el motor —`historia.atras`
- * apaga el botón y `volver` recibe un `ok: false` si no quedaba nada—; esta es
- * la de si existe la pila, que es de la pantalla porque es del paso en que
- * está.
- */
-function hayHistoria() {
-    return estado.paso === 'grabando' && Boolean(estado.sesion && estado.sesion.historia);
-}
 
 /**
  * Deshacer y rehacer, lo mismo que en la clase y por el mismo motor.
@@ -984,20 +974,9 @@ function hayHistoria() {
  * Solo mientras se graba: una sesión ya cerrada se relee del archivo en cada
  * gesto y no tiene pila (ver `sesiones-grabadas.js`). Los dos botones viven en
  * la tarjeta de grabar, así que en el editor no están, y la tecla pregunta lo
- * mismo (`hayHistoria`).
+ * mismo (`tarjetas.sePuedeDeshacer`).
  */
-async function volver(cual) {
-    let r = null;
-    try {
-        r = cual === 'deshacer' ? await window.nt.grabarDeshacer() : await window.nt.grabarRehacer();
-    } catch (e) {
-        avisar(`No se pudo ${cual}: ${e.message}`, 'error');
-    }
-    if (!r) return;
-    if (r.estado) { estado.sesion = r.estado; pintar(); }
-    if (r.error) avisar(r.error, 'error');
-    else if (r.ok) avisar(`${cual === 'deshacer' ? 'Deshecho' : 'Rehecho'}: ${r.que}`);
-}
+const volver = cual => historia.volver(cual, nuevo => { estado.sesion = nuevo; pintar(); });
 
 /**
  * Un cambio sobre una toma de la lista, por la puerta que corresponda.

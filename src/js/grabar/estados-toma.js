@@ -30,6 +30,26 @@
 import { icono } from '../iconos.js';
 
 /**
+ * Qué le pide al motor cada uno de los tres botones.
+ *
+ * Está acá con los botones porque el vocabulario del motor es una trampa: su
+ * `tipo: 'descartar'` es lo que acá se llama Desactivar —la toma queda, pero
+ * no cuenta— y lo que acá se llama Descartar es su `eliminar`. Traducido en
+ * cada pantalla, un día una lo traduce al revés.
+ *
+ * @param {string} hace el `data-hace` del botón
+ * @returns {object|null} el cambio, sin la toma; `null` si no es de estos
+ */
+export function cambioDe(hace) {
+    switch (hace) {
+        case 'mantener': return { tipo: 'descartar', descartada: false };
+        case 'desactivar': return { tipo: 'descartar', descartada: true };
+        case 'descartar': return { tipo: 'eliminar' };
+        default: return null;
+    }
+}
+
+/**
  * Los tres botones, o dos si no hay con qué deshacer.
  *
  * @param {object} t la toma

@@ -191,19 +191,20 @@ export function cerrar() {
  * sale con una opción sola, y eso es correcto: el OUT de una toma que no existe
  * no es nada, y cerrar la abierta en su última palabra ya es el botón primario.
  */
+const NOMBRES = {
+    abrir: { icono: 'abrirToma', dice: 'Abrir la toma acá',
+        pista: 'La toma empieza en esta palabra. Es lo mismo que arrastrar el IN hasta acá' },
+    cerrar: { icono: 'cerrarToma', dice: 'Cerrar la toma acá',
+        pista: 'Esta palabra es la última de la toma, y la toma queda cerrada' },
+    in: { icono: 'abrirToma', dice: 'Poner el IN acá',
+        pista: 'La toma empieza en esta palabra, y lo de antes queda afuera' },
+    out: { icono: 'cerrarToma', dice: 'Poner el OUT acá',
+        pista: 'Esta palabra es la última de la toma, y lo de después queda afuera' }
+};
+
 function comoSeLlama(cual, borde) {
-    if (borde === 'in') {
-        return cual === 'espera'
-            ? { icono: 'abrirToma', dice: 'Abrir la toma acá',
-                pista: 'La toma empieza en esta palabra. Es lo mismo que arrastrar el IN hasta acá' }
-            : { icono: 'abrirToma', dice: 'Poner el IN acá',
-                pista: 'La toma empieza en esta palabra, y lo de antes queda afuera' };
-    }
-    return cual === 'abierta'
-        ? { icono: 'cerrarToma', dice: 'Cerrar la toma acá',
-            pista: 'Esta palabra es la última de la toma, y la toma queda cerrada' }
-        : { icono: 'cerrarToma', dice: 'Poner el OUT acá',
-            pista: 'Esta palabra es la última de la toma, y lo de después queda afuera' };
+    const hace = texto.queHaceElBorde(cual, borde);
+    return NOMBRES[hace === 'mover' ? borde : hace];
 }
 
 function dibujar(opciones, palabra, x, y) {

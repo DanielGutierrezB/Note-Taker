@@ -87,34 +87,49 @@ module.exports = async t => {
         }
     });
 
-    t.test('grabando sí se puede descartar, en el editor no', () => {
-        const tarjetas = lasTarjetas();
-        t.ok(/botonFuera\(t, true\)/.test(tarjetas),
-            'la ficha de mientras se graba pide los tres');
-        t.ok(/sePuedeDeshacer: grabando === true/.test(tarjetas),
-            'y es `true` explícito: un argumento que falta no enciende Descartar');
+    // `tarjetas.js` y `historia.js` tocan `document` solo al dibujar, así que
+    // con uno vacío se importan y se les pregunta.
+    const conDocumento = async ruta => {
+        if (!globalThis.document) globalThis.document = { querySelector: () => null };
+        return import(pathToFileURL(path.join(RAIZ, ...ruta)).href);
+    };
+
+    t.test('grabando sí se puede descartar, en el editor no', async () => {
+        const tarjetas = await conDocumento(['src', 'js', 'semanal', 'tarjetas.js']);
+        t.eq(tarjetas.sePuedeDeshacer({ paso: 'grabando', sesion: { historia: {} } }), true,
+            'mientras se graba, ⌘Z la devuelve');
+        t.eq(tarjetas.sePuedeDeshacer({ paso: 'revisar', sesion: { historia: {} } }), false,
+            'en el editor la sesión ya se cerró');
+        t.eq(tarjetas.sePuedeDeshacer({ paso: 'grabando', sesion: {} }), false,
+            'y sin pila no hay nada que la devuelva');
+        t.ok(!/sePuedeDeshacer: true/.test(lasTarjetas()),
+            'ninguna ficha lo enciende a mano: pregunta lo mismo que la tecla');
         t.ok(/estadosToma\.estadosDe\(t, \{ donde: 'al XML', sePuedeDeshacer: !esDeMirar\(\) \}\)/
             .test(laClase()),
             'y la clase cerrada tampoco lo ofrece, que antes daba error');
     });
 
     t.test('los tres botones piden lo que el motor entiende', () => {
+        // El vocabulario del motor es la trampa: su `descartar` es Desactivar,
+        // y Descartar es su `eliminar`.
+        t.deep(control.cambioDe('mantener'), { tipo: 'descartar', descartada: false }, 'Mantener la vuelve a meter');
+        t.deep(control.cambioDe('desactivar'), { tipo: 'descartar', descartada: true },
+            'Desactivar la deja fuera, en la sesión');
+        t.deep(control.cambioDe('descartar'), { tipo: 'eliminar' }, 'y Descartar la saca');
+        t.eq(control.cambioDe('otra-cosa'), null);
         const semana = laSemana();
-        t.ok(/hace === 'mantener'\) return cambiarFicha\(Number\(boton\.dataset\.toma\),\s*\{ tipo: 'descartar', descartada: false \}/
-            .test(semana), 'Mantener la vuelve a meter');
-        t.ok(/hace === 'desactivar'\) return cambiarFicha\(Number\(boton\.dataset\.toma\),\s*\{ tipo: 'descartar', descartada: true \}/
-            .test(semana), 'Desactivar la deja fuera del vídeo, en la sesión');
+        t.ok(/estadosToma\.cambioDe\(hace\)/.test(semana), 'la semana lo pregunta ahí');
+        t.ok(/estadosToma\.cambioDe\(boton\.dataset\.hace\)/.test(laClase()), 'y la clase también');
         t.ok(/hace === 'descartar'\) return descartar\(/.test(semana),
             'y Descartar pasa por su función, que es la que avisa');
-        t.ok(/descartar\(id\)[\s\S]{0,400}cambiarFicha\(id, \{ tipo: 'eliminar' \}\)/.test(semana),
-            'y pide `eliminar`, que es como se llama en el motor');
     });
 
-    t.test('descartar no pregunta, pero dice con qué tecla se vuelve', () => {
+    t.test('descartar no pregunta, pero dice con qué tecla se vuelve', async () => {
         const semana = laSemana();
         t.ok(!/confirm\(/.test(semana), 'ningún cartel que leer con la cámara encendida');
-        t.ok(/avisar\(`Toma \$\{id\} descartada\. ⌘Z la devuelve\.`\)/.test(semana),
-            'el aviso nombra la tecla');
+        const historia = await conDocumento(['src', 'js', 'grabar', 'historia.js']);
+        t.eq(historia.avisoDeDescarte(4), 'Toma 4 descartada. ⌘Z la devuelve.', 'el aviso nombra la tecla');
+        t.ok(/avisar\(historia\.avisoDeDescarte\(id\)\)/.test(semana), 'y la semana lo da');
         // El motor se planta con la toma abierta, así que el aviso tiene que
         // mirar si de verdad se fue: decir «descartada» de una que sigue ahí es
         // peor que no decir nada.
@@ -124,18 +139,21 @@ module.exports = async t => {
 
     t.group('los tres estados · deshacer y rehacer en la semana');
 
-    t.test('⌘Z pasa antes del portero que apaga las teclas con ⌘', () => {
+    t.test('⌘Z pasa antes del portero que apaga las teclas con ⌘', async () => {
         const semana = laSemana();
         const teclado = semana.slice(semana.indexOf('async function alTeclado'));
-        const zeta = teclado.indexOf("e.key.toLowerCase() === 'z'");
+        const zeta = teclado.indexOf('historia.esDeshacer(e)');
         const portero = teclado.indexOf('e.metaKey || e.ctrlKey || e.altKey) return');
         t.ok(zeta > 0 && portero > 0, 'están los dos');
         t.ok(zeta < portero, 'y la tecla llega antes de que la apaguen');
         // Y la condición entera, no solo dónde está: dejarla puesta y apagada
-        // —un `meta` que ya no se mira— pasaba la prueba de arriba y no
-        // deshacía nada, que es justo el fallo que la tecla tiene que impedir.
-        t.ok(/const meta = e\.metaKey \|\| e\.ctrlKey;/.test(teclado), 'mira ⌘ y Ctrl');
-        t.ok(/if \(meta && e\.key\.toLowerCase\(\) === 'z' && hayHistoria\(\)\) \{/.test(teclado),
+        // pasaba la prueba de arriba y no deshacía nada, que es justo el fallo
+        // que la tecla tiene que impedir.
+        const historia = await conDocumento(['src', 'js', 'grabar', 'historia.js']);
+        t.eq(historia.esDeshacer({ metaKey: true, key: 'z' }), true, 'mira ⌘');
+        t.eq(historia.esDeshacer({ ctrlKey: true, key: 'Z' }), true, 'y Ctrl, con o sin ⇧');
+        t.eq(historia.esDeshacer({ key: 'z' }), false, 'una z sola es una letra');
+        t.ok(/if \(historia\.esDeshacer\(e\) && tarjetas\.sePuedeDeshacer\(estado\)\) \{/.test(teclado),
             'y la tecla es ⌘Z de verdad');
         t.ok(/volver\(e\.shiftKey \? 'rehacer' : 'deshacer'\)/.test(teclado),
             'con ⇧ rehace, como en la clase');
@@ -144,10 +162,8 @@ module.exports = async t => {
     t.test('la tecla y los botones preguntan lo mismo', () => {
         // Dos condiciones parecidas se separan: una dejaría el botón apagado
         // donde la tecla sí funciona, o al revés.
-        const semana = laSemana();
-        t.ok(/function hayHistoria\(\)[\s\S]{0,200}estado\.paso === 'grabando'/.test(semana),
-            'solo grabando, que es donde el motor tiene la pila');
-        t.ok(/'z' && hayHistoria\(\)/.test(semana), 'la tecla pregunta por ahí');
+        t.ok(/tarjetas\.sePuedeDeshacer\(estado\)/.test(laSemana()), 'la tecla pregunta ahí');
+        t.ok(/sePuedeDeshacer: sePuedeDeshacer\(estado\)/.test(lasTarjetas()), 'y Descartar también');
     });
 
     t.test('los botones de la semana no se llaman como los de la clase', () => {
@@ -160,18 +176,24 @@ module.exports = async t => {
             'y el clic entra por la misma puerta que la tecla');
     });
 
-    t.test('el botón dice qué va a deshacer, o que no hay nada', () => {
-        const historia = lasTarjetas();
-        t.ok(/hay \? `\$\{verbo\} «\$\{esc\(que\)\}»` : `No hay nada que \$\{verbo\.toLowerCase\(\)\}`/
-            .test(historia), 'el título lleva el nombre del paso');
-        t.ok(/\$\{hay \? '' : 'disabled'\}/.test(historia), 'y sin pasos queda apagado');
+    t.test('el botón dice qué va a deshacer, o que no hay nada', async () => {
+        const historia = await conDocumento(['src', 'js', 'grabar', 'historia.js']);
+        t.eq(historia.tituloDe(true, 'mover el IN', 'Deshacer'), 'Deshacer «mover el IN»',
+            'el título lleva el nombre del paso');
+        t.eq(historia.tituloDe(false, '', 'Rehacer'), 'No hay nada que rehacer');
+        t.ok(/title="\$\{esc\(historia\.tituloDe\(hay, que, verbo\)\)\}"/.test(lasTarjetas()),
+            'la semana lo usa, escapado');
+        t.ok(/historia\.tituloDe\(hay, que, verbo\)/.test(laClase()), 'y la clase también');
+        t.ok(/\$\{hay \? '' : 'disabled'\}/.test(lasTarjetas()), 'y sin pasos queda apagado');
     });
 
     t.test('deshacer repinta la sesión de la semana, no la de la clase', () => {
         // `estado` acá es la pantalla entera y la sesión cuelga de `estado.sesion`;
         // en la clase `estado` ES la sesión. Copiar la línea de allá dejaba la
         // pantalla pintando un estado sin `paso`.
-        t.ok(/async function volver\(cual\)[\s\S]{0,600}estado\.sesion = r\.estado; pintar\(\)/
-            .test(laSemana()));
+        t.ok(/const volver = cual => historia\.volver\(cual, nuevo => \{ estado\.sesion = nuevo; pintar\(\); \}\);/
+            .test(laSemana()), 'la semana guarda la sesión donde cuelga');
+        t.ok(/const volver = cual => historia\.volver\(cual, nuevo => \{ estado = nuevo; pintar\(\); \}\);/
+            .test(laClase()), 'y la clase, entera');
     });
 };

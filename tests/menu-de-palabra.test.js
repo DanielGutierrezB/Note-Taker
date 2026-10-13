@@ -243,12 +243,17 @@ module.exports = async t => {
         // El menú ofrece «poner el IN acá» sobre cualquier palabra del medio de
         // la toma abierta. Con los dos bordes yendo a `grabarCerrarToma` —que es
         // como estaba— correr el IN la habría cerrado en esa palabra.
-        const semana = laSemana();
-        t.ok(/if \(cual === 'abierta' && borde === 'out'\)[\s\S]{0,120}grabarCerrarToma/.test(semana),
-            'el OUT cierra');
-        const puerta = semana.slice(semana.indexOf('function ponerBorde(cual, tomaId'));
-        t.ok(/grabarCerrarToma[\s\S]{0,200}return cambiarFicha\(tomaId/.test(puerta),
-            'y el IN cae en la edición de siempre, que le corre el principio');
+        t.eq(texto.queHaceElBorde('abierta', 'out'), 'cerrar', 'el OUT cierra');
+        t.eq(texto.queHaceElBorde('abierta', 'in'), 'mover', 'y el IN le corre el principio');
+        t.eq(texto.queHaceElBorde('espera', 'in'), 'abrir', 'en espera, el IN la abre');
+        t.eq(texto.queHaceElBorde('cerrada', 'in'), 'mover');
+        t.eq(texto.queHaceElBorde('cerrada', 'out'), 'mover');
+        // Y las dos pantallas lo preguntan ahí en vez de decidirlo cada una.
+        for (const [quien, codigo] of [['clase', laClase()], ['semana', laSemana()]]) {
+            const puerta = codigo.slice(codigo.indexOf('function ponerBorde(cual, tomaId'));
+            t.ok(/switch \(texto\.queHaceElBorde\(cual, borde\)\)/.test(puerta), `${quien}: usa la regla`);
+            t.ok(!/cual === 'abierta'/.test(puerta.slice(0, 600)), `${quien}: y no la reescribe`);
+        }
     });
 
     t.test('seleccionar de corrido sigue siendo comentar, y el derecho no', () => {

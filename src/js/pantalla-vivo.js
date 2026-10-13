@@ -36,6 +36,7 @@ import * as texto from './grabar/texto-toma.js';
 import * as menuPalabra from './grabar/menu-de-palabra.js';
 import * as fichas from './grabar/lista-tomas.js';
 import * as estadosToma from './grabar/estados-toma.js';
+import * as historia from './grabar/historia.js';
 import { PALABRA_Y_APLAUSO_MS } from './grabar/senales.js';
 import { estiloDeVista, coloresDeVista } from './colores.js';
 import * as fotos from './fotos.js';
@@ -803,7 +804,7 @@ function despuesDeLaCerrada(toma) {
 
 function botonHistoria(boton, hay, que, verbo) {
     boton.disabled = !hay;
-    boton.title = hay ? `${verbo} «${que}»` : `No hay nada que ${verbo.toLowerCase()}`;
+    boton.title = historia.tituloDe(hay, que, verbo);
 }
 
 /**
@@ -1214,18 +1215,16 @@ function montarTextos(quedan) {
  * clic derecho— y las dos tienen que terminar en la misma llamada. Cada una
  * pasa por el motor por su puerta de siempre, así que el deshacer por campo
  * (`engine/deshacer.js`) ve lo mismo que veía: un `borde` es un cambio de toma,
- * cerrar es cerrar y abrir es abrir.
- *
- *   espera   no hay toma: poner el IN ahí es ABRIRLA desde esa palabra
- *   abierta  el OUT la cierra en esa palabra; el IN mueve el principio
- *   cerrada  los dos mueven su borde
+ * cerrar es cerrar y abrir es abrir. Qué toca en cada texto lo dice
+ * `texto.queHaceElBorde`, que es la misma regla de la semana y del menú.
  */
 function ponerBorde(cual, tomaId, borde, ms) {
-    if (cual === 'espera') return abrir(ms);
-    if (cual === 'abierta' && borde === 'out') {
-        return pedir(() => window.nt.grabarCerrarToma(ms));
+    switch (texto.queHaceElBorde(cual, borde)) {
+        case 'abrir': return abrir(ms);
+        case 'cerrar': return pedir(() => window.nt.grabarCerrarToma(ms));
+        case 'mover': return editar({ tipo: 'borde', toma: tomaId, borde, paredMs: ms });
+        default: return undefined;
     }
-    return editar({ tipo: 'borde', toma: tomaId, borde, paredMs: ms });
 }
 
 /**
@@ -1504,13 +1503,15 @@ async function alClic(e) {
         case 'vista':
             await editar({ tipo: 'vista', toma, vista: boton.dataset.vista });
             break;
-        case 'mantener': await editar({ tipo: 'descartar', toma, descartada: false }); break;
-        case 'desactivar': await editar({ tipo: 'descartar', toma, descartada: true }); break;
+        case 'mantener':
+        case 'desactivar':
+            await editar({ ...estadosToma.cambioDe(boton.dataset.hace), toma });
+            break;
         case 'descartar':
-            await editar({ tipo: 'eliminar', toma });
+            await editar({ ...estadosToma.cambioDe(boton.dataset.hace), toma });
             if (!estado.tomas.some(t => t.id === toma)) {
                 vista.abierta = null;
-                avisar(`Toma ${toma} descartada. ⌘Z la devuelve.`);
+                avisar(historia.avisoDeDescarte(toma));
             }
             break;
         case 'reabrir': await editar({ tipo: 'reabrir', toma }); break;
@@ -1792,18 +1793,7 @@ async function pedir(hacer) {
     pintar();
 }
 
-async function volver(cual) {
-    let r = null;
-    try {
-        r = cual === 'deshacer' ? await window.nt.grabarDeshacer() : await window.nt.grabarRehacer();
-    } catch (e) {
-        avisar(`No se pudo ${cual}: ${e.message}`, 'error');
-    }
-    if (!r) return;
-    if (r.estado) { estado = r.estado; pintar(); }
-    if (r.error) avisar(r.error, 'error');
-    else if (r.ok) avisar(`${cual === 'deshacer' ? 'Deshecho' : 'Rehecho'}: ${r.que}`);
-}
+const volver = cual => historia.volver(cual, nuevo => { estado = nuevo; pintar(); });
 
 /* ─── Las teclas ──────────────────────────────────────────────────────── */
 
@@ -1892,7 +1882,7 @@ async function alTeclado(e) {
     }
 
     const meta = e.metaKey || e.ctrlKey;
-    if (meta && e.key.toLowerCase() === 'z' && !esDeMirar()) {
+    if (historia.esDeshacer(e) && !esDeMirar()) {
         e.preventDefault();
         return volver(e.shiftKey ? 'rehacer' : 'deshacer');
     }

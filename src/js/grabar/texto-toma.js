@@ -271,6 +271,26 @@ export function dondeQueda({ rehecho, remontado, antes }) {
     return remontado ? antes.arriba : null;
 }
 
+/**
+ * Qué le hace al motor poner `borde` en una palabra del texto `cual`.
+ *
+ *   espera   no hay toma: poner el IN ahí es ABRIRLA desde esa palabra
+ *   abierta  el OUT la cierra en esa palabra; el IN mueve el principio
+ *   cerrada  los dos mueven su borde
+ *
+ * Está acá y no en cada pantalla porque es la misma regla para las dos y para
+ * el menú del clic derecho, que tiene que nombrar lo que va a pasar. Escrita
+ * tres veces ya se separó una: la semana mandaba el IN de la toma abierta a
+ * cerrarla, y correr el IN la cerraba en esa palabra.
+ *
+ * @returns {'abrir'|'cerrar'|'mover'}
+ */
+export function queHaceElBorde(cual, borde) {
+    if (cual === 'espera') return 'abrir';
+    if (cual === 'abierta' && borde === 'out') return 'cerrar';
+    return 'mover';
+}
+
 export function bordesQuePuede(texto, w) {
     const lineaIn = texto.querySelector('.borde.es-in');
     const lineaOut = texto.querySelector('.borde.es-out');
