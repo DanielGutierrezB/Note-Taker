@@ -226,7 +226,7 @@ module.exports = function (t) {
 
     t.test('cada vista lleva el color del marcador que va a tener en Premiere', () => {
         const semanal = laPantalla();
-        t.ok(/import \{ estiloDeVista, coloresDeVista \} from '\.\/colores\.js';/.test(semanal),
+        t.ok(/import \{ estiloDeVista \} from '\.\/colores\.js';/.test(semanal),
             'el color sale del mismo sitio que en una clase');
         t.ok(/window\.nt\.grabarVistas\(\)\.then/.test(semanal),
             'y los colores los sabe el motor, no esta pantalla');
@@ -244,7 +244,8 @@ module.exports = function (t) {
 
     t.test('las teclas solo valen donde la elección significa algo', () => {
         const semanal = laPantalla();
-        t.ok(/if \(estado\.paso !== 'listo' && estado\.paso !== 'grabando'\) return;/.test(semanal),
+        t.ok(/const puedeVista = \(\) => estado\.paso === 'listo' \|\| estado\.paso === 'grabando';/.test(semanal)
+            && /if \(!puedeVista\(\)\) return;/.test(semanal),
             'en la revisión cada toma tiene la suya y una tecla sola no sabría a cuál');
         t.ok(/foco\.matches\('input, textarea, select, \[contenteditable="true"\]'\)/.test(semanal),
             'donde se escribe, una «p» es una letra');
@@ -380,7 +381,8 @@ module.exports = function (t) {
         const semanal = laPantalla();
         t.ok(/if \(e\.key === 'Enter'\) \{[\s\S]{0,160}return bordeDeToma\(\);/.test(semanal),
             'la tecla llama al borde');
-        t.ok(/if \(estado\.paso !== 'grabando'\) return;/.test(semanal),
+        t.ok(/const puedeBorde = \(\) => estado\.paso === 'grabando';/.test(semanal)
+            && /if \(!puedeBorde\(\)\) return;/.test(semanal),
             'y solo grabando: sin sesión no hay borde que poner');
         t.ok(/data-hace="borde"/.test(semanal), 'y también hay botón, con su tecla escrita');
     });

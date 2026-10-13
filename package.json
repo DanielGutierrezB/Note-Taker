@@ -24,6 +24,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "preload-mirilla.js",
       "dev-shot.js",
       "package.json",
       "version.json",

@@ -42,16 +42,13 @@ function appVersion() {
 }
 
 /**
- * Avisarle algo a las ventanas que haya.
+ * Avisarle algo a la ventana de la app.
  *
- * Son dos y no una desde que existe la mirilla, y le llega lo MISMO que a la
- * principal a propósito: sus tres botones hablan del estado del motor —si hay
- * una toma abierta, qué vista va— y un segundo canal con un recorte sería la
- * segunda versión de la verdad que esta app evita en todas partes.
+ * Solo a ella. La mirilla no escucha al motor: lo que muestra se lo cuenta la
+ * pantalla semanal por el espejo (`ipc/mirilla.js`), que es la dueña.
  */
 function send(channel, payload) {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
-    if (mirilla) mirilla.avisar(channel, payload);
 }
 
 /** Una línea en el diario de la sesión (`engine/registro.js`). */
@@ -378,6 +375,6 @@ ipcPrproj.registrar({ ipcMain, dialog, ventana: () => mainWindow, send, anotar }
 ipcReferencias.registrar({ ipcMain, nativeImage, clipboard, anotar });
 ipcSemanal.registrar({ ipcMain, send, anotar });
 mirilla = ipcMirilla.registrar({
-    ipcMain, BrowserWindow, screen, desktopCapturer,
+    ipcMain, BrowserWindow, screen,
     ventanaPrincipal: () => mainWindow, anotar
 });

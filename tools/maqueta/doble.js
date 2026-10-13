@@ -517,13 +517,11 @@ window.nt = {
     // no existe: acá se contesta que sí y no se abre nada. Lo que SÍ se puede
     // ver en la maqueta es el botón —puesto o no— y que la semanal no se rompa
     // mandando el espejo en cada repintado, que es lo que pasaba antes de que
-    // estas cuatro existieran.
+    // estas existieran. Son las de la semanal: las de la mirilla viven en su
+    // propio puente (`preload-mirilla.js`).
     mirillaPoner: async () => ({ ok: true, visible: true }),
     mirillaPantalla: async () => ({ ok: true, monitor: null, sitio: null }),
-    mirillaEspejo: async () => ({ ok: true }),
-    mirillaQueMuestro: async () => ({}),
-    mirillaGesto: async () => ({ ok: true }),
-    onMirillaEspejo: () => {},
+    mirillaEspejo: () => {},
     onMirillaGesto: () => {},
 
     registroDescargar: async () => ({ ok: true, archivo: '/tmp/log.md' }),

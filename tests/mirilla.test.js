@@ -32,6 +32,134 @@ const RAIZ = path.join(__dirname, '..');
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), 'utf8');
 const mirilla = require('../ipc/mirilla');
 
+
+/**
+ * El proceso principal de mentira: lo justo para que `registrar` corra y se
+ * pueda mirar qué hizo. `close()` es asíncrono como el de verdad —el `closed`
+ * llega cuando la prueba lo suelta—, que es justo lo que hace falta para ver
+ * la carrera de apagar y encender rápido.
+ */
+function principal() {
+    const manejadores = {};
+    const ventanas = [];
+    const pantallas = [
+        { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 } },
+        { id: 2, bounds: { x: 1920, y: 0, width: 2560, height: 1440 } }
+    ];
+    const escuchas = [];
+    const enviadoAlaApp = [];
+    const app = {
+        isDestroyed: () => false,
+        getBounds: () => ({ x: 0, y: 0, width: 800, height: 600 }),
+        webContents: { send: (canal, dato) => enviadoAlaApp.push([canal, dato]) }
+    };
+    class Ventana {
+        constructor(opciones) {
+            this.opciones = opciones;
+            this.hecho = [];
+            this.eventos = {};
+            this.cerrada = false;
+            this.visible = false;
+            this.bordes = { x: opciones.x, y: opciones.y, width: opciones.width, height: opciones.height };
+            this.webContents = {
+                enviado: [],
+                send: (canal, dato) => this.webContents.enviado.push([canal, dato]),
+                isLoading: () => false,
+                on: (ev, fn) => { this.eventos[`wc:${ev}`] = fn; },
+                setWindowOpenHandler: fn => { this.abrirVentana = fn; }
+            };
+            ventanas.push(this);
+        }
+        setAlwaysOnTop(...a) { this.hecho.push(['setAlwaysOnTop', ...a]); }
+        setVisibleOnAllWorkspaces(...a) { this.hecho.push(['setVisibleOnAllWorkspaces', ...a]); }
+        setContentProtection(...a) { this.hecho.push(['setContentProtection', ...a]); }
+        loadFile(f) { this.archivo = f; }
+        once(ev, fn) { this.eventos[ev] = fn; }
+        on(ev, fn) { this.eventos[ev] = fn; }
+        isDestroyed() { return this.cerrada; }
+        isVisible() { return this.visible; }
+        showInactive() { this.visible = true; }
+        setBounds(b) { this.bordes = b; }
+        getBounds() { return this.bordes; }
+        close() { this.pidioCerrar = true; }
+        /** El `closed` de verdad, cuando la prueba diga. */
+        cerrarse() { this.cerrada = true; if (this.eventos.closed) this.eventos.closed(); }
+    }
+    const ipcMain = {
+        handle: (canal, fn) => { manejadores[canal] = fn; },
+        on: (canal, fn) => { manejadores[canal] = fn; }
+    };
+    const screen = {
+        getAllDisplays: () => pantallas,
+        getDisplayMatching: () => pantallas[0],
+        getPrimaryDisplay: () => pantallas[0],
+        on: ev => escuchas.push(ev)
+    };
+    const anotado = [];
+    const r = mirilla.registrar({
+        ipcMain, BrowserWindow: Ventana, screen,
+        ventanaPrincipal: () => app, anotar: (ev, d) => anotado.push([ev, d])
+    });
+    const deLaApp = { sender: app.webContents };
+    const deLa = w => ({ sender: w.webContents });
+    return {
+        r, manejadores, ventanas, escuchas, enviadoAlaApp, anotado, app,
+        deLaApp, deLa,
+        llamar: (canal, event, ...args) => manejadores[canal](event, ...args)
+    };
+}
+
+/**
+ * La página de la mirilla, cargada de verdad con un documento de mentira.
+ *
+ * Las peticiones de cámara quedan pendientes hasta que la prueba las suelta:
+ * así se puede ver qué pasa cuando llega otro espejo mientras una está en
+ * camino, que es la carrera que dejaba dos cámaras abiertas.
+ */
+async function paginaDeLaMirilla(n) {
+    const elemento = () => ({
+        dataset: {}, atributos: {}, textContent: '', disabled: false, srcObject: null,
+        style: { setProperty() {} },
+        setAttribute(k, v) { this.atributos[k] = v; },
+        addEventListener() {},
+        play: async () => {}
+    });
+    const els = {};
+    for (const id of ['marco', 'camara', 'aviso', 'btn-toma', 'btn-r', 'btn-pv']) els[id] = elemento();
+    els['btn-r'].dataset.vista = 'R';
+    els['btn-pv'].dataset.vista = 'PV';
+    let alEspejo = null;
+    const pedidos = [];
+    const pistas = [];
+    const antes = { document: globalThis.document, window: globalThis.window,
+        navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator') };
+    globalThis.document = {
+        querySelector: sel => els[sel.replace('#', '')],
+        documentElement: { style: { setProperty() {} } }
+    };
+    globalThis.window = { nt: {
+        onMirillaEspejo: fn => { alEspejo = fn; },
+        mirillaQueMuestro: async () => ({}),
+        mirillaGesto: async () => ({ ok: true })
+    } };
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: {
+        enumerateDevices: async () => [{ kind: 'videoinput', label: 'Cámara', deviceId: 'd1' }],
+        getUserMedia: pedido => new Promise(soltar => {
+            const pista = { parada: false, stop() { this.parada = true; } };
+            pistas.push(pista);
+            pedidos.push({ pedido, soltar: () => soltar({ getTracks: () => [pista] }) });
+        })
+    } } });
+    await import(`${require('url').pathToFileURL(path.join(RAIZ, 'src', 'js', 'mirilla.js')).href}?n=${n}`);
+    const devolver = () => {
+        globalThis.document = antes.document;
+        globalThis.window = antes.window;
+        Object.defineProperty(globalThis, 'navigator', antes.navigator);
+    };
+    const esperar = () => new Promise(r => setTimeout(r, 5));
+    return { els, pedidos, pistas, espejo: info => alEspejo(info), esperar, devolver };
+}
+
 module.exports = function (t) {
 
     t.group('la mirilla · dónde cae');
@@ -85,8 +213,8 @@ module.exports = function (t) {
     t.group('la mirilla · en qué monitor se pone');
 
     t.test('la pista de una pantalla entera dice cuál es', () => {
-        // `deviceId` viene como `screen:N:0` y esa N es el `display_id` de
-        // `desktopCapturer`. Comprobado contra el sistema, no supuesto.
+        // `deviceId` viene como `screen:N:0` y esa N es el `id` del monitor.
+        // Comprobado contra el sistema, no supuesto.
         t.eq(mirilla.monitorDe({ deviceId: 'screen:1:0' }, [{ display_id: '1' }]), '1');
     });
 
@@ -108,19 +236,152 @@ module.exports = function (t) {
         t.eq(mirilla.monitorDe({}, []), null);
     });
 
-    t.group('la mirilla · que no se grabe a sí misma');
+    t.group('la mirilla · la ventana');
 
-    t.test('la ventana se marca como no compartible', () => {
-        const src = leer('ipc', 'mirilla.js');
-        t.ok(/ventana\.setContentProtection\(true\);/.test(src),
+    t.test('se marca como no compartible, y queda encima hasta de una pantalla completa', () => {
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        const hecho = m.ventanas[0].hecho;
+        t.deep(hecho.find(h => h[0] === 'setContentProtection'), ['setContentProtection', true],
             'sin esto la cara sale dos veces en el vídeo: la grabada y la que pone ffmpeg');
+        t.deep(hecho.find(h => h[0] === 'setAlwaysOnTop'), ['setAlwaysOnTop', true, 'screen-saver'],
+            'con «floating» se esconde debajo de una pantalla completa, que es cuando más falta hace');
+        t.deep(hecho.find(h => h[0] === 'setVisibleOnAllWorkspaces')[2], { visibleOnFullScreen: true });
     });
 
-    t.test('queda encima hasta de una app en pantalla completa', () => {
-        const src = leer('ipc', 'mirilla.js');
-        t.ok(/setAlwaysOnTop\(true, 'screen-saver'\)/.test(src),
-            'con «floating» se esconde debajo de una pantalla completa, que es cuando más falta hace');
-        t.ok(/visibleOnFullScreen: true/.test(src), 'y en el escritorio donde estés');
+    t.test('abre con su propio puente, que el paquete lleva', () => {
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        const preload = m.ventanas[0].opciones.webPreferences.preload;
+        t.eq(path.basename(preload), 'preload-mirilla.js', 'no el de la app entera');
+        t.ok(m.ventanas[0].opciones.webPreferences.sandbox, 'y en la caja');
+        const archivos = JSON.parse(leer('package.json')).build.files;
+        t.ok(archivos.includes('preload-mirilla.js'),
+            'sin esto el .pkg abre la mirilla sin puente: un cuadro negro');
+    });
+
+    t.test('no navega ni abre ventanas', () => {
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        const w = m.ventanas[0];
+        let frenada = false;
+        w.eventos['wc:will-navigate']({ preventDefault: () => { frenada = true; } });
+        t.ok(frenada, 'se queda en su página');
+        t.deep(w.abrirVentana(), { action: 'deny' });
+    });
+
+    t.test('apagar y encender rápido no deja una ventana sin dueño', () => {
+        // `close()` es asíncrono: la segunda se crea antes de que la primera
+        // avise que se cerró, y ese aviso, mirando la del módulo, dejaba a la
+        // nueva sin que nadie pudiera cerrarla.
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        m.llamar('mirilla-poner', m.deLaApp, false);
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        const [vieja, nueva] = m.ventanas;
+        vieja.cerrarse();
+        m.r.cerrar();
+        t.ok(nueva.pidioCerrar, 'la nueva se puede cerrar todavía');
+    });
+
+    t.test('y una que llega tarde a mostrarse no muestra a la otra', () => {
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        m.llamar('mirilla-poner', m.deLaApp, false);
+        const vieja = m.ventanas[0];
+        vieja.visible = false;
+        vieja.eventos['ready-to-show']();
+        t.eq(vieja.visible, false, 'apagada, no aparece aunque termine de cargar');
+    });
+
+    t.test('los monitores se escuchan al abrir y no al cargar main', () => {
+        // `registrar` corre antes del `ready` de la app, y el módulo `screen`
+        // de Electron no existe hasta entonces: engancharlos arriba rompía el
+        // arranque entero.
+        const m = principal();
+        t.deep(m.escuchas, [], 'registrar no toca `screen`');
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        t.ok(m.escuchas.includes('display-metrics-changed'), 'se enganchan la primera vez que se abre');
+    });
+
+    t.group('la mirilla · en qué monitor');
+
+    t.test('se muda al monitor de la pantalla que se graba', () => {
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        const r = m.llamar('mirilla-pantalla', m.deLaApp, { deviceId: 'screen:2:0' });
+        t.eq(r.monitor, '2');
+        t.deep(r.sitio, mirilla.sitioEn({ bounds: { x: 1920, y: 0, width: 2560, height: 1440 } }),
+            'a la esquina de ese monitor');
+    });
+
+    t.test('sin saberlo se queda donde estaba', () => {
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        m.llamar('mirilla-pantalla', m.deLaApp, { deviceId: 'screen:2:0' });
+        t.eq(m.llamar('mirilla-pantalla', m.deLaApp, { deviceId: 'window:9:0' }).monitor, '2');
+    });
+
+    t.group('la mirilla · el espejo');
+
+    t.test('lo que manda la semanal le llega, y nada más', () => {
+        // El motor le habla a la app y solo a la app: lo que la mirilla
+        // muestra se lo cuenta la semanal por el espejo. Antes le llegaba
+        // todo —el estado entero con cada palabra, en cada pasada— a una
+        // página que solo escuchaba un canal.
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        m.llamar('mirilla-espejo', m.deLaApp, { vista: 'R', abierta: true });
+        t.deep(m.ventanas[0].webContents.enviado, [['mirilla-espejo', { vista: 'R', abierta: true }]]);
+        t.eq(m.r.avisar, undefined, 'no hay por dónde mandarle otra cosa');
+        t.ok(!/mirilla\.avisar/.test(leer('main.js')), 'y `send` no fanea');
+    });
+
+    t.test('al abrirla tiene lo último, y al reabrirla no tiene lo de antes', () => {
+        // Reabierta, un espejo viejo le diría que la cámara está abierta
+        // cuando a lo mejor ya no, y abrirla sin que nadie la tenga es lo que
+        // baja la grabación a 640×480.
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        m.llamar('mirilla-espejo', m.deLaApp, { camara: 'Cámara' });
+        t.deep(m.llamar('mirilla-que-muestro', m.deLa(m.ventanas[0])), { camara: 'Cámara' });
+        m.llamar('mirilla-poner', m.deLaApp, false);
+        m.ventanas[0].cerrarse();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        t.deep(m.llamar('mirilla-que-muestro', m.deLa(m.ventanas[1])), {});
+    });
+
+    t.test('cada ventana tiene su mitad, y no la otra', () => {
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        const deLaMirilla = m.deLa(m.ventanas[0]);
+        t.eq(m.llamar('mirilla-poner', deLaMirilla, false).ok, false, 'la mirilla no se apaga sola');
+        t.eq(m.llamar('mirilla-gesto', m.deLaApp, { hace: 'toma' }).ok, false, 'la app no se hace gestos');
+        t.deep(m.llamar('mirilla-que-muestro', m.deLaApp), {}, 'ni lee el espejo que ella misma manda');
+        t.deep(m.enviadoAlaApp, []);
+    });
+
+    t.test('un gesto se reenvía limpio, y uno que no es un gesto no pasa', () => {
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        const deLaMirilla = m.deLa(m.ventanas[0]);
+        m.llamar('mirilla-gesto', deLaMirilla, { hace: 'vista', vista: 'PV', otra: 'cosa' });
+        m.llamar('mirilla-gesto', deLaMirilla, { hace: 'toma' });
+        t.eq(m.llamar('mirilla-gesto', deLaMirilla, { hace: 'terminar' }).ok, false);
+        t.eq(m.llamar('mirilla-gesto', deLaMirilla, { hace: 'vista', vista: 3 }).ok, false);
+        t.deep(m.enviadoAlaApp, [
+            ['mirilla-gesto', { hace: 'vista', vista: 'PV' }],
+            ['mirilla-gesto', { hace: 'toma' }]
+        ]);
+    });
+
+    t.test('se va con la ventana de la app', () => {
+        // Sin marco y sin botón de cerrar, sola encima de todo y sin la app
+        // que la abrió, no habría forma de quitársela de encima. Y en macOS la
+        // app sigue viva después de cerrar su ventana, así que pasaría.
+        const main = leer('main.js');
+        t.ok(/mainWindow\.on\('closed', \(\) => \{[\s\S]*?if \(mirilla\) mirilla\.cerrar\(\);/
+            .test(main), 'al cerrar la principal se cierra la mirilla');
     });
 
     t.group('la mirilla · la cámara');
@@ -128,24 +389,66 @@ module.exports = function (t) {
     t.test('pide exactamente lo mismo que la grabación de verdad', () => {
         // La regla medida: dos ventanas comparten el dispositivo, pero el
         // formato lo negocia la primera. Pidiendo menos acá, la grabación de
-        // allá sale peor.
-        const ojo = leer('src', 'js', 'grabar', 'ojo.js');
-        const suyo = /const ANCHO_TOPE = (\d+);/.exec(ojo);
-        const nuestro = /const ANCHO_TOPE = (\d+);/.exec(leer('src', 'js', 'mirilla.js'));
-        t.ok(suyo && nuestro, 'las dos siguen teniendo el tope');
-        t.eq(nuestro[1], suyo[1], 'el mismo número en los dos sitios');
-        t.ok(/deviceId: \{ exact: cual\.deviceId \}, width: \{ ideal: ANCHO_TOPE \}/
-            .test(leer('src', 'js', 'mirilla.js')), 'y la misma forma de pedirlo');
+        // allá sale peor. Las dos lo sacan del mismo sitio.
+        t.ok(/import \{ pedidoDeCamara \} from '\.\/grabar\/ojo\.js';/.test(leer('src', 'js', 'mirilla.js')));
+        t.ok(/getUserMedia\(pedidoDeCamara\(cual\.id\)\)/.test(leer('src', 'js', 'grabar', 'ojo.js')),
+            'y la grabación de verdad pide con lo mismo');
     });
 
-    t.test('no abre la cámara si no hay quien ya la tenga abierta', () => {
-        const src = leer('src', 'js', 'mirilla.js');
-        t.ok(/if \(!info\.camara\) return soltar\(/.test(src),
-            'abriéndola primero, la de verdad hereda 640×480');
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
-        t.ok(/camara: ojo\.elStream\(\) \? \(estado\.camara && estado\.camara\.nombre\) \|\| null : null/
-            .test(semanal),
-            'y el nombre solo se manda con el stream ya abierto de este lado');
+    t.test('no la abre si nadie la tiene abierta', async () => {
+        const p = await paginaDeLaMirilla(1);
+        try {
+            p.espejo({ camara: null, vista: 'R' });
+            await p.esperar();
+            t.eq(p.pedidos.length, 0, 'abriéndola primero, la de verdad hereda 640×480');
+        } finally { p.devolver(); }
+    });
+
+    t.test('dos espejos seguidos abren UNA cámara', async () => {
+        // Al abrirla llegan casi juntos el guardado y el del primer repintado.
+        const p = await paginaDeLaMirilla(2);
+        try {
+            p.espejo({ camara: 'Cámara' });
+            p.espejo({ camara: 'Cámara' });
+            await p.esperar();
+            t.eq(p.pedidos.length, 1);
+            t.deep(p.pedidos[0].pedido.video.width, { ideal: 2560 }, 'con el pedido de `ojo.js`');
+            // Y uno que llega con la primera ya esperando el `getUserMedia` no
+            // la tira para pedirla de nuevo: la cámara parpadearía.
+            p.espejo({ camara: 'Cámara' });
+            await p.esperar();
+            t.eq(p.pedidos.length, 1, 'la que se está pidiendo vale');
+        } finally { p.devolver(); }
+    });
+
+    t.test('y si mientras se pedía la soltaron, al llegar se cierra', async () => {
+        // Antes la petición en vuelo la abría igual al volver, y quedaba
+        // abierta sin nadie que la tuviera del otro lado.
+        const p = await paginaDeLaMirilla(3);
+        try {
+            p.espejo({ camara: 'Cámara' });
+            await p.esperar();
+            p.espejo({ camara: null });
+            p.pedidos[0].soltar();
+            await p.esperar();
+            t.ok(p.pistas[0].parada, 'la que llegó tarde se para');
+            t.eq(p.els.camara.srcObject, null, 'y no se muestra');
+        } finally { p.devolver(); }
+    });
+
+    t.test('vuelta a abrir, se pide otra vez', async () => {
+        const p = await paginaDeLaMirilla(4);
+        try {
+            p.espejo({ camara: 'Cámara' });
+            await p.esperar();
+            p.pedidos[0].soltar();
+            await p.esperar();
+            p.espejo({ camara: null });
+            p.espejo({ camara: 'Cámara' });
+            await p.esperar();
+            t.eq(p.pedidos.length, 2);
+            t.ok(p.pistas[0].parada, 'la primera se soltó');
+        } finally { p.devolver(); }
     });
 
     t.group('la mirilla · espejo, no segunda opinión');
@@ -158,32 +461,111 @@ module.exports = function (t) {
         t.ok(/window\.nt\.mirillaGesto\(\{ hace: 'toma'/.test(src), 'y la toma también');
     });
 
+    t.test('el puente de la mirilla es el de la mirilla, y el de la app no lo tiene', () => {
+        const suyo = leer('preload-mirilla.js');
+        for (const nombre of ['mirillaQueMuestro', 'mirillaGesto', 'onMirillaEspejo']) {
+            t.ok(new RegExp(`${nombre}:`).test(suyo), `${nombre} está en su puente`);
+        }
+        t.ok(!/pickFolder|grabarTerminar|ajustesGuardar/.test(suyo), 'y nada de lo de la app');
+        const app = leer('preload.js');
+        for (const nombre of ['mirillaPoner', 'mirillaPantalla', 'mirillaEspejo', 'onMirillaGesto']) {
+            t.ok(new RegExp(`${nombre}:`).test(app), `${nombre} está en el de la app`);
+        }
+        t.ok(!/mirillaQueMuestro|mirillaGesto:|onMirillaEspejo/.test(app), 'y lo de la mirilla no');
+        const doble = leer('tools', 'maqueta', 'doble.js');
+        for (const nombre of ['mirillaPoner', 'mirillaPantalla', 'mirillaEspejo', 'onMirillaGesto']) {
+            t.ok(new RegExp(`${nombre}:`).test(doble), `${nombre} está en el doble`);
+        }
+    });
+
     t.test('los gestos entran por las mismas funciones que los botones de la semanal', () => {
         // Si abrieran una toma por otro camino, un día los dos caminos harían
         // cosas distintas: `bordeDeToma` espera al borde anterior en vuelo, y
-        // `cambiarVista` le pone la vista a la toma abierta.
+        // `cambiarVista` le pone la vista a la toma abierta. Y con las mismas
+        // guardas que el teclado: el espejo puede ir un latido atrasado.
         const semanal = leer('src', 'js', 'pantalla-semanal.js');
-        t.ok(/onMirillaGesto\(g => \{[\s\S]*?cambiarVista\(g\.vista\);[\s\S]*?bordeDeToma\(\);/
-            .test(semanal), 'las mismas dos funciones, y no copias');
+        t.ok(/onMirillaGesto\(g => \{[\s\S]*?puedeVista\(\)\) cambiarVista\(g\.vista\);[\s\S]*?puedeBorde\(\)\) bordeDeToma\(\);/
+            .test(semanal), 'las mismas dos funciones, con sus guardas');
+        t.ok(/if \(!puedeBorde\(\)\) return;/.test(semanal), 'que son las del teclado');
+        t.ok(/if \(!puedeVista\(\)\) return;/.test(semanal));
     });
 
-    t.test('el color del borde sale del motor, no de un rojo escrito a mano', () => {
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
-        t.ok(/const c = coloresDeVista\(estado\.vistas, vista\);/.test(semanal),
-            'son los colores de los marcadores de Premiere: lo que ves es lo que verá el editor');
+    t.test('la página de la mirilla no puede cargar nada de fuera', () => {
+        const html = leer('src', 'mirilla.html');
+        t.ok(/default-src 'none'/.test(html), 'tiene CSP y arranca cerrada');
+        t.ok(/media-src 'self' blob: mediastream:/.test(html),
+            'y deja pasar la cámara, que es lo único que necesita');
     });
 
-    t.test('y antes de que lleguen las vistas no se cae', async () => {
-        // `coloresDeVista` contesta `null` mientras el motor no contestó, y un
-        // `.color` suelto tiraba en el PRIMER repintado de la pantalla: no la
-        // mirilla, la pantalla entera.
-        const { coloresDeVista } = await import(
-            require('url').pathToFileURL(path.join(RAIZ, 'src', 'js', 'colores.js')).href);
-        t.eq(coloresDeVista([], 'PV'), null, 'sigue contestando null');
-        t.ok(/color: c \? c\.color : null,/.test(leer('src', 'js', 'pantalla-semanal.js')),
-            'y se respeta en vez de pedirle `.color`');
+    t.group('la mirilla · lo que le cuenta la semanal');
+
+    const espejoDe = async (...args) => {
+        const m = await import(require('url').pathToFileURL(path.join(RAIZ, 'src', 'js', 'semanal', 'mirilla.js')).href);
+        return m.espejoDe(...args);
+    };
+    // Las de verdad, con el entero de color de Premiere que manda el motor.
+    const VISTAS = require('../engine/notas-vivo').VISTAS;
+
+    t.test('la vista es la de la toma abierta, no la del próximo', async () => {
+        const e = await espejoDe({ vista: 'PV', vistas: VISTAS, paso: 'grabando',
+            sesion: { tomas: [{ vista: 'PV', outMs: 1 }, { vista: 'R', outMs: null }] } }, true);
+        t.eq(e.vista, 'R');
+        t.eq(e.abierta, true);
+        t.eq(e.puedeAbrir, true);
+    });
+
+    t.test('sin toma abierta, la que viene', async () => {
+        const e = await espejoDe({ vista: 'PV', vistas: VISTAS, paso: 'listo', sesion: null }, true);
+        t.eq(e.vista, 'PV');
+        t.eq(e.abierta, false);
+        t.eq(e.puedeAbrir, false, 'antes de grabar no hay toma que abrir');
+    });
+
+    t.test('la cámara se nombra solo con el stream ya abierto de este lado', async () => {
+        const estado = { vista: 'R', vistas: VISTAS, camara: { nombre: 'Cámara' } };
+        t.eq((await espejoDe(estado, true)).camara, 'Cámara');
+        t.eq((await espejoDe(estado, false)).camara, null, 'abriéndola primero allá, la de acá hereda 640×480');
+    });
+
+    t.test('el color sale del motor, y antes de que lleguen las vistas no se cae', async () => {
+        t.eq((await espejoDe({ vista: 'R', vistas: VISTAS }, false)).color, '#e96f24',
+            'son los colores de los marcadores de Premiere');
+        t.eq((await espejoDe({ vista: 'R', vistas: [] }, false)).color, null);
         t.ok(/if \(info\.color\) document\.documentElement\.style\.setProperty/
             .test(leer('src', 'js', 'mirilla.js')), 'del otro lado tampoco se da por hecho');
+    });
+
+    t.group('la mirilla · cuándo se va');
+
+    t.test('se cierra sola al terminar de grabar', () => {
+        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        t.ok(/if \(estado\.mirilla\) laMirilla\(false\);\n    estado\.paso = 'mirando';/
+            .test(semanal), 'una ventana encima de todo y sin nada que grabar tapa el editor');
+    });
+
+    t.test('y al salir del modo, antes de soltar la cámara', () => {
+        // Se quedaba flotando sobre la pantalla de la clase con la cámara
+        // abierta por su cuenta.
+        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const salir = /export async function salir\(\) \{[\s\S]*?\n}/.exec(semanal)[0];
+        t.ok(salir.indexOf('laMirilla(false)') > 0, 'la cierra');
+        t.ok(salir.indexOf('laMirilla(false)') < salir.indexOf("ojo.soltar('semanal')"), 'antes que la cámara');
+    });
+
+    t.test('el espejo no espera al menú de una palabra', () => {
+        // Una toma abierta por la voz con el menú abierto tiene que encender el
+        // punto rojo igual: es estado, no pantalla.
+        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const pintar = /function pintar\(\) \{[\s\S]*?\n}/.exec(semanal)[0];
+        t.ok(pintar.indexOf('mirilla.espejar(estado)') < pintar.indexOf('menuPalabra.hay()'));
+    });
+
+    t.test('se le cuenta el cambio de ventana, no solo la primera elección', () => {
+        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const cambiar = /async function cambiarPantalla\(boton\)[\s\S]*?\n}/.exec(semanal);
+        t.ok(cambiar, 'sigue existiendo el cambio de ventana a mitad de grabación');
+        t.ok(/mirilla\.contarLaPantalla\(estado, filmar\.laPantalla\(\)\);/.test(cambiar[0]),
+            'cambiando a una ventana de otro monitor, la mirilla se muda con ella');
     });
 
     t.group('la mirilla · el punto de grabando');
@@ -211,82 +593,5 @@ module.exports = function (t) {
         t.ok(/animation: rec-late/.test(css), 'un punto quieto se vuelve mobiliario');
         t.ok(/prefers-reduced-motion: reduce\) \{\n  \.rec \{ animation: none; \}/.test(css),
             'y quien pidió menos movimiento se queda con el punto, que es lo que importa');
-    });
-
-    t.test('la vista que muestra es la de la toma abierta, no la del próximo', () => {
-        // Es la misma cuenta que hace la escena de la tarjeta: con una toma
-        // abierta manda la suya, porque es la que se está grabando.
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
-        t.ok(/const vista = abierta \? \(abierta\.vista \|\| estado\.vista\) : estado\.vista;/
-            .test(semanal), 'igual que `escena`');
-    });
-
-    t.test('se cierra sola al terminar de grabar', () => {
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
-        t.ok(/if \(estado\.mirilla\) laMirilla\(false\);\n    estado\.paso = 'mirando';/
-            .test(semanal), 'una ventana encima de todo y sin nada que grabar tapa el editor');
-    });
-
-    t.group('la mirilla · el monitor que se graba');
-
-    t.test('se le cuenta el cambio de ventana, no solo la primera elección', () => {
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
-        const cambiar = /async function cambiarPantalla\(boton\)[\s\S]*?\n}/.exec(semanal);
-        t.ok(cambiar, 'sigue existiendo el cambio de ventana a mitad de grabación');
-        t.ok(/contarLaPantalla\(\);/.test(cambiar[0]),
-            'cambiando a una ventana de otro monitor, la mirilla se muda con ella');
-    });
-
-    t.test('los monitores se escuchan al abrir y no al cargar main', () => {
-        // `registrar` corre antes del `ready` de la app, y el módulo `screen`
-        // de Electron no existe hasta entonces: engancharlos arriba rompía el
-        // arranque entero.
-        const src = leer('ipc', 'mirilla.js');
-        const fuera = /^screen\.on\(/m.test(src);
-        t.ok(!fuera, 'nada de `screen` en el cuerpo de registrar');
-        t.ok(/function escucharMonitores\(\)[\s\S]*?screen\.on\('display-metrics-changed'/
-            .test(src), 'se enganchan la primera vez que se abre');
-    });
-
-    t.group('la mirilla · el puente');
-
-    t.test('las dos ventanas reciben lo que manda el motor', () => {
-        const main = leer('main.js');
-        t.ok(/if \(mirilla\) mirilla\.avisar\(channel, payload\);/.test(main),
-            '`send` es el único sitio por donde sale todo, así que fanea acá');
-    });
-
-    t.test('se va con la ventana de la app', () => {
-        // Sin marco y sin botón de cerrar, sola encima de todo y sin la app
-        // que la abrió, no habría forma de quitársela de encima. Y en macOS la
-        // app sigue viva después de cerrar su ventana, así que pasaría.
-        const main = leer('main.js');
-        t.ok(/mainWindow\.on\('closed', \(\) => \{[\s\S]*?if \(mirilla\) mirilla\.cerrar\(\);/
-            .test(main), 'al cerrar la principal se cierra la mirilla');
-    });
-
-    t.test('la maqueta tiene su doble, o la semanal se rompe al repintar', () => {
-        // `pintar` manda el espejo en cada repintado: sin estas, la maqueta
-        // tira en cuanto se dibuja la pantalla semanal.
-        const doble = leer('tools', 'maqueta', 'doble.js');
-        for (const nombre of ['mirillaPoner', 'mirillaPantalla', 'mirillaEspejo',
-            'mirillaQueMuestro', 'mirillaGesto', 'onMirillaEspejo', 'onMirillaGesto']) {
-            t.ok(new RegExp(`${nombre}:`).test(doble), `${nombre} está en el doble`);
-        }
-    });
-
-    t.test('el puente de verdad expone las mismas siete', () => {
-        const preload = leer('preload.js');
-        for (const nombre of ['mirillaPoner', 'mirillaPantalla', 'mirillaEspejo',
-            'mirillaQueMuestro', 'mirillaGesto', 'onMirillaEspejo', 'onMirillaGesto']) {
-            t.ok(new RegExp(`${nombre}:`).test(preload), `${nombre} está en el preload`);
-        }
-    });
-
-    t.test('la página de la mirilla no puede cargar nada de fuera', () => {
-        const html = leer('src', 'mirilla.html');
-        t.ok(/default-src 'none'/.test(html), 'tiene CSP y arranca cerrada');
-        t.ok(/media-src 'self' blob: mediastream:/.test(html),
-            'y deja pasar la cámara, que es lo único que necesita');
     });
 };

@@ -110,19 +110,13 @@ contextBridge.exposeInMainWorld('nt', {
     },
 
     // La mirilla: la ventanita flotante donde te ves mientras grabás
-    // (`ipc/mirilla.js`). Las dos ventanas usan ESTE preload, así que lo de
-    // abajo lo llaman las dos, cada una su mitad: la semanal enciende, manda el
-    // espejo y escucha los gestos; la mirilla pide qué mostrar, escucha el
-    // espejo y manda los gestos. No hay dos puentes porque no hay dos verdades:
-    // la semanal es la dueña y la mirilla es su reflejo.
+    // (`ipc/mirilla.js`). Esta es la mitad de la semanal, que es la dueña:
+    // la enciende, le manda el espejo y escucha sus gestos. La otra mitad está
+    // en `preload-mirilla.js`. El espejo va por `send` porque sale en cada
+    // repintado y no hay nada que esperar de vuelta.
     mirillaPoner: encendida => ipcRenderer.invoke('mirilla-poner', encendida),
     mirillaPantalla: pista => ipcRenderer.invoke('mirilla-pantalla', pista),
-    mirillaEspejo: info => ipcRenderer.invoke('mirilla-espejo', info),
-    mirillaQueMuestro: () => ipcRenderer.invoke('mirilla-que-muestro'),
-    mirillaGesto: gesto => ipcRenderer.invoke('mirilla-gesto', gesto),
-    onMirillaEspejo: callback => {
-        ipcRenderer.on('mirilla-espejo', (_event, payload) => callback(payload));
-    },
+    mirillaEspejo: info => ipcRenderer.send('mirilla-espejo', info),
     onMirillaGesto: callback => {
         ipcRenderer.on('mirilla-gesto', (_event, payload) => callback(payload));
     },

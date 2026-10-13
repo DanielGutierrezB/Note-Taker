@@ -136,9 +136,7 @@ export async function tomar(quien, nombre, avisos) {
         // Se le pide lo más grande que se va a guardar: con `ideal` la cámara
         // da el modo que más se acerque, así que una de 1080 entrega 1080 y una
         // virtual de más entrega más, en lugar de quedar clavada en 1920.
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { exact: cual.id }, width: { ideal: ANCHO_TOPE } }
-        });
+        stream = await navigator.mediaDevices.getUserMedia(pedidoDeCamara(cual.id));
     } catch (e) {
         estado.duenos.delete(quien);
         return { ok: false, error: `No se pudo abrir «${nombre}»: ${e.message}` };
@@ -175,6 +173,17 @@ export async function tomar(quien, nombre, avisos) {
     estado.reloj = setInterval(() => { guardarFotograma(); }, CADA_MS);
     guardarFotograma();
     return { ok: true, nombre };
+}
+
+/**
+ * Lo que se le pide a la cámara, para quien la abra.
+ *
+ * Lo usa también la mirilla (`src/js/mirilla.js`), y tiene que ser lo MISMO:
+ * dos ventanas comparten el dispositivo pero el formato lo negocia la primera,
+ * así que una que pidiera menos le bajaría el modo a la otra.
+ */
+export function pedidoDeCamara(deviceId) {
+    return { video: { deviceId: { exact: deviceId }, width: { ideal: ANCHO_TOPE } } };
 }
 
 /** Deja de usarla; cuando no queda nadie, se apaga. */

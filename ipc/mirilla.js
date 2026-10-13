@@ -52,17 +52,14 @@ const MARGEN = 48;
 /** Lo más chica que se deja, en puntos: por debajo no se distingue una cara. */
 const LADO_MINIMO = 120;
 
-let ventana = null;
-let quiereEstar = false;
-let dondeCae = null;          // el id del monitor que se está capturando
-
 /**
  * Qué monitor se está grabando, si se puede saber.
  *
  * `getSettings().deviceId` de una pista de pantalla trae `screen:N:0`, y esa N
- * es el `display_id` de `desktopCapturer`. Medido con el selector apagado; con
- * el selector del sistema puede venir vacío, y entonces no se adivina: se cae
- * al monitor donde está la ventana de la app, que es donde está la persona.
+ * es el `display_id` de su monitor (el `id` del `Display` de `screen`). Medido
+ * con el selector apagado; con el selector del sistema puede venir vacío, y
+ * entonces no se adivina: se cae al monitor donde está la ventana de la app,
+ * que es donde está la persona.
  *
  * Compartiendo UNA ventana en vez de la pantalla entera tampoco se sabe —la
  * pista no dice en qué monitor vive esa ventana— y da igual: en ese caso la
@@ -101,7 +98,24 @@ function sitioEn(monitor) {
     };
 }
 
-function registrar({ ipcMain, BrowserWindow, screen, desktopCapturer, ventanaPrincipal, anotar }) {
+/**
+ * Lo único que un gesto puede pedir, y nada más se reenvía.
+ *
+ * La mirilla no habla con el motor: le pasa el gesto a la pantalla semanal,
+ * que lo atiende como a sus propios botones. Que llegue tal cual vino sería
+ * que cualquier cosa que esa página mande entre por la puerta de la otra.
+ */
+function gestoLimpio(gesto) {
+    const g = gesto || {};
+    if (g.hace === 'toma') return { hace: 'toma' };
+    if (g.hace === 'vista' && typeof g.vista === 'string' && g.vista) return { hace: 'vista', vista: g.vista };
+    return null;
+}
+
+function registrar({ ipcMain, BrowserWindow, screen, ventanaPrincipal, anotar }) {
+    let ventana = null;
+    let quiereEstar = false;
+    let dondeCae = null;          // el id del monitor que se está capturando
 
     /** El monitor donde ponerla: el que se graba, o el de la app. */
     function elMonitor() {
@@ -112,6 +126,13 @@ function registrar({ ipcMain, BrowserWindow, screen, desktopCapturer, ventanaPri
         if (app && !app.isDestroyed()) return screen.getDisplayMatching(app.getBounds());
         return screen.getPrimaryDisplay();
     }
+
+    /** ¿Lo manda la mirilla? ¿Lo manda la app? Cada una tiene su mitad. */
+    const deLaMirilla = event => Boolean(ventana && !ventana.isDestroyed() && event.sender === ventana.webContents);
+    const deLaApp = event => {
+        const app = ventanaPrincipal();
+        return Boolean(app && !app.isDestroyed() && event.sender === app.webContents);
+    };
 
     /**
      * Ponerla donde va, ahora.
@@ -134,11 +155,20 @@ function registrar({ ipcMain, BrowserWindow, screen, desktopCapturer, ventanaPri
         return quedo;
     }
 
+    /**
+     * Abrirla, o acomodar la que ya está.
+     *
+     * Todo lo que llega más tarde —`ready-to-show`, `closed`— mira la ventana
+     * que ESTE llamado creó y no la del módulo. `close()` es asíncrono: apagar
+     * y encender rápido crea la segunda antes de que la primera avise que se
+     * cerró, y ese aviso, mirando la del módulo, dejaba a la nueva sin dueño.
+     * Sin marco, encima de todo y sin nadie que pueda cerrarla.
+     */
     function abrir() {
         escucharMonitores();
         if (ventana && !ventana.isDestroyed()) { acomodar(); return ventana; }
         const sitio = sitioEn(elMonitor());
-        ventana = new BrowserWindow({
+        const w = new BrowserWindow({
             ...sitio,
             frame: false,
             transparent: true,
@@ -152,30 +182,55 @@ function registrar({ ipcMain, BrowserWindow, screen, desktopCapturer, ventanaPri
             skipTaskbar: true,
             show: false,
             webPreferences: {
-                preload: path.join(__dirname, '..', 'preload.js'),
+                // Su propio puente, con sus tres llamadas: un espejo con tres
+                // botones no tiene por qué poder abrir carpetas ni terminar la
+                // grabación.
+                preload: path.join(__dirname, '..', 'preload-mirilla.js'),
                 contextIsolation: true,
                 nodeIntegration: false,
                 sandbox: true
             }
         });
+        ventana = w;
         // `screen-saver` y no `floating`: con `floating` queda debajo de una app
         // en pantalla completa, que es justo cuando más falta hace verse.
-        ventana.setAlwaysOnTop(true, 'screen-saver');
-        ventana.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+        w.setAlwaysOnTop(true, 'screen-saver');
+        w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
         // Lo que la saca de la grabación de pantalla.
-        ventana.setContentProtection(true);
-        ventana.loadFile(path.join(__dirname, '..', 'src', 'mirilla.html'));
-        ventana.once('ready-to-show', () => {
-            if (quiereEstar) { ventana.showInactive(); acomodar(); }
+        w.setContentProtection(true);
+        // Es una página y nada más: ni se va a otra ni abre ventanas.
+        w.webContents.on('will-navigate', e => e.preventDefault());
+        w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+        w.loadFile(path.join(__dirname, '..', 'src', 'mirilla.html'));
+        w.once('ready-to-show', () => {
+            if (quiereEstar && ventana === w) { w.showInactive(); acomodar(); }
         });
-        ventana.on('closed', () => { ventana = null; });
+        w.on('closed', () => { if (ventana === w) ventana = null; });
         anotar('mirilla.abierta', { sitio });
-        return ventana;
+        return w;
     }
+
+    /**
+     * El espejo: lo que la mirilla tiene que mostrar.
+     *
+     * **La mirilla no es dueña de nada.** Qué vista va en la toma que viene es
+     * estado de la pantalla semanal —vive en su `estado.vista`— y si acá se
+     * guardara una copia habría dos versiones de lo mismo, que es exactamente
+     * lo que esta app no hace en ninguna parte. Así que la semanal le manda qué
+     * mostrar y la mirilla lo muestra: un espejo.
+     *
+     * Se guarda el último para que, al abrirla, la ventana tenga algo que
+     * dibujar sin esperar al próximo latido. Y se olvida al cerrarla: reabierta,
+     * un espejo de antes le diría que la cámara está abierta cuando a lo mejor
+     * ya no, y abrirla sin que nadie la tenga es lo que baja la grabación a
+     * 640×480 (ver arriba).
+     */
+    let ultimoEspejo = {};
 
     function cerrar() {
         if (ventana && !ventana.isDestroyed()) ventana.close();
         ventana = null;
+        ultimoEspejo = {};
     }
 
     /**
@@ -196,6 +251,7 @@ function registrar({ ipcMain, BrowserWindow, screen, desktopCapturer, ventanaPri
 
     /** Encenderla o apagarla. Lo pide la pantalla semanal. */
     ipcMain.handle('mirilla-poner', (event, encendida) => {
+        if (!deLaApp(event)) return { ok: false };
         quiereEstar = Boolean(encendida);
         if (!quiereEstar) { cerrar(); return { ok: true, visible: false }; }
         const w = abrir();
@@ -203,29 +259,16 @@ function registrar({ ipcMain, BrowserWindow, screen, desktopCapturer, ventanaPri
         return { ok: true, visible: true };
     });
 
-    /**
-     * El espejo: lo que la mirilla tiene que mostrar.
-     *
-     * **La mirilla no es dueña de nada.** Qué vista va en la toma que viene es
-     * estado de la pantalla semanal —vive en su `estado.vista`— y si acá se
-     * guardara una copia habría dos versiones de lo mismo, que es exactamente
-     * lo que esta app no hace en ninguna parte. Así que la semanal le manda qué
-     * mostrar y la mirilla lo muestra: un espejo.
-     *
-     * Se guarda la última para que, al abrirla o al reabrirla, la ventana tenga
-     * algo que dibujar sin esperar al próximo latido.
-     */
-    let ultimoEspejo = {};
-    ipcMain.handle('mirilla-espejo', (event, info) => {
+    // Por `send` y no por `invoke`: sale en cada repintado de la semanal y no
+    // hay nada que esperar de vuelta, igual que el PCM.
+    ipcMain.on('mirilla-espejo', (event, info) => {
+        if (!deLaApp(event)) return;
         ultimoEspejo = info || {};
-        if (ventana && !ventana.isDestroyed()) {
-            ventana.webContents.send('mirilla-espejo', ultimoEspejo);
-        }
-        return { ok: true };
+        if (ventana && !ventana.isDestroyed()) ventana.webContents.send('mirilla-espejo', ultimoEspejo);
     });
 
     /** Y lo que la mirilla trae al cargar, sin esperar al próximo latido. */
-    ipcMain.handle('mirilla-que-muestro', () => ultimoEspejo);
+    ipcMain.handle('mirilla-que-muestro', event => (deLaMirilla(event) ? ultimoEspejo : {}));
 
     /**
      * El mando a distancia: los tres botones no hacen, piden.
@@ -236,8 +279,9 @@ function registrar({ ipcMain, BrowserWindow, screen, desktopCapturer, ventanaPri
      */
     ipcMain.handle('mirilla-gesto', (event, gesto) => {
         const app = ventanaPrincipal();
-        if (!app || app.isDestroyed()) return { ok: false };
-        app.webContents.send('mirilla-gesto', gesto || {});
+        const limpio = gestoLimpio(gesto);
+        if (!deLaMirilla(event) || !limpio || !app || app.isDestroyed()) return { ok: false };
+        app.webContents.send('mirilla-gesto', limpio);
         return { ok: true };
     });
 
@@ -247,14 +291,15 @@ function registrar({ ipcMain, BrowserWindow, screen, desktopCapturer, ventanaPri
      * Lo manda la pantalla semanal cada vez que se elige o se cambia la
      * ventana que se graba. Si no se puede saber el monitor, se queda donde
      * estaba: mudarla a un sitio inventado sería peor que no mudarla.
+     *
+     * Los monitores salen de `screen` y no de `desktopCapturer`: el
+     * `display_id` de una fuente de pantalla ES el `id` de su `Display`, y
+     * `getSources` dibuja una miniatura de cada monitor solo para decir que
+     * existe.
      */
-    ipcMain.handle('mirilla-pantalla', async (event, pista) => {
-        let pantallas = [];
-        try {
-            pantallas = await desktopCapturer.getSources({ types: ['screen'] });
-        } catch (err) {
-            pantallas = [];
-        }
+    ipcMain.handle('mirilla-pantalla', (event, pista) => {
+        if (!deLaApp(event)) return { ok: false };
+        const pantallas = screen.getAllDisplays().map(d => ({ display_id: String(d.id) }));
         const cual = monitorDe(pista, pantallas);
         if (cual !== dondeCae) {
             anotar('mirilla.monitor', { antes: dondeCae, ahora: cual, pista: pista || null });
@@ -263,14 +308,7 @@ function registrar({ ipcMain, BrowserWindow, screen, desktopCapturer, ventanaPri
         return { ok: true, monitor: dondeCae, sitio: acomodar() };
     });
 
-    return {
-        laVentana: () => ventana,
-        cerrar,
-        /** Para que el estado del motor llegue también acá (ver `send` en main.js). */
-        avisar(channel, payload) {
-            if (ventana && !ventana.isDestroyed()) ventana.webContents.send(channel, payload);
-        }
-    };
+    return { cerrar };
 }
 
-module.exports = { registrar, sitioEn, monitorDe, CUADRO_ANCHO, CAMARA_LADO, MARGEN, LADO_MINIMO };
+module.exports = { registrar, sitioEn, monitorDe, gestoLimpio, CUADRO_ANCHO, CAMARA_LADO, MARGEN, LADO_MINIMO };
