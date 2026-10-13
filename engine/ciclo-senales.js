@@ -175,7 +175,9 @@ async function buscarSenales(s) {
             }
             if (eventos.length) espejo.escribir(s);
         }
-        relecturas.releerOrillas(s);
+        // Y la cola de relecturas, que es lo que recoge a las tomas que estaban
+        // esperando a que el audio pasara su OUT (ver `hayOrilla`).
+        relecturas.atender(s);
         // El estado va en cada pasada y no solo cuando hay una señal: así las
         // palabras de la toma abierta van apareciendo en pantalla, que es lo que
         // dice "esto está oyendo bien" sin tener que esperar a que la toma cierre.

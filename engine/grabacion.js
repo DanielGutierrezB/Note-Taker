@@ -508,6 +508,12 @@ async function cerrarSesion() {
     if (sesion !== s) return null;
     const pendiente = cerrarLoAbierto();
     if (pendiente != null) relecturas.encolar(sesion, pendiente);
+    // Con el audio cerrado ya no va a llegar más orilla, así que lo que estuviera
+    // esperándola se lee con lo que haya: `terminando` ya está puesto, y eso es
+    // lo que `hayOrilla` mira. Sin esta llamada, una toma cerrada en los últimos
+    // doce segundos se quedaba en la cola para siempre, con el texto del ciclo
+    // de señales, que es el descartable.
+    relecturas.atender(sesion);
     if (sesion.rehaciendo) await sesion.rehaciendo;
     if (!sesion) return null; // `apagar` se adelantó
 

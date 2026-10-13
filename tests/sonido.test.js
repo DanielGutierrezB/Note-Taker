@@ -166,4 +166,127 @@ module.exports = function (t) {
         t.eq(sonido.algoSuena(n), true);
         t.eq(sonido.conSonido([{ start: 0, end: 1, text: 'x' }], n).words.length, 1);
     });
+
+    t.test('lo que se filtra por nivel queda dicho, con su nivel y su corte', () => {
+        // Es el único filtro que puede hacer desaparecer algo que se dijo, y
+        // hasta que esto existió lo hacía sin dejar rastro: el diario decía que
+        // la toma se había releído bien y el texto tenía un hueco.
+        const n = sonido.niveles(wav([[1, 0.5], [1, 0]]));
+        const r = sonido.conSonido([
+            { start: 0.2, end: 0.6, text: 'hablando' },
+            { start: 1.6, end: 1.8, text: 'Gracias.' }
+        ], n, -40);
+        t.deep(r.words.map(w => w.text), ['hablando']);
+        t.eq(r.mudas, 1);
+        t.eq(r.quitadas.length, 1);
+        t.eq(r.quitadas[0].texto, 'Gracias.');
+        t.eq(r.quitadas[0].corte, -40, 'contra qué se la midió');
+        t.ok(r.quitadas[0].db < -40, `y a qué nivel sonaba: ${r.quitadas[0].db}`);
+    });
+
+    t.group('sonido · la cola que Whisper inventa en un corte seco');
+
+    /** Palabras en segundos del recorte, como salen de Whisper. */
+    const w = (start, end, text) => ({ start, end, text });
+
+    t.test('la tirada final a la misma hora y sin duración se va', () => {
+        // El caso medido el 13/10: tres palabras en el mismo milisegundo,
+        // pegadas al final del recorte. Tres palabras dichas de verdad nunca
+        // empiezan a la vez.
+        const r = sonido.sinColaInventada([
+            w(8.44, 8.66, 'PROMP'), w(8.94, 8.96, 'Research'),
+            w(9.74, 9.74, '¡Suscríbete'), w(9.74, 9.74, 'al'), w(9.74, 9.80, 'canal!')
+        ], 9.82);
+        t.deep(r.words.map(x => x.text), ['PROMP', 'Research'], 'lo dicho se queda');
+        t.deep(r.inventadas.map(x => x.text), ['¡Suscríbete', 'al', 'canal!']);
+    });
+
+    t.test('aunque lo que invente no sea un crédito conocido', () => {
+        // Las otras que se midieron el 30/09: «Y», «ya está.». No hay lista que
+        // las cubra —son palabras cualquiera— y la seña es solo la hora
+        // compartida, así que esto es lo único que las ve.
+        const r = sonido.sinColaInventada([
+            w(8.4, 8.9, 'keywords'), w(9.7, 9.7, 'Y'), w(9.7, 9.7, 'ya'), w(9.7, 9.75, 'está.')
+        ], 9.8);
+        t.deep(r.words.map(x => x.text), ['keywords']);
+        t.eq(r.inventadas.length, 3);
+    });
+
+    t.test('los créditos aprendidos también, y solo ellos', () => {
+        // Con horas distintas no hay cola colapsada que ver, pero el crédito es
+        // inconfundible. Se va la tirada MÁS CORTA que casa: con la más larga se
+        // iban por delante las palabras de verdad de antes.
+        const r = sonido.sinColaInventada([
+            w(5.0, 5.4, 'investigación'), w(5.5, 5.9, 'Gracias'),
+            w(6.0, 6.2, 'por'), w(6.3, 6.5, 'ver'), w(6.6, 6.8, 'el'), w(6.9, 7.4, 'vídeo')
+        ], 7.5);
+        t.deep(r.words.map(x => x.text), ['investigación']);
+        t.eq(r.inventadas.length, 5);
+    });
+
+    t.test('a mitad del recorte no se toca nada', () => {
+        // Fuera de la orilla del final, «gracias» es una palabra como cualquier
+        // otra y dos palabras a la misma hora son cosa del modelo, no un invento.
+        const r = sonido.sinColaInventada([
+            w(1.0, 1.0, 'muchas'), w(1.0, 1.2, 'gracias'), w(5.0, 5.4, 'y'), w(5.5, 6.0, 'seguimos')
+        ], 20);
+        t.eq(r.inventadas.length, 0);
+        t.eq(r.words.length, 4);
+    });
+
+    t.test('una palabra sola al final no es una cola', () => {
+        // Hace falta más de una para que «la misma hora» signifique algo, y la
+        // última palabra de una frase que se apaga es justo eso: una sola.
+        const r = sonido.sinColaInventada([w(8.0, 8.4, 'entonces'), w(9.0, 9.5, 'cuesta.')], 9.6);
+        t.eq(r.inventadas.length, 0);
+    });
+
+    t.group('sonido · los huecos donde se oyó hablar');
+
+    t.test('un hueco largo con voz adentro se señala', () => {
+        // Medio segundo hablando, cinco callado, y medio hablando: si entre las
+        // dos palabras no quedó nada escrito, en el medio se perdió algo.
+        const n = sonido.niveles(wav([[1, 0.5], [4, 0], [2, 0.5]]));
+        const r = sonido.huecosConVoz([w(0.2, 0.8, 'hola'), w(6.2, 6.8, 'seguimos')], n, -40);
+        t.eq(r.length, 1);
+        t.near(r[0].desdeSec, 0.8, 0.01);
+        t.near(r[0].hastaSec, 6.2, 0.01);
+        t.ok(r[0].vozMs >= sonido.VOZ_EN_HUECO_MS, `${r[0].vozMs} ms de voz adentro`);
+    });
+
+    t.test('un silencio de verdad no es un hueco: no hay nada que rescatar', () => {
+        // El de cambiar de slide. Releerlo sería pagar una pasada de Whisper
+        // para que invente.
+        const n = sonido.niveles(wav([[1, 0.5], [6, 0]]));
+        t.deep(sonido.huecosConVoz([w(0.2, 0.8, 'hola'), w(6.6, 6.9, 'ya')], n, -40), []);
+    });
+
+    t.test('y un hueco corto tampoco, aunque se oiga: es respirar', () => {
+        const n = sonido.niveles(wav([[3, 0.5]]));
+        t.deep(sonido.huecosConVoz([w(0.2, 0.8, 'hola'), w(2.0, 2.4, 'ya')], n, -40), []);
+    });
+
+    t.test('el hueco se mide con el reloj de la salida, que es el DTW', () => {
+        // El fallo de la toma 10: el `start` crudo de la palabra siguiente era
+        // 4713,70 y su `dtw` 4714,90. Midiendo con el crudo, el hueco caía
+        // entero en el silencio y la voz de los últimos 0,9 s —justo la que
+        // había que rescatar— quedaba fuera de la cuenta.
+        const n = sonido.niveles(wav([[1, 0.5], [4, 0], [2, 0.5]]));
+        const antes = { start: 0.2, end: 0.8, text: 'voy.' };
+        const crudo = { start: 5.0, end: 6.8, dtw: 6.2, text: 'de' };
+        t.deep(sonido.huecosConVoz([antes, { ...crudo, dtw: undefined }], n, -40), [],
+            'con el crudo, el hueco es todo silencio y no se ve');
+        const r = sonido.huecosConVoz([antes, crudo], n, -40);
+        t.eq(r.length, 1, 'con el DTW sí');
+        t.near(r[0].hastaSec, 6.2, 0.01);
+    });
+
+    t.test('y una tirada larga a la misma hora es habla rápida, no un relleno', () => {
+        // El tope es la duración: tres palabras en 0,06 s no las dijo nadie,
+        // pero tres en medio segundo sí.
+        const r = sonido.sinColaInventada([
+            w(8.0, 8.2, 'esto'), w(9.0, 9.2, 'va'), w(9.0, 9.3, 'muy'), w(9.0, 9.6, 'rápido')
+        ], 9.7);
+        t.eq(r.inventadas.length, 0, `${sonido.COLA_SEC} s de orilla, pero media de habla`);
+    });
 };

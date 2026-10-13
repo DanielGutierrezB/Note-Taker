@@ -24,6 +24,7 @@
 
 const espejo = require('./espejo');
 const oirToma = require('./oir-toma');
+const registro = require('./registro');
 const vivo = require('./notas-vivo');
 
 /**
@@ -55,18 +56,84 @@ function encolar(sesion, id) {
     // haya cuando le toque, que son los últimos.
     if (sesion.cola.includes(id)) return;
     sesion.cola.push(id);
-    // `rehaciendo` guarda la promesa de la pasada en curso, y no un booleano:
-    // `terminar` la espera, para no soltar la sesión con tomas a medio releer.
-    if (!sesion.rehaciendo) sesion.rehaciendo = atenderCola(sesion);
+    atender(sesion);
+}
+
+/**
+ * ¿Ya hay audio detrás del OUT de esta toma?
+ *
+ * **Una toma no se lee cortada en seco, y esto es lo que lo impide.** Al cerrar
+ * con el botón, el WAV termina justo en el OUT: `oir-toma.leer` recorta contra
+ * el final del archivo, así que Whisper recibe un audio que se corta a mitad de
+ * frase, y en ese borde pierde las últimas palabras o escribe las frases que
+ * tiene aprendidas de los subtítulos. Medido sobre la grabación del 13/10,
+ * releyendo la MISMA toma de las dos maneras:
+ *
+ *   cortado en el OUT   …PROMP Research «¡Suscríbete al canal!»   (y nada detrás)
+ *   con su orilla       …PROMP Research.  │ buenísimo Alejo Alejo mientras tanto…
+ *
+ * Y no es solo texto de más: la toma se cerraba EN esa palabra inventada
+ * (`outProvisional`, abajo), así que lo dicho de verdad quedaba fuera de la
+ * toma y el transcript parecía retomar más adelante. Por eso la espera no es
+ * una mejora del texto: es lo que hace que el OUT caiga donde se habló.
+ *
+ * Con la sesión terminando no se espera: el audio ya se cerró y la orilla no va
+ * a llegar nunca, así que se lee con lo que haya, que es mejor que no leer.
+ */
+function hayOrilla(sesion, toma) {
+    if (sesion.terminando) return true;
+    return espejo.grabadoHastaMs(sesion) >= toma.outMs + oirToma.ORILLA_MS;
+}
+
+/** La primera de la cola que ya se puede leer, o null si todas esperan. */
+function siguiente(sesion) {
+    for (const id of sesion.cola) {
+        const toma = sesion.estado.tomas.find(t => t.id === id);
+        // Una toma que se fue —descartada— o que se reabrió sale de la cola sin
+        // leerse: `rehacer` ya lo comprueba, pero acá además destraba la cola.
+        if (!toma || toma.inMs == null || toma.outMs == null) return id;
+        if (hayOrilla(sesion, toma)) return id;
+    }
+    return null;
+}
+
+/**
+ * Pone la cola a andar, si no lo está ya.
+ *
+ * Lo llama el ciclo de señales en cada pasada, que es lo que recoge a las tomas
+ * que estaban esperando su orilla: cuando el audio las alcanza, la pasada
+ * siguiente las lee.
+ */
+function atender(sesion) {
+    if (!sesion || !sesion.viva) return;
+    if (!sesion.rehaciendo && sesion.cola.length) atenderCola(sesion);
 }
 
 async function atenderCola(sesion) {
+    // **La promesa se guarda acá adentro y no en quien llama**, que es el mismo
+    // patrón de `s.pasada` en el ciclo de señales. No es estilo: esta pasada
+    // puede terminar SIN esperar a nadie —cuando todas las tomas de la cola
+    // están esperando su orilla—, y entonces el `finally` de abajo corre antes
+    // de que una asignación de afuera guardara la promesa. Así quedaba una
+    // promesa ya resuelta en `rehaciendo`, `atender` no volvía a arrancar nunca
+    // y las tomas se quedaban en la cola hasta el final de la clase.
+    //
+    // `rehaciendo` es la promesa y no un booleano porque `terminar` la espera,
+    // para no soltar la sesión con tomas a medio releer.
+    let listo;
+    sesion.rehaciendo = new Promise(r => { listo = r; });
     try {
-        while (sesion.viva && sesion.cola.length) {
-            await rehacer(sesion, sesion.cola.shift());
+        while (sesion.viva) {
+            const id = siguiente(sesion);
+            // Nada que leer todavía: las que quedan esperan su orilla. La cola
+            // se suelta y la próxima pasada del ciclo vuelve a mirar.
+            if (id == null) return;
+            sesion.cola = sesion.cola.filter(x => x !== id);
+            await rehacer(sesion, id);
         }
     } finally {
         if (sesion.viva) sesion.rehaciendo = null;
+        listo();
     }
 }
 
@@ -86,7 +153,26 @@ async function rehacer(sesion, id) {
         // El OUT que puso el botón o Terminar es donde llegó el audio, con el
         // silencio del atraso incluido: se acerca a la última palabra de verdad,
         // que ahora sí se conoce entera.
-        if (toma.outProvisional && leido.palabras && leido.palabras.length) {
+        //
+        // **Solo con audio detrás del OUT.** Sin orilla, la última palabra de la
+        // lectura es justamente la que Whisper se inventó en el corte seco (ver
+        // `hayOrilla`), y acercar el OUT hasta ahí es cerrar la toma en una
+        // palabra que nadie dijo. Con la cola esperando esto se cumple siempre
+        // salvo al terminar la clase, y ahí el OUT se queda donde estaba, que es
+        // donde llegó el audio: sobra silencio, pero no falta nada hablado.
+        const orillaMs = Math.max(0, espejo.grabadoHastaMs(sesion) - toma.outMs);
+        // Con cuánta orilla se leyó, que es lo que explica un final raro: una
+        // toma leída con la orilla en cero se leyó cortada en seco, y eso ya no
+        // debería pasar salvo en la última de la clase (ver `hayOrilla`).
+        registro.anotar('main', 'relectura.leida', {
+            toma: toma.id,
+            orillaMs: Math.round(orillaMs),
+            pideMs: oirToma.ORILLA_MS,
+            palabras: (leido.palabras || []).length,
+            terminando: Boolean(sesion.terminando)
+        });
+        const conOrilla = orillaMs >= oirToma.ORILLA_MS;
+        if (conOrilla && toma.outProvisional && leido.palabras && leido.palabras.length) {
             const ultima = leido.palabras[leido.palabras.length - 1];
             const fin = (ultima.hasta != null ? ultima.hasta : ultima.t) + CIERRE_TRAS_PALABRA_MS;
             if (fin < toma.outMs && fin > toma.inMs) {
@@ -96,10 +182,6 @@ async function rehacer(sesion, id) {
             }
         }
         delete toma.outProvisional;
-        // La orilla de la derecha son segundos que, en el momento de cerrar la
-        // toma, todavía se están grabando: nace vacía por fuerza. Queda anotado
-        // para volver a buscarla cuando el audio la alcance (`releerOrillas`).
-        toma.orillaCorta = espejo.grabadoHastaMs(sesion) < toma.outMs + oirToma.ORILLA_MS;
 
         // Sin palabras es la toma que no se pudo releer con ningún modelo
         // (`engine/insistir.js`). Se escribe la marca y se para acá: lo que la
@@ -108,12 +190,7 @@ async function rehacer(sesion, id) {
         // sacar conclusiones de un texto del que no se cree ni una palabra.
         //
         // La marca se guarda igual, y es lo único que importa de este renglón: la
-        // toma queda dicha y regenerable en vez de quedar callada. Y `orillaCorta`
-        // se recalcula ARRIBA aunque no haya texto, porque es un dato del audio y
-        // no del texto: si la toma acaba de cerrar, `releerOrillas` la vuelve a
-        // encolar cuando el audio la alcance y eso le regala otra ronda entera de
-        // intentos, con la máquina quizás en otro estado. Es gratis y es la única
-        // segunda chance automática que tiene.
+        // toma queda dicha y regenerable en vez de quedar callada.
         if (!leido.palabras) {
             espejo.fijar(sesion);
             return;
@@ -166,25 +243,4 @@ function avisador(sesion) {
     return () => { espejo.fijar(sesion); };
 }
 
-/**
- * Vuelve a la cola las tomas cuya orilla derecha ya tiene audio detrás.
- *
- * Una toma se relee apenas cierra, y en ese instante lo que viene después no
- * existe todavía: es lo que se está grabando. Así que sale con la orilla derecha
- * en una palabra, y el OUT se puede mover hacia adelante eso y nada más. Doce
- * segundos después el audio ya está, y una segunda lectura la completa.
- *
- * La segunda lectura no vuelve a pedir una tercera: para entonces el audio pasa
- * de sobra el final de la orilla y `orillaCorta` queda en falso.
- */
-function releerOrillas(sesion) {
-    const hasta = espejo.grabadoHastaMs(sesion);
-    for (const toma of sesion.estado.tomas) {
-        if (!toma.orillaCorta || toma.outMs == null) continue;
-        if (hasta < toma.outMs + oirToma.ORILLA_MS) continue;
-        toma.orillaCorta = false;
-        encolar(sesion, toma.id);
-    }
-}
-
-module.exports = { encolar, avisador, releerOrillas };
+module.exports = { encolar, atender, avisador, hayOrilla };

@@ -109,8 +109,27 @@ async function leer(archivos, toma, opciones) {
         try {
             const oido = await oir.escuchar({ ...pedido, modelo });
             if (!oido) return null;
+            // **Lo que los filtros tiraron, dicho.** No va en lo que devuelve
+            // —los dos que llaman hacen `Object.assign(toma, leido)` y esto
+            // terminaría guardado en el sidecar— sino al diario, que es donde
+            // hace falta: el filtro de nivel es el único sitio capaz de hacer
+            // desaparecer algo que el profesor dijo, y hasta que esto existió lo
+            // hacía sin dejar rastro. Solo cuando hay algo que contar: una
+            // lectura limpia no escribe nada.
+            if ((oido.mudas || 0) > 0 || (oido.inventadas || []).length) {
+                registro.anotar('main', 'lectura.filtrada', {
+                    toma: toma && toma.id != null ? toma.id : null,
+                    mudas: oido.mudas || 0,
+                    // Las primeras, con el nivel al que sonaban y el corte contra
+                    // el que se las midió: con eso se sabe si el corte estaba mal
+                    // puesto o si de verdad no sonaba nada.
+                    quitadas: (oido.quitadas || []).slice(0, 12),
+                    inventadas: oido.inventadas || []
+                });
+            }
+            const palabras = await rescatarHuecos(oido, { ...pedido, modelo }, toma);
             return {
-                ...vivo.repartir(oido.palabras, toma),
+                ...vivo.repartir(palabras, toma),
                 colapsadas: oido.colapsadas || 0,
                 relectura: modelo.name === bueno.name ? null : insistir.degradada({
                     modelo: modelo.name, bueno: bueno.name, detalle: ultimoMotivo
@@ -160,6 +179,82 @@ async function leer(archivos, toma, opciones) {
             hastaDonde = abajo.name;
         }
     }
+}
+
+/* ─── Los huecos con voz ─────────────────────────────────────────────────── */
+
+/**
+ * Cuántos huecos se rescatan por toma, como mucho.
+ *
+ * Cada uno es una pasada más de Whisper. Tres son unos segundos y cubren el
+ * caso real —una toma con un par de pausas largas—; una toma con quince huecos
+ * con voz no tiene un problema de huecos, tiene un problema de audio, y
+ * quince pasadas más no lo arreglan.
+ */
+const HUECOS_MAX = 3;
+
+/** Lo que se le da de margen a cada lado del hueco al volver a leerlo. */
+const MARGEN_DE_HUECO_MS = 1500;
+
+/** Dos palabras son la misma si dicen lo mismo y caen así de cerca. */
+const MISMA_PALABRA_MS = 500;
+
+const comoSuena = texto => String(texto || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+
+/**
+ * Vuelve a leer los tramos donde se oyó hablar y no quedó ninguna palabra.
+ *
+ * El caso real está contado en `sonido.huecosConVoz`: leyendo la toma entera,
+ * Whisper le puso a cinco palabras la misma hora en mitad de un silencio de
+ * siete segundos, el filtro de nivel tiró las cuatro que caían ahí, y se
+ * perdieron dos palabras dichas. Releído solo ese tramo, el modelo las pone en
+ * su sitio: un recorte corto no le deja dónde descolocarlas.
+ *
+ * **Va acá y no en `oir.escuchar`** porque es caro: una pasada más de Whisper
+ * por hueco. El ciclo en vivo corre cada segundo y no se lo puede permitir —y
+ * tampoco le hace falta, su texto es el descartable—; la relectura de una toma
+ * pasa una vez y es la que queda escrita en el XML.
+ *
+ * Lo rescatado se mete en orden y sin repetir: el tramo nuevo se solapa con la
+ * lectura grande a propósito —para que la frase entre entera— así que las
+ * palabras de los bordes vuelven a salir.
+ *
+ * @returns {Promise<Array>} las palabras de la toma, con los huecos rellenos
+ */
+async function rescatarHuecos(oido, pedido, toma) {
+    const huecos = (oido.huecos || []).slice(0, HUECOS_MAX);
+    if (!huecos.length) return oido.palabras;
+
+    let palabras = oido.palabras;
+    for (const h of huecos) {
+        let extra = null;
+        try {
+            extra = await oir.escuchar({
+                ...pedido,
+                desdeMs: Math.max(pedido.desdeMs, h.desdeMs - MARGEN_DE_HUECO_MS),
+                hastaMs: Math.min(pedido.hastaMs, h.hastaMs + MARGEN_DE_HUECO_MS)
+            });
+        } catch (err) {
+            // Un hueco que no se pudo releer deja la toma como estaba, que es lo
+            // que había antes de que esto existiera. No se insiste ni se baja de
+            // modelo: de eso se ocupa la lectura grande, que es la que importa.
+            extra = null;
+        }
+        const dentro = ((extra && extra.palabras) || [])
+            .filter(w => w.t >= h.desdeMs && w.t < h.hastaMs)
+            .filter(w => !palabras.some(y => Math.abs(y.t - w.t) < MISMA_PALABRA_MS
+                && comoSuena(y.texto) === comoSuena(w.texto)));
+        if (!dentro.length) continue;
+        palabras = palabras.concat(dentro).sort((a, b) => a.t - b.t);
+        registro.anotar('main', 'lectura.hueco-rescatado', {
+            toma: toma && toma.id != null ? toma.id : null,
+            desdeMs: h.desdeMs,
+            segundos: Math.round((h.hastaMs - h.desdeMs) / 100) / 10,
+            vozMs: h.vozMs,
+            palabras: dentro.map(w => w.texto)
+        });
+    }
+    return palabras;
 }
 
 /**

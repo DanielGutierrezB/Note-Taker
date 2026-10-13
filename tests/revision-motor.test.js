@@ -47,6 +47,11 @@ module.exports = function (t) {
         for (let i = 0; i < 6; i++) grabacion.pcm(pedazo());
         falso.ventana = [w(8000, 'bien'), w(8400, 'Pausa.')];
         await grabacion.buscarSenales();
+        // La clase sigue, y con eso el audio pasa el OUT de la toma: hasta
+        // entonces no se relee, para no leerla cortada en seco (`hayOrilla`).
+        for (let i = 0; i < 14; i++) grabacion.pcm(pedazo());
+        falso.ventana = [];
+        await grabacion.buscarSenales();
         await new Promise(r => setTimeout(r, 30));
 
         const r = grabacion.deshacer();

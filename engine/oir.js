@@ -162,11 +162,27 @@ async function escuchar(params) {
         // Y lo que quedó escrito sobre un silencio sin repetirse: «Gracias.»
         // suelto, o tres, que el colapso no alcanza a ver como bucle.
         const oidas = sonido.conSonido(limpias.words, nivel, corte);
+        // Y lo que rellenó en el corte del final, que no es sobre silencio sino
+        // sobre una frase cortada en seco (`sinColaInventada`).
+        const sinCola = sonido.sinColaInventada(
+            oidas.words, nivel ? nivel.db.length * nivel.hopSec : 0);
 
+        const base = p.sesion.desdeMs + recortado.desdeSec * 1000;
         return {
-            palabras: aHoraDelDia(oidas.words, p.sesion, recortado.desdeSec),
+            palabras: aHoraDelDia(sinCola.words, p.sesion, recortado.desdeSec),
             colapsadas: limpias.removed,
-            mudas: oidas.mudas
+            mudas: oidas.mudas,
+            // Qué se tiró y por qué, para que no desaparezca nada en silencio.
+            quitadas: oidas.quitadas,
+            inventadas: sinCola.inventadas.map(w => w.text),
+            // Y dónde se oyó hablar sin que quedara una palabra: lo vuelve a
+            // leer quien pueda permitírselo (`oir-toma.leer`), que es la
+            // relectura de una toma y no el ciclo en vivo.
+            huecos: sonido.huecosConVoz(sinCola.words, nivel, corte).map(h => ({
+                desdeMs: Math.round(base + h.desdeSec * 1000),
+                hastaMs: Math.round(base + h.hastaSec * 1000),
+                vozMs: h.vozMs
+            }))
         };
     } finally {
         captura.tirar(recortado);
