@@ -41,6 +41,10 @@ const notasXml = require('./notas-xml');
 const ajustar = require('./ajustar-corte');
 const sesionesGrabadas = require('./sesiones-grabadas');
 const workspace = require('./workspace');
+const {
+    porOrdenDeVistas, normalizar, vistaDe, gruposDe,
+    archivoDeConfig, leerConfig, guardarConfig, vistasUsadas
+} = require('./prproj-carpeta-config');
 
 /** Los bins del panel, numerados para que Premiere los ordene así. */
 const BIN_CAPTURAS = '01 Capturas';
@@ -166,144 +170,7 @@ function nombreDeFuente(ids) {
  * comparten haría que tocar el encuadre de una cambiara la otra sin avisar.
  */
 function nombreDeAnidacion(vistas) {
-    const orden = vivo.VISTAS.map(v => v.nombre);
-    return vistas.slice()
-        .sort((a, b) => {
-            const ia = orden.indexOf(a);
-            const ib = orden.indexOf(b);
-            return (ia === -1 ? orden.length : ia) - (ib === -1 ? orden.length : ib) || (a < b ? -1 : 1);
-        })
-        .join(' y ');
-}
-
-// ─── La configuración ────────────────────────────────────────────────
-
-/**
- * La configuración del menú, puesta en regla.
- *
- * Por defecto hay una sola captura y todas las vistas van a ella, que es el
- * caso de una clase grabada con una cámara. Lo que no cuadra se corrige en vez
- * de rechazarse: una vista que nombra una captura que se quitó, o que quedó sin
- * ninguna, vuelve a la Captura 1, que siempre está.
- *
- * **El orden de cada vista se respeta tal cual viene**, porque es el apilado:
- * van de abajo hacia arriba, así que la última es la que tapa. Ordenar por
- * número, que es lo que hacía antes, perdía en silencio justo lo que el menú
- * deja elegir.
- *
- * @param {object} [config] { capturas: 2, vistas: { R: { capturas: [1, 2], unidas: true, siempre: [1, 2] } } }
- * @param {string[]} [vistasUsadas] las vistas que aparecen en las tomas
- * @returns {{capturas: number, vistas: object}}
- */
-function normalizar(config, vistasUsadas) {
-    const c = config || {};
-    const capturas = Math.max(1, Math.min(20, Math.floor(Number(c.capturas) || 1)));
-    const vistas = {};
-    const todas = new Set(vivo.VISTAS.map(v => v.nombre).concat(vistasUsadas || []));
-    for (const vista of todas) {
-        vistas[vista] = vistaSaneada(c.vistas && c.vistas[vista], capturas);
-    }
-    return { capturas, vistas };
-}
-
-/**
- * Una vista: qué capturas la componen, apiladas de abajo hacia arriba, si van
- * anidadas y cuáles se quedan puestas en todas las tomas.
- *
- * **Anidadas o sueltas es la diferencia entre un encuadre y doce.** Anidadas,
- * las dos capturas viven adentro de una secuencia aparte y el recuadro se
- * acomoda una vez para toda la carpeta. Sueltas, cada una va en su propia pista
- * de la precortada y se puede mover toma por toma, que es lo que hace falta
- * cuando el recuadro tapa algo distinto en cada una.
- *
- * **`siempre` es qué hace esa captura en las tomas de las OTRAS vistas.** Las
- * que están ahí ocupan su pista en todas las tomas de la clase, apagadas donde
- * no les toca: cambiar de plano es encender el clip que ya está, que es como
- * trabaja Class Cut. Las que no están entran solo en las tomas de su vista y en
- * las demás su pista queda vacía, que es una línea de tiempo más limpia a cambio
- * de tener que arrastrar para cambiar de plano. Por defecto están todas, que es
- * lo que hacía la app antes de que esto se pudiera elegir.
- *
- * Una anidación es un solo clip en una sola pista, así que ahí es todo o nada:
- * `siempre` se redondea a las capturas enteras del grupo o a ninguna.
- *
- * Acepta la forma vieja —una lista pelada— porque es la que hay guardada en las
- * carpetas de antes y en los ajustes, y ahí dos capturas siempre eran una
- * anidación.
- */
-function vistaSaneada(pedida, capturas) {
-    const bruta = Array.isArray(pedida) ? { capturas: pedida } : (pedida || {});
-    const pedidas = Array.isArray(bruta.capturas) ? bruta.capturas : [];
-    const ids = [...new Set(pedidas.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= capturas))];
-    const limpias = ids.length ? ids : [1];
-    const unidas = limpias.length > 1 && bruta.unidas !== false;
-    const puestas = Array.isArray(bruta.siempre)
-        ? limpias.filter(id => bruta.siempre.includes(id))
-        : limpias.slice();
-    return {
-        capturas: limpias,
-        unidas,
-        siempre: unidas ? (puestas.length ? limpias.slice() : []) : puestas
-    };
-}
-
-/** Dónde guarda cada carpeta su configuración del menú. */
-function archivoDeConfig(carpeta) {
-    return path.join(workspace.datosDir(carpeta), 'prproj.json');
-}
-
-/**
- * La configuración del menú para esta carpeta, con lo que el menú necesita para
- * dibujarse.
- *
- * Primero la que la carpeta tiene guardada; si no tiene, la última que se usó en
- * cualquier carpeta (`ultima`, de los ajustes), que suele ser la misma cámara y
- * la misma pantalla; y si tampoco, una sola captura con todo adentro.
- *
- * @param {string} carpeta
- * @param {object} [ultima] la que quedó en los ajustes
- * @param {string} [enCurso] la secuencia que se está grabando, que no cuenta
- * @returns {{config, vistas: {nombre, titulo, usada}[], clases: number, guardada: boolean}}
- */
-function leerConfig(carpeta, ultima, enCurso) {
-    let guardada = null;
-    try {
-        guardada = JSON.parse(fs.readFileSync(archivoDeConfig(carpeta), 'utf8'));
-    } catch (e) {
-        // Sin archivo, o roto: se arranca de la última o de fábrica.
-    }
-    const sesiones = carpeta ? sesionesGrabadas.listar([carpeta], enCurso) : [];
-    const usadas = vistasUsadas(sesiones);
-    const config = normalizar(guardada || ultima, usadas);
-    return {
-        config,
-        vistas: vivo.VISTAS.map(v => ({
-            nombre: v.nombre, titulo: v.titulo, colorDeMarcador: v.colorDeMarcador, usada: usadas.includes(v.nombre)
-        })),
-        clases: sesiones.length,
-        guardada: Boolean(guardada)
-    };
-}
-
-/** La guarda en la carpeta, puesta en regla. Devuelve la que quedó. */
-function guardarConfig(carpeta, config) {
-    const limpia = normalizar(config);
-    const destino = archivoDeConfig(carpeta);
-    workspace.ensureDir(path.dirname(destino));
-    workspace.writeJson(destino, limpia);
-    return limpia;
-}
-
-/** Las vistas que se usan en las tomas que van al XML, en el orden de `VISTAS`. */
-function vistasUsadas(sesiones) {
-    const usadas = new Set();
-    for (const s of sesiones || []) {
-        for (const toma of vivo.tomasQueQuedan(s)) {
-            usadas.add(vivo.vistaLeida(toma.vista) || vivo.VISTA_POR_DEFECTO);
-        }
-    }
-    const orden = vivo.VISTAS.map(v => v.nombre);
-    return [...usadas].sort((a, b) => orden.indexOf(a) - orden.indexOf(b));
+    return vistas.slice().sort(porOrdenDeVistas).join(' y ');
 }
 
 // ─── El plan ─────────────────────────────────────────────────────────
@@ -410,12 +277,7 @@ function planear(sesiones, config) {
             nombre: sesion.secuencia,
             wavs: wavs.filter(w => fs.existsSync(w.ruta)),
             franja: { desdeSeg: reloj, largoSeg },
-            // Los de la clase sin cortar, que son los del XML tal cual: ya
-            // vienen en segundos desde el cero de la clase, que es justo el
-            // reloj de la PRE. No hace falta correrlos como en la precortada
-            // —donde cada toma se pega a la anterior— porque acá no se quitó
-            // nada: el minuto 12 de la clase es el minuto 12 de la secuencia.
-            marcadoresPre: marcas.map(deXml)
+            marcas
         });
         reloj += largoSeg + nidos.AIRE_SEG;
     }
@@ -446,12 +308,7 @@ function planear(sesiones, config) {
         quienPide.get(clave).add(vista);
         return clave;
     };
-    const fuentesDe = vista => {
-        const v = config.vistas[vista] || vistaSaneada(null, config.capturas);
-        return v.unidas && v.capturas.length > 1
-            ? [anotar(v.capturas, vista)]
-            : v.capturas.map(id => anotar([id], vista));
-    };
+    const fuentesDe = vista => gruposDe(vistaDe(config, vista)).map(ids => anotar(ids, vista));
 
     for (const clase of clases) {
         let cursor = 0;
@@ -526,10 +383,25 @@ function planear(sesiones, config) {
             cursor += largo;
         }
         clase.duracionSeg = cursor;
-        if (!clase.cortes.length) avisos.push(`${clase.nombre} no tiene tomas que vayan al XML: no lleva precortada.`);
+        if (!clase.cortes.length) {
+            avisos.push(`${clase.nombre} no tiene tomas que vayan al XML: no lleva precortada`
+                + (clase.franja.largoSeg > 0 ? `, pero entra entera en ${BIN_PRE}.` : '.'));
+        }
     }
 
     const pistas = repartirPistas(clases, config, anotar);
+
+    // La clase sin cortar (ver `armarPre`). Sus marcadores son los del XML tal
+    // cual: ya vienen en segundos desde el cero de la clase, que es justo el
+    // reloj de la PRE. No hace falta correrlos como en la precortada —donde
+    // cada toma se pega a la anterior— porque acá no se quitó nada: el minuto
+    // 12 de la clase es el minuto 12 de la secuencia.
+    for (const clase of clases) {
+        clase.pre = clase.franja.largoSeg > 0
+            ? { vista: vistaDeLaPre(clase, pistas), marcadores: clase.marcas.map(deXml) }
+            : null;
+        delete clase.marcas;
+    }
 
     // **En las anidaciones van las claquetas y nada más.**
     //
@@ -643,32 +515,34 @@ function repartirPistas(clases, config, anotar) {
     // `vistaLeida` devuelve lo que diga el marcador, así que un XML tocado a
     // mano puede traer una sigla que el menú no conoce. Sin esto esa toma se
     // quedaría sin una sola pista de vídeo, que es el peor final posible.
-    const orden = vivo.VISTAS.map(v => v.nombre);
-    const enOrden = [...new Set([...Object.keys(config.vistas || {}), ...conTomas])].sort((a, b) => {
-        const ia = orden.indexOf(a);
-        const ib = orden.indexOf(b);
-        return (ia === -1 ? orden.length : ia) - (ib === -1 ? orden.length : ib) || (a < b ? -1 : 1);
-    });
+    const enOrden = [...new Set([...Object.keys(config.vistas || {}), ...conTomas])].sort(porOrdenDeVistas);
 
     const pistas = [];
     for (const vista of enOrden) {
-        const v = (config.vistas || {})[vista] || vistaSaneada(null, config.capturas);
-        const puestas = v.siempre || [];
-        const anidada = v.unidas && v.capturas.length > 1;
+        const v = vistaDe(config, vista);
         const llamada = conTomas.has(vista);
-        if (anidada) {
-            if (!llamada && !puestas.length) continue;
-            pistas.push({ vista, clave: anotar(v.capturas, vista), ids: v.capturas.slice(), siempre: puestas.length > 0 });
-        } else {
-            for (const id of v.capturas) {
-                // Sin tomas de su vista, una «solo suya» quedaría vacía de punta
-                // a punta: un renglón sin un solo clip.
-                if (!llamada && !puestas.includes(id)) continue;
-                pistas.push({ vista, clave: anotar([id], vista), ids: [id], siempre: puestas.includes(id) });
-            }
+        for (const ids of gruposDe(v)) {
+            // Una anidación es un clip: «en todas» es todo el grupo o nada
+            // (ver `vistaSaneada`). Y sin tomas de su vista, una «solo suya»
+            // quedaría vacía de punta a punta: un renglón sin un solo clip.
+            const siempre = ids.every(id => v.siempre.includes(id));
+            if (!llamada && !siempre) continue;
+            pistas.push({ vista, clave: anotar(ids, vista), ids, siempre });
         }
     }
     return pistas;
+}
+
+/**
+ * La vista que queda encendida en la PRE: la primera que se usó en esta clase,
+ * en el orden de las pistas, que ya es el de `VISTAS`. No la primera pista, que
+ * puede ser una «en todas» que nadie llamó. Una clase sin tomas no usó ninguna
+ * y se queda con la primera pista.
+ */
+function vistaDeLaPre(clase, pistas) {
+    const usadas = new Set(clase.cortes.map(c => c.vista));
+    const primera = pistas.find(p => usadas.has(p.vista)) || pistas[0];
+    return primera ? primera.vista : null;
 }
 
 // ─── El armado ───────────────────────────────────────────────────────
@@ -684,6 +558,25 @@ function fpsDeLaPlantilla(taller) {
 /** ¿Es el mismo fps? 29.97 y 30 no lo son, aunque se escriban parecido. */
 function mismoFps(a, b) {
     return Math.abs(Number(a) - Number(b)) < 0.01;
+}
+
+/**
+ * El audio de referencia de una clase, entero y en su sitio, contado desde
+ * `origenSeg`: la franja de la clase en las capturas, el cero en la PRE.
+ */
+function colocarReferencia(taller, pista, clase, medios, origenSeg) {
+    let cortes = 0;
+    for (const w of clase.wavs) {
+        const medio = medios.get(w.ruta);
+        if (!medio) continue;
+        const desde = origenSeg + notasXml.aSegundos(w.desdeMs, clase.sesion.ceroMs);
+        taller.colocarCorte({
+            pista, medio, desdeSeg: desde, hastaSeg: desde + w.segundos,
+            entradaSeg: 0, etiqueta: ETIQUETA_DE_REFERENCIA, sonando: true
+        });
+        cortes++;
+    }
+    return cortes;
 }
 
 /**
@@ -711,17 +604,7 @@ function armarCapturas(taller, plan, config, medios, bin) {
         taller.guardarEn(bin, seq.itemDelPanel);
 
         const pistaRef = seq.pistasAudio[1];
-        for (const clase of plan.clases) {
-            for (const w of clase.wavs) {
-                const medio = medios.get(w.ruta);
-                if (!medio) continue;
-                const desde = clase.franja.desdeSeg + notasXml.aSegundos(w.desdeMs, clase.sesion.ceroMs);
-                taller.colocarCorte({
-                    pista: pistaRef, medio, desdeSeg: desde, hastaSeg: desde + w.segundos,
-                    entradaSeg: 0, etiqueta: ETIQUETA_DE_REFERENCIA, sonando: true
-                });
-            }
-        }
+        for (const clase of plan.clases) colocarReferencia(taller, pistaRef, clase, medios, clase.franja.desdeSeg);
         taller.mutearPista(pistaRef);
 
         if (!primera && plan.largoSeg > 0) {
@@ -798,6 +681,7 @@ function armarGrupos(taller, plan, capturas, bin) {
  * que acá ya están en A1 y A2—; colocadas con audio, la precortada sonaría doble.
  */
 function armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bin) {
+    if (!clase.cortes.length) return 0;
     const seq = taller.crearSecuencia({
         nombre: clase.nombre,
         pistasVideo: Math.max(1, plan.pistas.length),
@@ -864,9 +748,8 @@ function armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bin) {
  * precortada: cambiar de plano es encender el clip que ya está.
  */
 function armarPre(taller, clase, plan, fuentes, capturas, medios, bin) {
+    if (!clase.pre) return 0;
     const largoSeg = clase.franja.largoSeg;
-    if (!(largoSeg > 0)) return 0;
-
     const pistas = plan.pistas;
     const seq = taller.crearSecuencia({
         nombre: nombreDePre(clase.nombre),
@@ -876,51 +759,31 @@ function armarPre(taller, clase, plan, fuentes, capturas, medios, bin) {
     });
     taller.guardarEn(bin, seq.itemDelPanel);
 
-    // La vista que queda encendida: la primera que se usó en esta clase, en el
-    // orden de las pistas, que ya es el de `VISTAS`. Una clase sin tomas no
-    // usó ninguna y se queda con la primera pista.
-    const usadas = new Set(clase.cortes.map(c => c.vista));
-    const primera = pistas.find(p => usadas.has(p.vista)) || pistas[0];
-    const encendida = primera ? primera.vista : null;
-
     let cortes = 0;
     pistas.forEach((p, i) => {
         taller.colocarCorte({
             pista: seq.pistasVideo[i], medio: fuentes.get(p.clave).comoFuente,
             desdeSeg: 0, hastaSeg: largoSeg, entradaSeg: clase.franja.desdeSeg,
             etiqueta: p.color,
-            sonando: p.vista === encendida
+            sonando: p.vista === clase.pre.vista
         });
         cortes++;
     });
 
     // A1, el audio de la Captura 1, que es el que se oye en la precortada.
-    const c1 = capturas.get(1);
-    if (c1) {
-        taller.colocarCorte({
-            pista: seq.pistasAudio[0], medio: c1.comoFuente,
-            desdeSeg: 0, hastaSeg: largoSeg, entradaSeg: clase.franja.desdeSeg,
-            etiqueta: plan.colorDeCaptura.get(1), sonando: true
-        });
-        cortes++;
-    }
+    taller.colocarCorte({
+        pista: seq.pistasAudio[0], medio: capturas.get(1).comoFuente,
+        desdeSeg: 0, hastaSeg: largoSeg, entradaSeg: clase.franja.desdeSeg,
+        etiqueta: plan.colorDeCaptura.get(1), sonando: true
+    });
+    cortes++;
 
-    // Y A2, el audio de referencia entero y en su sitio: acá no se corta por
-    // toma como en la precortada, porque no hay tomas que seguir.
-    for (const w of clase.wavs) {
-        const medio = medios.get(w.ruta);
-        if (!medio) continue;
-        const desde = notasXml.aSegundos(w.desdeMs, clase.sesion.ceroMs);
-        taller.colocarCorte({
-            pista: seq.pistasAudio[1], medio,
-            desdeSeg: desde, hastaSeg: desde + w.segundos, entradaSeg: 0,
-            etiqueta: ETIQUETA_DE_REFERENCIA, sonando: true
-        });
-        cortes++;
-    }
+    // Y A2, el audio de referencia entero: acá no se corta por toma como en la
+    // precortada, porque no hay tomas que seguir.
+    cortes += colocarReferencia(taller, seq.pistasAudio[1], clase, medios, 0);
     taller.mutearPista(seq.pistasAudio[1]);
 
-    taller.ponerMarcadores(seq.secuencia, clase.marcadoresPre);
+    taller.ponerMarcadores(seq.secuencia, clase.pre.marcadores);
     return cortes;
 }
 
@@ -1007,11 +870,12 @@ async function generar(opciones) {
     try {
         const raiz = taller.raizDelPanel();
         const descolgados = taller.vaciarElPanel();
-        const bins = [BIN_CAPTURAS, BIN_PRECORTADAS, BIN_AUDIO, ...BINS_DEL_EDITOR].map((nombre, i) => {
-            const bin = taller.crearBin(nombre, { orden: i });
-            taller.guardarEn(raiz, bin);
-            return bin;
-        });
+        const [binCapturas, binPrecortadas, binAudio] = [BIN_CAPTURAS, BIN_PRECORTADAS, BIN_AUDIO, ...BINS_DEL_EDITOR]
+            .map((nombre, i) => {
+                const bin = taller.crearBin(nombre, { orden: i });
+                taller.guardarEn(raiz, bin);
+                return bin;
+            });
 
         decir(0, total, 'Importando el audio de referencia…');
         const medios = new Map();
@@ -1026,14 +890,14 @@ async function generar(opciones) {
                     conVideo: false
                 });
                 taller.marcarMedio(medio, w.marcadores);
-                taller.guardarEn(bins[2], medio.clipProjectItem);
+                taller.guardarEn(binAudio, medio.clipProjectItem);
                 medios.set(w.ruta, medio);
             }
         }
 
         decir(0, total, 'Armando las capturas…');
-        const capturas = armarCapturas(taller, plan, config, medios, bins[0]);
-        const grupos = armarGrupos(taller, plan, capturas, bins[0]);
+        const capturas = armarCapturas(taller, plan, config, medios, binCapturas);
+        const grupos = armarGrupos(taller, plan, capturas, binCapturas);
         const fuentes = new Map();
         for (const f of plan.fuentes) {
             fuentes.set(f.clave, f.ids.length > 1 ? grupos.get(f.clave) : capturas.get(f.ids[0]));
@@ -1044,23 +908,21 @@ async function generar(opciones) {
         // meter, igual que los bins del editor: un bin vacío no cuesta nada y
         // un proyecto que a veces tiene la carpeta y a veces no se lee peor.
         const binPre = taller.crearBin(BIN_PRE, { orden: 0 });
-        taller.guardarEn(bins[1], binPre);
+        taller.guardarEn(binPrecortadas, binPre);
 
         let cortes = 0;
         let precortadas = 0;
         let pres = 0;
         plan.clases.forEach((clase, i) => {
             decir(i, total, `Precortando ${clase.nombre}…`);
-            if (clase.cortes.length) {
-                cortes += armarPrecortada(taller, clase, plan, fuentes, capturas, medios, bins[1]);
-                precortadas++;
-            }
+            const precortada = armarPrecortada(taller, clase, plan, fuentes, capturas, medios, binPrecortadas);
+            if (precortada) { cortes += precortada; precortadas++; }
             // **La PRE se arma aunque la clase no tenga ni una toma.** Es
             // justamente la clase a la que no se podía llegar: sin tomas no hay
             // precortada, y su audio y sus notas no aparecían en el proyecto por
             // ningún lado.
-            const suyos = armarPre(taller, clase, plan, fuentes, capturas, medios, binPre);
-            if (suyos) { cortes += suyos; pres++; }
+            const pre = armarPre(taller, clase, plan, fuentes, capturas, medios, binPre);
+            if (pre) { cortes += pre; pres++; }
         });
 
         const podados = taller.podarLaPlantilla();
@@ -1092,7 +954,8 @@ async function generar(opciones) {
                 // esta y no en una tercera: es un sitio nuevo del proyecto y
                 // hay que saber que está.
                 `${precortadas} precortada(s) con ${tomas} toma(s) y ${claquetas} claqueta(s) marcada(s)`
-                    + ` en las capturas, y ${pres} clase(s) enteras sin cortar en «${BIN_PRECORTADAS} › ${BIN_PRE}».`,
+                    + ' en las capturas'
+                    + (pres ? `, y ${pres} clase(s) enteras sin cortar en «${BIN_PRECORTADAS} › ${BIN_PRE}».` : '.'),
                 `Se quitaron ${descolgados} objeto(s) de la plantilla (${podados} borrado(s)).`
             ],
             error: null

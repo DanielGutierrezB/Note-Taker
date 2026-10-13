@@ -621,6 +621,23 @@ module.exports = async function (t) {
             encendida: p.vista === corte.vista }));
         t.deep(deEstaToma.map(x => x.puesta), [true, true, true, true], 'las cuatro tienen clip');
         t.deep(deEstaToma.map(x => x.encendida), [false, true, true, false], 'y solo las de R suenan');
+
+        // En la PRE va encendida R, que es la que se usó, y no PV, que es la
+        // primera pista pero nadie la llamó.
+        t.eq(plan.clases[0].pre.vista, 'R');
+    });
+
+    t.test('una clase sin tomas tiene PRE con la primera pista encendida', () => {
+        const dir = carpeta();
+        const llamada = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'R', T0)] });
+        const callada = sesion(dir, { cero: T0 + UNA_HORA, segundos: 300 });
+        const plan = carpetaPrproj.planear([llamada, callada], carpetaPrproj.normalizar(soloLasDichas({
+            capturas: 2, vistas: { PV: { capturas: [1], siempre: [1] }, R: { capturas: [2], siempre: [2] } }
+        })));
+        t.deep(plan.pistas.map(p => p.vista), ['PV', 'R']);
+        t.eq(plan.clases[0].pre.vista, 'R', 'la que habló, con la suya');
+        t.eq(plan.clases[1].pre.vista, 'PV', 'la callada, con la primera');
+        t.ok(plan.avisos.some(a => /no lleva precortada, pero entra entera en PRE/.test(a)), plan.avisos.join(' · '));
     });
 
     t.test('dos vistas sueltas con apilados contrarios: cada una tiene el suyo', () => {
