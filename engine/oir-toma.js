@@ -33,6 +33,48 @@ const vivo = require('./notas-vivo');
 const ORILLA_MS = 12000;
 
 /**
+ * Y hasta dónde se estira cuando la toma vecina está más lejos que eso.
+ *
+ * **Las sueltas no se guardan.** Lo que se dijo entre dos tomas vive en
+ * `estado.sueltas`, que es memoria de la sesión en curso y no entra en el
+ * sidecar: cerrada la clase, ese texto no está en ninguna parte y el tramo
+ * entre dos tomas no se puede tocar desde ninguno de los dos lados. El editor
+ * lo reportó el 13/10 mirando las tomas 11 y 12, con medio minuto hablado
+ * entre una y otra: «si hay transcript entre ambas, debería poder modificar en
+ * cualquiera de los 2 lados».
+ *
+ * Así que la orilla llega hasta la vecina y queda escrita en las dos: en el
+ * `despues` de la de antes y en el `antes` de la de después. Noventa segundos
+ * de tope porque cada segundo de orilla es audio que Whisper transcribe dos
+ * veces, una por cada lado; más allá de minuto y medio eso ya no es «lo que se
+ * dijo entre dos tomas» sino un rato de clase que nadie marcó, y para eso está
+ * abrir una toma.
+ */
+const ORILLA_MAX_MS = 90000;
+
+/**
+ * Cuánta orilla pedir de cada lado: hasta la toma vecina, con techo y piso.
+ *
+ * Más cerca que `ORILLA_MS` **también** manda la vecina, y achicar ahí es lo
+ * correcto: lo que está más allá de su borde ya es texto suyo, y traerlo sería
+ * escribir la misma frase en las dos tomas.
+ *
+ * Sin vecina queda la orilla de siempre: lo de más allá no es de nadie, y para
+ * eso están las palabras sueltas mientras la clase corre.
+ */
+function orillaIzquierda(toma, tomas) {
+    const piso = tomas ? vivo.pisoDelIn(tomas, toma) : null;
+    if (piso == null) return ORILLA_MS;
+    return Math.max(0, Math.min(ORILLA_MAX_MS, toma.inMs - piso));
+}
+
+function orillaDerecha(toma, tomas) {
+    const techo = tomas ? vivo.techoDelOut(tomas, toma) : null;
+    if (techo == null) return ORILLA_MS;
+    return Math.max(0, Math.min(ORILLA_MAX_MS, techo - toma.outMs));
+}
+
+/**
  * Un tramo del reloj de pared, transcripto.
  *
  * Se busca en qué archivo está: el que se está escribiendo o alguno ya cerrado
@@ -93,8 +135,8 @@ async function leer(archivos, toma, opciones) {
     const finDelArchivo = donde.desdeMs + (donde.segundos || 0) * 1000;
     const pedido = {
         sesion: donde,
-        desdeMs: Math.max(donde.desdeMs, toma.inMs - ORILLA_MS),
-        hastaMs: Math.min(finDelArchivo, toma.outMs + ORILLA_MS),
+        desdeMs: Math.max(donde.desdeMs, toma.inMs - orillaIzquierda(toma, o.tomas)),
+        hastaMs: Math.min(finDelArchivo, toma.outMs + orillaDerecha(toma, o.tomas)),
         liviano: false,
         idioma: o.idioma
     };
@@ -272,4 +314,4 @@ function dormir(ms) {
     return ms ? new Promise(listo => setTimeout(listo, ms)) : Promise.resolve();
 }
 
-module.exports = { ORILLA_MS, tramo, leer };
+module.exports = { ORILLA_MS, ORILLA_MAX_MS, tramo, leer };

@@ -42,6 +42,7 @@ const FILES = [
     'reloj-del-audio.test.js',
     'revision-motor.test.js',
     'final-de-toma.test.js',
+    'entre-dos-tomas.test.js',
     'puente-grabar.test.js',
     'vivo-interfaz.test.js',
     'senales-del-texto.test.js',

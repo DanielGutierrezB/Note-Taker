@@ -142,8 +142,11 @@ async function rehacer(sesion, id) {
     if (!toma || toma.inMs == null || toma.outMs == null) return;
 
     try {
+        // Con las tomas: de ahí sale hasta dónde llega la orilla de cada lado,
+        // que es lo que deja el tramo entre dos tomas escrito en las dos y no
+        // solo en las sueltas, que no se guardan (ver `orillaIzquierda`).
         const leido = await oirToma.leer(espejo.archivosDeLaSesion(sesion), toma,
-            { idioma: sesion.estado.idioma });
+            { idioma: sesion.estado.idioma, tomas: sesion.estado.tomas });
         if (!sesion.viva || !leido) return;
         // Mientras se leía, la toma pudo irse (descartada) o reabrirse: sin OUT,
         // `repartir` mandaba todo el texto a `despues` y la toma quedaba vacía.

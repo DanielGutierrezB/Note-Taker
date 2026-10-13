@@ -276,7 +276,7 @@ async function regenerar(json, avisar, enCurso) {
         let degradadas = 0;
         let sinLeer = 0;
         for (const [i, toma] of tomas.entries()) {
-            const leido = await oirToma.leer(archivos, toma, { idioma: estado.idioma });
+            const leido = await oirToma.leer(archivos, toma, { idioma: estado.idioma, tomas });
             // **Y acá es donde la marca se limpia sola.** `leer` devuelve
             // `relectura: null` cuando la toma salió con el modelo bueno, así
             // que el `Object.assign` borra la marca que le había quedado de la

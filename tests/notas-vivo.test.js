@@ -532,13 +532,39 @@ module.exports = function (t) {
         t.ok(e.tomas[0].outMs > T0 + 30000, 'y el OUT va después del IN');
     });
 
-    t.test('el conteo vacía el colchón: lo de antes es de otra cosa', () => {
+    t.test('el conteo ya no vacía el colchón: lo de antes se sigue viendo', () => {
+        // Antes se vaciaba, y con él desaparecía de la pantalla todo lo hablado
+        // entre la toma anterior y el «3, 2, 1»: ni en el gris de antes del IN
+        // ni en ninguna de las dos tomas. Reportado el 13/10 sobre las tomas 11
+        // y 12, con medio minuto hablado entre una y otra.
         const e = nuevo();
         vivo.aplicarSenales(e, palabras([[0, 'charla'], [400, 'suelta']]));
         vivo.aplicarSenales(e, palabras([
             [1000, '3,'], [1400, '2,'], [1800, '1.'], [2400, 'Hola']
         ]));
-        t.eq(e.sueltas.length, 0);
+        t.deep(e.sueltas.map(w => w.texto), ['charla', 'suelta'], 'siguen a mano');
+        t.deep(e.tomas[0].palabras.map(w => w.texto), ['Hola'], 'y no se metieron en la toma');
+    });
+
+    t.test('pero una toma nueva no se las lleva si ya son de otra toma', () => {
+        // Es el motivo por el que el colchón se vaciaba, y sigue siendo cierto:
+        // lo anterior al OUT de la última toma cerrada ya es texto de una toma, y
+        // meterlo en una nueva escribiría la misma frase dos veces en el XML.
+        // Ahora lo cuida un piso para el retroceso, no tirar el texto.
+        const e = nuevo();
+        vivo.aplicarSenales(e, palabras([[0, 'charla'], [400, 'suelta']]));
+        vivo.aplicarSenales(e, palabras([
+            [1000, '3,'], [1400, '2,'], [1800, '1.'], [2400, 'Hola'], [2800, 'mundo']
+        ]));
+        vivo.cerrarEn(e, e.tomas[0], T0 + 3000);
+        // Abrir a mano justo después: puede retroceder a lo que se dijo tras el
+        // OUT, pero no a «charla suelta», que es de antes de la toma 1.
+        vivo.aplicarSenales(e, palabras([[3200, 'seguimos'], [3600, 'acá']]));
+        vivo.abrirToma(e, T0 + 3800);
+        const nueva = e.tomas[1];
+        t.deep(nueva.palabras.map(w => w.texto), ['seguimos', 'acá']);
+        t.ok(nueva.inMs >= e.tomas[0].outMs, 'el IN no cruza el OUT de la de antes');
+        t.ok(e.sueltas.some(w => w.texto === 'charla'), 'y lo de antes no se perdió');
     });
 
     t.test('el colchón no crece toda la clase, y se recorta pocas veces', () => {

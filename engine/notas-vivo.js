@@ -684,20 +684,27 @@ function abrirToma(estado, ms, opciones) {
     if (tomaAbierta(estado)) return null;
     const o = opciones || {};
 
-    const sueltas = estado.sueltas || [];
+    // Solo lo que todavía no es de nadie. Las sueltas llegan hasta antes de la
+    // toma anterior —ya no se tiran al abrir con el conteo— así que sin este
+    // piso el retroceso podría meter en la toma nueva palabras que ya están
+    // adentro de la de antes, y la misma frase saldría dos veces en el XML.
+    const piso = pisoDeLasSueltas(estado);
+    const todas = estado.sueltas || [];
+    const libres = todas.filter(w => w.t >= piso);
     const desde = o.exacto
-        ? sueltas.findIndex(w => w.t >= ms)
-        : arranqueDeLaTirada(sueltas, ms);
-    const inMs = (o.exacto || desde === -1) ? ms : sueltas[desde].t;
+        ? libres.findIndex(w => w.t >= ms)
+        : arranqueDeLaTirada(libres, ms);
+    const inMs = (o.exacto || desde === -1) ? ms : libres[desde].t;
 
     const toma = nuevaToma(estado, inMs, '');
     if (desde !== -1) {
         // Las palabras de la tirada dejan de ser de nadie y pasan a ser de la
         // toma. Se sacan del colchón: dejarlas ahí las mostraría dos veces
         // —adentro de la toma y como sueltas— y la toma siguiente podría
-        // volver a absorberlas.
-        toma.palabras = sueltas.slice(desde);
-        estado.sueltas = sueltas.slice(0, desde);
+        // volver a absorberlas. Lo de debajo del piso se queda como estaba: es
+        // el gris de una toma de antes y no es de esta.
+        toma.palabras = libres.slice(desde);
+        estado.sueltas = todas.filter(w => w.t < piso).concat(libres.slice(0, desde));
     }
     estado.tomas.push(toma);
     const desdeCuando = o.ahoraMs != null ? o.ahoraMs : ms;
@@ -761,6 +768,21 @@ function tomaAnterior(tomas, toma) {
  *
  * @returns {number|null} el ms mínimo, o `null` si no hay toma antes
  */
+/**
+ * Desde dónde las palabras sueltas son «de nadie».
+ *
+ * El OUT de la última toma cerrada: lo anterior ya es texto de una toma, y
+ * meterlo en una toma nueva sería escribir la misma frase dos veces en el XML.
+ *
+ * Es el piso que hacía falta para poder dejar de vaciar el colchón cuando el
+ * conteo abre una toma (ver `aplicarSenales`), que es lo que hacía desaparecer
+ * de la pantalla todo lo hablado entre dos tomas.
+ */
+function pisoDeLasSueltas(estado) {
+    const cerradas = (estado.tomas || []).filter(t => t.outMs != null && !t.descartada);
+    return cerradas.length ? Math.max(...cerradas.map(t => t.outMs)) : -Infinity;
+}
+
 function pisoDelIn(tomas, toma) {
     const previa = toma && toma.inMs != null ? tomaAnterior(tomas, toma) : null;
     return previa ? previa.outMs : null;
@@ -1355,10 +1377,19 @@ function aplicarSenales(estado, palabras, opciones) {
                 sigue ? sigue.t : (uno.hasta != null ? uno.hasta : uno.t),
                 textoDe(nuevas, marca.desde, marca.hasta));
             if (!sigue) toma.inProvisional = true;
-            // El conteo abrió la toma, así que lo que se dijo antes es de otra
-            // cosa: el colchón se vacía para que un "abrir a mano" posterior no
-            // retroceda hasta una tirada que ya quedó del lado de afuera.
-            estado.sueltas = [];
+            // **Lo que se dijo antes del conteo se queda.** Antes acá se vaciaba
+            // el colchón entero, y con él desaparecía de la pantalla todo lo
+            // hablado entre la toma anterior y el «3, 2, 1»: ni se veía en el
+            // gris de antes del IN ni se podía meter en ninguna de las dos
+            // tomas. El editor lo reportó el 13/10 mirando las tomas 11 y 12,
+            // donde entre una y otra había medio minuto hablado y los dos lados
+            // salían vacíos.
+            //
+            // Se vaciaba por un motivo que sigue siendo cierto —un «abrir a
+            // mano» posterior no puede retroceder hasta una tirada que ya quedó
+            // del lado de afuera— pero eso es un piso para el retroceso, no una
+            // razón para tirar el texto: lo pone `pisoDeLasSueltas`, que mira el
+            // OUT de la última toma cerrada.
             estado.tomas.push(toma);
             eventos.push({ tipo: 'abierta', toma: toma.id, por: marca.por });
             cursor = marca.hasta + 1;
