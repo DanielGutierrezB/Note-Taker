@@ -159,7 +159,7 @@ function tarjetaDeLaUltima(estado) {
             dice: 'Vuelve al editor de esa grabación: qué toma va, qué se ve en cada una, y '
                 + 'cortarla nueva. Se abre donde se dejó, y el vídeo que ya sacaste no se pisa.'
         }) : ''}
-        ${halladas.length ? '' : `
+        ${halladas.length || estado.buscada ? '' : `
         <div class="campo-fila">
           <span class="v3 crece">¿El vídeo que buscás está en otra carpeta?</span>
           <button class="btn btn-tenue" type="button" data-hace="elegir-carpeta"
@@ -317,19 +317,19 @@ export function tarjetaListo(estado) {
 export function tarjetaGrabando(estado) {
     const abierta = (estado.sesion && estado.sesion.tomas || []).find(t => t.outMs == null);
     const cerradas = (estado.sesion && estado.sesion.tomas || []).filter(t => t.outMs != null && !t.descartada);
-    // El ciclo que no llega manda en la pastilla, por encima de «toma abierta»:
-    // con el transcript atrasado los bordes de las tomas salen mal puestos, y
-    // eso hay que verlo mientras se graba y no al exportar (ver `atrasado` en
-    // `estados.js`). Y se dice además en un renglón, porque la palabra sola no
-    // alcanza para algo que cambia si conviene seguir grabando.
-    const atras = estados.atrasado(estado.sesion);
+    // El ciclo que no llega manda en la pastilla, por encima de «toma abierta»
+    // (ver `deSemanal` en `estados.js`). Y se dice además en un renglón, porque
+    // la palabra sola no alcanza para algo que cambia si conviene seguir
+    // grabando.
+    const pastilla = estados.deSemanal(estado.sesion);
+    const atras = pastilla.porque ? pastilla : null;
     return `
-      <div class="tarjeta guarda" data-estado="${atras ? atras.clave : (abierta ? 'abierta' : 'terminada')}">
+      <div class="tarjeta guarda" data-estado="${pastilla.clave === 'listo' ? 'terminada' : pastilla.clave}">
         <div class="tarjeta-cabeza">
           <span class="pastilla" id="semanal-pastilla"
-                data-estado="${atras ? atras.clave : (abierta ? 'abierta' : 'listo')}"
+                data-estado="${pastilla.clave}"
                 title="${atras ? esc(atras.porque) : ''}">
-            ${atras ? esc(atras.palabra) : (abierta ? 'toma abierta' : 'esperando el «3, 2, 1»')}</span>
+            ${esc(pastilla.palabra)}</span>
           <span class="crece"></span>
           ${laHistoria(estado.sesion)}
           <div class="nivel" id="semanal-nivel"><div class="nivel-barra"></div></div>

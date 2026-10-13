@@ -212,6 +212,16 @@ module.exports = async t => {
 
     t.group('ciclo atrasado · la tarjeta del vídeo de la semana');
 
+    t.test('la pastilla de la semana: el atraso manda sobre la toma abierta', () => {
+        // Es con una toma abierta cuando un transcript atrasado le pone mal
+        // los bordes, así que ahí es donde no se puede tapar.
+        const abierta = [{ id: 1, outMs: null }];
+        t.eq(estados.deSemanal({ tomas: abierta, atrasoSec: 31, salteadoSec: 0 }).clave, 'releyendo');
+        t.eq(estados.deSemanal({ tomas: abierta, atrasoSec: 0, salteadoSec: 0 }).clave, 'abierta');
+        t.eq(estados.deSemanal({ tomas: [], atrasoSec: 0, salteadoSec: 0 }).palabra, 'esperando el «3, 2, 1»');
+        t.eq(estados.deSemanal(null).clave, 'listo', 'y antes de que llegue la sesión no se cae');
+    });
+
     t.test('la tarjeta de grabar lo dice en la pastilla y en un renglón', () => {
         // Es la pantalla donde pasó, y la única que no usa la pastilla de clase.
         const html = tarjetas.tarjetaGrabando({

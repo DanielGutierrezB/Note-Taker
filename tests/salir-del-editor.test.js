@@ -167,6 +167,15 @@ module.exports = async t => {
         t.ok(html.includes('data-hace="elegir-carpeta"'), 'y se puede probar con otra');
     });
 
+    t.test('y lo deja elegir UNA vez, aunque haya algo para seguir', () => {
+        // Con una grabación de antes a mano salían dos: «Elegir otra…» al lado
+        // del aviso y, debajo, «¿El vídeo que buscás está en otra carpeta?» con
+        // el mismo botón. La pregunta es para quien todavía no buscó.
+        const html = tarjetas.tarjetaListo(elPanel({ ultima: unaSesion(), buscada: '/Volumes/Rodaje/Vacía' }));
+        t.eq(html.split('data-hace="elegir-carpeta"').length - 1, 1, 'un solo botón de carpeta');
+        t.ok(html.includes('Seguir con esa'), 'y lo de antes sigue ahí');
+    });
+
     t.test('sin nada que seguir, la tarjeta entera no está', () => {
         // Una línea que dice «no hay nada» no ayuda a grabar, que es lo que se
         // viene a hacer cuando no hay nada.

@@ -1540,14 +1540,6 @@ async function alClic(e) {
     }
 }
 
-/* ─── El menú del clic derecho sobre una palabra ───────────────────────── */
-/*
- * Vive en `grabar/menu-de-palabra.js`, con el transcript sobre el que abre: lo
- * usan esta pantalla y la del vídeo de la semana, y tiene que ofrecer lo mismo
- * en las dos. Acá queda solo lo que es de esta pantalla —a dónde vuelve el foco
- * y qué estaba sin pintar—, que se le dice al conectarlo.
- */
-
 /**
  * Un pedazo seleccionado del texto de una toma abre el campo para comentarlo.
  *

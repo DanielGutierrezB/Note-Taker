@@ -98,7 +98,7 @@ export function hay() {
  * dejar de repintar. Sobre cualquier otra cosa cierra el que hubiera y no hace
  * nada más: un clic derecho en el aire es cerrar.
  */
-export function alClicDerecho(e) {
+function alClicDerecho(e) {
     const w = e.target.closest && e.target.closest('.palabra');
     const donde = w && w.closest('.transcript.es-movible');
     cerrar();
@@ -126,7 +126,7 @@ export function alClicDerecho(e) {
  * estaba abierto, pero la elección ya está tomada y no depende de lo que haya
  * debajo ahora.
  */
-export function elegido(boton) {
+function elegido(boton) {
     const que = abierto;
     cerrar();
     if (!que) return null;
@@ -159,7 +159,7 @@ export function alTeclado(e) {
 }
 
 /** Si el clic cayó fuera del menú, es cerrarlo. */
-export function esDeFuera(destino) {
+function esDeFuera(destino) {
     return !destino || !destino.closest('#menu-palabra');
 }
 

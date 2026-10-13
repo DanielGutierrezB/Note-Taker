@@ -211,6 +211,25 @@ export function deSesion(estado, audio) {
     return { clave: 'escuchando', palabra: 'escuchando' };
 }
 
+/**
+ * La pastilla del vídeo de la semana mientras se graba.
+ *
+ * La misma prioridad que `deSesion` y por lo mismo: el ciclo que no llega va
+ * antes que la toma abierta, porque es con una toma abierta cuando un
+ * transcript atrasado le pone mal los bordes. Lo que cambia es la palabra de
+ * reposo: acá no se está «escuchando» una clase, se espera el «3, 2, 1».
+ *
+ * @returns {{clave, palabra, porque?}} `porque` solo cuando va atrasado
+ */
+export function deSemanal(sesion) {
+    const atras = atrasado(sesion);
+    if (atras) return atras;
+    const abierta = ((sesion && sesion.tomas) || []).some(t => t.outMs == null);
+    return abierta
+        ? { clave: 'abierta', palabra: 'toma abierta' }
+        : { clave: 'listo', palabra: 'esperando el «3, 2, 1»' };
+}
+
 /** Cómo está una sesión ya guardada, en la lista. */
 export function deSesionGuardada(resumen) {
     const e = (resumen && resumen.estado) || 'terminada';

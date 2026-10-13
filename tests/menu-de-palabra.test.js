@@ -150,7 +150,7 @@ module.exports = async t => {
     });
 
     t.test('el menú del sistema no sale encima', () => {
-        t.ok(/export function alClicDerecho[\s\S]{0,900}e\.preventDefault\(\)/.test(elModulo()),
+        t.ok(/function alClicDerecho[\s\S]{0,900}e\.preventDefault\(\)/.test(elModulo()),
             'el contextmenu se cancela antes de abrir el nuestro');
         const main = fs.readFileSync(path.join(RAIZ, 'main.js'), 'utf8');
         t.ok(!/context-menu/.test(main), 'Electron no tiene ningún menú propio que competir');
