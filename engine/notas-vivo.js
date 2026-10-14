@@ -713,7 +713,13 @@ function abrirToma(estado, ms, opciones) {
     const desde = o.exacto
         ? libres.findIndex(w => w.t >= ms)
         : arranqueDeLaTirada(libres, ms);
-    const inMs = (o.exacto || desde === -1) ? ms : libres[desde].t;
+    // Nunca antes del OUT de la última cerrada, venga de donde venga la hora.
+    // Con el retroceso de siempre eso se cumple solo —sale de `libres`, que ya
+    // está por encima del piso—, pero una hora exacta es de la ventana y la
+    // ventana puede mandar una palabra gris de antes del piso: la toma nueva
+    // nacía adentro de la anterior, y a partir de ahí las dos se pisaban en el
+    // XML y los bordes de las dos se peleaban la misma palabra.
+    const inMs = Math.max(piso, (o.exacto || desde === -1) ? ms : libres[desde].t);
 
     const toma = nuevaToma(estado, inMs, '');
     if (desde !== -1) {
@@ -944,6 +950,29 @@ function pisoDeLasSueltas(estado) {
     return cerradas.length ? Math.max(...cerradas.map(t => t.outMs)) : -Infinity;
 }
 
+/**
+ * La toma viva que se solapa con esta, si hay alguna.
+ *
+ * Dos tomas vivas no se pisan nunca: es lo que hace que una palabra sea de una
+ * sola y que el XML no tenga dos clips encimados. Lo mantienen `moverBorde`
+ * —con su piso y su techo—, `abrirToma` y el conteo; esto es para el gesto que
+ * puede romperlo por la puerta de atrás, que es volver a activar una toma
+ * desactivada sobre cuyo tramo ya nació otra (ver `descartar` en `cambios-toma`).
+ */
+function laQuePisa(tomas, toma) {
+    if (!toma || toma.inMs == null) return null;
+    const fin = toma.outMs == null ? Infinity : toma.outMs;
+    return (tomas || []).find(t => {
+        if (t === toma || t.id === toma.id || t.descartada || t.inMs == null) return false;
+        // Caber es dos cosas: no solaparse, y quedar del lado que dice su
+        // número. Mientras estuvo desactivada, un IN pudo cruzarla entera —su
+        // tramo estaba libre—, y una toma 2 que vuelve a contar por detrás de
+        // la 1 no pisa a nadie pero deja el XML con los nombres al revés.
+        if (t.id < toma.id) return t.outMs == null || t.outMs > toma.inMs;
+        return t.inMs < fin;
+    }) || null;
+}
+
 function pisoDelIn(tomas, toma) {
     const previa = toma && toma.inMs != null ? tomaAnterior(tomas, toma) : null;
     return previa ? previa.outMs : null;
@@ -994,6 +1023,10 @@ function moverInAbierta(estado, toma, ms) {
     toma.inMs = donde;
     toma.palabras = todas.filter(w => w.t >= donde);
     estado.sueltas = todas.filter(w => w.t < donde);
+    // El gris de antes del IN también se corre: una toma reabierta conserva el
+    // `antes` de su relectura, y con el IN hacia atrás esas palabras quedaban
+    // a los dos lados de la línea —grises y a la vez dentro de la toma—.
+    if (toma.antes) toma.antes = toma.antes.filter(w => w.t < donde);
     return true;
 }
 
@@ -1029,8 +1062,17 @@ function cerrarEn(estado, toma, ms) {
  */
 function finDeToma(toma, siNoDijoNada) {
     const palabras = toma.palabras || [];
-    const ultima = palabras[palabras.length - 1];
-    const fin = ultima ? (ultima.hasta || ultima.t) : siNoDijoNada;
+    // La que termina más tarde, no la última de la lista: la lista admite la
+    // deriva de Whisper en el orden (`DERIVA_DEL_CICLO_MS`), y con una palabra
+    // tardía al final el OUT caía ENCIMA de otra —misma hora que su `t`—, que
+    // por el OUT exclusivo quedaba fuera de la toma.
+    //
+    // Y una palabra sin final termina DESPUÉS de empezar. Las del sidecar
+    // venían sin `hasta`, así que en una clase reanudada el OUT caía en el
+    // `t` de la última palabra y esa palabra quedaba fuera de su propia toma.
+    const fin = palabras.length
+        ? palabras.reduce((m, w) => Math.max(m, w.hasta != null ? w.hasta : w.t + 1), -Infinity)
+        : siNoDijoNada;
     // Nunca antes del IN: una toma abierta a mano durante el atraso del ciclo
     // podía tener palabras de antes de su IN y cerrar con el OUT más atrás
     // que el IN, que igual llegaba al XML.
@@ -1430,6 +1472,71 @@ function tomaCon(estado, w) {
     return null;
 }
 
+/** Dos palabras del ciclo son la misma si suenan igual y caen así de cerca. */
+const MISMA_DEL_CICLO_MS = 600;
+
+/** Si una desactivada que cubre esa hora ya tiene esa misma palabra escrita. */
+function yaEscritaEnDescartada(estado, w) {
+    const n = norm(w.texto);
+    for (const t of estado.tomas || []) {
+        if (!t.descartada || t.inMs == null) continue;
+        if (w.t < t.inMs || (t.outMs != null && w.t >= t.outMs)) continue;
+        if ((t.palabras || []).some(p => Math.abs(p.t - w.t) < MISMA_DEL_CICLO_MS && mismaPalabra(norm(p.texto), n))) return true;
+    }
+    return false;
+}
+
+/**
+ * Mete en una toma una palabra que el ciclo acaba de oír, con tres cuidados que
+ * la toma abierta nunca necesitó y una cerrada sí:
+ *
+ *   · **en su sitio y no al final.** El ciclo oye con atraso, así que una
+ *     palabra de hace cuatro segundos puede llegar cuando la toma ya tiene las
+ *     de hace dos; pegada al final quedaba fuera de orden, y `senales` apunta a
+ *     las palabras por índice;
+ *   · **sin repetir.** Las ventanas se solapan y `dondeSigue` engancha por
+ *     texto; cuando no engancha, la misma palabra vuelve. En la abierta la
+ *     tapaba el enganche siguiente; en una cerrada se quedaba dos veces;
+ *   · **y nunca sobre un texto releído.** Una toma que ya pasó por el modelo
+ *     grande tiene SU texto, y el del ciclo es el descartable: meterle una
+ *     palabra más es escribir «funcion» al lado de «funcionando».
+ *
+ * Los tres los encontró el martillo de secuencias al azar (`tests/martillo.test.js`).
+ */
+function meterEnToma(toma, w) {
+    if (toma.outMs != null && toma.releida) return false;
+    return meterEnOrden(toma.palabras || (toma.palabras = []), w);
+}
+
+/**
+ * Cuánto puede correrse la hora de una palabra sin que eso diga nada del orden.
+ *
+ * Whisper le pone a la misma palabra horas distintas de una pasada a otra, hasta
+ * medio segundo (ver `dondeSigue`). Por eso el ciclo engancha por TEXTO y no por
+ * hora, y por eso una palabra que llega con la hora un poco por detrás de la
+ * última guardada va al final igual: el orden en que se oyó manda sobre una
+ * deriva de milisegundos. Lo que sí se mete en su sitio es lo que llega
+ * claramente tarde —segundos, el atraso del ciclo contra una toma recién
+ * cerrada—, que no es deriva: es una palabra de antes.
+ */
+const DERIVA_DEL_CICLO_MS = 1000;
+
+/**
+ * Una palabra del ciclo, en una lista que se mantiene en orden y sin repetir.
+ * Vale para las palabras de una toma y para el colchón de sueltas, que tienen
+ * el mismo problema: el ciclo oye con atraso y con solape.
+ */
+function meterEnOrden(lista, w) {
+    const n = norm(w.texto);
+    for (let i = lista.length - 1; i >= 0 && w.t - lista[i].t < MISMA_DEL_CICLO_MS * 4; i--) {
+        if (Math.abs(lista[i].t - w.t) < MISMA_DEL_CICLO_MS && mismaPalabra(norm(lista[i].texto), n)) return false;
+    }
+    let donde = lista.length;
+    while (donde > 0 && lista[donde - 1].t - w.t > DERIVA_DEL_CICLO_MS) donde--;
+    lista.splice(donde, 0, w);
+    return true;
+}
+
 function aplicarSenales(estado, palabras, opciones) {
     if (!Array.isArray(estado.sueltas)) estado.sueltas = [];
     if (!estado.ultimaSenal) estado.ultimaSenal = {};
@@ -1494,8 +1601,11 @@ function aplicarSenales(estado, palabras, opciones) {
             // alguien abre a mano en los próximos segundos (ver `sueltas` y
             // `abrirToma`).
             const suya = tomaCon(estado, w);
-            if (suya) (suya.palabras || (suya.palabras = [])).push(w);
-            else estado.sueltas.push(w);
+            if (suya) meterEnToma(suya, w);
+            // Lo que cae en el tramo de una desactivada es de nadie —su tramo
+            // quedó libre— salvo que sea la misma palabra que ella ya tiene
+            // escrita: el solape la trae otra vez y quedaba suelta y en su fila.
+            else if (!yaEscritaEnDescartada(estado, w)) meterEnOrden(estado.sueltas, w);
         }
         cursor = hasta;
     };
@@ -1561,9 +1671,14 @@ function aplicarSenales(estado, palabras, opciones) {
             // quedaba adentro de la toma.
             const sigue = nuevas[marca.hasta + 1];
             const uno = nuevas[marca.hasta];
+            // Y nunca antes del OUT de la última cerrada: el ciclo oye con
+            // atraso, así que un «3, 2, 1» dicho justo al cerrar a mano puede
+            // llegar con su hora por detrás del OUT que puso el botón, y la
+            // toma nueva nacía pisando a la anterior.
+            const arranque = sigue ? sigue.t : (uno.hasta != null ? uno.hasta : uno.t);
             const toma = nuevaToma(
                 estado,
-                sigue ? sigue.t : (uno.hasta != null ? uno.hasta : uno.t),
+                Math.max(arranque, pisoDeLasSueltas(estado)),
                 textoDe(nuevas, marca.desde, marca.hasta));
             if (!sigue) toma.inProvisional = true;
             // **Lo que se dijo antes del conteo se queda.** Antes acá se vaciaba
@@ -1731,9 +1846,22 @@ function parecido(a, b) {
  * la toma. Comparar contra `null` no da eso sino lo contrario —`w.t < null` es
  * falso para cualquier hora—, y el texto entero se le iba a `despues`: al partir
  * una toma abierta, la mitad que sigue grabando aparecía vacía.
+ *
+ * **Y sale en orden de tiempo, venga como venga.** Quien reparte suele juntar
+ * tres listas —`antes`, `palabras`, `despues`— y a veces una cuarta, las sueltas
+ * que un OUT corrido hacia adelante acaba de tragar. Pegadas una detrás de otra
+ * no están en orden: con el OUT en 3 y las sueltas en 5, correrlo a 6 dejaba
+ * [1, 2, 5, 3, 4]. Y el orden no es estética: `senales` apunta a las palabras
+ * por índice y la ventana dibuja de corrido.
+ *
+ * **Y sin repetidas.** Las cuatro listas se solapan a propósito: la orilla
+ * `despues` de la relectura y las sueltas del ciclo cubren el mismo tramo, así
+ * que correr el OUT hacia adelante traía la misma palabra por los dos lados y
+ * la toma la escribía dos veces. Misma hora y mismo texto es la misma palabra
+ * (`juntas`). Las dos cosas las encontró el martillo (`tests/martillo.test.js`).
  */
 function repartir(palabras, toma) {
-    const lista = palabras || [];
+    const lista = juntas(palabras, []);
     const hasta = toma.outMs == null ? Infinity : toma.outMs;
     return {
         antes: lista.filter(w => w.t < toma.inMs),
@@ -1765,7 +1893,11 @@ function repartir(palabras, toma) {
  * @returns {boolean} si se pudo mover
  */
 function moverBorde(toma, cual, paredMs, tomas) {
-    if (!toma || paredMs == null) return false;
+    // Finito, no solo distinto de null: un NaN pasaba las dos comparaciones de
+    // abajo —las dos dan falso— y terminaba ESCRITO en el borde. Una toma con
+    // el IN en NaN no está en ninguna parte: no se dibuja, no se relee, no se
+    // reparte y el XML sale con un clip sin principio.
+    if (!toma || !Number.isFinite(paredMs)) return false;
     if (cual === 'in') {
         if (toma.outMs != null && paredMs >= toma.outMs) return false;
         const piso = tomas ? pisoDelIn(tomas, toma) : null;
@@ -1779,6 +1911,12 @@ function moverBorde(toma, cual, paredMs, tomas) {
     const donde = techo != null ? Math.min(paredMs, techo) : paredMs;
     if (donde === toma.outMs || (toma.inMs != null && donde <= toma.inMs)) return false;
     toma.outMs = donde;
+    // Un OUT puesto a mano no es provisional. El del botón sí —cae donde llegó
+    // el audio y la relectura lo acerca a la última palabra—, pero si el editor
+    // lo arrastró antes de que la relectura llegara, la marca seguía puesta y
+    // la relectura le movía el borde que acababa de elegir. Lo encontró el
+    // martillo deshaciendo y rehaciendo (`tests/martillo.test.js`).
+    delete toma.outProvisional;
     return true;
 }
 
@@ -1792,6 +1930,9 @@ function moverBorde(toma, cual, paredMs, tomas) {
 
 /** @param {object} c { desdeMs, hastaMs, texto, comentario } */
 function comentar(toma, c) {
+    // Un comentario señala un tramo; sin horas no señala nada, y un NaN
+    // guardado llega al XML como un marcador sin sitio.
+    if (!Number.isFinite(Number(c.desdeMs)) || !Number.isFinite(Number(c.hastaMs))) return;
     toma.comentarios = (toma.comentarios || []).concat([{
         desdeMs: Number(c.desdeMs),
         hastaMs: Number(c.hastaMs),
@@ -1849,7 +1990,22 @@ function tragarSueltas(estado, toma) {
     if (!sueltas.length || toma.inMs == null || toma.outMs == null) return;
     const adentro = w => w.t >= toma.inMs && w.t < toma.outMs;
     if (!sueltas.some(adentro)) return;
-    toma.palabras = (toma.palabras || []).concat(sueltas.filter(adentro))
+    toma.palabras = juntas(toma.palabras, sueltas.filter(adentro))
+        .sort((a, b) => a.t - b.t);
+    estado.sueltas = sueltas.filter(w => !adentro(w));
+}
+
+/**
+ * Lo mismo para la toma ABIERTA, que llega hasta ahora: todo lo suelto desde
+ * su IN es suyo. Es lo que hace falta al reabrir una toma cerrada, porque lo
+ * dicho desde que cerró estaba en el colchón y de golpe cae dentro de ella.
+ */
+function tragarSueltasDesde(estado, toma) {
+    const sueltas = estado.sueltas || [];
+    if (!sueltas.length || toma.inMs == null || toma.outMs != null) return;
+    const adentro = w => w.t >= toma.inMs;
+    if (!sueltas.some(adentro)) return;
+    toma.palabras = juntas(toma.palabras, sueltas.filter(adentro))
         .sort((a, b) => a.t - b.t);
     estado.sueltas = sueltas.filter(w => !adentro(w));
 }
@@ -1877,8 +2033,43 @@ function tragarSueltas(estado, toma) {
  * @param {object[]} [soltadas] palabras que una toma tenía y ya no
  */
 function limpiarSueltas(estado, soltadas) {
-    estado.sueltas = juntas(estado.sueltas, soltadas)
-        .filter(w => !esDeAlgunaToma(estado, w));
+    // Lo que se suelta entra con la regla del ciclo —en orden y sin la misma
+    // palabra dos veces a la misma hora— y no por igualdad exacta: lo que
+    // suelta un Cmd-Z puede ser la lectura del modelo grande de un tramo que el
+    // ciclo ya tenía con otra ortografía, y las dos juntas en el gris eran
+    // «funcion funcionando».
+    //
+    // Contra lo que YA estaba suelto, no entre ellas: dos soltadas iguales
+    // seguidas —«no, no»— son dos palabras dichas, y vienen de una toma que ya
+    // las tenía deduplicadas.
+    const habia = (estado.sueltas || []).slice();
+    const nuevas = (soltadas || []).filter(w => {
+        const n = norm(w.texto);
+        return !habia.some(h => Math.abs(h.t - w.t) < MISMA_DEL_CICLO_MS && mismaPalabra(norm(h.texto), n));
+    });
+    const todas = juntas(habia, nuevas);
+    // Lo que cae dentro de una CERRADA sobra en el colchón y punto: la toma lo
+    // tiene o lo va a tener con su relectura. Lo que cae dentro de la ABIERTA
+    // se le mete, porque a la abierta nadie la relee hasta que cierre, y tirarlo
+    // era perder lo que se dijo —lo encontró el martillo deshaciendo una
+    // división de la toma abierta—.
+    const abierta = tomaAbierta(estado);
+    if (abierta && !abierta.descartada && abierta.inMs != null) {
+        const suyas = todas.filter(w => w.t >= abierta.inMs);
+        if (suyas.length) abierta.palabras = juntas(abierta.palabras, suyas);
+    }
+    // Y lo que una toma tiene escrito no está suelto, cuente la toma o no: una
+    // desactivada se queda con sus palabras y las muestra en su fila, así que
+    // tenerlas además en el colchón era verlas dos veces. Es la otra mitad de
+    // la regla: suelta es lo que no está dentro de ninguna viva NI escrito en
+    // ninguna.
+    const escritas = new Set();
+    for (const t of estado.tomas || []) for (const w of t.palabras || []) escritas.add(`${w.t}|${w.texto}`);
+    estado.sueltas = todas.filter(w => !esDeAlgunaToma(estado, w)
+        && !escritas.has(`${w.t}|${w.texto}`)
+        // Con la regla del ciclo para las desactivadas: su texto puede venir
+        // de la relectura, con otra ortografía que la palabra suelta.
+        && !yaEscritaEnDescartada(estado, w));
 }
 
 /**
@@ -2065,6 +2256,9 @@ module.exports = {
     dividir,
     correrNumeros,
     tragarSueltas,
+    tragarSueltasDesde,
+    laQuePisa,
+    juntas,
     limpiarSueltas,
     esDeAlgunaToma,
     tomasQueQuedan,

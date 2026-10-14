@@ -334,7 +334,14 @@ function dejariaDosAbiertas(tomas, id, cual, campos) {
         // No repone el OUT: si la toma está abierta ahora, lo estaba igual.
         return false;
     }
-    return tomas.some(t => t.id !== id && t.outMs == null);
+    // Dos abiertas, o una abierta que no es la última: una toma reabierta llega
+    // hasta ahora, así que si detrás de ella ya hay otra —viva— las dos se
+    // pisan. Es el mismo motivo por el que `reabrir` solo acepta la última, y
+    // deshacer un «cerrar» viejo con tomas nuevas detrás tiene que negarse
+    // igual. Lo encontró el martillo de secuencias al azar.
+    const propia = tomas.find(t => t.id === id);
+    return tomas.some(t => t.id !== id && !t.descartada
+        && (t.outMs == null || (propia && t.inMs > propia.inMs)));
 }
 
 /**

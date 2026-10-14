@@ -17,7 +17,12 @@ const espejo = require('./espejo');
 const relecturas = require('./relecturas');
 const historial = require('./deshacer');
 const referencias = require('./referencias');
+const registro = require('./registro');
 const vivo = require('./notas-vivo');
+
+/** Los cambios de una toma que esta puerta conoce; cualquier otro no es un cambio. */
+const TIPOS = new Set(['vista', 'nota', 'descartar', 'comentar', 'editar-comentario',
+    'borrar-comentario', 'borde', 'dividir', 'reabrir', 'eliminar']);
 
 /**
  * Lo que el editor cambia a mano desde la pantalla.
@@ -63,6 +68,14 @@ function editar(sesion, cambio) {
     }
     const toma = sesion.estado.tomas.find(t => t.id === c.toma);
     if (!toma) return espejo.resumen(sesion);
+    // Un tipo que no existe no es un cambio: se contesta con el estado tal cual,
+    // igual que con una toma que no está. Antes bajaba hasta `vivo.aplicar`, que
+    // revienta con «Cambio sin definir», y eso salía por el IPC como una promesa
+    // rechazada en la ventana. El motor no se fía de lo que manda la ventana.
+    if (!TIPOS.has(c.tipo)) {
+        registro.anotar('main', 'grabar.cambio-desconocido', { tipo: String(c.tipo) });
+        return espejo.resumen(sesion);
+    }
 
     const antes = historial.foto(toma);
 
@@ -120,6 +133,33 @@ function editar(sesion, cambio) {
         // en `clases-grabadas.js`), y de ahí que los aplique la misma función.
         // `borde` también entra ahí, pero acá va aparte: con la sesión viva se
         // relee el tramo, así que el borde no está atado a las orillas guardadas.
+        case 'descartar': {
+            // La abierta no se desactiva: primero se cierra, igual que para
+            // descartarla. La ventana no lo ofrece, y el motor tampoco lo acepta.
+            if (toma.outMs == null) break;
+            // Y una que vuelve a contar tiene que caber. Mientras no contaba no
+            // ponía piso, así que la toma siguiente pudo abrirse legítimamente
+            // sobre su tramo; reactivarla ahora dejaría dos tomas vivas pisándose,
+            // con la misma palabra en las dos y dos clips encimados en el XML.
+            // Se niega, y se dice: esto sí es una decisión del editor.
+            const pisada = !c.descartada && vivo.laQuePisa(sesion.estado.tomas, toma);
+            if (pisada) {
+                if (sesion.avisar) {
+                    sesion.avisar({
+                        tipo: 'aviso',
+                        mensaje: `No puedo volver a activar la toma ${toma.id}: la toma ${pisada.id} quedó ` +
+                            `sobre su tramo. Desactivá o corré la ${pisada.id} primero.`
+                    });
+                }
+                break;
+            }
+            vivo.aplicar(toma, c, sesion.estado.tomas);
+            // Una toma que vuelve a contar recupera lo que se dijo en su tramo
+            // mientras no contaba: el ciclo lo fue dejando en el colchón, porque
+            // una desactivada no es de nadie, y ahora cae dentro de ella.
+            if (!toma.descartada) vivo.tragarSueltas(sesion.estado, toma);
+            break;
+        }
         default:
             vivo.aplicar(toma, c, sesion.estado.tomas);
     }
@@ -269,6 +309,12 @@ function eliminar(sesion, toma) {
     if (toma.outMs == null) return;
     const tomas = sesion.estado.tomas;
     tomas.splice(tomas.indexOf(toma), 1);
+    // Y sale de la cola de relecturas: una toma que ya no está no tiene nada
+    // que leer, y su número en la cola es una entrada que apunta a nadie.
+    sesion.cola = (sesion.cola || []).filter(id => id !== toma.id);
+    // Lo que decía deja de ser de alguien y vuelve al colchón: es lo mismo que
+    // pasa al desactivarla, y lo que hace que ese tramo se pueda volver a tomar.
+    vivo.limpiarSueltas(sesion.estado, toma.palabras || []);
 }
 
 /* ─── Partir una toma en dos ───────────────────────────────────────────── */
@@ -363,11 +409,31 @@ function volverDivision(sesion, paso, hacia) {
     const segunda = tomas.find(t => t.id === paso.id + 1);
     const primera = tomas.find(t => t.id === paso.id);
     if (!segunda || !primera) return false;
+    // Si la junta vuelve abierta, tiene que poder serlo: ninguna otra abierta
+    // y ninguna viva detrás. La segunda mitad no cuenta porque se va en este
+    // mismo gesto. Pasa cuando el conteo abrió otra toma después de partir
+    // —el conteo no deja paso en el historial, así que la división sigue
+    // arriba de la pila—, y deshacerla dejaría dos abiertas.
+    if ((paso.antes || {}).outMs == null) {
+        const estorba = tomas.some(t => t !== primera && t !== segunda && !t.descartada
+            && (t.outMs == null || t.inMs > primera.inMs));
+        if (estorba) return false;
+    }
     // La foto del OUT vuelve a la primera mitad antes de que los números corran.
     correrLoDeAfuera(sesion, [{ de: segunda.id, a: primera.id }]);
     // Sin `campos`, que es como `poner` repone la toma entera: acá hay que
     // devolverle a la vez el OUT, el texto y las dos orillas.
+    // Lo que la segunda mitad oyó DESPUÉS de partir no está en la foto de la
+    // primera, que es de antes: si la segunda seguía abierta, es todo lo que se
+    // dijo desde el corte, y se iba con ella. Se queda con la junta.
+    const foto = paso.antes || {};
+    const ultimaDeLaFoto = (foto.palabras || []).reduce((m, w) => Math.max(m, w.t), -Infinity);
+    const nuevas = (segunda.palabras || []).filter(w => w.t > ultimaDeLaFoto + 1000);
     historial.poner(tomas, paso.id, paso.antes, null);
+    primera.palabras = vivo.juntas(primera.palabras, nuevas);
+    // La toma junta vuelve con el texto de antes de partirla, que no es un
+    // texto leído con estos bordes (ver `volver`).
+    delete primera.releida;
     tomas.splice(tomas.indexOf(segunda), 1);
     sesion.cola = (sesion.cola || []).filter(id => id !== segunda.id);
     correrLoDeAfuera(sesion, vivo.correrNumeros(sesion.estado, segunda.id + 1, -1));
@@ -392,8 +458,28 @@ function volverDivision(sesion, paso, hacia) {
 function reabrir(sesion, toma) {
     const tomas = sesion.estado.tomas;
     if (vivo.tomaAbierta(sesion.estado) || toma !== tomas[tomas.length - 1]) return;
+    // Reabrir una desactivada es querer seguir grabando en ella: vuelve a
+    // contar. Una abierta que no cuenta deja al ciclo mandando al colchón lo
+    // que se dice dentro de ella, y eso no se ve en ningún sitio. Y tiene que
+    // caber: mientras no contaba, otra pudo correr su IN por encima de ella.
+    const pisada = vivo.laQuePisa(tomas, { ...toma, descartada: false, outMs: null });
+    if (pisada) {
+        if (sesion.avisar) {
+            sesion.avisar({
+                tipo: 'aviso',
+                mensaje: `No puedo reabrir la toma ${toma.id}: la toma ${pisada.id} quedó sobre su tramo.`
+            });
+        }
+        return;
+    }
+    toma.descartada = false;
     toma.outMs = null;
     toma.cerradaSola = false;
+    // Lo que se dijo desde que cerró vuelve a ser suyo. Sin OUT la toma llega
+    // hasta ahora, así que las sueltas de ese tramo caen dentro de ella: dejarlas
+    // en el colchón era tener palabras que no se veían en ningún sitio —no son
+    // de nadie para la pantalla, pero están dentro de una toma para el motor—.
+    vivo.tragarSueltasDesde(sesion.estado, toma);
     // Lo que se dijo después del OUT deja de ser orilla: la toma sigue abierta y
     // esas palabras van a entrar en ella cuando se la relea al cerrar. Dejarlas
     // las mostraría dos veces, una en gris y otra dentro de la toma.
@@ -422,12 +508,41 @@ function volver(sesion, hacia) {
     // sesión no repone ninguna, así que no puede dejar dos abiertas. Preguntarle
     // igual lo plantaría siempre, porque su `id` es undefined y entonces
     // cualquier toma abierta contaría como "la otra".
-    if (!paso.campo && historial.dejariaDosAbiertas(sesion.estado.tomas, paso.id, foto, paso.campos)) {
+    // Ni puede reponer una toma que ya no cabe: mientras estuvo desactivada
+    // —o fuera, si el paso es un «eliminar»— su tramo quedó libre y otra pudo
+    // ocuparlo. Es la misma regla que «Mantener» y «Reabrir» (`laQuePisa`).
+    // La división no: repone la primera mitad sobre el tramo de la segunda a
+    // propósito, porque en el mismo gesto la segunda se va (`volverDivision`,
+    // que tiene sus propias comprobaciones).
+    if (!paso.campo && foto && paso.tipo !== 'dividir') {
+        // Como va a quedar la toma, no como está en la foto: el paso repone solo
+        // los campos que cambió (`poner`), y el resto se queda como está hoy.
+        const actual = sesion.estado.tomas.find(t => t.id === paso.id) || {};
+        const quedaria = Array.isArray(paso.campos)
+            ? { ...actual, ...Object.fromEntries(paso.campos.filter(k => k in foto).map(k => [k, foto[k]])) }
+            : { ...foto };
+        const pisada = quedaria.descartada ? null
+            : vivo.laQuePisa(sesion.estado.tomas, { ...quedaria, id: paso.id });
+        if (pisada) {
+            return {
+                ok: false,
+                error: `No puedo ${hacia === 'adelante' ? 'rehacer' : 'deshacer'} «${paso.que}»: ` +
+                    `la toma ${pisada.id} quedó sobre el tramo de la ${paso.id}.`,
+                estado: espejo.resumen(sesion)
+            };
+        }
+    }
+    // Tampoco a la división: deshacerla saca la segunda mitad en el mismo
+    // gesto, así que la abierta que esta guarda vería es justamente la que se
+    // va. Con la guarda puesta, dividir la toma abierta —el caso para el que
+    // existe dividir— no se podía deshacer nunca.
+    if (!paso.campo && paso.tipo !== 'dividir'
+        && historial.dejariaDosAbiertas(sesion.estado.tomas, paso.id, foto, paso.campos)) {
         return {
             ok: false,
             error: `No puedo ${hacia === 'adelante' ? 'rehacer' : 'deshacer'} «${paso.que}»: ` +
-                'mientras tanto se abrió otra toma, y dos tomas abiertas a la vez rompen ' +
-                'el ciclo de señales. Cerrá la de ahora y volvé a intentar.',
+                'mientras tanto hubo otra toma detrás, y una toma reabierta con otra detrás ' +
+                'las deja pisándose. Descartá o desactivá la de después y volvé a intentar.',
             estado: espejo.resumen(sesion)
         };
     }
@@ -446,6 +561,11 @@ function volver(sesion, hacia) {
             };
         }
         historial.sacar(sesion.historia, hacia);
+        // Las dos mitades juntas o separadas cambian qué tramo es de quién, y
+        // las sueltas son de la sesión: se cuadran igual que en el camino de
+        // abajo. Sin esto, deshacer la división de la toma abierta dejaba en el
+        // colchón lo dicho desde el corte, dentro de la toma y sin verse.
+        vivo.limpiarSueltas(sesion.estado, []);
         espejo.escribir(sesion);
         return { ok: true, que: paso.que, estado: espejo.resumen(sesion) };
     }
@@ -468,9 +588,59 @@ function volver(sesion, hacia) {
     } else {
         historial.poner(sesion.estado.tomas, paso.id, foto, dado.campos);
     }
-    // La foto es de una toma y las sueltas son de la sesión: hay que cuadrarlas
-    // a mano, o un borde repuesto deja la misma palabra adentro y afuera.
-    if (!paso.campo) vivo.limpiarSueltas(sesion.estado, tenia);
+    if (!paso.campo) {
+        // La foto repone los campos que el gesto cambió, y las palabras pueden
+        // no estar entre ellos: deshacer un «reabrir» devuelve el OUT viejo y
+        // deja en la toma todo lo que el ciclo le metió mientras estuvo abierta,
+        // o sea palabras fuera de sus propios bordes. Se vuelve a repartir por
+        // los bordes repuestos, y lo que cae fuera pasa a orilla.
+        const vuelta = sesion.estado.tomas.find(t => t.id === paso.id);
+        if (vuelta && vuelta.inMs != null) {
+            // Solo hacia afuera: lo que quedó fuera de los bordes sale a la
+            // orilla. No al revés —meter la orilla dentro— porque la orilla es
+            // texto del modelo grande y las palabras repuestas son del ciclo:
+            // juntarlas dejaba la misma palabra dos veces con dos ortografías.
+            const fin = vuelta.outMs == null ? Infinity : vuelta.outMs;
+            const dentroDe = w => w.t >= vuelta.inMs && w.t < fin;
+            const fuera = (vuelta.palabras || []).filter(w => !dentroDe(w));
+            vuelta.palabras = (vuelta.palabras || []).filter(dentroDe);
+            // Y la orilla se recorta a lo que es orilla con estos bordes: lo que
+            // ahora cae dentro no se mete —sería la lectura grande junto a la
+            // del ciclo— y lo repone la relectura, que vuelve a correr.
+            vuelta.antes = vivo.juntas(vuelta.antes, fuera).filter(w => w.t < vuelta.inMs);
+            vuelta.despues = vuelta.outMs == null ? [] : vivo.juntas(vuelta.despues, fuera).filter(w => w.t >= fin);
+            // Un texto repuesto no es un texto leído. La foto devuelve las
+            // palabras de entonces —las del ciclo, si la relectura aterrizó
+            // después—, y la marca de «ya releída con estos bordes» se quedaba
+            // puesta: la cola la veía leída y no la volvía a leer nunca, así
+            // que el texto descartable quedaba en el archivo para siempre.
+            delete vuelta.releida;
+        }
+        // La foto es de una toma y las sueltas son de la sesión: hay que
+        // cuadrarlas a mano, o un borde repuesto deja la misma palabra adentro
+        // y afuera. Vuelve al colchón lo que la toma PERDIÓ: lo que tenía en
+        // `palabras` y ya no tiene. Lo que sigue en `palabras` no —y eso cubre
+        // a la toma desactivada, que se queda con sus palabras y mandarlas
+        // además al colchón las mostraba dos veces, gris entre tomas y dentro
+        // de su fila—. Las orillas no cuentan: una palabra en `despues` está
+        // fuera de la toma, y que además esté suelta es lo normal.
+        //
+        // **Y solo lo que quedó FUERA de sus bordes.** Lo que la toma tenía y
+        // sigue cayendo dentro de ellos no se perdió: se reemplazó. Es el caso
+        // de deshacer un «cerrar» cuando la relectura ya aterrizó: la foto
+        // devuelve el texto del ciclo, y las palabras del modelo grande que
+        // no coinciden letra por letra —«funcion» y «funcionando»— no son
+        // sueltas que haya que devolver, son la otra lectura del mismo tramo.
+        // Soltarlas las metía otra vez en la toma reabierta, y el texto salía
+        // con las dos lecturas pegadas.
+        const sigueEn = new Set(((vuelta && vuelta.palabras) || []).map(w => `${w.t}|${w.texto}`));
+        const dentro = w => vuelta && vuelta.inMs != null && w.t >= vuelta.inMs
+            && (vuelta.outMs == null || w.t < vuelta.outMs);
+        vivo.limpiarSueltas(sesion.estado,
+            (tenia || []).filter(w => !sigueEn.has(`${w.t}|${w.texto}`) && !dentro(w)));
+        // Y la cola no apunta a una toma que el paso acaba de sacar.
+        if (!vuelta) sesion.cola = (sesion.cola || []).filter(id => id !== paso.id);
+    }
     // Un borde repuesto pide el mismo texto que pidió el gesto original: acá el
     // reparto de palabras lo hace la relectura, no el borde (ver `editar`).
     if (paso.tipo === 'borde' || paso.tipo === 'cerrar') relecturas.encolar(sesion, paso.id);

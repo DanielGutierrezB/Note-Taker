@@ -241,7 +241,7 @@ function iniciar(params) {
         avisar: typeof p.avisar === 'function' ? p.avisar : () => {}
     };
 
-    abrirEscucha({ sampleRate: p.sampleRate, canales: p.canales });
+    abrirEscucha({ sampleRate: p.sampleRate, canales: p.canales, sinReloj: p.sinReloj, desdeMs: p.desdeMs });
     // `sinReloj` es para la simulación, que empuja el ciclo a mano después de
     // cada pedazo: con el reloj andando las dos pasadas se pisarían y la que
     // llegara segunda no vería nada.
@@ -250,6 +250,12 @@ function iniciar(params) {
         // El modelo grande cargado para el texto en vivo. No se espera: mientras
         // carga, el ciclo oye por whisper-cli como siempre (`oir.escuchar`).
         residente.arrancar({ idioma: sesion.estado.idioma || 'es' });
+    }
+    // Al reanudar, la toma que quedó abierta cuando la app murió viene cerrada
+    // donde llegó el audio y provisional (`paraReanudar`): se relee, para que
+    // su OUT caiga en la última palabra y su texto sea el del modelo grande.
+    if (previa) {
+        for (const t of sesion.estado.tomas) if (t.outProvisional) relecturas.encolar(sesion, t.id);
     }
     espejo.escribir(sesion);
     return espejo.resumen(sesion);
@@ -262,7 +268,11 @@ function abrirEscucha(params) {
         nombre: sesion.estado.secuencia,
         sampleRate: p.sampleRate,
         canales: p.canales,
-        desdeMs: Date.now()
+        // La simulación (`sinReloj`) puede decir a qué hora arranca el audio:
+        // su tiempo corre a golpes de `pcm` y no con el reloj, así que al
+        // reanudar una clase simulada el WAV nuevo tiene que nacer DESPUÉS del
+        // viejo, como en la realidad. La app nunca lo manda.
+        desdeMs: p.sinReloj && Number.isFinite(p.desdeMs) ? p.desdeMs : Date.now()
     });
     sesion.captura = { ...info, segundos: 0 };
     sesion.escuchadoHastaMs = info.desdeMs;

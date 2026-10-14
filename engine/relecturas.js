@@ -57,8 +57,11 @@ function encolar(sesion, id) {
     // veces seguidas pedía tres relecturas iguales, una detrás de otra, y cada
     // una es cargar el modelo grande. La que espera va a leer los bordes que
     // haya cuando le toque, que son los últimos.
-    if (sesion.cola.includes(id)) return;
-    sesion.cola.push(id);
+    //
+    // Pero la cola se despierta igual: la toma puede estar esperando su orilla
+    // larga y el gesto que la vuelve a encolar —un Cmd-Z que le repuso el
+    // texto— la deja pidiendo otra vez la lectura entera, que no espera.
+    if (!sesion.cola.includes(id)) sesion.cola.push(id);
     atender(sesion);
 }
 
@@ -284,6 +287,10 @@ async function rehacer(sesion, id) {
             const todas = (leido.antes || []).concat(leido.palabras, leido.despues || []);
             Object.assign(toma, vivo.repartir(todas, toma));
         }
+        // El texto nuevo manda sobre el colchón: lo que el ciclo dejó suelto en
+        // este tramo —porque la toma estaba desactivada cuando lo oyó— ahora
+        // está escrito acá, y suelto además se veía dos veces.
+        if (leido.palabras) vivo.limpiarSueltas(sesion.estado, []);
         // El OUT que puso el botón o Terminar es donde llegó el audio, con el
         // silencio del atraso incluido: se acerca a la última palabra de verdad,
         // que ahora sí se conoce entera.

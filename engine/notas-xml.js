@@ -373,7 +373,13 @@ function xmlDeNotas(estado) {
  */
 /** Una palabra como se guarda: la hora del día y lo que se dijo, nada más. */
 function palabraDelArchivo(w) {
-    return { t: w.t, texto: w.texto };
+    // Con su final cuando lo tiene: es lo que decide dónde cae el OUT al
+    // cerrar (`finDeToma`) y a dónde se acerca la relectura. Sin él, en una
+    // clase reanudada la última palabra de cada toma cerrada quedaba fuera.
+    // Un sidecar viejo no lo trae y el motor lo tolera.
+    const p = { t: w.t, texto: w.texto };
+    if (w.hasta != null) p.hasta = w.hasta;
+    return p;
 }
 
 /**

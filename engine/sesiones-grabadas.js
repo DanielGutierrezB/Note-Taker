@@ -559,6 +559,20 @@ function paraReanudar(json, enCurso) {
         archivo: dondeQuedoElWav(sitio, s.archivo)
     }));
 
+    // Una toma que quedó abierta se cierra donde llegó el audio. Apagar la
+    // app lo hace (`cerrarLoAbierto`), pero la app que se MUERE no apaga nada:
+    // el sidecar queda con la toma abierta, y reanudada así seguiría creciendo
+    // por encima del hueco en que no se grabó —con el IN en un WAV y el OUT en
+    // otro, que la relectura no puede leer entero—. Provisional, como la del
+    // botón, para que la relectura la acerque a la última palabra de verdad.
+    const ultima = sesiones[sesiones.length - 1];
+    const finDelAudio = ultima ? ultima.desdeMs + (ultima.segundos || 0) * 1000 : null;
+    for (const toma of estado.tomas || []) {
+        if (toma.outMs != null || toma.inMs == null || finDelAudio == null) continue;
+        vivo.cerrarProvisional(toma, Math.max(finDelAudio, toma.inMs + 1));
+        toma.cerradaSola = true;
+    }
+
     return {
         dir: sitio.base,
         ceroMs: Number(estado.ceroMs),
