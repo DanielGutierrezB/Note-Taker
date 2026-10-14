@@ -190,6 +190,24 @@ module.exports = async t => {
             'y `crecer` tampoco toca el que tiene la línea agarrada');
     });
 
+    t.test('el puntero parado en un borde congela ese texto, y solo mientras esté ahí', () => {
+        // Congelar un texto es dejar de dibujarle las palabras que entran, así
+        // que la marca tiene que durar exactamente lo que el puntero esté sobre
+        // la línea. Colgaba de un `pointerout`, y la lista se rehace entera cada
+        // segundo: sacar del documento el nodo que está bajo el puntero se puede
+        // comer ese evento, y entonces la marca quedaba puesta para siempre y
+        // ESE texto no volvía a crecer mientras el resto de la pantalla seguía.
+        const codigo = leer('src', 'js', 'pantalla-vivo.js');
+        const puesta = codigo.slice(codigo.indexOf("addEventListener('pointerover'"),
+            codigo.indexOf("addEventListener('pointerleave'"));
+        t.ok(/sobreBorde = b \? claveDe\(b\.closest\('\[data-texto\]'\)\) : null;/.test(puesta),
+            'el mismo evento la pone y la quita: sobre otra cosa no hay borde');
+        t.ok(!/addEventListener\('pointerout'/.test(codigo),
+            'y ya no depende de un `pointerout`, que puede no llegar');
+        t.ok(/addEventListener\('pointerleave', \(\) => \{ sobreBorde = null; \}\)/.test(codigo),
+            'al salir de la pantalla también se suelta: ahí no llega ningún `pointerover`');
+    });
+
     t.test('la selección se guarda y se devuelve alrededor del repintado', () => {
         // Creciendo, los nodos sobreviven; lo que borra la selección es que
         // `#ahora` se vacíe un momento. Por eso se anota el rango y se repone.

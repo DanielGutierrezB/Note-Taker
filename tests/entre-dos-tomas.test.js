@@ -7,17 +7,23 @@
  * Pero si hay transcript entre ambas, debería poder modificar en cualquiera de
  * los 2 lados.»
  *
- * Entre el OUT de la 11 y el IN de la 12 había medio minuto hablado. En el
- * sidecar de esa clase ese tramo no está en ninguna parte, y por dos motivos
- * distintos que se tapaban entre sí:
+ * Entre el OUT de la 11 y el IN de la 12 había medio minuto hablado, y ese
+ * tramo se perdía en cuatro sitios distintos que se tapaban entre sí:
  *
- *   · **las sueltas no se guardan.** Viven en la memoria de la sesión, así que
- *     cerrada la clase el tramo entre dos tomas no existe para nadie;
- *   · **y el conteo las vaciaba.** Abrir con «3, 2, 1» tiraba todo lo dicho
- *     antes, así que ni en vivo se veía.
+ *   · **el conteo vaciaba las sueltas.** Abrir con «3, 2, 1» tiraba todo lo
+ *     dicho antes, así que ni en vivo se veía;
+ *   · **el puente las cortaba en el OUT de la última toma cerrada.** Un tramo
+ *     del medio de la clase queda por debajo de ese piso, así que estaba en el
+ *     motor y la ventana no lo recibía nunca (`sueltasQueSirven` en espejo.js);
+ *   · **la pantalla no juntaba nada a la izquierda del IN de una toma cerrada.**
+ *     Del otro lado del OUT juntaba tres fuentes, y acá mandaba solo la orilla
+ *     de la relectura: por eso el tramo se veía desde la toma de arriba y no
+ *     desde la de abajo, que es tal cual lo que reportó el editor;
+ *   · **y el sidecar no las guardaba.** Vivían solo en memoria, así que cerrada
+ *     la clase el tramo no existía para nadie.
  *
- * Lo que se prueba acá es que el tramo llega a la pantalla mientras la clase
- * corre, y que queda ESCRITO en las dos tomas para cuando no corra.
+ * Lo que se prueba acá es que el tramo llega a la pantalla desde los dos lados
+ * mientras la clase corre, y que queda ESCRITO para cuando no corra.
  */
 
 const fs = require('fs');
@@ -52,6 +58,41 @@ function conWhisperFalso(fn) {
             grabacion.apagar();
         }
     };
+}
+
+/**
+ * Una función de la ventana, sacada del archivo y puesta a correr de verdad.
+ *
+ * `pantalla-vivo.js` es un módulo de la ventana —importa el DOM y media app—
+ * así que no se puede cargar acá, pero estas tres funciones son cuentas puras
+ * sobre `estado`. Se las saca por su nombre y se las corre con un `estado` de
+ * mentira, igual que `tomas-que-no-se-pisan` hace con `tomaAnterior`: así la
+ * prueba mide el código que se ejecuta y no una copia que ya cambió.
+ *
+ * @param {string} cual la que se devuelve
+ * @param {string[]} [conQue] las que necesita al lado
+ * @returns {function(object): Function} el `estado` y la función ya atada a él
+ */
+function sacar(cual, conQue) {
+    const codigo = fs.readFileSync(path.join(__dirname, '..', 'src', 'js', 'pantalla-vivo.js'), 'utf8');
+    const cuerpo = nombre => {
+        const a = codigo.indexOf(`function ${nombre}(`);
+        if (a === -1) throw new Error(`no está \`${nombre}\` en pantalla-vivo.js`);
+        return codigo.slice(a, codigo.indexOf('\n}', a) + 2);
+    };
+    const partes = (conQue || []).concat([cual]).map(cuerpo).join('\n');
+    // `coloresDeVista` y `SIGUIENTE_MAX` vienen de otros módulos: se dan hechos,
+    // que es lo que deja correr el resto tal cual está escrito.
+    // eslint-disable-next-line no-new-func
+    const fabrica = new Function('estado', 'coloresDeVista', 'SIGUIENTE_MAX', 'ANTERIOR_MAX',
+        `${partes} return ${cual};`);
+    return estado => fabrica(estado, coloresDeVista, 25, 300);
+}
+
+/** Los colores de una vista, con la misma firma que en `colores.js`. */
+function coloresDeVista(vistas, nombre) {
+    const v = (vistas || []).find(x => x.nombre === nombre);
+    return v ? { color: v.color, tinta: v.tinta } : {};
 }
 
 module.exports = function (t) {
@@ -119,6 +160,126 @@ module.exports = function (t) {
             t.deep((res.sueltas || []).map(x => x.texto), ['charla', 'suelta', 'de', 'pasillo'],
                 'y sigue a mano para meterlo en una toma o para leerlo');
         }));
+
+    t.test('una toma CERRADA también junta lo de antes de su IN', () => {
+        // El agujero que quedaba: la pantalla juntaba tres fuentes a la derecha
+        // del OUT (`despuesDeLaCerrada`) y a la izquierda del IN mandaba solo
+        // `toma.antes`, la orilla de la relectura. O sea que el tramo de en
+        // medio se veía desde la toma de arriba y no desde la de abajo, que es
+        // justo lo que el editor reportó con la 11 y la 12. Y mientras la
+        // relectura no terminara no había NI UNA palabra antes del IN, así que
+        // el arrastre no tenía dónde apoyarse.
+        //
+        // Se corre el código de la ventana sacado del archivo, como en
+        // `tomas-que-no-se-pisan`: así la prueba no mide una copia que ya cambió.
+        const deLaVentana = sacar('antesDeLaCerrada', ['tomaAnterior', 'sueltasEntre']);
+        const T = Date.parse('2026-10-13T16:00:00');
+        const palabras = (desde, textos) => textos.map((texto, i) => ({
+            t: desde + i * 1000, hasta: desde + i * 1000 + 300, texto
+        }));
+        const estado = {
+            vistas: [{ nombre: 'PV', color: '#718637', tinta: '#fff' }],
+            tomas: [
+                {
+                    id: 11, vista: 'PV', inMs: T, outMs: T + 20000,
+                    palabras: palabras(T, ['la', 'once']),
+                    // Su orilla llega hasta la vecina: son las mismas palabras
+                    // que el tramo de en medio, contadas desde el otro lado.
+                    antes: [], despues: palabras(T + 22000, ['entonces', 'esa', 'sería'])
+                },
+                {
+                    id: 12, vista: 'R', inMs: T + 30000, outMs: T + 50000,
+                    palabras: palabras(T + 30000, ['la', 'doce']),
+                    // Todavía sin releer: su orilla izquierda está vacía.
+                    antes: [], despues: []
+                }
+            ],
+            sueltas: []
+        };
+
+        const atras = deLaVentana(estado)(estado.tomas[1]);
+        t.deep(atras.antes.filter(w => !w.de).map(w => w.texto), ['entonces', 'esa', 'sería'],
+            'lo hablado entre las dos aparece antes del IN de la 12');
+        t.ok(atras.antes.some(w => w.de && w.de.id === 11),
+            'y el final de la 11 se asoma, marcado como suyo');
+        t.eq(atras.limite.toma, 11, 'con la marca de dónde termina la 11');
+        t.eq(atras.limite.ms, T + 20000, 'puesta en su OUT, que es la pared del IN');
+        t.eq(atras.limite.color, '#718637', 'y del color de su vista');
+    });
+
+    t.test('y nada de lo que ya es de una toma se cuela ahí', () => {
+        // La otra mitad: juntar tres fuentes no puede traer al gris palabras que
+        // están DENTRO de una toma, porque entonces el mismo texto se leería dos
+        // veces y el IN podría entrar donde no entra.
+        const deLaVentana = sacar('antesDeLaCerrada', ['tomaAnterior', 'sueltasEntre']);
+        const T = Date.parse('2026-10-13T16:00:00');
+        const w = (ms, texto) => ({ t: ms, hasta: ms + 300, texto });
+        const estado = {
+            vistas: [],
+            tomas: [
+                {
+                    id: 1, vista: 'PV', inMs: T, outMs: T + 10000,
+                    palabras: [w(T + 1000, 'adentro-de-la-1')],
+                    antes: [], despues: [w(T + 12000, 'en-medio')]
+                },
+                {
+                    id: 2, vista: 'PV', inMs: T + 20000, outMs: T + 30000,
+                    palabras: [w(T + 21000, 'adentro-de-la-2')],
+                    // Una orilla que se pasa de largo: llega hasta dentro de la 1.
+                    antes: [w(T + 1000, 'adentro-de-la-1'), w(T + 12000, 'en-medio')],
+                    despues: []
+                }
+            ],
+            sueltas: []
+        };
+
+        const atras = deLaVentana(estado)(estado.tomas[1]);
+        const grises = atras.antes.filter(x => !x.de).map(x => x.texto);
+        t.deep(grises, ['en-medio'], 'solo el tramo de nadie, no lo que es de la 1');
+        t.ok(!atras.antes.some(x => x.t >= estado.tomas[1].inMs),
+            'y nada de la toma misma, que ya se dibuja entre las dos líneas');
+    });
+
+    t.test('una toma desactivada no tapa lo que se dijo en su tramo', () => {
+        // Descartar saca la toma del XML y su tramo queda libre —lo mismo que
+        // decide `tomaAnterior` y `pisoDeLasSueltas` en el motor—, así que el
+        // piso de las sueltas no la puede contar. Contándola, el puente se
+        // quedaba con ese texto y la ventana no lo dibujaba ni dejaba abrir ahí.
+        const deLaVentana = sacar('sueltasLibres');
+        const T = Date.parse('2026-10-13T16:00:00');
+        const w = (ms, texto) => ({ t: ms, hasta: ms + 300, texto });
+        const estado = {
+            tomas: [{ id: 1, inMs: T, outMs: T + 40000, descartada: true, palabras: [] }],
+            sueltas: [w(T + 10000, 'dentro-de-la-descartada'), w(T + 50000, 'despues')]
+        };
+        t.deep(deLaVentana(estado)().map(x => x.texto),
+            ['dentro-de-la-descartada', 'despues'], 'las dos se pueden ver y tomar');
+
+        // Y el puente dice lo mismo, que es de donde las saca la ventana.
+        const falsa = {
+            dir: carpeta(),
+            estado: { ...estado, secuencia: 'e_2026-10-13_16-00-00', ceroMs: T, claquetas: [] },
+            captura: {}, cola: [], historia: { atras: [], adelante: [] }
+        };
+        t.deep(espejo.resumen(falsa).sueltas.map(x => x.texto),
+            ['dentro-de-la-descartada', 'despues'], 'el motor manda las dos');
+    });
+
+    t.test('y la tarjeta de la toma cerrada se lo pide, que es lo que la dibuja', () => {
+        // La cuenta puede estar perfecta y no llamarla nadie. Lo que se mira es
+        // el único sitio donde se arma el texto de una toma cerrada.
+        const codigo = fs.readFileSync(
+            path.join(__dirname, '..', 'src', 'js', 'pantalla-vivo.js'), 'utf8');
+        const desde = codigo.indexOf("} else if (cual === 'cerrada' && toma) {");
+        const rama = codigo.slice(desde, codigo.indexOf('}, soltar, previo));', desde));
+        t.ok(desde !== -1, 'la rama está donde se la busca');
+        t.ok(/antesDeLaCerrada\(toma\)/.test(rama), 'junta lo de antes del IN');
+        t.ok(/antes: atras\.antes/.test(rama), 'y se lo pasa al texto');
+        t.ok(/limite: atras\.limite/.test(rama),
+            'con la marca de la toma anterior, que es la pared del arrastre');
+        t.ok(/limiteDespues: adelante\.limiteDespues/.test(rama),
+            'y la del otro lado sigue estando: son los dos lados, no uno');
+    });
 
     t.group('entre dos tomas · lo que queda escrito');
 

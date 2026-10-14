@@ -60,6 +60,10 @@ function sembrar(opciones) {
             antes: palabras(T0 + 36000, 48), despues: [], comentarios: []
         }
     ];
+    // Lo que se dijo entre las dos tomas, sin estar en ninguna. Es el gris con
+    // el que se decide dónde mover un borde, y hasta que el sidecar lo guardó
+    // desaparecía al cerrar la app.
+    estado.sueltas = palabras(T0 + 45000, 6);
     vivo.anotarClaqueta(estado, { ms: T0 + 12000, confirmada: true, origen: 'golpe' });
     if (o.terminada !== false) estado.terminada = T0 + 600000;
 
@@ -110,7 +114,31 @@ module.exports = function (t) {
         t.eq(e.terminada, true);
         t.eq(e.json, s.json, 'el sidecar por donde va a salir cada cambio');
         t.eq(e.abierta, null, 'y ninguna toma abierta: no hay ciclo que la llene');
-        t.deep(e.sueltas, [], 'ni colchón de palabras sueltas');
+    });
+
+    t.test('lo que se dijo entre dos tomas vuelve del sidecar', () => {
+        // Antes esto vivía solo en memoria, y el archivo no lo guardaba: al
+        // volver a abrir la clase, el tramo entre dos tomas no existía para
+        // nadie y la pantalla lo dibujaba solo donde llegaran las orillas. O
+        // sea un transcript con huecos sobre un audio que sí los tiene.
+        const s = sembrar();
+        const e = sesiones.paraMirar(s.json, null);
+        t.eq(e.sueltas.length, 6, 'las seis palabras sueltas están');
+        t.ok(e.sueltas.every(w => w.t > e.tomas[0].outMs && w.t < e.tomas[1].inMs),
+            'y caen donde se dijeron: entre el OUT de la 1 y el IN de la 2');
+        t.ok(e.sueltas.every(w => w.texto), 'con su texto, que es lo que se lee');
+    });
+
+    t.test('un sidecar viejo, sin ese campo, se abre igual', () => {
+        // El formato suma un campo y no cambia de versión: lo que no lo tenga
+        // tiene que seguir abriéndose, con el colchón vacío como hasta ahora.
+        const s = sembrar();
+        const guardado = JSON.parse(fs.readFileSync(s.json, 'utf8'));
+        delete guardado.sueltas;
+        fs.writeFileSync(s.json, JSON.stringify(guardado));
+        const e = sesiones.paraMirar(s.json, null);
+        t.deep(e.sueltas, [], 'sin colchón, y sin romperse');
+        t.eq(e.tomas.length, 2, 'y la clase se abre entera');
     });
 
     t.test('el reloj es la duración del audio grabado', () => {

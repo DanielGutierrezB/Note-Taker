@@ -79,7 +79,16 @@ function palabra(w, comentarios, senal) {
     s.dataset.t = w.t;
     // Ya es de otra toma: no es un adorno, es lo que dice que ahí el IN no
     // entra. Va en el mismo span por la misma razón que la señal.
-    if (w.de) s.dataset.deToma = w.de.id;
+    if (w.de) {
+        s.dataset.deToma = w.de.id;
+        // El color de SU vista, en la palabra y no en el transcript entero: una
+        // toma cerrada tiene vecina de los dos lados y las dos pueden tener
+        // vistas distintas.
+        if (w.de.color) {
+            s.style.setProperty('--vista-ajena', w.de.color);
+            s.style.setProperty('--tinta-ajena', w.de.tinta);
+        }
+    }
     if (w.hasta != null) s.dataset.hasta = w.hasta;
     s.textContent = w.texto;
     // Subrayada si cae en un pedazo comentado: es lo que dice dónde está cada
@@ -118,6 +127,12 @@ function limiteDe(limite, lado) {
     l.className = 'transcript-limite';
     l.dataset.limite = limite.toma;
     l.dataset.lado = lado;
+    // Igual que en las palabras ajenas: el color va en la pastilla, porque las
+    // dos marcas de un mismo transcript pueden ser de vistas distintas.
+    if (limite.color) {
+        l.style.setProperty('--vista-ajena', limite.color);
+        l.style.setProperty('--tinta-ajena', limite.tinta);
+    }
     l.title = lado === 'antes'
         ? `Hasta acá es la toma ${limite.toma}, que ya está hecha. `
             + 'El IN no puede entrar ahí: las dos tomas se quedarían con las mismas palabras.'
@@ -439,15 +454,6 @@ export function textoDe(p, alSoltar, previo) {
     if (previo && crecer(previo, p)) return previo;
     const texto = document.createElement('div');
     texto.className = `transcript es-${p.modo}${alSoltar ? ' es-movible' : ''}`;
-    // El color de la vista de la toma de al lado, para su marca y sus palabras.
-    // Lo trae hecho la pantalla (`coloresDeVista`): acá no se sabe de colores.
-    // Una sola variable porque una sola marca aparece por transcript: la de
-    // antes es de la toma abierta y la de después, de una cerrada.
-    const ajena = p.limite || p.limiteDespues;
-    if (ajena && ajena.color) {
-        texto.style.setProperty('--vista-ajena', ajena.color);
-        texto.style.setProperty('--tinta-ajena', ajena.tinta);
-    }
     // Las señales se buscan sobre la tirada ENTERA y en el orden en que se
     // dibuja, no sobre cada pedazo: el conteo que abrió la toma está en lo gris
     // de antes del IN y la «Pausa» que la cerró en lo gris de después del OUT,
@@ -575,7 +581,9 @@ function huella(p) {
     };
 }
 
-const sello = w => `${w.t}|${w.texto}${w.de ? `|t${w.de.id}` : ''}`;
+// Con la vista de la toma ajena: cambiarle la vista a la vecina le cambia el
+// color a sus palabras, y sin esto el transcript crecía con el color de antes.
+const sello = w => `${w.t}|${w.texto}${w.de ? `|t${w.de.id}:${w.de.vista}` : ''}`;
 const firma = ws => (ws || []).map(sello).join(' ');
 
 /**

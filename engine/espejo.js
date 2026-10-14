@@ -123,16 +123,21 @@ const SUELTAS_QUE_CRUZAN = 600;
 /**
  * Las sueltas que la ventana puede usar, que no son todas.
  *
- * Lo anterior al OUT de la última toma cerrada ya es texto de una toma, y la
- * ventana lo descarta apenas llega (`sueltasLibres` en `pantalla-vivo.js`):
- * mandarlo es mandar palabras para que las tiren del otro lado. Filtrar acá
- * además hace que el tope de arriba se gaste en lo que sirve.
+ * Lo que cruza es lo que no está dentro de ninguna toma, que es exactamente lo
+ * que quiere decir «suelta» (`esDeAlgunaToma` en `notas-vivo.js`). Mandar una
+ * palabra que ya es de una toma es mandarla para que la tiren del otro lado, o
+ * peor, para que se dibuje dos veces.
+ *
+ * **El filtro era «todo lo anterior al OUT de la última cerrada», y eso tiraba
+ * de más**: entre dos tomas del medio de la clase hay tramos hablados que no
+ * son de nadie, y con ese piso no cruzaba ninguno. Era la mitad del problema
+ * del editor con las tomas 11 y 12: el tramo estaba en el motor y la ventana
+ * nunca lo recibía.
  */
 function sueltasQueSirven(e) {
-    const lista = e.sueltas || [];
-    const cerradas = (e.tomas || []).filter(t => t.outMs != null);
-    const piso = cerradas.length ? Math.max(...cerradas.map(t => t.outMs)) : -Infinity;
-    return lista.filter(w => w.t >= piso).slice(-SUELTAS_QUE_CRUZAN);
+    return (e.sueltas || [])
+        .filter(w => !vivo.esDeAlgunaToma(e, w))
+        .slice(-SUELTAS_QUE_CRUZAN);
 }
 
 /**

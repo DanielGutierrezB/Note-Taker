@@ -1853,9 +1853,24 @@ function tragarSueltas(estado, toma) {
  * @param {object[]} [soltadas] palabras que una toma tenía y ya no
  */
 function limpiarSueltas(estado, soltadas) {
-    const tomas = (estado.tomas || []).filter(t => t.inMs != null && !t.descartada);
-    const adentro = w => tomas.some(t => w.t >= t.inMs && (t.outMs == null || w.t < t.outMs));
-    estado.sueltas = juntas(estado.sueltas, soltadas).filter(w => !adentro(w));
+    estado.sueltas = juntas(estado.sueltas, soltadas)
+        .filter(w => !esDeAlgunaToma(estado, w));
+}
+
+/**
+ * Si una palabra cae dentro de los bordes de alguna toma.
+ *
+ * **Es la regla de qué NO puede estar suelto**, y está acá sola porque la usan
+ * los dos lados: `limpiarSueltas` la mantiene al editar y el puente la usa para
+ * decidir qué colchón cruza a la ventana (`sueltasQueSirven` en `espejo.js`).
+ * Escrita dos veces, una de las dos se habría quedado atrás.
+ *
+ * Las descartadas no cuentan: su tramo vuelve a quedar libre, igual que en
+ * `tomaAnterior` y en `pisoDeLasSueltas`.
+ */
+function esDeAlgunaToma(estado, w) {
+    return (estado.tomas || []).some(t => t.inMs != null && !t.descartada
+        && w.t >= t.inMs && (t.outMs == null || w.t < t.outMs));
 }
 
 /**
@@ -2027,6 +2042,7 @@ module.exports = {
     correrNumeros,
     tragarSueltas,
     limpiarSueltas,
+    esDeAlgunaToma,
     tomasQueQuedan,
     limpio,
     comentarioDeEntrada,

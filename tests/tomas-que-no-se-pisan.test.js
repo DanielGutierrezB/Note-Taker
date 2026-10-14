@@ -189,7 +189,10 @@ module.exports = async t => {
     t.test('la marca de la toma anterior es la pared del arrastre y del menú', async () => {
         dom.fingir();
         const texto = await import(pathToFileURL(path.join(RAIZ, 'src', 'js', 'grabar', 'texto-toma.js')).href);
-        const ajena = n => ({ t: T0 + n, hasta: T0 + n + 380, texto: `v${n}`, de: { id: 1 } });
+        const ajena = n => ({
+            t: T0 + n, hasta: T0 + n + 380, texto: `v${n}`,
+            de: { id: 1, vista: 'PV', color: '#718637', tinta: '#ffffff' }
+        });
         const libre = n => ({ t: T0 + n, hasta: T0 + n + 380, texto: `l${n}` });
         const tr = texto.textoDe({
             modo: 'abierta',
@@ -201,12 +204,18 @@ module.exports = async t => {
         const marca = tr.querySelector('.transcript-limite');
         t.ok(marca, 'la marca está');
         t.ok(/fin de la toma 1/.test(marca.textContent), 'y dice de qué toma, con letras y no solo con color');
-        t.eq(tr.style.getPropertyValue('--vista-ajena'), '#718637',
+        // El color va en la marca y en cada palabra ajena, no en el transcript:
+        // una toma cerrada tiene vecina de los dos lados y las dos pueden ser de
+        // vistas distintas, así que una sola variable para todo pintaba una de
+        // las dos marcas con el color de la otra.
+        t.eq(marca.style.getPropertyValue('--vista-ajena'), '#718637',
             'el color de la vista de esa toma, que es el mismo de su bloque en la lista');
         const hijos = tr.children;
         const antesDeLaMarca = hijos.slice(0, hijos.indexOf(marca)).filter(h => h.clases.has('palabra'));
         t.eq(antesDeLaMarca.length, 2, 'las dos palabras de la toma 1 quedan de su lado');
         t.ok(antesDeLaMarca.every(w => w.dataset.deToma === '1'), 'y marcadas con su dueña');
+        t.ok(antesDeLaMarca.every(w => w.style.getPropertyValue('--vista-ajena') === '#718637'),
+            'y pintadas con el color de su dueña, cada una');
 
         // El menú: sobre una ajena no se ofrece nada; sobre una libre, el IN.
         const di = w => texto.bordesQuePuede(tr, w).map(o => o.borde).join('+') || '';

@@ -386,7 +386,10 @@ function paraMirar(json, enCurso) {
         // esconden en este modo (ver `esDeMirar` en pantalla-vivo.js); lo que sí
         // hay es que cada cambio se ve en el acto como quedó en el archivo.
         historia: historial.nueva(),
-        estado: { ...vivo.estadoNuevo({}), ...estado, sueltas: [] }
+        // Con sus palabras sueltas, que ahora el sidecar sí guarda: son el gris
+        // de entre dos tomas y de antes de la primera, o sea con qué se decide
+        // dónde mover un borde. Un sidecar viejo no las trae y queda en [].
+        estado: { ...vivo.estadoNuevo({}), ...estado, sueltas: estado.sueltas || [] }
     };
     return { ...espejo.resumen(falsa), json, grabando: false, terminada: Boolean(estado.terminada) };
 }
@@ -561,13 +564,17 @@ function paraReanudar(json, enCurso) {
         ceroMs: Number(estado.ceroMs),
         estado: {
             // Primero un estado nuevo entero y encima lo del sidecar: el sidecar
-            // no guarda lo que vive solo en memoria (las palabras sueltas, lo
-            // último oído), y sin esto una sesión reanudada tenía `sueltas`
+            // no guarda todo lo que vive en memoria (lo último oído, por
+            // ejemplo), y sin esto una sesión reanudada tenía `sueltas`
             // indefinido y el ciclo de señales tiraba en cada pasada: nunca más
             // abría una toma, y la ventana que oía crecía sin techo.
             ...vivo.estadoNuevo({}),
             ...estado,
-            sueltas: [],
+            // Las sueltas sí vuelven: es lo que se dijo sin toma justo antes de
+            // que la app se cayera, y tirarlas dejaba un hueco en el transcript
+            // sobre un audio que sí lo tiene grabado. Un sidecar viejo no las
+            // trae y queda en [], que es como estaba.
+            sueltas: estado.sueltas || [],
             recientes: [],
             sesiones,
             // Los contadores siguen desde donde estaban: una toma nueva no puede

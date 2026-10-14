@@ -187,13 +187,22 @@ export function conectar(contexto) {
     window.addEventListener('pointerup', soltarPulsacion);
     window.addEventListener('pointercancel', soltarPulsacion);
     window.addEventListener('blur', soltarPulsacion);
+    // **Se pone Y se quita en el mismo evento**, y no con un `pointerout`
+    // aparte. Congelar un texto es dejar de dibujarle las palabras que entran,
+    // así que tiene que durar exactamente lo que el puntero esté encima de la
+    // línea. Con el `pointerout` eso dependía de que el evento llegara, y la
+    // lista se rehace entera cada segundo (`innerHTML`): sacar del documento el
+    // nodo que está bajo el puntero se puede comer el `pointerout`, y entonces
+    // la marca quedaba puesta para siempre y ESE texto no volvía a crecer
+    // —parado, mientras el resto de la pantalla seguía—. Preguntando en cada
+    // `pointerover` no hay nada que llegue tarde: si el puntero está sobre
+    // cualquier otra cosa, no está sobre un borde.
     pantalla.addEventListener('pointerover', e => {
         const b = e.target.closest('.borde');
-        if (b) sobreBorde = claveDe(b.closest('[data-texto]'));
+        sobreBorde = b ? claveDe(b.closest('[data-texto]')) : null;
     });
-    pantalla.addEventListener('pointerout', e => {
-        if (e.target.closest('.borde')) sobreBorde = null;
-    });
+    // Y al salir de la pantalla, que es donde no llega ningún `pointerover`.
+    pantalla.addEventListener('pointerleave', () => { sobreBorde = null; });
     document.addEventListener('compositionstart', () => { componiendo = true; });
     document.addEventListener('compositionend', () => {
         componiendo = false;
@@ -725,12 +734,12 @@ const ANTERIOR_MAX = 300;
  *   su OUT: donde se dibuja la marca que el IN no puede cruzar
  */
 function antesDeLaAbierta(toma) {
-    const libres = sueltasLibres().filter(w => w.t < toma.inMs);
     const previa = tomaAnterior(toma);
+    const libres = sueltasEntre(previa ? previa.outMs : -Infinity, toma.inMs);
     if (!previa) return { antes: libres.slice(-ORILLA_ABIERTA), limite: null };
     // De la toma anterior, con su dueña pegada para que se distinga al dibujar.
     const suyas = (previa.palabras || []).slice(-ANTERIOR_MAX)
-        .map(w => ({ ...w, de: { id: previa.id, vista: previa.vista } }));
+        .map(w => ({ ...w, de: { id: previa.id, vista: previa.vista, ...coloresDeVista(estado.vistas, previa.vista) } }));
     // Entre su OUT y este IN: su orilla de después y las sueltas son la misma
     // tirada contada dos veces, así que se juntan sin repetir.
     const vistas = new Set(libres.map(w => w.t));
@@ -785,20 +794,65 @@ function despuesDeLaCerrada(toma) {
     // misma tirada contada hasta tres veces: se juntan por tiempo, sin repetir.
     const tierraDeNadie = new Map();
     for (const w of (toma.despues || [])
-        .concat(sueltasLibres(), siguiente ? (siguiente.antes || []) : [])) {
+        .concat(sueltasEntre(toma.outMs, techo), siguiente ? (siguiente.antes || []) : [])) {
         if (w.t >= toma.outMs && w.t < techo && !tierraDeNadie.has(w.t)) tierraDeNadie.set(w.t, w);
     }
     const medio = [...tierraDeNadie.values()].sort((a, b) => a.t - b.t);
     if (!siguiente) return { despues: medio, limiteDespues: null };
     // De la toma siguiente, con su dueña pegada para que se distinga al dibujar.
     const suyas = (siguiente.palabras || []).slice(0, SIGUIENTE_MAX)
-        .map(w => ({ ...w, de: { id: siguiente.id, vista: siguiente.vista } }));
+        .map(w => ({ ...w, de: { id: siguiente.id, vista: siguiente.vista, ...coloresDeVista(estado.vistas, siguiente.vista) } }));
     return {
         despues: medio.concat(suyas),
         limiteDespues: {
             toma: siguiente.id, ms: siguiente.inMs,
             ...coloresDeVista(estado.vistas, siguiente.vista)
         }
+    };
+}
+
+/**
+ * Lo que va antes del IN de una toma CERRADA, y hasta dónde es de otra.
+ *
+ * El espejo de `despuesDeLaCerrada`, y faltaba. Acá iba solo `toma.antes` —la
+ * orilla que escribe la relectura— mientras que del otro lado se juntaban tres
+ * fuentes, y esa asimetría es un agujero con dos caras:
+ *
+ *   · hasta que la relectura termina no hay NADA antes del IN, así que el
+ *     arrastre no tiene dónde apoyarse (`bordesQuePuede` necesita una palabra) y
+ *     el IN de una toma recién cerrada no se podía correr hacia atrás;
+ *   · lo que se dijo entre dos tomas se veía desde la de ARRIBA y no desde la de
+ *     abajo. El editor lo dijo tal cual el 13/10: «no me muestra transcript
+ *     antes del In en la toma 12, y en la 11 dice que corta al inicio de la 12.
+ *     Pero si hay transcript entre ambas, debería poder modificar en cualquiera
+ *     de los 2 lados».
+ *
+ * Así que van las mismas tres cosas que del otro lado, en orden: el final de la
+ * toma anterior si ya hay una, lo que se dijo entre su OUT y este IN —su orilla
+ * de después, la orilla de esta y lo suelto, que son la misma tirada contada
+ * hasta tres veces— y nada más.
+ *
+ * @returns {{antes: Array, limite: object|null}} `limite` es la toma anterior
+ *   con su OUT: donde se dibuja la marca que el IN no puede cruzar
+ */
+function antesDeLaCerrada(toma) {
+    const previa = tomaAnterior(toma);
+    const piso = previa ? previa.outMs : -Infinity;
+    const tierraDeNadie = new Map();
+    for (const w of (toma.antes || [])
+        .concat(sueltasEntre(piso, toma.inMs), previa ? (previa.despues || []) : [])) {
+        if (w.t >= piso && w.t < toma.inMs && !tierraDeNadie.has(w.t)) tierraDeNadie.set(w.t, w);
+    }
+    const medio = [...tierraDeNadie.values()].sort((a, b) => a.t - b.t);
+    if (!previa) return { antes: medio, limite: null };
+    // Del final de la toma anterior se asoman pocas, como del principio de la
+    // siguiente del otro lado: acá lo que hace falta es entender dónde se frena
+    // el IN, no releer esa toma (para eso está su propia tarjeta).
+    const suyas = (previa.palabras || []).slice(-SIGUIENTE_MAX)
+        .map(w => ({ ...w, de: { id: previa.id, vista: previa.vista, ...coloresDeVista(estado.vistas, previa.vista) } }));
+    return {
+        antes: suyas.concat(medio),
+        limite: { toma: previa.id, ms: previa.outMs, ...coloresDeVista(estado.vistas, previa.vista) }
     };
 }
 
@@ -810,14 +864,31 @@ function botonHistoria(boton, hay, que, verbo) {
 /**
  * Lo que se oyó y no está en ninguna toma, y que todavía puede entrar en una.
  *
- * Las sueltas que el motor manda se filtran contra la última toma cerrada: lo
- * de antes de su OUT ya tuvo su oportunidad, y un deshacer puede dejar ahí
- * palabras que ya son de la toma (el historial repone tomas, no las sueltas).
+ * Es el campo de «Ahora» cuando no hay toma abierta: lo que se está oyendo y
+ * todavía no es de nadie. Se corta en el OUT de la última toma cerrada porque
+ * eso es lo que se está oyendo AHORA; los tramos de más atrás son de otras
+ * tarjetas, y cada una pide el suyo con `sueltasEntre`.
+ *
+ * Las descartadas no ponen piso, lo mismo que decide el motor y por el mismo
+ * motivo que en `tomaAnterior`: descartar saca la toma del XML y su tramo queda
+ * libre.
  */
 function sueltasLibres() {
-    const cerradas = estado.tomas.filter(t => t.outMs != null);
+    const cerradas = estado.tomas.filter(t => t.outMs != null && !t.descartada);
     const desde = cerradas.length ? Math.max(...cerradas.map(t => t.outMs)) : -Infinity;
     return (estado.sueltas || []).filter(w => w.t >= desde);
+}
+
+/**
+ * Lo que se oyó sin ninguna toma en un tramo concreto.
+ *
+ * El colchón del motor es la clase entera, y cada tarjeta necesita un pedazo:
+ * el de entre su IN y la toma de arriba, o el de entre su OUT y la de abajo.
+ * Pedirlo por tramo es lo que deja ver el hueco del medio de la clase, que con
+ * un piso único —«desde el OUT de la última cerrada»— no se veía nunca.
+ */
+function sueltasEntre(desde, hasta) {
+    return (estado.sueltas || []).filter(w => w.t >= desde && w.t < hasta);
 }
 
 /**
@@ -1194,10 +1265,12 @@ function montarTextos(quedan) {
                 vacio: 'Todavía no se oyó nada de esta toma.'
             }, soltar, previo));
         } else if (cual === 'cerrada' && toma) {
+            const atras = antesDeLaCerrada(toma);
             const adelante = despuesDeLaCerrada(toma);
             hueco.append(texto.textoDe({
                 modo: 'cerrada',
-                antes: toma.antes,
+                antes: atras.antes,
+                limite: atras.limite,
                 palabras: toma.palabras,
                 despues: adelante.despues,
                 limiteDespues: adelante.limiteDespues,

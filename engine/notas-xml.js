@@ -376,6 +376,16 @@ function palabraDelArchivo(w) {
     return { t: w.t, texto: w.texto };
 }
 
+/**
+ * Cuántas palabras sueltas se guardan, como mucho.
+ *
+ * El motor se guarda diez minutos (`VENTANA_DE_SUELTAS_SEC`), que son muchas
+ * más de las que sirven: lo que hace falta al volver a abrir es el gris de
+ * alrededor de cada borde y el de entre las dos últimas tomas. Seiscientas son
+ * unos cinco minutos de habla, el mismo tope que cruza el puente.
+ */
+const SUELTAS_GUARDADAS = 600;
+
 function sidecar(estado) {
     const fps = estado.fps || 30;
     return {
@@ -451,7 +461,18 @@ function sidecar(estado) {
             antes: (t.antes || []).map(palabraDelArchivo),
             despues: (t.despues || []).map(palabraDelArchivo),
             comentarios: t.comentarios || []
-        }))
+        })),
+        // Lo que se dijo sin ninguna toma. Hasta ahora vivía solo en memoria, y
+        // eso se notaba de dos maneras: al reabrir una clase ya grabada el gris
+        // de entre dos tomas aparecía solo donde llegaran las orillas, y una
+        // sesión reanudada después de un cierre perdía lo dicho justo antes.
+        // Las dos veces el editor veía un transcript con huecos sobre un audio
+        // que sí los tenía grabados.
+        //
+        // Con tope, igual que en el puente (`SUELTAS_QUE_CRUZAN` en espejo.js):
+        // sin ninguna toma cerrada las sueltas son todo lo que se oyó, y esto se
+        // escribe entero en cada cambio.
+        sueltas: (estado.sueltas || []).slice(-SUELTAS_GUARDADAS).map(palabraDelArchivo)
     };
 }
 
