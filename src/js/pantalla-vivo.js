@@ -138,9 +138,6 @@ export function conectar(contexto) {
     // Seleccionar un pedazo del texto de una toma abre el campo para comentarlo.
     $('#ahora').addEventListener('mouseup', alSeleccionar);
     $('#lista-vivo').addEventListener('mouseup', alSeleccionar);
-    // Y doble clic sobre uno ya guardado lo abre para corregirlo.
-    $('#ahora').addEventListener('dblclick', alDobleClic);
-    $('#lista-vivo').addEventListener('dblclick', alDobleClic);
     // Y el clic derecho sobre UNA palabra pone ahí el IN o el OUT. En la
     // pantalla entera para que el clic derecho en cualquier otro lado también
     // cierre el menú, y en el documento para que lo cierre el de afuera.
@@ -1017,10 +1014,10 @@ function sePuedeReabrir(t) {
  * de la toma entera. El campo aparece cuando se selecciona un pedazo del texto
  * de ESTA toma (`alSeleccionar`).
  *
- * Uno ya escrito se corrige con doble clic encima (`alDobleClic`): se escriben
- * en medio de una clase, apurado, y hasta ahora el único arreglo era borrarlo
- * y volver a seleccionar el mismo pedazo. El pedazo señalado no se toca: eso
- * sí hay que volver a elegirlo con el mouse.
+ * Uno ya escrito se corrige apretándolo (`corregirComentario`): se escriben en
+ * medio de una clase, apurado, y hasta ahora el único arreglo era borrarlo y
+ * volver a seleccionar el mismo pedazo. El pedazo señalado no se toca: eso sí
+ * hay que volver a elegirlo con el mouse.
  */
 function comentariosDe(t) {
     const lista = (t.comentarios || []).map((c, i) => {
@@ -1035,8 +1032,9 @@ function comentariosDe(t) {
                data-toma="${t.id}" data-indice="${i}" value="${esc(e.borrador)}">
         <button class="btn" type="button" data-hace="guardar-edicion">Guardar</button>
         <button class="btn btn-tenue" type="button" data-hace="cancelar-edicion">Cancelar</button>` : `
-        <span class="crece comentario-dicho"
-              title="Doble clic para corregirlo">${esc(c.comentario)}</span>
+        <button class="crece comentario-dicho" type="button" data-hace="corregir-comentario"
+                data-toma="${t.id}" data-indice="${i}"
+                title="Corregir lo que dice">${esc(c.comentario)}</button>
         <button class="btn btn-tenue btn-ico" type="button" data-hace="borrar-comentario"
                 data-toma="${t.id}" data-indice="${i}" title="Quitar este comentario">${icono('cerrar')}</button>`}
       </div>`;
@@ -1547,6 +1545,9 @@ async function alClic(e) {
             vista.editando = null;
             pintar();
             break;
+        case 'corregir-comentario':
+            corregirComentario(toma, Number(boton.dataset.indice));
+            break;
         case 'borrar-comentario':
             await editar({ tipo: 'borrar-comentario', toma, indice: Number(boton.dataset.indice) });
             break;
@@ -1604,30 +1605,34 @@ function alSeleccionar(e) {
 }
 
 /**
- * Doble clic sobre un comentario guardado: se abre para corregirlo.
+ * Un comentario guardado se abre para corregirlo apretándolo.
  *
- * Doble clic y no un botón más porque el renglón ya tiene uno —la × de
- * quitarlo— y dos iconos de 24 px en doce píxeles de alto es un renglón de
- * botones con un comentario al lado. El `title` del texto lo cuenta.
+ * **Lo que se aprieta es el texto, y el texto ES el botón.** Antes esto era un
+ * doble clic sobre un `<span>`, con el `title` como única pista, y el editor lo
+ * reportó el 13/10 sin haberlo encontrado: «aún los comentarios que dejo sobre
+ * una sección no tienen forma de ser editados, quedan solo para borrar o
+ * rehacer». Un botón más al lado de la × tampoco servía —dos iconos de 24 px no
+ * entran en un renglón de doce— pero el comentario entero sí es un botón, y de
+ * los grandes: se ve que se puede tocar, se llega con el tabulador y no agrega
+ * un solo píxel de cromo.
  *
- * Sobre el campo abierto no hace nada: ahí el doble clic es el del navegador,
- * que selecciona la palabra que se quiere corregir.
+ * De paso se van dos problemas del doble clic: la selección de texto que dejaba
+ * debajo —que `alSeleccionar` tomaba por un pedazo elegido y abría el OTRO
+ * campo— y que grabando casi no se podía dar, porque la lista se repinta cada
+ * segundo y los dos clics caían en nodos distintos.
  */
-function alDobleClic(e) {
-    if (e.target.closest('input, textarea, button')) return;
-    const fila = e.target.closest('.comentario');
-    if (!fila || fila.dataset.indice == null) return;
-    const toma = Number(fila.dataset.toma);
-    const indice = Number(fila.dataset.indice);
+function corregirComentario(toma, indice) {
     const t = estado && estado.tomas.find(x => x.id === toma);
     const c = t && (t.comentarios || [])[indice];
     if (!c) return;
     vista.editando = { toma, indice, borrador: c.comentario || '' };
     vista.comentando = null;
-    // El doble clic deja seleccionado el texto de abajo, y si no se limpia,
-    // `alSeleccionar` lo toma por un pedazo elegido y abre el otro campo.
-    const sel = window.getSelection();
-    if (sel) sel.removeAllRanges();
+    // El botón ya se soltó, así que se pinta AHORA. Sin esto, `pulsando` sigue
+    // en pie treinta milisegundos más —se suelta un turno después del clic, para
+    // que el arrastre de un borde no se repinte debajo— y `pintar` solo deja el
+    // repintado pendiente: el campo no existía todavía cuando se le iba a dar el
+    // foco, así que se abría apagado y lo que se tecleaba iba a parar a los
+    // atajos. Lo encontró `tools/probar-comentarios.js`, que es para esto.
     pulsando = false;
     pintar();
     const campo = document.querySelector('[data-campo="comentario-editado"]');

@@ -885,10 +885,35 @@ b {
   min-width: 0;
 }
 
-/* Lo que se escribió, que se corrige con doble clic encima. El cursor lo
-   cuenta antes de que nadie lea el `title`: es texto que se puede tocar. */
+/* Lo que se escribió, que ES el botón de corregirlo: se aprieta y se abre el
+   campo. Va sin cromo —ni borde ni fondo— porque es un renglón de doce píxeles
+   y lo que tiene que leerse es el comentario; lo que dice que se puede tocar
+   son el cursor y el subrayado al pasar por encima, que es como se comporta
+   cualquier texto editable. Alineado a la izquierda y no al centro, que es lo
+   que un `<button>` hace de fábrica. */
 .comentario-dicho {
-  cursor: text;
+  display: flex;
+  align-items: center;
+  /* Alto de renglón entero y no el de su texto: es un blanco de clic, y 17 px
+     es menos que el mínimo que se puede apretar sin apuntar. El renglón ya
+     medía esto, así que no mueve nada. */
+  min-height: var(--row-xs);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.comentario-dicho:hover,
+.comentario-dicho:focus-visible {
+  text-decoration: underline;
+  color: var(--text-primary);
 }
 
 /* Corrigiéndolo: el campo ocupa el sitio del texto y el renglón no salta.

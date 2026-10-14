@@ -100,14 +100,28 @@ module.exports = function (t) {
             'la cabecera de cambios-toma.js lo lista con su payload');
     });
 
-    t.group('comentarios · el doble clic en la pantalla');
+    t.group('comentarios · corregir uno ya escrito');
 
     const pantalla = () => fs.readFileSync(path.join(RAIZ, 'src', 'js', 'pantalla-vivo.js'), 'utf8');
 
-    t.test('el doble clic está enganchado en los dos sitios donde hay comentarios', () => {
+    t.test('el comentario ES el botón de corregirlo', () => {
+        // Antes era un doble clic sobre un `<span>`, con el `title` como única
+        // pista, y el editor lo reportó el 13/10 sin haberlo encontrado: «no
+        // tienen forma de ser editados, quedan solo para borrar o rehacer». Un
+        // botón más al lado de la × no entra —dos iconos de 24 px en un renglón
+        // de doce— pero el texto entero sí, y es un blanco grande.
         const codigo = pantalla();
-        t.eq((codigo.match(/addEventListener\('dblclick', alDobleClic\)/g) || []).length, 2,
-            'la toma abierta y la lista de cerradas');
+        t.ok(/<button class="crece comentario-dicho" type="button" data-hace="corregir-comentario"/
+            .test(codigo), 'el texto se aprieta');
+        t.ok(/case 'corregir-comentario':/.test(codigo), 'y abre el campo');
+        t.ok(!/dblclick/.test(codigo), 'y ya no hace falta el doble clic');
+        // Con el repintado de cada segundo, los dos clics de un doble clic caen
+        // en nodos distintos: grabando casi no se podía dar.
+        const css = fs.readFileSync(path.join(RAIZ, 'src', 'css', 'style.css'), 'utf8');
+        const regla = css.slice(css.indexOf('.comentario-dicho {'), css.indexOf('}', css.indexOf('.comentario-dicho {')));
+        t.ok(/cursor: pointer;/.test(regla), 'y se ve que se toca');
+        t.ok(/min-height: var\(--row-xs\)/.test(regla),
+            'con el alto del renglón entero: 17 px es menos de lo que se puede apretar sin apuntar');
     });
 
     t.test('el renglón dice qué comentario es, que es lo que el gesto necesita', () => {
@@ -118,9 +132,9 @@ module.exports = function (t) {
 
     t.test('no se puede estar escribiendo dos comentarios a la vez', () => {
         const codigo = pantalla();
-        const doble = codigo.slice(codigo.indexOf('function alDobleClic(e)'),
-            codigo.indexOf('\n}', codigo.indexOf('function alDobleClic(e)')));
-        t.ok(/vista\.comentando = null/.test(doble), 'abrir la corrección cierra el campo nuevo');
+        const corregir = codigo.slice(codigo.indexOf('function corregirComentario(toma, indice)'),
+            codigo.indexOf('\n}', codigo.indexOf('function corregirComentario(toma, indice)')));
+        t.ok(/vista\.comentando = null/.test(corregir), 'abrir la corrección cierra el campo nuevo');
         const selec = codigo.slice(codigo.indexOf('function alSeleccionar(e)'),
             codigo.indexOf('\n}\n', codigo.indexOf('function alSeleccionar(e)')));
         t.ok(/vista\.editando = null/.test(selec), 'y seleccionar un pedazo cierra la corrección');

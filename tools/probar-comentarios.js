@@ -1,11 +1,12 @@
 'use strict';
 /**
- * El doble clic que corrige un comentario, contra la maqueta.
+ * Corregir un comentario, contra la maqueta.
  *
  * La maqueta no tiene motor: `grabarEditar` lo contesta `doble.js`. Lo que se
- * comprueba acá es la mitad de la ventana —que el doble clic abra el campo con
- * lo que ya decía, que Escape lo deje como estaba y que Enter mande el cambio
- * que corresponde—, que es la mitad que las pruebas de texto no pueden ver.
+ * comprueba acá es la mitad de la ventana —que apretar el comentario abra el
+ * campo con lo que ya decía, que Escape lo deje como estaba y que Enter mande
+ * el cambio que corresponde—, que es la mitad que las pruebas de texto no
+ * pueden ver.
  */
 
 const puppeteer = require('puppeteer-core');
@@ -20,17 +21,6 @@ function decir(bien, texto) {
     if (!bien) mal += 1;
 }
 
-/**
- * Un doble clic de verdad sobre un elemento.
- *
- * `click({ clickCount: 2 })` NO sirve: manda un solo apretar-soltar con el
- * contador en dos, y el navegador no saca ningún `dblclick` de eso. Hacen
- * falta las dos pulsaciones, la segunda contando dos.
- *
- * Y antes hay que traerlo a la pantalla a mano: los comentarios están abajo
- * del todo, `boundingBox` da la posición tal cual —fuera de la ventana— y el
- * clic terminaba cayendo en cualquier otra cosa.
- */
 /** Dejar el campo vacío, sin depender de que el atajo de seleccionar todo ande. */
 function vaciar(pagina) {
     return pagina.evaluate(`(() => {
@@ -40,17 +30,22 @@ function vaciar(pagina) {
     })()`);
 }
 
-async function dobleClic(pagina, elemento) {
+/**
+ * Un clic de verdad sobre un elemento.
+ *
+ * Antes esto eran dos pulsaciones para sacar un `dblclick` —`click({
+ * clickCount: 2 })` no saca ninguno— y ya no hacen falta: el comentario es un
+ * botón y se aprieta una vez.
+ *
+ * Lo que sí sigue haciendo falta es traerlo a la pantalla a mano: los
+ * comentarios están abajo del todo, `boundingBox` da la posición tal cual
+ * —fuera de la ventana— y el clic terminaba cayendo en cualquier otra cosa.
+ */
+async function apretar(pagina, elemento) {
     await elemento.evaluate(el => el.scrollIntoView({ block: 'center' }));
     await espera(150);
     const caja = await elemento.boundingBox();
-    const x = caja.x + caja.width * 0.4;
-    const y = caja.y + caja.height / 2;
-    await pagina.mouse.move(x, y);
-    await pagina.mouse.down({ clickCount: 1 });
-    await pagina.mouse.up({ clickCount: 1 });
-    await pagina.mouse.down({ clickCount: 2 });
-    await pagina.mouse.up({ clickCount: 2 });
+    await pagina.mouse.click(caja.x + caja.width * 0.4, caja.y + caja.height / 2);
     await espera(300);
 }
 
@@ -80,8 +75,8 @@ async function dobleClic(pagina, elemento) {
         .querySelector('.comentario-dicho').textContent.trim()`);
     console.log(`\n   el segundo dice: "${await dice(1)}"`);
 
-    console.log('\nhaciendo doble clic en el segundo comentario…');
-    await dobleClic(p, filas[1]);
+    console.log('\napretando el segundo comentario…');
+    await apretar(p, filas[1]);
     const campo = await p.$('[data-campo="comentario-editado"]');
     decir(Boolean(campo), 'se abrió el campo');
     if (!campo) { await nave.close(); process.exit(1); }
@@ -101,8 +96,8 @@ async function dobleClic(pagina, elemento) {
     decir(await dice(1) === 'Revisar si esto aporta', 'y el comentario quedó como estaba');
     decir((await p.evaluate('window.MANDADO.length')) === 0, 'sin mandarle nada al motor');
 
-    console.log('\ndoble clic otra vez, borrar y escribir, y Enter…');
-    await dobleClic(p, (await p.$$('.comentario'))[1]);
+    console.log('\notra vez, borrar y escribir, y Enter…');
+    await apretar(p, (await p.$$('.comentario'))[1]);
     await vaciar(p);
     await p.keyboard.type('No aporta: cortar');
     await p.keyboard.press('Enter');
@@ -119,7 +114,7 @@ async function dobleClic(pagina, elemento) {
     decir(!(await p.$('[data-campo="comentario-editado"]')), 'y el campo se cerró al guardar');
 
     console.log('\nvacío no se guarda…');
-    await dobleClic(p, (await p.$$('.comentario'))[0]);
+    await apretar(p, (await p.$$('.comentario'))[0]);
     await vaciar(p);
     await p.keyboard.press('Enter');
     await espera(400);

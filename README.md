@@ -596,14 +596,24 @@ cerrada las sueltas son todo lo que se oyó, y el motor se guarda diez minutos.
 para comentarlas. El comentario va al XML como un marcador blanco en ese tramo,
 además de la nota de la toma entera, y las palabras comentadas quedan subrayadas.
 
-**Doble clic encima de uno ya escrito lo corrige.** Se escriben en medio de una
-clase, apurado, y hasta acá lo único que se podía hacer con uno mal escrito era
+**Apretar uno ya escrito lo corrige.** Se escriben en medio de una clase,
+apurado, y hasta acá lo único que se podía hacer con uno mal escrito era
 borrarlo y volver a seleccionar el mismo pedazo con el mouse. Enter guarda,
 Escape lo deja como estaba. Lo que NO cambia es el pedazo señalado: el tramo y
 las palabras citadas salieron de lo que se eligió con el mouse, y moverlos sin
 volver a elegir dejaría un marcador diciendo una cosa sobre un tramo que dice
-otra. Doble clic y no un botón más porque el renglón ya tiene uno —la × de
-quitarlo— y dos iconos de 24 px no entran en un renglón de doce.
+otra.
+
+**El comentario ES el botón**, y eso resolvió dos cosas a la vez. Antes esto era
+un doble clic sobre un texto cualquiera, con el `title` como única pista, y el
+editor lo reportó el 13/10 sin haberlo encontrado: «aún los comentarios que dejo
+sobre una sección no tienen forma de ser editados, quedan solo para borrar o
+rehacer». Un botón más al lado de la × tampoco entraba —dos iconos de 24 px en
+un renglón de doce son un renglón de botones con un comentario al lado— pero el
+comentario entero sí es un blanco, y de los grandes: se llega con el tabulador y
+no agrega un píxel de cromo. Y de paso se va un defecto del doble clic que
+grabando se notaba: la lista se repinta cada segundo, así que los dos clics
+caían en nodos distintos y el gesto casi no se podía dar.
 
 Los tres gestos —poner, corregir y quitar— nombran el comentario **por su
 índice** en la lista de la toma, que es la única forma que hay: no tienen id.
@@ -1640,14 +1650,13 @@ barra en los tres casos —grabando, con una fila desplegada y entre dos tomas�
 incluida la parte que no se ve en una captura: que apretar una vista entre dos
 tomas no le cambie la vista a NINGUNA de las que ya están hechas.
 
-Lo mismo del lado de las notas: `node tools/probar-comentarios.js` comprueba
-que el doble clic abra el comentario con lo que ya decía, que Escape no mande
+Lo mismo del lado de las notas: `node tools/probar-comentarios.js` comprueba que
+apretar el comentario abra el campo con lo que ya decía, que Escape no mande
 nada al motor y que Enter mande `editar-comentario` con la toma y el índice del
-renglón. Dos detalles del arnés, porque costaron: `click({ clickCount: 2 })` de
-Puppeteer **no saca ningún `dblclick`** —manda un apretar-soltar con el contador
-en dos, y hacen falta las dos pulsaciones—, y los comentarios están abajo del
-todo, así que hay que traer el renglón a la pantalla antes de medirlo o el clic
-cae en cualquier otra cosa.
+renglón. Un detalle del arnés, porque costó: los comentarios están abajo del
+todo, `boundingBox` da la posición tal cual —fuera de la ventana— así que hay
+que traer el renglón a la pantalla antes de medirlo o el clic cae en cualquier
+otra cosa.
 
 Los tres MP4 que la maqueta sirve son sintéticos y se rehacen con
 `node tools/maqueta/hacer-videos.js`: dos «crudos» de 40 s, de distinto tamaño
