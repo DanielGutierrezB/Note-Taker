@@ -148,6 +148,35 @@ module.exports = function (t) {
         t.eq(vivo.tomaAbierta(e).id, r.segunda.id, 'que es la que el ciclo va a seguir llenando');
     });
 
+    t.test('y se lleva su texto: una toma abierta no tiene orilla por la derecha', () => {
+        // Lo pidió así el 13/10: «la palabra seleccionada debería quedar como el
+        // inicio de la nueva toma o toma abierta». En la cerrada salía bien; en la
+        // abierta la mitad nueva aparecía VACÍA, con el texto entero en `despues`.
+        // `repartir` comparaba contra un OUT que no existe, y `w.t < null` es
+        // falso para cualquier hora, así que nada caía adentro.
+        const toma = unaToma({ abierta: true });
+        const r = vivo.dividir(estadoCon(toma), toma, seg(20));
+        t.deep(textos(r.segunda.palabras), ['cinco', 'seis', 'siete', 'ocho'],
+            'la mitad que sigue grabando arranca en la palabra del clic');
+        t.deep(textos(r.segunda.despues), [],
+            'y no tiene orilla por la derecha: todavía no terminó');
+        t.deep(textos(r.primera.palabras), ['uno', 'dos', 'tres', 'cuatro'],
+            'lo de antes del corte queda cerrado, sin la palabra del clic');
+    });
+
+    t.test('el ciclo de señales sigue llenando la mitad nueva', () => {
+        // Que el reparto esté bien no alcanza: lo que importa es que la toma que
+        // queda abierta siga siendo una toma normal para lo que viene después.
+        const toma = unaToma({ abierta: true });
+        const e = estadoCon(toma);
+        const r = vivo.dividir(e, toma, seg(20));
+        const dicha = { t: seg(32), texto: 'nueve', hasta: seg(32) + 200 };
+        Object.assign(r.segunda, vivo.repartir(
+            (r.segunda.antes || []).concat(r.segunda.palabras, [dicha]), r.segunda));
+        t.deep(textos(r.segunda.palabras), ['cinco', 'seis', 'siete', 'ocho', 'nueve'],
+            'lo que se dice después del corte entra en la mitad abierta');
+    });
+
     t.group('dividir · dónde no se puede');
 
     t.test('no se parte sobre un borde ni dejando media toma de una décima', () => {

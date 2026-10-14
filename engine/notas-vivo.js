@@ -1673,13 +1673,20 @@ function parecido(a, b) {
  * OUT ya no es de la toma. Lo que queda en `palabras` es exactamente lo que había
  * antes de que existieran las orillas —lo que va al XML y lo que se compara para
  * ver si una toma repite a otra—, así que nada de lo que se escribe cambia.
+ *
+ * **Una toma abierta no tiene orilla derecha**, y hay que decirlo aparte: sin OUT
+ * no hay frontera por la derecha, así que todo lo que se dijo desde el IN es de
+ * la toma. Comparar contra `null` no da eso sino lo contrario —`w.t < null` es
+ * falso para cualquier hora—, y el texto entero se le iba a `despues`: al partir
+ * una toma abierta, la mitad que sigue grabando aparecía vacía.
  */
 function repartir(palabras, toma) {
     const lista = palabras || [];
+    const hasta = toma.outMs == null ? Infinity : toma.outMs;
     return {
         antes: lista.filter(w => w.t < toma.inMs),
-        palabras: lista.filter(w => w.t >= toma.inMs && w.t < toma.outMs),
-        despues: lista.filter(w => w.t >= toma.outMs)
+        palabras: lista.filter(w => w.t >= toma.inMs && w.t < hasta),
+        despues: lista.filter(w => w.t >= hasta)
     };
 }
 

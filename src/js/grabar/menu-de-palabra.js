@@ -214,8 +214,8 @@ const NOMBRES = {
     out: { icono: 'cerrarToma', dice: 'Poner el OUT acá',
         pista: 'Esta palabra es la última de la toma, y lo de después queda afuera' },
     dividir: { icono: 'dividir', dice: 'Dividir la toma acá',
-        pista: 'La toma se parte en dos por esta palabra, pegadas: sirve para cambiar '
-            + 'de vista sin cortar lo que se está diciendo' }
+        pista: 'Esta palabra abre la segunda mitad, pegada a la primera: sirve para '
+            + 'cambiar de vista sin cortar lo que se está diciendo' }
 };
 
 function comoSeLlama(cual, borde) {
