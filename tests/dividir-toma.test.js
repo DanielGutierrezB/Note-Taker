@@ -209,6 +209,42 @@ module.exports = function (t) {
         t.eq(e.proximaToma, 7, 'y el contador sube');
     });
 
+    t.test('dividir la ÚLTIMA toma también sube el contador', () => {
+        // El agujero por el que salieron dos tomas con el mismo número, grabando
+        // el 13/10: «dice que es la toma 2 y ya hay una toma 2». Al dividir, el
+        // número de la mitad nueva se saca de `toma.id + 1`, y el contador lo
+        // ponía al día `correrNumeros` mirando las tomas que hay — pero la mitad
+        // nueva todavía no estaba en la lista, y si la dividida era la última no
+        // había ninguna otra que correr. El contador se quedaba abajo y la toma
+        // siguiente repartía un número ya usado.
+        const toma = { ...unaToma(), id: 2 };
+        const e = estadoCon({ id: 1, inMs: seg(1), outMs: seg(5), palabras: [] }, toma);
+
+        const r = vivo.dividir(e, toma, seg(20));
+        t.eq(r.segunda.id, 3, 'la mitad nueva es la 3');
+        t.eq(e.proximaToma, 3, 'y el contador se entera');
+
+        const otra = vivo.abrirToma(e, seg(60)).toma;
+        t.eq(otra.id, 4, 'así que la siguiente es la 4 y no pisa a nadie');
+        t.deep(e.tomas.map(x => x.id), [1, 2, 3, 4], 'cuatro tomas, cuatro números');
+    });
+
+    t.test('ningún gesto deja dos tomas con el mismo número', () => {
+        // La red, y no el arreglo: el número se pide mirando lo que YA existe,
+        // no solo el contador. Once sitios del motor buscan una toma con
+        // `find(t => t.id === n)` y todos se quedan con la primera, así que un
+        // número repetido no es un rótulo mal puesto: es que mover un borde, un
+        // Cmd-Z o una relectura se van a la toma que no es.
+        const e = estadoCon({ id: 1, inMs: seg(1), outMs: seg(5), palabras: [] });
+        // Un contador que se quedó atrás, como lo dejaba el agujero de arriba.
+        e.tomas.push({ id: 2, inMs: seg(6), outMs: seg(10), palabras: [] });
+        e.proximaToma = 1;
+
+        const nueva = vivo.abrirToma(e, seg(20)).toma;
+        t.eq(nueva.id, 3, 'la nueva se pone por encima de lo que hay, no del contador');
+        t.eq(new Set(e.tomas.map(x => x.id)).size, e.tomas.length, 'y no hay repetidos');
+    });
+
     t.test('el historial no hace falta renumerarlo, y está dicho por qué', () => {
         // Parecía que sí: un paso guarda de qué toma es por su `id`, y las dos
         // fotos y el rótulo llevan el número adentro. Pero la pila es LIFO —un
@@ -230,6 +266,27 @@ module.exports = function (t) {
             // Sin correrla, el «2» de la cola sería la mitad nueva —`encolar` lo
             // ve como ya encolado— y la toma que se tocó no se releería nunca.
             t.deep(s.cola, [3, 1, 2], JSON.stringify(s.cola));
+        });
+    });
+
+    t.test('dividir y abrir otra, que es la secuencia que lo destapó', async () => {
+        // Tal cual el diario del 13/10: abrir la 1, dividirla, cerrar, y abrir
+        // la siguiente. La mitad nueva se llamaba 2 y la siguiente también, y a
+        // partir de ahí la pantalla pintaba en la toma abierta el texto de la
+        // cerrada —busca su toma con `find(t => t.id === n)` y se quedaba con la
+        // primera—, que es el transcript que se veía congelado.
+        await conUnaClase(async (s, st) => {
+            s.estado.tomas = [s.estado.tomas[0]];
+            s.estado.proximaToma = 1;
+
+            grabacion.editar({ tipo: 'dividir', toma: 1, paredMs: st.ceroMs + 20000 });
+            t.deep(s.estado.tomas.map(x => x.id), [1, 2], 'las dos mitades');
+
+            grabacion.cerrarToma(st.ceroMs + 30000);
+            const abierta = vivo.abrirToma(s.estado, st.ceroMs + 40000).toma;
+            t.eq(abierta.id, 3, 'la toma nueva es la 3');
+            t.eq(new Set(s.estado.tomas.map(x => x.id)).size, 3,
+                'tres tomas, tres números: ninguna pantalla puede confundirlas');
         });
     });
 

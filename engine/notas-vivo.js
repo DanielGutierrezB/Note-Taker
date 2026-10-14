@@ -535,11 +535,30 @@ function vistaDeLaProxima(estado, vista) {
     return true;
 }
 
+/**
+ * El contador, puesto al día: nunca por debajo del número más alto que ya hay.
+ *
+ * **El número se pide mirando las tomas, no solo el contador**, y eso es la red
+ * y no un detalle. Un número repetido no es un rótulo mal puesto: once sitios
+ * del motor buscan su toma con `find(t => t.id === n)` y todos se quedan con la
+ * primera, así que mover un borde, un Cmd-Z o una relectura se van a la toma que
+ * no es —y la que el editor está mirando no se relee nunca—. Salió grabando el
+ * 13/10: «dice que es la toma 2 y ya hay una toma 2», y la causa era que
+ * `dividir` metía la mitad nueva sin avisarle al contador (ver abajo). Con la
+ * cuenta hecha sobre la lista, olvidarse de avisar deja un número saltado, que
+ * es barato, en vez de dos tomas con el mismo nombre, que no lo es.
+ */
+function alDia(estado) {
+    estado.proximaToma = Math.max(Number(estado.proximaToma) || 0,
+        ...(estado.tomas || []).map(t => Number(t.id) || 0));
+    return estado.proximaToma;
+}
+
 function nuevaToma(estado, inMs, cuenta) {
     const pedida = estado.vistaProxima;
     estado.vistaProxima = null;
     return {
-        id: (estado.proximaToma = estado.proximaToma + 1),
+        id: (estado.proximaToma = alDia(estado) + 1),
         vista: pedida || vistaHeredada(estado),
         comentario: '',
         cuenta: cuenta || '',
@@ -805,6 +824,12 @@ function dividir(estado, toma, ms) {
     const donde = estado.tomas.indexOf(toma);
     const movidas = correrNumeros(estado, toma.id + 1);
     estado.tomas.splice(donde + 1, 0, segunda);
+    // Y el contador se entera DESPUÉS de meterla, que es lo que faltaba: lo
+    // ponía al día `correrNumeros`, que cuenta las tomas de la lista, y ahí la
+    // mitad nueva todavía no estaba. Dividiendo la última no había ninguna otra
+    // que correr, así que el contador se quedaba abajo y la toma siguiente
+    // repartía un número ya usado.
+    alDia(estado);
     return { primera: toma, segunda, movidas };
 }
 
@@ -843,8 +868,7 @@ function correrNumeros(estado, desde, cuanto) {
         mapa.push({ de: t.id, a: t.id + salto });
         t.id += salto;
     }
-    estado.proximaToma = Math.max(Number(estado.proximaToma) || 0,
-        ...(estado.tomas || []).map(t => t.id));
+    alDia(estado);
     return mapa;
 }
 
