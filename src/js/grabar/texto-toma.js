@@ -283,9 +283,14 @@ export function dondeQueda({ rehecho, remontado, antes }) {
  * tres veces ya se separó una: la semana mandaba el IN de la toma abierta a
  * cerrarla, y correr el IN la cerraba en esa palabra.
  *
- * @returns {'abrir'|'cerrar'|'mover'}
+ * Y `dividir`, que no es un borde sino los dos: parte la toma en esa palabra y
+ * deja las dos mitades pegadas. No depende de qué texto sea —solo se ofrece
+ * sobre una toma que existe— así que contesta lo mismo siempre.
+ *
+ * @returns {'abrir'|'cerrar'|'mover'|'dividir'}
  */
 export function queHaceElBorde(cual, borde) {
+    if (borde === 'dividir') return 'dividir';
     if (cual === 'espera') return 'abrir';
     if (cual === 'abierta' && borde === 'out') return 'cerrar';
     return 'mover';

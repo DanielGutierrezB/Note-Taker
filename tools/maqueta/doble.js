@@ -930,6 +930,43 @@ function cambiarEnVivo(c) {
         };
         return vivo;
     }
+    // Partir la toma en dos, para poder VER el gesto completo: dos bloques
+    // pegados, la segunda con el número siguiente y las de después corridas.
+    // El reparto de verdad está en `vivo.dividir`, con sus pruebas; acá es lo
+    // justo para que la pantalla se dibuje como se va a dibujar.
+    if (c.tipo === 'dividir') {
+        const ms = Number(c.paredMs);
+        if (!Number.isFinite(ms) || ms <= toma.inMs) return base;
+        if (toma.outMs != null && ms >= toma.outMs) return base;
+        const todas = (toma.antes || []).concat(toma.palabras || [], toma.despues || []);
+        const primera = {
+            ...toma,
+            outMs: ms,
+            palabras: todas.filter(w => w.t >= toma.inMs && w.t < ms),
+            despues: todas.filter(w => w.t >= ms)
+        };
+        const segunda = {
+            ...toma,
+            id: toma.id + 1,
+            comentario: '',
+            inMs: ms,
+            antes: todas.filter(w => w.t < ms),
+            palabras: todas.filter(w => w.t >= ms && (toma.outMs == null || w.t < toma.outMs)),
+            despues: []
+        };
+        const corridas = base.tomas
+            .filter(t => t !== toma && t.id > toma.id)
+            .map(t => ({ ...t, id: t.id + 1 }));
+        vivo = {
+            ...base,
+            tomas: base.tomas
+                .filter(t => t !== toma && t.id < toma.id)
+                .concat([primera, segunda], corridas),
+            historia: { ...base.historia, atras: (base.historia.atras || 0) + 1,
+                queAtras: `dividir la toma ${toma.id}` }
+        };
+        return vivo;
+    }
     const cambiada = { ...toma };
     if (c.tipo === 'vista') cambiada.vista = c.vista;
     else if (c.tipo === 'descartar') cambiada.descartada = Boolean(c.descartada);

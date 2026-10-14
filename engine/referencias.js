@@ -126,6 +126,31 @@ function mover(carpeta, deNombre, aNombre) {
 }
 
 /**
+ * Les corre el número a las fotos cuando las tomas se renumeran.
+ *
+ * Partir una toma en dos corre un número a todas las que siguen, y la foto de
+ * cada una se llama por el número de su toma: sin esto, la toma 7 mostraría la
+ * foto de la que antes era la 6.
+ *
+ * Las movidas vienen ya ordenadas para que ningún nombre pise a otro (ver
+ * `correrNumeros` en `notas-vivo.js`). Una toma sin foto se saltea en silencio:
+ * es el caso normal cuando no hay cámara de referencia.
+ *
+ * @param {Array<{de:number, a:number}>} movidas
+ * @returns {number} cuántas se renombraron
+ */
+function renumerar(carpeta, secuencia, movidas) {
+    let hechas = 0;
+    for (const { de, a } of movidas || []) {
+        const origen = archivoDeToma(carpeta, secuencia, de);
+        if (!fs.existsSync(origen)) continue;
+        fs.renameSync(origen, archivoDeToma(carpeta, secuencia, a));
+        hechas++;
+    }
+    return hechas;
+}
+
+/**
  * Y se van con la clase cuando la clase se borra.
  *
  * @returns {number} cuántas se borraron
@@ -150,6 +175,7 @@ module.exports = {
     guardar,
     listar,
     esDeAca,
+    renumerar,
     mover,
     borrar
 };

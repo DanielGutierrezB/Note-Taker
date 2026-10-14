@@ -93,6 +93,24 @@ export async function cambiarCamara(camara) {
     if (!abierta.ok) avisar(`${abierta.error} Las tomas que sigan no van a tener foto.`, 'error');
 }
 
+/**
+ * Volver a leer del disco qué fotos hay.
+ *
+ * Hace falta cuando las tomas se RENUMERAN —partir una toma le corre el número
+ * a todas las que siguen— porque lo que hay acá es un mapa por número: después
+ * de partir, la foto que estaba anotada como de la 7 es la de la que ahora es
+ * la 8, y cada bloque mostraría la de al lado. También se olvida qué tomas no
+ * tenían foto, que es lo que deja volver a intentarlo con la mitad nueva.
+ */
+export async function recargar() {
+    if (!donde.carpeta) return;
+    const r = await window.nt.fotosListar(donde.carpeta, donde.secuencia);
+    tengo = new Map();
+    for (const f of (r && r.fotos) || []) tengo.set(f.toma, { ruta: f.ruta, mini: f.mini });
+    sinFoto = new Set();
+    alCambiar();
+}
+
 /** Salir de la clase: la cámara se suelta y lo que se sabía se olvida. */
 export async function salir() {
     donde = { carpeta: null, secuencia: null };

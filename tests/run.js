@@ -43,6 +43,7 @@ const FILES = [
     'revision-motor.test.js',
     'final-de-toma.test.js',
     'entre-dos-tomas.test.js',
+    'dividir-toma.test.js',
     'puente-grabar.test.js',
     'vivo-interfaz.test.js',
     'senales-del-texto.test.js',

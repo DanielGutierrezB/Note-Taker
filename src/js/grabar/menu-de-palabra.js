@@ -65,7 +65,11 @@ export function conectar(p) {
         raiz: p.raiz,
         foco: p.foco || p.raiz,
         alCerrar: typeof p.alCerrar === 'function' ? p.alCerrar : () => {},
-        alElegir: typeof p.alElegir === 'function' ? p.alElegir : () => {}
+        alElegir: typeof p.alElegir === 'function' ? p.alElegir : () => {},
+        // Si esta pantalla sabe partir una toma. Lo declara ella y no se
+        // supone acá: el vídeo de la semana usa el mismo menú y no lo sabe
+        // hacer, y ofrecérselo sería un botón que no hace nada.
+        puedeDividir: p.puedeDividir === true
     });
     $(p.raiz).addEventListener('contextmenu', alClicDerecho);
     if (enganchado) return;
@@ -112,7 +116,16 @@ function alClicDerecho(e) {
     const hueco = donde.closest('[data-texto]');
     const cual = hueco.dataset.texto;
     const toma = hueco.dataset.toma ? Number(hueco.dataset.toma) : null;
-    const opciones = texto.bordesQuePuede(donde, w).map(o => ({ ...o, ...comoSeLlama(cual, o.borde) }));
+    const bordes = texto.bordesQuePuede(donde, w);
+    const opciones = bordes.map(o => ({ ...o, ...comoSeLlama(cual, o.borde) }));
+    // Y partir la toma por esa palabra. Se ofrece justo donde se podría poner el
+    // IN sobre una toma que ya existe, y no es casualidad: las dos dicen «acá
+    // empieza algo». La diferencia es qué pasa con lo de antes — el IN lo deja
+    // afuera y dividir lo deja en una toma propia.
+    const paraIn = bordes.find(o => o.borde === 'in');
+    if (dueño.puedeDividir && cual !== 'espera' && paraIn) {
+        opciones.push({ borde: 'dividir', ms: paraIn.ms, ...NOMBRES.dividir });
+    }
     if (!opciones.length) return false;
     abierto = { cual, toma, dueño };
     dibujar(opciones, w.textContent, e.clientX, e.clientY);
@@ -199,7 +212,10 @@ const NOMBRES = {
     in: { icono: 'abrirToma', dice: 'Poner el IN acá',
         pista: 'La toma empieza en esta palabra, y lo de antes queda afuera' },
     out: { icono: 'cerrarToma', dice: 'Poner el OUT acá',
-        pista: 'Esta palabra es la última de la toma, y lo de después queda afuera' }
+        pista: 'Esta palabra es la última de la toma, y lo de después queda afuera' },
+    dividir: { icono: 'dividir', dice: 'Dividir la toma acá',
+        pista: 'La toma se parte en dos por esta palabra, pegadas: sirve para cambiar '
+            + 'de vista sin cortar lo que se está diciendo' }
 };
 
 function comoSeLlama(cual, borde) {

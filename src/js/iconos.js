@@ -91,6 +91,13 @@ const DIBUJOS = {
         '<path d="M12 3.6v16.8"/><path d="M7.4 8.2 12 3.6l4.6 4.6"/>' +
         '<path d="M4 12h3.4M16.6 12H20"/>',
 
+    // Dividir: la misma línea vertical de los dos de arriba —es un borde— con
+    // las dos flechas apartándose, una a cada lado. Dice lo que hace: lo que
+    // era uno pasa a ser dos, y nada se va.
+    dividir:
+        '<path d="M12 3.6v16.8"/>' +
+        '<path d="M8.6 8.4 4.6 12l4 3.6"/><path d="M15.4 8.4l4 3.6-4 3.6"/>',
+
     // Regenerar: el lazo que vuelve al principio. Es «tirar el texto y volver
     // a leerlo», no «reintentar lo que falló».
     regenerar:

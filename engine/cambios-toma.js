@@ -16,6 +16,7 @@
 const espejo = require('./espejo');
 const relecturas = require('./relecturas');
 const historial = require('./deshacer');
+const referencias = require('./referencias');
 const vivo = require('./notas-vivo');
 
 /**
@@ -109,6 +110,11 @@ function editar(sesion, cambio) {
         case 'eliminar':
             eliminar(sesion, toma);
             break;
+        // Partir sale por su propia puerta: anota su paso y escribe él mismo,
+        // porque su paso no es de una toma sola —aparece otra y los números
+        // corren— y el portero de abajo no sabría qué fotografiar.
+        case 'dividir':
+            return dividir(sesion, toma, c);
         // Los otros cinco se resuelven con lo que ya está escrito, así que son
         // los mismos que se hacen sobre una clase ya terminada (`editarGrabada`
         // en `clases-grabadas.js`), y de ahí que los aplique la misma función.
@@ -186,6 +192,7 @@ function comoSeLlama(c) {
         case 'editar-comentario': return `corregir un comentario de ${cual}`;
         case 'borrar-comentario': return `quitar un comentario de ${cual}`;
         case 'borde': return `mover el ${c.borde === 'in' ? 'IN' : 'OUT'} de ${cual}`;
+        case 'dividir': return `dividir ${cual}`;
         case 'reabrir': return `reabrir ${cual}`;
         case 'eliminar': return `descartar ${cual}`;
         case 'abrir': return `abrir ${cual}`;
@@ -264,6 +271,110 @@ function eliminar(sesion, toma) {
     tomas.splice(tomas.indexOf(toma), 1);
 }
 
+/* ─── Partir una toma en dos ───────────────────────────────────────────── */
+
+/**
+ * Parte una toma por una palabra: lo de antes queda cerrado y lo de después
+ * sigue en una toma nueva.
+ *
+ * Lo pidió el editor el 13/10: «para poder separar una toma en 2 y cambiar de
+ * vista, sin necesidad de que haya un corte de contenido». El reparto lo hace
+ * `vivo.dividir`; acá está lo que hay que mover FUERA del estado cuando los
+ * números corren, que es lo que hace que renumerar no rompa nada.
+ *
+ * Las dos mitades se releen: cada una es ahora un tramo distinto del audio, y
+ * sus orillas también cambiaron.
+ */
+function dividir(sesion, toma, c) {
+    const ms = Number(c.paredMs);
+    const antes = historial.foto(toma);
+    const r = vivo.dividir(sesion.estado, toma, ms);
+    // No se pudo partir ahí —el corte cae sobre un borde, o deja media toma de
+    // una décima—: sin cambio no hay paso, igual que un borde que no se movió.
+    if (!r) return espejo.resumen(sesion);
+
+    correrLoDeAfuera(sesion, r.movidas);
+    // Y la foto del OUT se va con el OUT, que ahora es de la segunda mitad. Va
+    // DESPUÉS de las movidas: para entonces su sitio ya quedó libre.
+    correrLoDeAfuera(sesion, [{ de: toma.id, a: r.segunda.id }]);
+
+    historial.anotar(sesion.historia, {
+        que: comoSeLlama({ ...c, toma: toma.id }),
+        tipo: 'dividir',
+        id: toma.id,
+        // Dónde se partió, que es lo único que hace falta para volver a hacerlo.
+        ms,
+        antes,
+        despues: historial.foto(toma)
+    });
+    relecturas.encolar(sesion, r.primera.id);
+    relecturas.encolar(sesion, r.segunda.id);
+    espejo.escribir(sesion);
+    return espejo.resumen(sesion);
+}
+
+/**
+ * Lo que guarda un número de toma y no vive en `estado.tomas`.
+ *
+ * Son dos, y se rompen distinto: la cola releería la toma que no es, y las
+ * fotos del OUT quedarían cada una en el bloque de al lado.
+ *
+ * El historial NO está acá, y no es un olvido: su pila es LIFO, así que cuando
+ * un paso se aplica la numeración es siempre la que había cuando se anotó. El
+ * razonamiento entero está en `engine/deshacer.js`.
+ */
+function correrLoDeAfuera(sesion, movidas) {
+    if (!(movidas || []).length) return;
+    const cambia = new Map(movidas.map(m => [m.de, m.a]));
+    sesion.cola = (sesion.cola || []).map(id => (cambia.has(id) ? cambia.get(id) : id));
+    try {
+        referencias.renumerar(sesion.dir, sesion.estado.secuencia, movidas);
+    } catch (e) {
+        // Una foto que no se pudo renombrar no puede costar la división: lo peor
+        // que pasa es que un bloque muestre la foto de al lado, y la clase sigue.
+    }
+}
+
+/**
+ * Deshacer una división junta las dos mitades; rehacerla las vuelve a partir.
+ *
+ * **No entra por `historial.poner` como los demás pasos**, y por eso tiene su
+ * propia puerta: aquel repone campos de UNA toma, y acá hay una toma que
+ * aparece o desaparece y un número que corre en todas las que siguen. La foto
+ * de antes sí sirve, y es la que devuelve a la primera mitad su OUT, su texto y
+ * sus dos orillas de una vez.
+ *
+ * @returns {boolean} si se pudo
+ */
+function volverDivision(sesion, paso, hacia) {
+    const tomas = sesion.estado.tomas;
+    if (hacia === 'adelante') {
+        const toma = tomas.find(t => t.id === paso.id);
+        if (!toma) return false;
+        const r = vivo.dividir(sesion.estado, toma, paso.ms);
+        if (!r) return false;
+        correrLoDeAfuera(sesion, r.movidas);
+        correrLoDeAfuera(sesion, [{ de: paso.id, a: r.segunda.id }]);
+        relecturas.encolar(sesion, r.primera.id);
+        relecturas.encolar(sesion, r.segunda.id);
+        return true;
+    }
+
+    const segunda = tomas.find(t => t.id === paso.id + 1);
+    const primera = tomas.find(t => t.id === paso.id);
+    if (!segunda || !primera) return false;
+    // La foto del OUT vuelve a la primera mitad antes de que los números corran.
+    correrLoDeAfuera(sesion, [{ de: segunda.id, a: primera.id }]);
+    // Sin `campos`, que es como `poner` repone la toma entera: acá hay que
+    // devolverle a la vez el OUT, el texto y las dos orillas.
+    historial.poner(tomas, paso.id, paso.antes, null);
+    tomas.splice(tomas.indexOf(segunda), 1);
+    sesion.cola = (sesion.cola || []).filter(id => id !== segunda.id);
+    correrLoDeAfuera(sesion, vivo.correrNumeros(sesion.estado, segunda.id + 1, -1));
+    relecturas.encolar(sesion, primera.id);
+    return true;
+}
+
 /**
  * Solo la última, y solo si no hay otra abierta.
  *
@@ -319,6 +430,24 @@ function volver(sesion, hacia) {
                 'el ciclo de señales. Cerrá la de ahora y volvé a intentar.',
             estado: espejo.resumen(sesion)
         };
+    }
+
+    // Partir y juntar no se reponen con una foto: hay una toma que aparece o
+    // desaparece y un número que corre en todas las que siguen (ver
+    // `volverDivision`). Se mira ANTES de sacar el paso del historial, para que
+    // uno que no se puede dar no se gaste.
+    if (paso.tipo === 'dividir') {
+        if (!volverDivision(sesion, paso, hacia)) {
+            return {
+                ok: false,
+                error: `No puedo ${hacia === 'adelante' ? 'rehacer' : 'deshacer'} «${paso.que}»: ` +
+                    'esa toma ya no está como estaba.',
+                estado: espejo.resumen(sesion)
+            };
+        }
+        historial.sacar(sesion.historia, hacia);
+        espejo.escribir(sesion);
+        return { ok: true, que: paso.que, estado: espejo.resumen(sesion) };
     }
 
     const dado = historial.sacar(sesion.historia, hacia);

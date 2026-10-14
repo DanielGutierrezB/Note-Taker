@@ -711,6 +711,143 @@ function abrirToma(estado, ms, opciones) {
     return { toma, retrocedioSec: Math.max(0, Math.round((desdeCuando - inMs) / 100) / 10) };
 }
 
+/* ─── Partir una toma en dos ──────────────────────────────────────────────
+ *
+ * Lo pidió el editor el 13/10: «deberíamos agregar una función de "Dividir
+ * toma". Esto para poder separar una toma en 2 y cambiar de vista, sin
+ * necesidad de que haya un corte de contenido.»
+ *
+ * O sea: el profesor habló de corrido veinte minutos y en el medio pasó de
+ * hablar a cámara a mostrar la pantalla. Es una sola tirada de contenido —no
+ * hay dónde cortar— pero son dos planos. Hasta ahora eso pedía cerrar la toma
+ * en una palabra y abrir otra en la siguiente, con dos gestos y el riesgo de
+ * dejar un hueco entre el OUT de una y el IN de la otra.
+ *
+ * **Las dos mitades se tocan.** El OUT de la primera ES el IN de la segunda, y
+ * `repartir` reparte con el OUT exclusivo, así que ni se pierde ni se repite
+ * una palabra. Eso es lo que hace que esto no sea «cerrar y abrir»: entre las
+ * dos no queda nada afuera.
+ */
+
+/**
+ * Parte `toma` en dos por la palabra que empieza en `ms`.
+ *
+ * La primera mitad se queda con el número —es la misma toma, que ahora termina
+ * antes— y la segunda es nueva y se mete justo detrás. Si la toma estaba
+ * abierta, la segunda queda abierta: es «dejá cerrado lo de hasta acá y seguí
+ * grabando», que es como lo pidió.
+ *
+ * Qué se lleva cada una:
+ *
+ *   · las palabras y las dos orillas se reparten por el corte, sin releer nada;
+ *   · la **vista** la heredan las dos, porque el gesto es justamente cambiarle
+ *     la vista a una de ellas y hay que poder ver cuál se cambió;
+ *   · el **OUT** y su foto son del final, así que son de la segunda;
+ *   · la **nota de la toma** se queda en la primera y no se copia. Es un
+ *     marcador del XML: duplicarla pondría dos marcadores iguales en Premiere,
+ *     y la nota se escribió mirando el principio, que es donde queda;
+ *   · las **notas sobre el texto** van cada una a la mitad donde cae su palabra;
+ *   · `descartada` la heredan las dos: una toma desactivada partida en dos sigue
+ *     desactivada entera, y volver a activar media sería otro gesto;
+ *   · el **ajuste** al silencio se tira en las dos. Los bordes cambiaron, así
+ *     que el guardado ya no vale (ver `bordeAjustado` en `ajustar-corte.js`), y
+ *     dejarlo puesto sería escribir en el XML un corte que no se calculó contra
+ *     estos bordes.
+ *
+ * @param {object} estado el de la sesión, se muta
+ * @param {object} toma la que se parte
+ * @param {number} ms la hora de la palabra que abre la segunda mitad
+ * @returns {{primera:object, segunda:object}|null} null si no se puede partir ahí
+ */
+function dividir(estado, toma, ms) {
+    if (!toma || !Number.isFinite(ms)) return null;
+    if (toma.inMs == null || ms <= toma.inMs) return null;
+    if (toma.outMs != null && ms >= toma.outMs) return null;
+    // Que las dos mitades sean tomas y no un fotograma: el mismo mínimo con el
+    // que `finDeToma` cuida que el OUT no caiga sobre el IN.
+    if (ms - toma.inMs < DURACION_MINIMA_MS) return null;
+    if (toma.outMs != null && toma.outMs - ms < DURACION_MINIMA_MS) return null;
+
+    const todas = (toma.antes || []).concat(toma.palabras || [], toma.despues || []);
+    const comentarios = toma.comentarios || [];
+
+    const segunda = {
+        id: toma.id + 1,
+        vista: toma.vista,
+        comentario: '',
+        cuenta: '',
+        inMs: ms,
+        outMs: toma.outMs,
+        inISO: null,
+        outISO: toma.outISO || null,
+        descartada: Boolean(toma.descartada),
+        cerradaSola: Boolean(toma.cerradaSola),
+        palabras: [],
+        comentarios: comentarios.filter(c => c.desdeMs != null && c.desdeMs >= ms),
+        relectura: toma.relectura || null
+    };
+    if (toma.outProvisional) segunda.outProvisional = true;
+
+    // Y la primera termina donde empieza la segunda.
+    toma.outMs = ms;
+    toma.outISO = null;
+    toma.cerradaSola = false;
+    toma.comentarios = comentarios.filter(c => c.desdeMs == null || c.desdeMs < ms);
+    delete toma.outProvisional;
+    delete toma.ajuste;
+    delete toma.pausaAdentro;
+
+    Object.assign(toma, repartir(todas, toma));
+    Object.assign(segunda, repartir(todas, segunda));
+
+    // La segunda entra justo detrás, y lo que venía después corre un número: el
+    // editor pidió que se leyeran en orden (ver `correrNumeros`).
+    const donde = estado.tomas.indexOf(toma);
+    const movidas = correrNumeros(estado, toma.id + 1);
+    estado.tomas.splice(donde + 1, 0, segunda);
+    return { primera: toma, segunda, movidas };
+}
+
+/**
+ * Corre un número a todas las tomas desde `desde`, para hacerle sitio a una.
+ *
+ * **Renumerar y no dejar huecos fue la decisión del editor**, preguntado de
+ * frente: una toma 9 metida entre la 4 y la 5 se lee peor en Premiere que
+ * cuatro tomas que cambian de nombre. El precio es que el número de una toma
+ * deja de ser para siempre, y por eso todo lo que guarda un número tiene que
+ * correrlo en el mismo gesto: las fotos del OUT —que se nombran por el número
+ * de su toma (`engine/referencias.js`)—, la cola de relecturas y, sobre todo,
+ * el historial de deshacer, que guarda los pasos por `id`. Nada de eso se puede
+ * hacer desde acá, así que lo orquesta `cambios-toma`.
+ *
+ * De atrás hacia adelante al subir y al revés al bajar, para que ningún número
+ * pise a otro mientras se mueven. Lo que devuelve va en ese mismo orden, porque
+ * quien renombra las fotos tiene el mismo problema.
+ *
+ * **`proximaToma` solo sube.** Al deshacer una división los números vuelven,
+ * pero el contador se queda arriba: un número que ya se usó no se reparte otra
+ * vez, porque el historial guarda los pasos por `id` y reusarlo haría que un
+ * Cmd-Z viejo cayera en una toma que no es. El precio es que la toma siguiente
+ * puede saltarse un número, que es lo mismo que ya pasa al descartar una.
+ *
+ * @param {number} [cuanto] `1` para hacer sitio, `-1` para cerrar el hueco
+ * @returns {Array<{de:number, a:number}>} qué número pasó a ser cuál
+ */
+function correrNumeros(estado, desde, cuanto) {
+    const salto = cuanto == null ? 1 : cuanto;
+    const movidas = (estado.tomas || [])
+        .filter(t => t.id >= desde)
+        .sort((a, b) => (salto > 0 ? b.id - a.id : a.id - b.id));
+    const mapa = [];
+    for (const t of movidas) {
+        mapa.push({ de: t.id, a: t.id + salto });
+        t.id += salto;
+    }
+    estado.proximaToma = Math.max(Number(estado.proximaToma) || 0,
+        ...(estado.tomas || []).map(t => t.id));
+    return mapa;
+}
+
 /** Las dos listas juntas, en orden y sin repetir lo que esté en las dos. */
 function juntas(a, b) {
     const vistas = new Set();
@@ -1823,6 +1960,8 @@ module.exports = {
     aplausoOido,
     PALABRA_Y_APLAUSO_MS,
     moverBorde,
+    dividir,
+    correrNumeros,
     tragarSueltas,
     tomasQueQuedan,
     limpio,

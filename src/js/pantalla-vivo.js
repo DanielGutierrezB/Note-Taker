@@ -150,7 +150,10 @@ export function conectar(contexto) {
         // Por `ponerBorde`, igual que el arrastre: si el menú llamara al motor
         // por su cuenta, el deshacer por campo vería dos cosas distintas para
         // el mismo cambio.
-        alElegir: q => ponerBorde(q.cual, q.toma, q.borde, q.ms)
+        alElegir: q => ponerBorde(q.cual, q.toma, q.borde, q.ms),
+        // Partir una toma en dos es de esta pantalla: el vídeo de la semana usa
+        // el mismo menú y no lo sabe hacer.
+        puedeDividir: true
     });
 
     $('#btn-compacto').addEventListener('click', () => {
@@ -1223,8 +1226,27 @@ function ponerBorde(cual, tomaId, borde, ms) {
         case 'abrir': return abrir(ms);
         case 'cerrar': return pedir(() => window.nt.grabarCerrarToma(ms));
         case 'mover': return editar({ tipo: 'borde', toma: tomaId, borde, paredMs: ms });
+        case 'dividir': return dividir(tomaId, ms);
         default: return undefined;
     }
+}
+
+/**
+ * Parte una toma en dos por una palabra.
+ *
+ * Lo pidió el editor el 13/10: «para poder separar una toma en 2 y cambiar de
+ * vista, sin necesidad de que haya un corte de contenido». El reparto lo hace el
+ * motor (`vivo.dividir`); acá queda lo que es de la ventana.
+ *
+ * Las fotos del OUT se vuelven a leer del disco porque los números corrieron:
+ * esta pantalla las tiene en un mapa por número de toma, y después de partir la
+ * foto de la 7 es la de la que ahora es la 8. Sin esto, cada bloque mostraría la
+ * foto del de al lado hasta salir y volver a entrar a la clase.
+ */
+async function dividir(tomaId, ms) {
+    await editar({ tipo: 'dividir', toma: tomaId, paredMs: ms });
+    await fotos.recargar();
+    pintar();
 }
 
 /**

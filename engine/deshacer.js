@@ -373,6 +373,28 @@ function sacar(historia, hacia) {
     };
 }
 
+/* ─── Por qué los pasos NO se renumeran ───────────────────────────────────
+ *
+ * Partir una toma le corre el número a todas las que siguen (`correrNumeros` en
+ * `notas-vivo.js`), y un paso guarda el número por todos lados: de qué toma es
+ * (`id`), las dos fotos —que son copias de la toma entera— y el rótulo que se
+ * lee en el botón. Parece que hiciera falta corregirlos a todos.
+ *
+ * No hace falta, y el motivo es que **esta pila es LIFO**. Partir deja su propio
+ * paso, así que un paso más viejo solo se puede deshacer después de deshacer la
+ * división — y deshacerla devuelve los números. O sea que cuando un paso se
+ * aplica, la numeración es siempre la que había cuando se anotó. Lo mismo del
+ * otro lado: rehacer saca de `adelante` en el orden inverso, y `anotar` vacía
+ * esa pila en cuanto se edita cualquier otra cosa.
+ *
+ * Se intentó renumerarlos igual, por las dudas, y no se pudo escribir ni una
+ * prueba que fallara sin eso: ni con el id, ni con las fotos, ni con el rótulo.
+ * Un arreglo que no se puede ver cuando se rompe es un arreglo que mañana nadie
+ * sabe si sigue haciendo algo. Si alguna vez hay dos pilas, o un paso que toque
+ * más de una toma sin ser el último, esto vuelve a hacer falta — y entonces se
+ * va a poder probar.
+ */
+
 /** Cuántos pasos hay para cada lado, sin tocar el historial. */
 function pasos(historia) {
     return { atras: historia.atras.length, adelante: historia.adelante.length };

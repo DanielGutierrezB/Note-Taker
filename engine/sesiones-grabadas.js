@@ -423,6 +423,23 @@ function editarGrabada(json, cambio) {
         const claqueta = (estado.claquetas || []).find(x => x.n === Number(c.n));
         if (!claqueta) throw new Error(`Esa sesión no tiene la claqueta ${c.n}.`);
         vivo.aplicarAClaqueta(claqueta, c);
+    } else if (c.tipo === 'dividir') {
+        // Partir una toma no es escribir un campo, pero tampoco necesita el
+        // audio: las palabras y las dos orillas ya están guardadas y lo único
+        // que se hace es repartirlas por el corte (ver `vivo.dividir`). De ahí
+        // que entre también acá y no solo en la clase que se está grabando: lo
+        // pidió para «las tomas anteriores o editando las notas tomadas».
+        const toma = (estado.tomas || []).find(t => t.id === c.toma);
+        if (!toma) throw new Error(`Esa sesión no tiene la toma ${c.toma}.`);
+        const r = vivo.dividir(estado, toma, Number(c.paredMs));
+        if (!r) {
+            throw new Error('No puedo dividir ahí: el corte cae sobre un borde de la toma. ' +
+                'Elegí una palabra del medio.');
+        }
+        // Las fotos del OUT también se llaman por el número de su toma. Acá no
+        // hay historial que correr: una clase cerrada no tiene (ver `paraMirar`).
+        referencias.renumerar(sitio.base, estado.secuencia, r.movidas);
+        referencias.renumerar(sitio.base, estado.secuencia, [{ de: toma.id, a: r.segunda.id }]);
     } else {
         const toma = (estado.tomas || []).find(t => t.id === c.toma);
         if (!toma) throw new Error(`Esa sesión no tiene la toma ${c.toma}.`);

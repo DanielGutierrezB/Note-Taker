@@ -636,6 +636,23 @@ function haceFalta(toma) {
 }
 
 /**
+ * Si este borde cae exactamente sobre el de la toma de al lado.
+ *
+ * Dos tomas que se tocan son legales y las hace «Dividir la toma» (ver
+ * `vivo.dividir`): el OUT de una es el IN de la otra, al milisegundo. Las
+ * descartadas no cuentan, igual que en `pisoDelIn` y `techoDelOut`.
+ */
+function pegadoAUnaVecina(tomas, toma, cual) {
+    const propio = cual === 'out' ? toma.outMs : toma.inMs;
+    if (propio == null) return false;
+    return (tomas || []).some(t => {
+        if (t === toma || t.descartada) return false;
+        const suyo = cual === 'out' ? t.inMs : t.outMs;
+        return suyo != null && Number(suyo) === Number(propio);
+    });
+}
+
+/**
  * Ajusta los bordes de todas las tomas de una sesión contra la onda.
  *
  * Trabaja SOBRE el estado —le escribe `toma.ajuste`— y a propósito: así el
@@ -701,6 +718,17 @@ function ajustarSesion(estado, opciones) {
         };
 
         for (const cual of ['in', 'out']) {
+            // **Un borde pegado a la toma vecina no se mueve.** Es el borde que
+            // deja «Dividir la toma»: el OUT de una mitad ES el IN de la otra, y
+            // ahí no hay silencio que buscar —el profesor no paró de hablar, esa
+            // es la gracia del gesto—. Peor: los dos bordes se ajustan por
+            // separado, así que correrlos dejaría en el XML un hueco entre los
+            // dos bloques o, al revés, un pedazo repetido en los dos. El editor
+            // eligió esa palabra mirando; se respeta.
+            if (pegadoAUnaVecina(estado.tomas, toma, cual)) {
+                ajuste[cual === 'out' ? 'porQueOut' : 'porQueIn'] = 'pegado';
+                continue;
+            }
             const ms = cual === 'out' ? toma.outMs : toma.inMs;
             const donde = dondeCae(estado.sesiones, ms, o.resolver);
             if (!donde) continue;
