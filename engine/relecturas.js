@@ -41,9 +41,12 @@ const vivo = require('./notas-vivo');
  * **De una a la vez.** Se encola en vez de largarse a correr: el ciclo de señales
  * ya tiene un Whisper andando cada tres segundos, y sumarle uno por cada toma que
  * se cierra pone dos modelos grandes a pelearse la GPU. Los dos tardan el doble y
- * el que importa es el del ciclo, porque de ese salen las tomas siguientes. Una
- * toma cerrada, en cambio, puede esperar: nadie va a mirar su texto en los
- * próximos segundos.
+ * el que importa es el del ciclo, porque de ese salen las tomas siguientes.
+ *
+ * Lo que la cola NO puede hacer es demorar a la toma que el editor acaba de
+ * cerrar: esa la tiene delante. Por eso la espera de `hayOrilla` es corta y el
+ * contexto largo llega después, en una pasada aparte que no relee la toma
+ * (`completarOrilla`) — ahí sí es verdad que nadie está mirando.
  */
 /** Aire después de la última palabra cuando el OUT se acerca a ella. */
 const CIERRE_TRAS_PALABRA_MS = 200;
@@ -57,6 +60,30 @@ function encolar(sesion, id) {
     if (sesion.cola.includes(id)) return;
     sesion.cola.push(id);
     atender(sesion);
+}
+
+/**
+ * Cuánta orilla derecha querría esta toma: hasta la vecina, o la de siempre.
+ *
+ * Es la MISMA cuenta que hace `oir-toma.leer` para recortar el audio, y se
+ * llama desde acá para que la espera y la lectura no puedan discrepar. Cuando
+ * discrepaban, una toma pegada a la siguiente —las dos mitades de una división—
+ * esperaba doce segundos de audio que la lectura después ni iba a pedir.
+ */
+function quiereDerecha(sesion, toma) {
+    return oirToma.orillaDerecha(toma, sesion.estado.tomas);
+}
+
+/**
+ * Con cuánta orilla derecha quedó leída esta toma, o null si todavía no.
+ *
+ * La marca lleva el OUT con el que se leyó, así que mover un borde la invalida
+ * sola: la toma vuelve a ser "sin leer" y su relectura vuelve a entrar por la
+ * espera corta, que es lo que el editor está esperando cuando arrastra.
+ */
+function leidaCon(toma) {
+    const r = toma.releida;
+    return r && r.inMs === toma.inMs && r.outMs === toma.outMs ? r.orillaMs : null;
 }
 
 /**
@@ -77,12 +104,28 @@ function encolar(sesion, id) {
  * toma y el transcript parecía retomar más adelante. Por eso la espera no es
  * una mejora del texto: es lo que hace que el OUT caiga donde se habló.
  *
+ * **Pero eso se arregla con dos segundos, no con doce** (ver `ORILLA_MINIMA_MS`,
+ * que trae la medición). Los doce son cuánto contexto se GUARDA, que es otra
+ * cosa y no hace falta tenerla para leer: la primera pasada espera el mínimo y
+ * deja el texto bueno enseguida, y la orilla larga la completa después una
+ * segunda pasada corta (`completarOrilla`), cuando ya nadie está mirando esa
+ * toma. Eso es justo el reparto que este archivo venía razonando al revés: la
+ * frase "una toma cerrada puede esperar" vale para la segunda pasada, no para
+ * la primera, porque el editor acaba de cerrarla y la tiene delante.
+ *
  * Con la sesión terminando no se espera: el audio ya se cerró y la orilla no va
  * a llegar nunca, así que se lee con lo que haya, que es mejor que no leer.
  */
 function hayOrilla(sesion, toma) {
     if (sesion.terminando) return true;
-    return espejo.grabadoHastaMs(sesion) >= toma.outMs + oirToma.ORILLA_MS;
+    return espejo.grabadoHastaMs(sesion) >= toma.outMs + pideAhora(sesion, toma);
+}
+
+function pideAhora(sesion, toma) {
+    const quiere = quiereDerecha(sesion, toma);
+    // La primera pasada se conforma con el mínimo; la segunda es justamente la
+    // que viene a buscar el resto, así que espera a que esté entero.
+    return leidaCon(toma) == null ? Math.min(quiere, oirToma.ORILLA_MINIMA_MS) : quiere;
 }
 
 /** La primera de la cola que ya se puede leer, o null si todas esperan. */
@@ -129,7 +172,7 @@ async function atenderCola(sesion) {
             // se suelta y la próxima pasada del ciclo vuelve a mirar.
             if (id == null) return;
             sesion.cola = sesion.cola.filter(x => x !== id);
-            await rehacer(sesion, id);
+            await pasada(sesion, id);
         }
     } finally {
         if (sesion.viva) sesion.rehaciendo = null;
@@ -137,13 +180,80 @@ async function atenderCola(sesion) {
     }
 }
 
+/**
+ * Qué le toca a esta toma: la lectura entera, o solo completarle la orilla.
+ *
+ * Lo decide la toma y no la cola, que es lo que deja la cola siendo una lista
+ * de ids: `releida` dice con qué OUT y con cuánta orilla quedó leída, así que
+ * una toma sin esa marca —o con el OUT movido desde entonces— pide la lectura
+ * entera, y una ya leída corta solo pide el contexto que le faltó.
+ */
+async function pasada(sesion, id) {
+    const toma = sesion.estado.tomas.find(t => t.id === id);
+    if (!toma || toma.inMs == null || toma.outMs == null) return;
+    if (leidaCon(toma) == null) return rehacer(sesion, id);
+    return completarOrilla(sesion, toma);
+}
+
+/** Lo que se lee de más a la izquierda del OUT al completar la orilla. */
+const SOLAPE_DE_ORILLA_MS = 1500;
+
+/**
+ * La segunda pasada: le completa a una toma ya leída el contexto de su derecha.
+ *
+ * **No vuelve a leer la toma**, y eso es todo el punto. Releerla entera sería
+ * cargar el modelo grande por segunda vez para reescribir un texto que ya está
+ * bien —y este archivo evita eso a propósito, ver `encolar`—; acá se lee solo el
+ * tramo de después del OUT, que son doce segundos de audio y menos de dos de
+ * trabajo. `palabras` no se toca: el texto que el editor ya está leyendo no se
+ * mueve.
+ *
+ * Se arranca un poco antes del OUT y se tira lo que caiga delante: así la
+ * primera palabra de la orilla entra entera en vez de empezar cortada, que es el
+ * mismo cuidado que tiene la lectura grande con sus dos bordes.
+ */
+async function completarOrilla(sesion, toma) {
+    const quiere = quiereDerecha(sesion, toma);
+    const bordes = { inMs: toma.inMs, outMs: toma.outMs };
+    // La marca queda puesta ANTES de leer y con la orilla entera, salga lo que
+    // salga: dice "a esta toma ya se le pidió su contexto", que es distinto de
+    // "lo tiene". Puesta después, una lectura que se muere dejaría a la toma
+    // declarando que todavía le falta, y la siguiente que la encolara —mover un
+    // borde y volverlo a su sitio, por ejemplo— pediría la misma orilla otra vez.
+    toma.releida = { ...bordes, orillaMs: quiere };
+    try {
+        const oido = await oirToma.tramo(espejo.archivosDeLaSesion(sesion),
+            bordes.outMs - SOLAPE_DE_ORILLA_MS, bordes.outMs + quiere, false, sesion.estado.idioma);
+        if (!sesion.viva || !sesion.estado.tomas.includes(toma)) return;
+        // El editor pudo mover un borde mientras se leía: entonces esta orilla
+        // es de un corte que ya no existe, y el gesto dejó encolada la relectura
+        // entera. Se tira, que es más barato que pensarla.
+        if (toma.inMs !== bordes.inMs || toma.outMs !== bordes.outMs) return;
+        if (!oido || !oido.palabras) return;
+        toma.despues = oido.palabras.filter(w => w.t >= bordes.outMs);
+        registro.anotar('main', 'relectura.orilla', {
+            toma: toma.id, pideMs: Math.round(quiere), palabras: toma.despues.length
+        });
+        espejo.fijar(sesion);
+    } catch (err) {
+        // Sin orilla la toma se queda con el contexto corto de la primera
+        // pasada, que es texto bueno y poco: peor que completarla, mejor que
+        // cualquier cosa que se pueda hacer acá.
+        registro.anotar('main', 'relectura.orilla-fallo', { toma: toma.id, detalle: err.message });
+    }
+}
+
 async function rehacer(sesion, id) {
     const toma = sesion.estado.tomas.find(t => t.id === id);
     if (!toma || toma.inMs == null || toma.outMs == null) return;
 
-    // Con qué bordes se va a leer. Se guardan porque leer tarda —modelo grande,
-    // toma entera— y el editor sigue trabajando mientras tanto.
-    const seLeyoCon = { inMs: toma.inMs, outMs: toma.outMs };
+    // Con qué bordes se va a leer, y hasta dónde llegaba el audio al empezar. Se
+    // guardan porque leer tarda —modelo grande, toma entera— y el editor sigue
+    // trabajando mientras tanto; lo grabado se mira ACÁ y no al volver porque al
+    // volver ya creció lo que tardó la lectura, y entonces la orilla con la que
+    // se leyó de verdad se contaba de más.
+    const seLeyoCon = { inMs: toma.inMs, outMs: toma.outMs, grabadoMs: espejo.grabadoHastaMs(sesion) };
+    const quiere = quiereDerecha(sesion, toma);
 
     try {
         // Con las tomas: de ahí sale hasta dónde llega la orilla de cada lado,
@@ -184,20 +294,28 @@ async function rehacer(sesion, id) {
         // palabra que nadie dijo. Con la cola esperando esto se cumple siempre
         // salvo al terminar la clase, y ahí el OUT se queda donde estaba, que es
         // donde llegó el audio: sobra silencio, pero no falta nada hablado.
-        const orillaMs = Math.max(0, espejo.grabadoHastaMs(sesion) - toma.outMs);
+        //
+        // **La orilla que CABÍA en la lectura, no la que hay ahora.** Son dos
+        // números distintos y el de antes era el segundo: lo grabado crece
+        // mientras Whisper trabaja, así que una toma leída cortada en seco podía
+        // declarar quince segundos de orilla y habilitar el acercamiento de
+        // abajo. Lo que la lectura recibió es lo que había al empezar, y tampoco
+        // más de lo que iba a pedir (`quiere`, que se achica contra la vecina).
+        const orillaMs = Math.max(0, Math.min(quiere, seLeyoCon.grabadoMs - seLeyoCon.outMs));
         // Con cuánta orilla se leyó, que es lo que explica un final raro: una
         // toma leída con la orilla en cero se leyó cortada en seco, y eso ya no
         // debería pasar salvo en la última de la clase (ver `hayOrilla`).
         registro.anotar('main', 'relectura.leida', {
             toma: toma.id,
             orillaMs: Math.round(orillaMs),
-            pideMs: oirToma.ORILLA_MS,
+            pideMs: Math.round(quiere),
+            minimaMs: oirToma.ORILLA_MINIMA_MS,
             palabras: (leido.palabras || []).length,
             terminando: Boolean(sesion.terminando)
         });
         // Tampoco se acerca el OUT si el editor lo movió mientras se leía: ese
         // OUT ya no es el que puso el botón, es el que eligió alguien mirando.
-        const conOrilla = orillaMs >= oirToma.ORILLA_MS;
+        const conOrilla = orillaMs >= oirToma.ORILLA_MINIMA_MS;
         if (comoSeLeyo && conOrilla && toma.outProvisional && leido.palabras && leido.palabras.length) {
             const ultima = leido.palabras[leido.palabras.length - 1];
             const fin = (ultima.hasta != null ? ultima.hasta : ultima.t) + CIERRE_TRAS_PALABRA_MS;
@@ -208,6 +326,25 @@ async function rehacer(sesion, id) {
             }
         }
         delete toma.outProvisional;
+
+        // Con qué bordes y con cuánta orilla derecha quedó esta toma. De acá
+        // salen las dos decisiones de la segunda pasada: si hace falta, y
+        // cuánto esperar para ella.
+        //
+        // **Solo si se leyó con los bordes de ahora.** Si el editor movió uno a
+        // mitad de lectura, el gesto ya encoló la relectura entera, y dejar la
+        // marca puesta la convertiría en una pasada de orilla: la toma se
+        // quedaría con el texto del reparto viejo y nadie volvería a leerla.
+        if (comoSeLeyo) {
+            // Acercar el OUT le suma a la orilla lo mismo que le quitó a la toma:
+            // el audio leído llega igual de lejos, solo que el borde se corrió.
+            const yaTiene = orillaMs + Math.max(0, seLeyoCon.outMs - toma.outMs);
+            toma.releida = { inMs: toma.inMs, outMs: toma.outMs, orillaMs: yaTiene };
+            // Y si le faltó contexto a la derecha, se encola la segunda pasada.
+            // No al terminar: ahí el audio ya se cerró, esa orilla no va a
+            // llegar nunca y la toma se encolaría sola hasta el final.
+            if (!sesion.terminando && yaTiene < quiereDerecha(sesion, toma)) encolar(sesion, toma.id);
+        }
 
         // Sin palabras es la toma que no se pudo releer con ningún modelo
         // (`engine/insistir.js`). Se escribe la marca y se para acá: lo que la

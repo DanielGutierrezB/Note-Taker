@@ -51,6 +51,10 @@ function conWhisperFalso(fn) {
         oirToma.tramo = async () => ({ palabras: falso.ventana });
         oirToma.leer = async (_a, toma) => {
             falso.leidas.push(toma.id);
+            // Con `colgar`, la lectura arranca y no contesta: es como mirar la
+            // pantalla mientras Whisper trabaja, que es cuando hay que ver el
+            // texto del ciclo puesto en su sitio.
+            if (falso.colgar) await new Promise(() => {});
             return {
                 antes: [], despues: [], colapsadas: 0, relectura: null,
                 palabras: [{ t: toma.inMs, texto: 'RELEÍDA', hasta: toma.inMs + 300 }]
@@ -92,7 +96,7 @@ module.exports = function (t) {
         t.deep(falso.leidas, [], 'nadie la leyó cortada en seco');
         // Mientras espera se sigue viendo lo que oyó el ciclo, como siempre.
         t.deep(s.estado.tomas[0].palabras.map(x => x.texto), ['Hola', 'mundo']);
-        t.ok(espejo.grabadoHastaMs(s) < s.estado.tomas[0].outMs + oirToma.ORILLA_MS,
+        t.ok(espejo.grabadoHastaMs(s) < s.estado.tomas[0].outMs + oirToma.ORILLA_MINIMA_MS,
             'que es justo lo que `hayOrilla` mira');
     }));
 
@@ -142,6 +146,187 @@ module.exports = function (t) {
         t.deep(s.cola, [2], 'y la 2 sigue esperando');
     }));
 
+    /* ─── Dos pasadas, y la corta primero ─────────────────────────────────────
+     *
+     * Esperar la orilla era correcto, pero esperaba doce segundos para una cosa
+     * que se arregla con uno: la misma constante medía CUÁNTO CONTEXTO guardar
+     * —treinta palabras, para mover un borde mirando— y CUÁNTO AUDIO hace falta
+     * detrás del OUT para que Whisper no invente el final. La medición está en
+     * `ORILLA_MINIMA_MS`: con un segundo salen las mismas palabras que con doce,
+     * en las cinco tomas probadas de la clase del 13/10.
+     *
+     * Así que la espera se parte en dos. La primera pasada sale con el mínimo y
+     * deja el texto bueno enseguida, que es cuando el editor acaba de cerrar la
+     * toma y la tiene delante; el contexto largo lo completa después una pasada
+     * corta que NO vuelve a leer la toma —solo el tramo de detrás del OUT—, y
+     * esa sí puede esperar, porque para entonces nadie la está mirando.
+     */
+    t.group('final de la toma · la espera corta y la orilla que llega después');
+
+    /** Una toma cerrada a mano en `dt`, sin OUT provisional que se mueva solo. */
+    async function tomaCerradaEn(falso, dt) {
+        const { st, w } = await conUnaTomaAbierta(falso, 8);
+        grabacion.cerrarToma(st.ceroMs + dt);
+        falso.ventana = [];
+        await reposo();
+        return { st, w, s: grabacion._sesion() };
+    }
+
+    const correrCiclo = async (falso, chunks) => {
+        for (let i = 0; i < chunks; i++) grabacion.pcm(pedazo());
+        await grabacion.buscarSenales();
+        await reposo();
+    };
+
+    t.test('la primera pasada se conforma con el mínimo, no con la orilla entera',
+        conWhisperFalso(async falso => {
+            // Cerrada a 7,5 s con 8 s grabados: medio segundo de orilla, que no
+            // alcanza. La toma espera, como siempre.
+            const { st, s } = await tomaCerradaEn(falso, 7500);
+            t.deep(falso.leidas, [], 'con medio segundo no se lee');
+
+            await correrCiclo(falso, 2);
+            const out = st.ceroMs + 7500;
+            t.deep(falso.leidas, [1], 'con dos segundos y medio sí');
+            t.ok(espejo.grabadoHastaMs(s) < out + oirToma.ORILLA_MS,
+                'y eso fue MUCHO antes de tener los doce segundos que se pedían');
+        }));
+
+    t.test('y la orilla larga se completa después, sin volver a leer la toma',
+        conWhisperFalso(async falso => {
+            const { st, w, s } = await tomaCerradaEn(falso, 7500);
+            await correrCiclo(falso, 2);
+            const toma = s.estado.tomas[0];
+            t.deep(s.cola, [1], 'la toma vuelve a la cola: le falta contexto a la derecha');
+            t.deep(toma.despues, [], 'que por ahora no tiene');
+
+            // Lo que se dijo detrás del OUT. Al ciclo le llega igual —se va al
+            // colchón— y es lo que la pasada de orilla viene a buscar.
+            falso.ventana = [w(8200, 'la'), w(9000, 'orilla'), w(10000, 'larga')];
+            await correrCiclo(falso, 10);
+
+            t.deep(falso.leidas, [1], 'la toma NO se releyó: eso es cargar el modelo grande otra vez');
+            t.deep(toma.palabras.map(x => x.texto), ['RELEÍDA'], 'su texto no se movió');
+            t.deep(toma.despues.map(x => x.texto), ['la', 'orilla', 'larga'],
+                'y ya tiene con qué mover el OUT mirando');
+            t.deep(s.cola, [], 'la cola quedó vacía');
+            t.eq(toma.releida.orillaMs, oirToma.ORILLA_MS,
+                'y queda anotado que a esta toma ya se le pidió su contexto entero');
+        }));
+
+    t.test('y no se pide una tercera vez', conWhisperFalso(async falso => {
+        const { w, s } = await tomaCerradaEn(falso, 7500);
+        await correrCiclo(falso, 2);
+        falso.ventana = [w(8200, 'la'), w(9000, 'orilla')];
+        await correrCiclo(falso, 10);
+        t.deep(s.cola, [], 'ya está completa');
+
+        // Dos vueltas más del ciclo. Sin la marca de hasta dónde quedó leída, la
+        // toma se encolaría sola en cada una hasta el final de la clase.
+        await correrCiclo(falso, 3);
+        await correrCiclo(falso, 3);
+        t.deep(s.cola, [], 'y sigue sin pedir nada');
+        t.deep(falso.leidas, [1], 'una sola lectura en toda su vida');
+    }));
+
+    t.test('el OUT provisional se acerca a la última palabra ya en la primera pasada',
+        conWhisperFalso(async falso => {
+            // Cerrar con el botón deja el OUT donde llegó el audio, con el
+            // silencio del atraso incluido, y la relectura lo acerca a lo último
+            // que se dijo. Si ese acercamiento pidiera la orilla entera no
+            // pasaría NUNCA: la primera pasada sale con el mínimo y es la única
+            // que hay, porque la segunda no vuelve a mirar el texto de la toma.
+            const { s } = await (async () => {
+                const r = await conUnaTomaAbierta(falso, 8);
+                grabacion.cerrarToma();
+                await reposo();
+                return { ...r, s: grabacion._sesion() };
+            })();
+            const toma = s.estado.tomas[0];
+            const puestoPorElBoton = toma.outMs;
+            t.ok(toma.outProvisional, 'el botón lo dejó provisional');
+
+            await correrCiclo(falso, 2);
+
+            t.ok(toma.outMs < puestoPorElBoton, 'se acercó');
+            // La relectura de mentira contesta una palabra que acaba a los 300 ms
+            // del IN, y el cierre va 200 ms detrás de ella.
+            t.eq(toma.outMs, toma.inMs + 500, 'justo detrás de la última palabra');
+            t.ok(!toma.outProvisional, 'y ya no es provisional');
+        }));
+
+    t.test('una toma pegada a la siguiente no espera una orilla que nadie va a pedir',
+        conWhisperFalso(async falso => {
+            // Las dos mitades de una división se tocan: detrás del OUT de la
+            // primera no hay ni un milímetro de audio que no sea ya de la
+            // segunda, así que su lectura recorta la orilla derecha a cero.
+            // Esperarla era esperar por algo que después nadie iba a pedir.
+            const st = grabacion.iniciar({
+                dir: carpeta(), curso: 'f', fps: 30, sinReloj: true, sampleRate: 48000
+            });
+            const s = grabacion._sesion();
+            for (let i = 0; i < 5; i++) grabacion.pcm(pedazo());
+            const toma = (id, inMs, outMs) => ({
+                id, vista: 'PV', comentario: '', cuenta: '', descartada: false,
+                cerradaSola: false, comentarios: [], palabras: [], antes: [], despues: [],
+                inMs: st.ceroMs + inMs, outMs: outMs == null ? null : st.ceroMs + outMs
+            });
+            s.estado.tomas = [toma(1, 1000, 5000)];
+            s.estado.proximaToma = 1;
+
+            // Sola, la toma espera: no hay nada grabado detrás de su OUT.
+            t.ok(!relecturas.hayOrilla(s, s.estado.tomas[0]), 'sola, espera');
+
+            s.estado.tomas.push(toma(2, 5000, null));
+            t.ok(relecturas.hayOrilla(s, s.estado.tomas[0]), 'con la vecina pegada, no');
+
+            relecturas.encolar(s, 1);
+            await reposo();
+            t.deep(falso.leidas, [1], 'y se lee');
+            t.deep(s.cola, [], 'sin quedar pidiendo una segunda pasada que no tiene sitio');
+        }));
+
+    t.test('la orilla que cuenta es la que cupo en la lectura, no la que creció mientras', async () => {
+        // El OUT provisional se acerca a la última palabra de la lectura, y eso
+        // solo vale si detrás del OUT había audio: si no, esa última palabra es
+        // justamente la que Whisper inventó en el corte seco. La cuenta se hacía
+        // al VOLVER de leer, y leer tarda, así que lo grabado ya había crecido:
+        // una toma leída cortada en seco declaraba quince segundos de orilla y
+        // se cerraba en la palabra inventada igual.
+        const guardado = { tramo: oirToma.tramo, leer: oirToma.leer };
+        oirToma.tramo = async () => ({ palabras: [] });
+        oirToma.leer = async (_a, toma) => {
+            // La clase sigue grabando mientras Whisper trabaja.
+            for (let i = 0; i < 20; i++) grabacion.pcm(pedazo());
+            return {
+                antes: [], despues: [], colapsadas: 0, relectura: null,
+                palabras: [{ t: toma.inMs + 500, texto: 'inventada', hasta: toma.inMs + 800 }]
+            };
+        };
+        try {
+            const st = grabacion.iniciar({
+                dir: carpeta(), curso: 'f', fps: 30, sinReloj: true, sampleRate: 48000
+            });
+            const s = grabacion._sesion();
+            for (let i = 0; i < 8; i++) grabacion.pcm(pedazo());
+            s.estado.tomas = [{
+                id: 1, vista: 'PV', comentario: '', cuenta: '', descartada: false,
+                cerradaSola: false, comentarios: [], palabras: [], antes: [], despues: [],
+                inMs: st.ceroMs + 1000, outMs: st.ceroMs + 8000, outProvisional: true
+            }];
+            s.terminando = true;
+            await relecturas.encolar(s, 1);
+            await reposo();
+
+            t.eq(s.estado.tomas[0].outMs, st.ceroMs + 8000,
+                'el OUT se queda donde llegó el audio: sobra silencio, pero no falta nada hablado');
+        } finally {
+            oirToma.tramo = guardado.tramo;
+            oirToma.leer = guardado.leer;
+            grabacion.apagar();
+        }
+    });
+
     /* ─── El atraso del ciclo ─────────────────────────────────────────────────
      *
      * Esperar la orilla arregló el texto de la relectura, pero dejó a la vista el
@@ -160,6 +345,10 @@ module.exports = function (t) {
             grabacion.cerrarToma();
             const s = grabacion._sesion();
             const out = s.estado.tomas[0].outMs;
+            // La relectura de esa toma arranca y se queda trabajando: lo que se
+            // mira acá es el texto que hay MIENTRAS tanto, que es el momento en
+            // que el editor acaba de apretar el botón.
+            falso.colgar = true;
 
             // Se dijo a los 7 s, o sea DENTRO de la toma, pero el ciclo lo oye
             // con la toma ya cerrada: su ventana va unos segundos atrás.
@@ -172,8 +361,8 @@ module.exports = function (t) {
             t.deep(s.estado.tomas[0].palabras.map(x => x.texto), ['Hola', 'mundo', 'lo', 'último'],
                 'y es de la toma, no del colchón');
             t.deep(s.estado.sueltas.map(x => x.texto), [], 'nada quedó suelto');
-            t.deep(falso.leidas, [],
-                'y aparece sin esperar la relectura, que es lo que tardaba');
+            t.deep(falso.leidas, [1],
+                'y está puesto con la relectura todavía en vuelo, que es lo que tardaba');
         }));
 
     t.test('pero lo dicho DESPUÉS del OUT sigue siendo de nadie',
@@ -183,6 +372,7 @@ module.exports = function (t) {
             const { w } = await conUnaTomaAbierta(falso, 8);
             grabacion.cerrarToma();
             const s = grabacion._sesion();
+            falso.colgar = true;
 
             falso.ventana = falso.ventana.concat([w(9000, 'ya'), w(9400, 'fuera')]);
             // Tres segundos y no dos: a la última palabra de una ventana el ciclo

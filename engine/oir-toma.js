@@ -33,15 +33,41 @@ const vivo = require('./notas-vivo');
 const ORILLA_MS = 12000;
 
 /**
+ * Y cuánta hace falta para que Whisper no cierre la toma con algo inventado.
+ *
+ * Son dos cosas distintas que durante un tiempo midió la constante de arriba, y
+ * de ahí salía una espera doce veces más larga de lo necesario: la de arriba es
+ * CUÁNTO CONTEXTO se guarda —una decisión de pantalla, treinta palabras para
+ * mover un borde mirando— y esta es CUÁNTO AUDIO tiene que haber detrás del OUT
+ * para que la lectura no salga cortada en seco (`hayOrilla` en `relecturas.js`).
+ * Lo segundo es un umbral del modelo, y es chico.
+ *
+ * Medido sobre la clase del 13/10, releyendo cinco tomas con la misma orilla
+ * izquierda y la derecha en 0, 0,5, 1, 2, 3, 6 y 12 segundos:
+ *
+ *   orilla       qué sale
+ *   0 ms         inventa el final en 3 de 5 ("…sobre mí VAMOS", "…en vivo POR FAVOR")
+ *   500 ms       todavía inventa en 1 de 5
+ *   1000 ms      las mismas palabras que con 12 s, en las cinco
+ *   ≥2000 ms     igual, y lo que cambia a partir de ahí son comas y mayúsculas
+ *                que también cambian entre 6 s y 12 s: es el modelo, no el borde
+ *
+ * Dos segundos es el doble del umbral medido y la sexta parte de lo que se
+ * pedía. Lo que se gana no es velocidad de lectura —leer tarda lo mismo— sino
+ * los diez segundos que la toma pasaba esperando sin leerse, justo cuando el
+ * editor acaba de cerrarla y la está mirando.
+ */
+const ORILLA_MINIMA_MS = 2000;
+
+/**
  * Y hasta dónde se estira cuando la toma vecina está más lejos que eso.
  *
- * **Las sueltas no se guardan.** Lo que se dijo entre dos tomas vive en
- * `estado.sueltas`, que es memoria de la sesión en curso y no entra en el
- * sidecar: cerrada la clase, ese texto no está en ninguna parte y el tramo
- * entre dos tomas no se puede tocar desde ninguno de los dos lados. El editor
- * lo reportó el 13/10 mirando las tomas 11 y 12, con medio minuto hablado
- * entre una y otra: «si hay transcript entre ambas, debería poder modificar en
- * cualquiera de los 2 lados».
+ * **Para que el tramo entre dos tomas se pueda tocar desde las dos.** El editor
+ * lo reportó el 13/10 mirando las tomas 11 y 12, con medio minuto hablado entre
+ * una y otra: «si hay transcript entre ambas, debería poder modificar en
+ * cualquiera de los 2 lados». Las sueltas de la sesión también lo guardan hoy,
+ * pero con tope y solo mientras no sean de nadie; esto lo deja escrito en la
+ * toma, que es donde no se pierde.
  *
  * Así que la orilla llega hasta la vecina y queda escrita en las dos: en el
  * `despues` de la de antes y en el `antes` de la de después. Noventa segundos
@@ -314,4 +340,4 @@ function dormir(ms) {
     return ms ? new Promise(listo => setTimeout(listo, ms)) : Promise.resolve();
 }
 
-module.exports = { ORILLA_MS, ORILLA_MAX_MS, tramo, leer };
+module.exports = { ORILLA_MS, ORILLA_MINIMA_MS, ORILLA_MAX_MS, orillaDerecha, tramo, leer };
