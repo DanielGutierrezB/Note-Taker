@@ -1796,6 +1796,34 @@ function tragarSueltas(estado, toma) {
 }
 
 /**
+ * Las sueltas, cuadradas contra las tomas que hay ahora.
+ *
+ * Una palabra está en las sueltas exactamente cuando se dijo sin toma: lo que
+ * cae adentro de una sobra ahí, y lo que se salió de una tiene que volver.
+ * `moverInAbierta` y `tragarSueltas` mantienen eso solas porque mueven la
+ * palabra de un sitio al otro en el mismo gesto, pero **deshacer repone la toma
+ * y no las sueltas** —la foto del historial es de UNA toma, nunca de la sesión
+ * (ver `engine/deshacer.js`)—, así que después de volver atrás un borde hay que
+ * cuadrarlas acá.
+ *
+ * Sin esto el daño no se ve enseguida: deshacer dejaba la palabra en los dos
+ * sitios y lo cobraba el siguiente gesto que leyera las sueltas —`tragarSueltas`
+ * al mover el OUT, o la toma siguiente al abrirse—, y entonces el texto salía
+ * doble ("uno uno dos dos tres") en la pantalla y en el XML.
+ *
+ * Lo de las orillas (`antes`, `despues`) sí convive: es el gris de contexto, y
+ * la pantalla lo junta con las sueltas sin repetir. Acá solo cuenta lo que cae
+ * entre el IN y el OUT, que es donde la palabra pasa a ser de la toma.
+ *
+ * @param {object[]} [soltadas] palabras que una toma tenía y ya no
+ */
+function limpiarSueltas(estado, soltadas) {
+    const tomas = (estado.tomas || []).filter(t => t.inMs != null && !t.descartada);
+    const adentro = w => tomas.some(t => w.t >= t.inMs && (t.outMs == null || w.t < t.outMs));
+    estado.sueltas = juntas(estado.sueltas, soltadas).filter(w => !adentro(w));
+}
+
+/**
  * Un borde corrido sin volver a oír: se reparten otra vez las palabras que hay.
  *
  * **Mover un borde no necesita el audio, y esa es la razón de que las orillas
@@ -1963,6 +1991,7 @@ module.exports = {
     dividir,
     correrNumeros,
     tragarSueltas,
+    limpiarSueltas,
     tomasQueQuedan,
     limpio,
     comentarioDeEntrada,

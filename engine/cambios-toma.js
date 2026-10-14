@@ -451,6 +451,10 @@ function volver(sesion, hacia) {
     }
 
     const dado = historial.sacar(sesion.historia, hacia);
+    // Lo que la toma tiene ANTES de que la foto vuelva: si la foto no se lo
+    // devuelve, es porque esa palabra pasa a estar fuera de toda toma otra vez.
+    const tenia = paso.campo ? null
+        : ((sesion.estado.tomas.find(t => t.id === paso.id) || {}).palabras || []).slice();
     if (paso.campo === 'claquetas') {
         historial.ponerEnLista(sesion.estado.claquetas || (sesion.estado.claquetas = []),
             dado.quitar, dado.foto, { campos: dado.campos, esLaMisma: vivo.mismaClaqueta });
@@ -464,6 +468,9 @@ function volver(sesion, hacia) {
     } else {
         historial.poner(sesion.estado.tomas, paso.id, foto, dado.campos);
     }
+    // La foto es de una toma y las sueltas son de la sesión: hay que cuadrarlas
+    // a mano, o un borde repuesto deja la misma palabra adentro y afuera.
+    if (!paso.campo) vivo.limpiarSueltas(sesion.estado, tenia);
     // Un borde repuesto pide el mismo texto que pidió el gesto original: acá el
     // reparto de palabras lo hace la relectura, no el borde (ver `editar`).
     if (paso.tipo === 'borde' || paso.tipo === 'cerrar') relecturas.encolar(sesion, paso.id);

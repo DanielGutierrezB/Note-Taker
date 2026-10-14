@@ -133,4 +133,70 @@ module.exports = function (t) {
         t.eq(cruzan[cruzan.length - 1].texto, 's2999', 'y lo que se recorta es lo viejo, no lo nuevo');
         grabacion.apagar();
     });
+
+    /* ─── Volver atrás ───────────────────────────────────────────────────────
+     *
+     * Correr el IN es el gesto que más se corrige, porque se hace mirando el
+     * texto y la palabra buena suele estar una o dos más allá. Así que ⌘Z tiene
+     * que devolver exactamente el estado de antes, y ⇧⌘Z el de después.
+     *
+     * Lo que fallaba no era el borde —ese siempre volvió— sino las sueltas: la
+     * foto del historial es de UNA toma y las sueltas son de la sesión, así que
+     * deshacer le devolvía a la toma palabras que seguían contadas afuera. La
+     * misma palabra en los dos sitios no se nota hasta el gesto siguiente, y
+     * entonces sale doble.
+     */
+    t.group('el IN que retrocede · deshacer y rehacer');
+
+    /** Las palabras que están a la vez dentro de una toma y en las sueltas. */
+    function repetidas(e) {
+        const adentro = new Set();
+        for (const toma of e.tomas) {
+            for (const w of toma.palabras || []) adentro.add(`${w.t}|${w.texto}`);
+        }
+        return (e.sueltas || []).filter(w => adentro.has(`${w.t}|${w.texto}`)).map(w => w.texto);
+    }
+
+    t.test('deshacer devuelve el IN y las palabras, sin dejarlas sueltas además', () => {
+        const { e, palabras } = conUnaTomaLarga(20);
+        const donde = e.tomas[1].inMs;
+        grabacion.editar({ tipo: 'borde', toma: 2, borde: 'in', paredMs: palabras[10].t });
+        t.eq(e.sueltas.length, 10, 'el gesto sacó las diez primeras de la toma');
+
+        grabacion.deshacer();
+        t.eq(e.tomas[1].inMs, donde, 'el IN volvió a donde estaba');
+        t.eq(e.tomas[1].palabras.length, 20, 'y la toma recuperó su texto entero');
+        t.deep(repetidas(e), [], 'ninguna palabra quedó adentro y suelta a la vez');
+        grabacion.apagar();
+    });
+
+    t.test('rehacer vuelve a sacarlas de la toma y a dejarlas sueltas', () => {
+        const { e, palabras } = conUnaTomaLarga(20);
+        grabacion.editar({ tipo: 'borde', toma: 2, borde: 'in', paredMs: palabras[10].t });
+        grabacion.deshacer();
+        grabacion.rehacer();
+
+        t.eq(e.tomas[1].inMs, palabras[10].t, 'el IN volvió a correrse');
+        t.deep(e.tomas[1].palabras.map(w => w.texto), palabras.slice(10).map(w => w.texto),
+            'la toma se quedó otra vez con la segunda mitad');
+        t.deep(e.sueltas.map(w => w.texto), palabras.slice(0, 10).map(w => w.texto),
+            'y las diez de antes volvieron a ser lo gris: rehacer es el mismo estado, no uno parecido');
+        t.deep(repetidas(e), [], 'tampoco acá hay palabras en dos sitios');
+        grabacion.apagar();
+    });
+
+    t.test('tras deshacer, mover el OUT no traga lo que ya está adentro', () => {
+        // El daño de verdad llegaba acá: `tragarSueltas` mete en la toma lo que
+        // el borde nuevo abarca, y si eso estaba repetido la toma terminaba con
+        // «p0 p0 p1 p1 p2...» en la pantalla y en el XML.
+        const { st, e, palabras } = conUnaTomaLarga(20);
+        grabacion.editar({ tipo: 'borde', toma: 2, borde: 'in', paredMs: palabras[10].t });
+        grabacion.deshacer();
+        grabacion.cerrarToma(palabras[19].t + 500);
+        grabacion.editar({ tipo: 'borde', toma: 2, borde: 'out', paredMs: st.ceroMs + 30000 });
+
+        t.deep(e.tomas[1].palabras.map(w => w.texto), palabras.map(w => w.texto),
+            'cada palabra una sola vez, en orden');
+        grabacion.apagar();
+    });
 };
