@@ -536,6 +536,47 @@ más tenue siga pasando 4,5:1 encima con los cinco colores
 (`node tools/contrastes.js`). Una toma desactivada pierde el color: su marcador
 no va a existir.
 
+### Dividir una toma en dos
+
+El clic derecho sobre una palabra ofrece además **«Dividir la toma acá»**. Lo
+pidió el editor grabando: «para poder separar una toma en 2 y cambiar de vista,
+sin necesidad de que haya un corte de contenido». Es el caso de hablar de
+corrido veinte minutos y pasar en el medio de hablar a cámara a mostrar la
+pantalla: una sola tirada de contenido, dos planos.
+
+**Las dos mitades se tocan.** El OUT de la primera ES el IN de la segunda, y el
+reparto de palabras usa el OUT exclusivo, así que entre ellas no queda nada
+afuera ni nada repetido. Eso es lo que lo distingue de cerrar una toma y abrir
+otra, que deja un hueco del tamaño de lo que uno tarde. Sobre la toma abierta
+deja cerrado lo de hasta ahí y sigue grabando en la mitad nueva.
+
+Se ofrece en la clase —en vivo y abriendo una clase vieja— y donde se podría
+poner el IN sobre una toma que existe: las dos cosas dicen «acá empieza algo», y
+lo que cambia es qué pasa con lo de antes. En el vídeo de la semana no, que usa
+el mismo menú y no sabe partir tomas.
+
+Qué se lleva cada mitad: la **vista** las dos, que es para lo que se parte; el
+**OUT y su foto** son del final y van a la segunda; las **notas sobre el texto**
+van a la mitad donde cae su palabra; y la **nota de la toma** se queda en la
+primera sin copiarse, porque duplicarla serían dos marcadores iguales en
+Premiere.
+
+**Las tomas se renumeran**, que fue la decisión del editor preguntado de frente:
+una toma 9 metida entre la 4 y la 5 se lee peor en Premiere que cuatro tomas que
+cambian de nombre. El precio es que el número de una toma deja de ser para
+siempre, así que todo lo que guarda un número corre en el mismo gesto: las fotos
+del OUT y la cola de relecturas. El contador solo sube —un número que ya se usó
+no se reparte dos veces— así que deshacer puede dejar un hueco en la numeración
+siguiente, igual que descartar una toma. El historial de deshacer NO se renumera
+y está dicho por qué en `engine/deshacer.js`: la pila es LIFO, así que un paso
+viejo solo se deshace después de deshacer la división, y eso devuelve los
+números.
+
+Y el ajuste al silencio **no toca un borde pegado a su vecina**. Los dos bordes
+se ajustan por separado, así que correrlos dejaría en el XML un hueco entre los
+dos bloques o un pedazo repetido en los dos. El editor eligió esa palabra
+mirando: se respeta.
+
 ### Mantener, desactivar, descartar
 
 Cada toma cerrada, al desplegarla, tiene sus tres estados en un solo control:
@@ -1328,6 +1369,78 @@ Hay dos ciclos y la separación es lo que protege el transcript.
 |---|---|---|---|
 | **en vivo** | cada 1 s, sobre los últimos 6 s | el grande (`large-v3-turbo`) con DTW, cargado en `whisper-server` | el texto que se ve mientras se habla, y la hora de las señales |
 | **toma** | al cerrar cada toma | el grande, con alineación DTW (`whisper-cli`) | el texto del XML |
+
+### Una toma no se lee cortada en seco
+
+La relectura de una toma pide su tramo **con audio a los dos lados**, y eso no
+es para mejorar el texto: es lo que hace que el OUT caiga donde se habló.
+
+Reportado grabando el 13/10: «si cierro una toma manualmente después de que dijo
+algo, me hace el transcript como si lo parara cuando dije pero no transcribe lo
+que dijo en ese último momento». Al cerrar con el botón, el WAV termina justo en
+el OUT y la relectura salía al instante, así que Whisper recibía un audio
+cortado a mitad de frase. Releyendo la MISMA toma de esa clase de las dos
+maneras:
+
+```
+cortado en el OUT   …PROMP Research «¡Suscríbete al canal!»   (y nada detrás)
+con su orilla       …PROMP Research.  │ buenísimo Alejo Alejo mientras tanto…
+```
+
+En ese borde Whisper escribe lo que tiene aprendido de los subtítulos. Y no
+quedaba en texto de más: el OUT provisional se acercaba A esa palabra inventada,
+así que lo dicho de verdad quedaba FUERA de la toma. Eso es lo que se veía como
+«el transcript retoma más adelante».
+
+Así que una toma espera a que el audio pase su OUT antes de releerse, y mientras
+tanto muestra el texto del ciclo en vivo, como siempre. Al terminar la clase se
+lee con lo que haya: esa orilla ya no va a llegar nunca. Esa última toma, que se
+lee cortada por fuerza, **se defiende sola**: se descarta la tirada final que
+comparte la misma hora de comienzo —tres palabras dichas no empiezan en el mismo
+milisegundo— y los créditos aprendidos, solo en el último segundo y medio del
+recorte.
+
+### Lo que se dijo entre dos tomas
+
+La orilla de cada toma llega **hasta su vecina** —el OUT de la anterior y el IN
+de la siguiente— con un tope de noventa segundos, en vez de doce fijos. Más
+cerca que eso también manda la vecina, y achicar ahí es lo correcto: lo que está
+más allá de su borde ya es texto suyo.
+
+Es para poder tocar el tramo entre dos tomas desde cualquiera de las dos, que
+es lo que el editor pidió: «si hay transcript entre ambas, debería poder
+modificar en cualquiera de los 2 lados». Mientras la clase corre ese texto está
+en las palabras sueltas, pero esas **no se guardan**: viven en la memoria de la
+sesión, así que cerrada la clase el tramo no existía para nadie. Ahora queda
+escrito en las dos tomas, en el `despues` de una y en el `antes` de la otra.
+
+Y abrir una toma con «3, 2, 1» ya no vacía las palabras sueltas. Se vaciaban por
+un motivo que sigue siendo cierto —una toma nueva no puede retroceder hasta una
+tirada que ya es de otra toma— pero eso es un piso para el retroceso, no una
+razón para tirar el texto.
+
+### Nada se tira callado
+
+El filtro de nivel (`engine/sonido.js`) es el único sitio de la app que puede
+hacer desaparecer algo que el profesor dijo, y hasta acá lo hacía sin dejar
+rastro: el diario decía que la toma se había releído bien y el texto tenía un
+hueco. Ahora cada lectura anota qué palabras quitó, a qué nivel sonaban y contra
+qué corte se las midió (`lectura.filtrada`), y cada relectura con cuánta orilla
+se leyó (`relectura.leida`).
+
+Eso es lo que permitió diagnosticar el otro hueco del 13/10, el de la toma 10:
+el profesor calló siete segundos cambiando de slide y después dijo «a raíz de la
+ausencia…»; Whisper, leyendo la toma entera, le puso a CINCO palabras la misma
+hora —4713,6 s, en mitad de ese silencio— y el filtro tiró cuatro porque ahí de
+verdad no sonaba nada: −82,8 dB contra un corte de −35. Las dos piezas hicieron
+lo suyo bien y aun así se perdieron palabras dichas.
+
+La red para eso son los **huecos con voz**: si entre dos palabras de una toma
+quedan más de dos segundos con voz sostenida y ni una palabra escrita, ese tramo
+se lee aparte, con un segundo y medio de margen a cada lado, y lo que salga se
+mete en su sitio sin repetir. Un recorte corto no le deja a Whisper dónde
+descolocar las palabras. Un silencio de verdad —el de cambiar de slide— no se
+relee: no hay nada que rescatar y sería pagar una pasada para que invente.
 
 ### El texto en vivo
 
