@@ -32,6 +32,8 @@ const grabacion = require('../engine/grabacion');
 const oirToma = require('../engine/oir-toma');
 const oir = require('../engine/oir');
 const espejo = require('../engine/espejo');
+const vivo = require('../engine/notas-vivo');
+const relecturas = require('../engine/relecturas');
 
 /** Un segundo de audio a 48 kHz, que es lo que escribe cada `pcm`. */
 const pedazo = () => Buffer.alloc(48000 * 2);
@@ -139,6 +141,124 @@ module.exports = function (t) {
         t.deep(falso.leidas, [1, 1], 'la 1 se releyó sin esperar a la 2');
         t.deep(s.cola, [2], 'y la 2 sigue esperando');
     }));
+
+    /* ─── El atraso del ciclo ─────────────────────────────────────────────────
+     *
+     * Esperar la orilla arregló el texto de la relectura, pero dejó a la vista el
+     * otro lado del mismo problema: hasta que la relectura llega, lo que se ve es
+     * lo que oyó el ciclo de señales, y el ciclo oye tarde. Cerrar la toma justo
+     * después de hablar dejaba lo último dicho fuera de ella durante medio minuto
+     * —«hay partes del transcript que no aparecen... como si hubiera un delay»—,
+     * y no por el audio: la palabra llegaba, pero como ya no había toma abierta se
+     * iba al colchón aunque cayera entre el IN y el OUT.
+     */
+    t.group('final de la toma · el atraso del ciclo de señales');
+
+    t.test('lo último dicho entra en la toma aunque se cierre antes de oírlo',
+        conWhisperFalso(async falso => {
+            const { st, w } = await conUnaTomaAbierta(falso, 8);
+            grabacion.cerrarToma();
+            const s = grabacion._sesion();
+            const out = s.estado.tomas[0].outMs;
+
+            // Se dijo a los 7 s, o sea DENTRO de la toma, pero el ciclo lo oye
+            // con la toma ya cerrada: su ventana va unos segundos atrás.
+            falso.ventana = falso.ventana.concat([w(7000, 'lo'), w(7400, 'último')]);
+            for (let i = 0; i < 2; i++) grabacion.pcm(pedazo());
+            await grabacion.buscarSenales();
+            await reposo();
+
+            t.ok(st.ceroMs + 7400 < out, 'la palabra cae antes del OUT');
+            t.deep(s.estado.tomas[0].palabras.map(x => x.texto), ['Hola', 'mundo', 'lo', 'último'],
+                'y es de la toma, no del colchón');
+            t.deep(s.estado.sueltas.map(x => x.texto), [], 'nada quedó suelto');
+            t.deep(falso.leidas, [],
+                'y aparece sin esperar la relectura, que es lo que tardaba');
+        }));
+
+    t.test('pero lo dicho DESPUÉS del OUT sigue siendo de nadie',
+        conWhisperFalso(async falso => {
+            // El colchón no se vacía: es de donde sale lo gris entre dos tomas y
+            // lo que absorbe la toma siguiente al abrirse a mano.
+            const { w } = await conUnaTomaAbierta(falso, 8);
+            grabacion.cerrarToma();
+            const s = grabacion._sesion();
+
+            falso.ventana = falso.ventana.concat([w(9000, 'ya'), w(9400, 'fuera')]);
+            // Tres segundos y no dos: a la última palabra de una ventana el ciclo
+            // no se la cree hasta la pasada siguiente (`firmeHastaMs`).
+            for (let i = 0; i < 3; i++) grabacion.pcm(pedazo());
+            await grabacion.buscarSenales();
+            await reposo();
+
+            t.deep(s.estado.tomas[0].palabras.map(x => x.texto), ['Hola', 'mundo'],
+                'la toma no se estira');
+            t.deep(s.estado.sueltas.map(x => x.texto), ['ya', 'fuera'], 'eso sí es suelto');
+        }));
+
+    t.group('final de la toma · un borde movido mientras se lee');
+
+    t.test('la lectura que llega tarde no deshace el gesto', async () => {
+        // Leer tarda —modelo grande sobre la toma entera— y el editor sigue
+        // trabajando mientras tanto. La lectura reparte por los bordes que había
+        // al empezar, así que al aterrizar pisaba el reparto del gesto con uno
+        // viejo: con el IN corrido hacia atrás, las palabras que el editor
+        // acababa de meter en la toma volvían a la orilla y desaparecían del
+        // texto hasta la relectura siguiente.
+        const guardado = { tramo: oirToma.tramo, leer: oirToma.leer };
+        let suelta;
+        const enVuelo = new Promise(r => { suelta = r; });
+        let todas = [];
+        let lecturas = 0;
+        oirToma.tramo = async () => ({ palabras: [] });
+        oirToma.leer = async (_a, toma) => {
+            const bordes = { inMs: toma.inMs, outMs: toma.outMs };
+            lecturas++;
+            // La primera se queda esperando a que el editor mueva el borde; la
+            // segunda no contesta nunca, para poder mirar el estado de en medio.
+            if (lecturas === 1) await enVuelo;
+            else await new Promise(() => {});
+            return { colapsadas: 0, relectura: null, ...vivo.repartir(todas, bordes) };
+        };
+
+        try {
+            const st = grabacion.iniciar({
+                dir: carpeta(), curso: 'f', fps: 30, sinReloj: true, sampleRate: 48000
+            });
+            const s = grabacion._sesion();
+            const w = (dt, texto) => ({ t: st.ceroMs + dt, texto, hasta: st.ceroMs + dt + 300 });
+            todas = [w(6000, 'esto'), w(8000, 'es'), w(10000, 'uno'), w(12000, 'dos'),
+                w(14000, 'tres'), w(22000, 'después')];
+            const bordes = { inMs: st.ceroMs + 10000, outMs: st.ceroMs + 20000 };
+            s.estado.tomas = [{
+                id: 1, vista: 'PV', comentario: '', cuenta: '', descartada: false,
+                cerradaSola: false, comentarios: [], ...bordes, ...vivo.repartir(todas, bordes)
+            }];
+            s.estado.proximaToma = 1;
+            // Audio de sobra: la toma ya tiene su orilla, así que se lee enseguida.
+            for (let i = 0; i < 40; i++) grabacion.pcm(pedazo());
+
+            const toma = s.estado.tomas[0];
+            relecturas.encolar(s, 1);
+            await reposo();
+            t.eq(lecturas, 1, 'se está leyendo');
+
+            // Y acá el editor mueve el IN hacia atrás: la toma empezó antes.
+            grabacion.editar({ tipo: 'borde', toma: 1, borde: 'in', paredMs: st.ceroMs + 6000 });
+            t.deep(toma.palabras.map(x => x.texto), ['esto', 'es', 'uno', 'dos', 'tres'],
+                'el gesto mete las dos palabras de antes, al instante');
+
+            suelta();
+            await reposo();
+            t.deep(toma.palabras.map(x => x.texto), ['esto', 'es', 'uno', 'dos', 'tres'],
+                'y la lectura vieja no se las lleva de vuelta a la orilla');
+            t.eq(toma.inMs, st.ceroMs + 6000, 'el borde sigue donde lo puso el editor');
+        } finally {
+            oirToma.tramo = guardado.tramo;
+            oirToma.leer = guardado.leer;
+            grabacion.apagar();
+        }
+    });
 
     t.group('final de la toma · al terminar no hay orilla que esperar');
 

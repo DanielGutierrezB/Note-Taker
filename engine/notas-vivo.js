@@ -1379,6 +1379,33 @@ function dondeSigue(estado, nuevas) {
  * @param {object} [opciones] { firmeHastaMs } — sin él, todo es firme
  * @returns {Array} qué pasó, para poder contarlo en la pantalla y en el registro
  */
+/**
+ * De qué toma es una palabra que el ciclo de señales acaba de oír.
+ *
+ * **La abierta no es la única que puede recibir palabras**, y eso es lo que
+ * arregla el hueco del final de cada toma. El ciclo oye con unos segundos de
+ * atraso —ventana de seis segundos, mediana de tres (ver `ciclo-senales.js`)—,
+ * así que al cerrar una toma justo después de hablar, lo último dicho todavía
+ * no se había oído. Llegaba con la toma ya cerrada, no había abierta, y se iba
+ * al colchón: la toma se quedaba sin su final, y ese final volvía recién con la
+ * relectura, que además espera a tener su orilla. Medio minuto de "me falta lo
+ * que acabo de decir", justo donde el editor está mirando.
+ *
+ * La palabra cae dentro de los bordes de la toma, así que es suya: dejarla
+ * suelta era decir que se dijo sin toma, y no es verdad. Es la misma regla que
+ * `limpiarSueltas` mantiene del otro lado.
+ *
+ * Las descartadas no cuentan —ya no son de nadie— y una toma vieja no puede
+ * salir elegida: la ventana del ciclo no llega tan atrás.
+ */
+function tomaCon(estado, w) {
+    for (const t of estado.tomas || []) {
+        if (t.inMs == null || t.descartada) continue;
+        if (w.t >= t.inMs && (t.outMs == null || w.t < t.outMs)) return t;
+    }
+    return null;
+}
+
 function aplicarSenales(estado, palabras, opciones) {
     if (!Array.isArray(estado.sueltas)) estado.sueltas = [];
     if (!estado.ultimaSenal) estado.ultimaSenal = {};
@@ -1438,11 +1465,12 @@ function aplicarSenales(estado, palabras, opciones) {
                 toma.inMs = Math.max(toma.inMs, w.t);
                 delete toma.inProvisional;
             }
-            // Con una toma abierta la palabra es suya —salvo que se haya dicho
-            // antes de su IN, que pasa al abrir a mano durante el atraso del
-            // ciclo—; sin ninguna, queda en el colchón por si alguien abre a mano
-            // en los próximos segundos (ver `sueltas` y `abrirToma`).
-            if (toma && w.t >= toma.inMs) toma.palabras.push(w);
+            // La palabra es de la toma en cuyos bordes cae, esté abierta o
+            // recién cerrada; si no cae en ninguna queda en el colchón, por si
+            // alguien abre a mano en los próximos segundos (ver `sueltas` y
+            // `abrirToma`).
+            const suya = tomaCon(estado, w);
+            if (suya) (suya.palabras || (suya.palabras = [])).push(w);
             else estado.sueltas.push(w);
         }
         cursor = hasta;

@@ -141,6 +141,10 @@ async function rehacer(sesion, id) {
     const toma = sesion.estado.tomas.find(t => t.id === id);
     if (!toma || toma.inMs == null || toma.outMs == null) return;
 
+    // Con qué bordes se va a leer. Se guardan porque leer tarda —modelo grande,
+    // toma entera— y el editor sigue trabajando mientras tanto.
+    const seLeyoCon = { inMs: toma.inMs, outMs: toma.outMs };
+
     try {
         // Con las tomas: de ahí sale hasta dónde llega la orilla de cada lado,
         // que es lo que deja el tramo entre dos tomas escrito en las dos y no
@@ -152,7 +156,24 @@ async function rehacer(sesion, id) {
         // `repartir` mandaba todo el texto a `despues` y la toma quedaba vacía.
         if (!sesion.estado.tomas.includes(toma) || toma.outMs == null) return;
 
+        // **Y el editor pudo mover un borde mientras se leía**, que es lo que
+        // hacía desaparecer texto: la lectura reparte por los bordes que había
+        // al empezar, así que pisaba el reparto bueno con uno viejo. Con el IN
+        // corrido hacia atrás a mitad de lectura, las palabras que el gesto
+        // acababa de meter en la toma se iban otra vez a la orilla y el texto
+        // volvía a empezar donde ya no empieza la línea azul — y no volvían
+        // hasta que terminara la relectura siguiente, que es medio minuto más.
+        //
+        // Las palabras son las mismas y el tramo leído es más ancho que la
+        // toma, así que no hay que releer nada: alcanza con volver a repartirlas
+        // por los bordes de AHORA. Eso deja el texto bueno y el borde del editor,
+        // que es lo que estaba mirando cuando lo movió.
+        const comoSeLeyo = toma.inMs === seLeyoCon.inMs && toma.outMs === seLeyoCon.outMs;
         Object.assign(toma, leido);
+        if (!comoSeLeyo && leido.palabras) {
+            const todas = (leido.antes || []).concat(leido.palabras, leido.despues || []);
+            Object.assign(toma, vivo.repartir(todas, toma));
+        }
         // El OUT que puso el botón o Terminar es donde llegó el audio, con el
         // silencio del atraso incluido: se acerca a la última palabra de verdad,
         // que ahora sí se conoce entera.
@@ -174,8 +195,10 @@ async function rehacer(sesion, id) {
             palabras: (leido.palabras || []).length,
             terminando: Boolean(sesion.terminando)
         });
+        // Tampoco se acerca el OUT si el editor lo movió mientras se leía: ese
+        // OUT ya no es el que puso el botón, es el que eligió alguien mirando.
         const conOrilla = orillaMs >= oirToma.ORILLA_MS;
-        if (conOrilla && toma.outProvisional && leido.palabras && leido.palabras.length) {
+        if (comoSeLeyo && conOrilla && toma.outProvisional && leido.palabras && leido.palabras.length) {
             const ultima = leido.palabras[leido.palabras.length - 1];
             const fin = (ultima.hasta != null ? ultima.hasta : ultima.t) + CIERRE_TRAS_PALABRA_MS;
             if (fin < toma.outMs && fin > toma.inMs) {
