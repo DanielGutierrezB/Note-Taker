@@ -101,6 +101,20 @@ module.exports = function (t) {
         t.eq(e.tomas[0].outMs, null, 'y sigue abierta');
     });
 
+    t.group('notas-vivo · cómo se llama cada vista');
+
+    t.test('los títulos son los nombres que usa el equipo, no traducciones', () => {
+        // Reportado el 14/10 mirando el tooltip de la barra: «esta tecla M no es
+        // Multi sino Motion Graphics, y X2 es Acelerar». El nombre corto es lo
+        // que va al XML y no cambia; el título es lo que lee quien graba.
+        const titulos = Object.fromEntries(vivo.VISTAS.map(v => [v.nombre, v.titulo]));
+        t.eq(titulos.MG, 'Motion Graphics');
+        t.eq(titulos.X2, 'Acelerar');
+        t.eq(titulos.PV, 'Profesor');
+        t.eq(titulos.R, 'Pantalla');
+        t.eq(titulos.S, 'Slides');
+    });
+
     t.group('notas-vivo · la vista de la toma nueva');
 
     t.test('la primera toma arranca en PV', () => {

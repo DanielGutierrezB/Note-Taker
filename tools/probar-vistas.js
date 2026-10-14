@@ -66,7 +66,7 @@ const vistasDeLasTomas = p => p.evaluate(`(() => {
     decir(v.de === 'la que viene', 'habla de la toma que todavía no empezó');
     decir(/La toma que viene empieza en/.test(v.dice), 'y los botones también');
 
-    console.log('\n   apretando «M» (Multi)…');
+    console.log('\n   apretando «M» (Motion Graphics)…');
     await p.keyboard.press('m');
     await espera(500);
     v = await mirar(p);

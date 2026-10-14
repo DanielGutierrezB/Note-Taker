@@ -963,7 +963,7 @@ b {
    mezclado con el fondo más oscuro: lo bastante para reconocerlo de reojo, lo
    bastante poco para que las tres voces de texto sigan pasando 4,5:1 encima
    (lo mide `tools/contrastes.js`). Contra `--bg-surface` no alcanzaba: el
-   cian de «Multi» aclaraba tanto el bloque que el gris bajaba a 3,3:1. La guarda de la izquierda sigue diciendo el
+   cian de «Motion Graphics» aclaraba tanto el bloque que el gris bajaba a 3,3:1. La guarda de la izquierda sigue diciendo el
    estado: un canal, un significado. */
 .con-vista {
   --tinte: color-mix(in srgb, var(--vista) 16%, var(--bg-inset));

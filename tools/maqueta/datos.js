@@ -23,8 +23,8 @@ const VISTAS = [
     { nombre: 'PV', titulo: 'Profesor', fuente: 0, colorDeMarcador: 4281740498 },
     { nombre: 'R', titulo: 'Pantalla', fuente: 1, colorDeMarcador: 4280578025 },
     { nombre: 'S', titulo: 'Slides', fuente: 1, colorDeMarcador: 4281828977 },
-    { nombre: 'MG', titulo: 'Multi', fuente: 1, colorDeMarcador: 4294345275 },
-    { nombre: 'X2', titulo: 'Doble', fuente: 1, colorDeMarcador: 4289825711 }
+    { nombre: 'MG', titulo: 'Motion Graphics', fuente: 1, colorDeMarcador: 4294345275 },
+    { nombre: 'X2', titulo: 'Acelerar', fuente: 1, colorDeMarcador: 4289825711 }
 ];
 
 const TOMAS = [
@@ -125,7 +125,7 @@ const SUELTAS = palabras(
  *
  * Están aparte porque el modo semanal muestra otra cosa: solo dos vistas —la
  * pantalla y la cámara—, ninguna nota escrita a mano y ninguna claqueta. Con
- * las de la clase, la maqueta enseñaba tomas en «Slides» y en «Multi» y
+ * las de la clase, la maqueta enseñaba tomas en «Slides» y en «Motion Graphics» y
  * renglones que decían «Los tres pilares», que ahí no existen: la captura
  * mentía sobre la pantalla que estaba enseñando.
  *

@@ -76,8 +76,11 @@ const VISTAS = [
     { nombre: 'PV', titulo: 'Profesor', fuente: CAMARA, colorDeMarcador: 4281740498 },
     { nombre: 'R', titulo: 'Pantalla', fuente: PANTALLA, colorDeMarcador: 4280578025 },
     { nombre: 'S', titulo: 'Slides', fuente: PANTALLA, colorDeMarcador: 4281828977 },
-    { nombre: 'MG', titulo: 'Multi', fuente: PANTALLA, colorDeMarcador: 4294345275 },
-    { nombre: 'X2', titulo: 'Doble', fuente: PANTALLA, colorDeMarcador: 4289825711 }
+    // Los títulos son los nombres con que el equipo llama a cada plano: MG es
+    // Motion Graphics y X2 es el tramo que se acelera en post. «Multi» y
+    // «Doble» eran traducciones que nadie usaba (corregido el 14/10).
+    { nombre: 'MG', titulo: 'Motion Graphics', fuente: PANTALLA, colorDeMarcador: 4294345275 },
+    { nombre: 'X2', titulo: 'Acelerar', fuente: PANTALLA, colorDeMarcador: 4289825711 }
 ];
 
 const VISTA_POR_DEFECTO = 'PV';
