@@ -70,23 +70,40 @@ module.exports = function (t) {
     t.test('un archivo vacío da lo de fábrica', () => {
         const a = ajustes.sanear(null);
         t.eq(a.fps, 30);
-        t.eq(a.idioma, 'es');
+        t.eq(a.idioma, 'auto');
         t.eq(a.carpeta, null);
         t.deep(a.carpetas, []);
         t.eq(a.modo, 'clase', 'la app abre tomando notas, como siempre');
         t.deep(a.semanal, { carpeta: null, idioma: 'auto' },
-            'el vídeo de la semana detecta el idioma; la clase lo lleva puesto');
+            'los dos modos detectan el idioma: equivocarlo no sale caro, sale traducido');
     });
 
-    t.test('«auto» es un idioma válido, y cualquier otra cosa no', () => {
+    t.test('solo los idiomas que la app oye, y cualquier otra cosa no', () => {
         // Va a la línea de comandos de `whisper-server` tal cual, y con un `-l`
         // que no entiende el servidor no arranca: sin servidor no hay ni
-        // «3, 2, 1» ni transcript.
-        t.eq(ajustes.sanear({ idioma: 'auto' }).idioma, 'auto');
-        t.eq(ajustes.sanear({ idioma: 'en' }).idioma, 'en');
-        t.eq(ajustes.sanear({ idioma: 'automático' }).idioma, 'es', 'se cae a lo de fábrica');
-        t.eq(ajustes.sanear({ idioma: '--help' }).idioma, 'es');
+        // «3, 2, 1» ni transcript. Y la lista es corta a propósito: un idioma
+        // de más es una manera nueva de que una clase salga traducida
+        // (ver `engine/idiomas.js`).
+        const puesto = i => ajustes.sanear({ idioma: i, idiomaMigrado: true }).idioma;
+        t.eq(puesto('auto'), 'auto');
+        t.eq(puesto('en'), 'en');
+        t.eq(puesto('pt'), 'pt');
+        t.eq(puesto('fr'), 'auto', 'un idioma que la app no oye se cae a lo de fábrica');
+        t.eq(puesto('automático'), 'auto');
+        t.eq(puesto('--help'), 'auto');
         t.eq(ajustes.sanear({ semanal: { idioma: 'xx-larga' } }).semanal.idioma, 'auto');
+    });
+
+    t.test('el «es» de fábrica de antes pasa a «auto» una vez, y después se respeta lo elegido', () => {
+        // `guardar` escribe el archivo entero, así que todo el mundo tiene un
+        // `idioma: "es"` escrito lo haya elegido o no: mirando el archivo no se
+        // distingue «lo dejé como venía» de «lo puse yo». Por eso la marca.
+        const viejo = ajustes.sanear({ idioma: 'es' });
+        t.eq(viejo.idioma, 'auto', 'el de antes se pasa a automático');
+        t.eq(viejo.idiomaMigrado, true, 'y queda dicho que ya se pasó');
+        t.eq(ajustes.sanear(viejo).idioma, 'auto', 'y no se vuelve a pasar');
+        // Quien después elija español lo conserva: la marca ya está puesta.
+        t.eq(ajustes.sanear({ ...viejo, idioma: 'es' }).idioma, 'es');
     });
 
     t.group('ajustes · el parche de cada pantalla');
@@ -140,9 +157,9 @@ module.exports = function (t) {
         t.eq(ajustes.sanear({ fps: 'muchos' }).fps, 30);
     });
 
-    t.test('un idioma que no es de dos letras cae al de fábrica', () => {
-        t.eq(ajustes.sanear({ idioma: 'castellano' }).idioma, 'es');
-        t.eq(ajustes.sanear({ idioma: 'pt' }).idioma, 'pt');
+    t.test('un idioma que la app no oye cae al de fábrica', () => {
+        t.eq(ajustes.sanear({ idioma: 'castellano', idiomaMigrado: true }).idioma, 'auto');
+        t.eq(ajustes.sanear({ idioma: 'pt', idiomaMigrado: true }).idioma, 'pt');
     });
 
     t.test('la carpeta activa va primera en la lista', () => {

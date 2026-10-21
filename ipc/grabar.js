@@ -171,6 +171,14 @@ function registrar({ ipcMain, app, send, anotar }) {
         return grabacion.quitarClaqueta(n);
     });
 
+    /**
+     * El idioma de la clase que está grabando, cambiado a mitad.
+     *
+     * No lo anota acá: lo anota el motor, que es el que sabe cuántas tomas
+     * manda a releer y el que puede negarse (`grabacion.cambiarIdioma`).
+     */
+    ipcMain.handle('grabar-idioma', (event, cual) => grabacion.cambiarIdioma(cual));
+
     ipcMain.handle('grabar-editar', (event, cambio) => {
         // `n` es de los cambios que no son de ninguna toma —la nota de una
         // claqueta—, donde `toma` viene vacío y el registro no diría sobre qué.

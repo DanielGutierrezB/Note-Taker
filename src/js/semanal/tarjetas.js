@@ -29,6 +29,8 @@ import * as fmt from '../formato.js';
 import * as fichas from '../grabar/lista-tomas.js';
 import * as estadosToma from '../grabar/estados-toma.js';
 import * as historia from '../grabar/historia.js';
+import * as rotuloBarra from '../grabar/rotulo-barra.js';
+import * as idiomas from '../idiomas.js';
 import * as estados from '../estados.js';
 import * as corte from './corte.js';
 import { estiloDeVista } from '../colores.js';
@@ -332,6 +334,10 @@ export function tarjetaGrabando(estado) {
             ${esc(pastilla.palabra)}</span>
           <span class="crece"></span>
           ${laHistoria(estado.sesion)}
+          <!-- En qué idioma oye, que acá cambia de verdad a mitad de frase: es
+               el modo donde alguien cuenta su semana y se pasa al inglés. La
+               cámara no va: la de este modo es la mirilla y se elige aparte. -->
+          <span class="rotulos-barra">${rotuloDeIdioma(estado.sesion)}</span>
           <div class="nivel" id="semanal-nivel"><div class="nivel-barra"></div></div>
         </div>
         <div class="tarjeta-cuerpo">
@@ -400,6 +406,34 @@ export function tarjetaGrabando(estado) {
  * Sin `id`: la pantalla de clase busca los suyos por `#btn-deshacer` en todo el
  * documento, y dos elementos con ese id harían que encontrara el de acá.
  */
+/**
+ * El idioma, en la barra del vídeo de la semana.
+ *
+ * Acá importa más que en una clase: este es el modo donde alguien cuenta su
+ * semana y se pasa al inglés a mitad de frase, y el rótulo es lo que deja ver
+ * que lo está siguiendo. Sin cámara al lado: la de este modo es la mirilla y
+ * se elige en su propia tarjeta.
+ */
+function rotuloDeIdioma(sesion) {
+    if (!sesion) return '';
+    const puesto = sesion.idioma || 'auto';
+    const oido = sesion.idiomaOido || null;
+    const discrepa = puesto !== 'auto' && oido && oido !== puesto;
+    return rotuloBarra.rotulo({
+        id: 'semanal-idioma',
+        hace: 'idioma',
+        dice: idiomas.sigla(puesto, oido),
+        corto: idiomas.sigla(puesto === 'auto' ? (oido || 'auto') : puesto, oido),
+        avisa: discrepa,
+        pista: discrepa
+            ? `Lo tenés en ${idiomas.nombre(puesto).toLowerCase()} y suena a `
+                + `${idiomas.nombre(oido).toLowerCase()}. Con el idioma equivocado el transcript sale TRADUCIDO.`
+            : `En qué idioma oye${puesto === 'auto' && oido
+                ? `: lo está eligiendo solo y ahora oye ${idiomas.nombre(oido).toLowerCase()}`
+                : ''}. Cambiarlo relee las tomas que ya cerraste.`
+    });
+}
+
 function laHistoria(sesion) {
     const h = (sesion && sesion.historia) || {};
     const boton = (hace, hay, que, verbo) => `

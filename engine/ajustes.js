@@ -18,6 +18,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+const idiomas = require('./idiomas');
+
 /**
  * Los cuadros por segundo que se pueden elegir.
  *
@@ -54,17 +56,36 @@ const DEFAULTS = {
     /**
      * En qué idioma habla la clase. Va a `whisper-cli -l`.
      *
-     * Fijo y no `auto` porque una clase es de un idioma de punta a punta, y
-     * detectar cuesta: medido contra el residente, 790 ms la pasada con el
-     * idioma puesto y 1200 ms con `auto`, o sea 400 ms más de atraso para el
-     * «3, 2, 1» en una pantalla donde el idioma no va a cambiar nunca.
+     * **`auto`, y antes era `es`.** El motivo de que estuviera fijo era el
+     * precio: detectar costaba 400 ms más por pasada —1200 contra 790— y una
+     * clase es de un idioma de punta a punta, así que se pagaba todo el rato
+     * por una pregunta cuya respuesta no cambiaba.
      *
-     * `auto` existe igual, para quien dé una clase en dos idiomas, y es lo de
-     * fábrica del vídeo semanal (ver `semanal.idioma`): ahí el idioma SÍ cambia
-     * a la mitad, que es justo lo que pasó la primera vez que alguien se grabó
-     * explicando la semana en inglés con el español clavado.
+     * Ese precio ya no se paga. `whisper-server` contesta qué idioma detectó
+     * en TODAS las pasadas, también cuando se le pide uno puesto, así que
+     * «Automático» pregunta de verdad una sola vez y después oye el que viene
+     * oyendo —rápido— sin dejar de vigilar (ver `quePedir` en `oir.js`).
+     *
+     * Y lo que inclinó la balanza es lo que cuesta equivocarse. Con el idioma
+     * equivocado Whisper no se queda corto: TRADUCE. Medido el 20/10 sobre dos
+     * clases reales, audio en inglés pedido en español salió «¿Qué es el skill
+     * prompt que se ha añadido?». Una clase entera traducida no se arregla
+     * mirando; `auto` acertó en las 18 ventanas probadas.
+     *
+     * Entre español e inglés y nada más, por lo que explica `engine/idiomas.js`.
+     * El portugués se elige a mano.
      */
-    idioma: 'es',
+    idioma: 'auto',
+    /**
+     * Que el `es` de fábrica de antes ya se pasó a `auto`, una sola vez.
+     *
+     * Hace falta porque `guardar` escribe el archivo entero: todo el mundo
+     * tiene un `idioma: "es"` escrito, lo haya elegido o no, así que mirando el
+     * archivo no hay manera de distinguir «lo dejé como venía» de «lo puse yo».
+     * Con la marca se pasa una vez a `auto` y nunca más: quien después elija
+     * español lo conserva, porque para entonces la marca ya está puesta.
+     */
+    idiomaMigrado: false,
     /**
      * La entrada de audio elegida la última vez, por su nombre y no por su id.
      *
@@ -125,16 +146,17 @@ const DEFAULTS = {
 const MODOS = ['clase', 'semanal'];
 
 /**
- * Un idioma que Whisper pueda recibir, o lo de fábrica.
+ * Uno de los idiomas que la app oye, o lo de fábrica.
  *
- * Dos letras es un código de idioma y `auto` es «detectalo vos». Lo que no sea
- * ni una cosa ni la otra se cae a lo de fábrica en vez de llegar a la línea de
- * comandos de `whisper-server`, que con un `-l` que no entiende no arranca — y
- * sin servidor no hay ni «3, 2, 1» ni transcript.
+ * La lista es corta a propósito y el porqué está en `engine/idiomas.js`: un
+ * idioma de más no es una opción más, es una manera nueva de que una clase
+ * salga traducida. Antes se aceptaba cualquier par de letras, y con eso un
+ * «fr» escrito a mano en el archivo llegaba al `-l` de `whisper-server` —que
+ * con un idioma que no entiende no arranca, y sin servidor no hay ni «3, 2, 1»
+ * ni transcript.
  */
 function idiomaSano(valor, deFabrica) {
-    return typeof valor === 'string' && (valor === 'auto' || /^[a-z]{2}$/.test(valor))
-        ? valor : deFabrica;
+    return idiomas.esElegible(valor) ? valor : deFabrica;
 }
 
 /**
@@ -216,7 +238,10 @@ function sanear(crudo) {
         // —haría falta saber si lleva `ntsc`—, así que se cae al de fábrica en
         // vez de arrastrar un número que después nadie sabe de dónde salió.
         fps: FPS_POSIBLES.includes(Number(c.fps)) ? Number(c.fps) : DEFAULTS.fps,
-        idioma: idiomaSano(c.idioma, DEFAULTS.idioma),
+        // El `es` que todo el mundo tiene escrito sin haberlo elegido pasa a
+        // `auto` una vez, y la marca queda puesta (ver `idiomaMigrado`).
+        idioma: c.idiomaMigrado ? idiomaSano(c.idioma, DEFAULTS.idioma) : DEFAULTS.idioma,
+        idiomaMigrado: true,
         dispositivo: (typeof c.dispositivo === 'string' && c.dispositivo) || null,
         // Lo que haya guardado que no sea un nombre —el `false` de la versión en
         // la que esto era un sí o un no— se lee como «ninguna».

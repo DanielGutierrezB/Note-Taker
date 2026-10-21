@@ -162,6 +162,9 @@ function resumen(sesion) {
         ceroMs: e.ceroMs,
         fps: e.fps,
         idioma: e.idioma,
+        // Y lo que de verdad suena, para que la barra pueda decir «Auto · EN» y
+        // avisar cuando el idioma puesto no es el que se está hablando.
+        idiomaOido: e.idiomaOido || null,
         // Todas, en orden y con su número. La primera es la de referencia: es
         // contra ella que el editor correlaciona los archivos de Premiere.
         claquetas: e.claquetas || [],

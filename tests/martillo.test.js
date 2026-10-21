@@ -218,6 +218,10 @@ async function unaClase(semilla, conBasura, seCae) {
                 grabacion.editar({ tipo: 'comentar', toma: t.id, desdeMs: p.t, hastaMs: p.hasta || p.t + 200, texto: p.texto, comentario: 'nota' });
             }],
             ['borrar-comentario', async () => { const t = tomaAlAzar(); if (t && (t.comentarios || []).length) grabacion.editar({ tipo: 'borrar-comentario', toma: t.id, indice: r.entre(0, t.comentarios.length) }); }],
+            // Cambiar el idioma a mitad relee todas las tomas cerradas de una
+            // vez, así que es el gesto que más cola genera: es justo el que
+            // tiene que convivir con deshacer, dividir y las caídas.
+            ['idioma', async () => { grabacion.cambiarIdioma(r.de(['auto', 'es', 'en', 'pt'])); }],
             ['claqueta', async () => { grabacion.claqueta(); }],
             ['quitar-claqueta', async () => { const c = s.estado.claquetas || []; if (c.length) grabacion.quitarClaqueta(r.de(c).n); }],
             ['deshacer', async () => { grabacion.deshacer(); }],
@@ -236,6 +240,7 @@ async function unaClase(semilla, conBasura, seCae) {
                     { tipo: 'vista', toma: idDe(tomaAlAzar()), vista: 'NOEXISTE' },
                     { tipo: 'loquesea', toma: idDe(tomaAlAzar()) },
                     { tipo: 'descartar', toma: 'uno' },
+                    { tipo: 'idioma', toma: idDe(tomaAlAzar()), idioma: 'fr' },
                     { tipo: 'comentar', toma: idDe(tomaAlAzar()), desdeMs: NaN, hastaMs: 'x', texto: 'y' },
                     { tipo: 'borrar-comentario', toma: idDe(tomaAlAzar()), indice: 99 },
                     { tipo: 'editar-comentario', toma: idDe(tomaAlAzar()), indice: -1, comentario: 'x' },
@@ -244,6 +249,7 @@ async function unaClase(semilla, conBasura, seCae) {
                 grabacion.editar(r.de(malos));
                 if (r.si(0.3)) grabacion.cerrarToma(NaN);
                 if (r.si(0.3)) grabacion.abrirToma('ayer');
+                if (r.si(0.3)) grabacion.cambiarIdioma(r.de(['fr', '', null, '--help', 42]));
             }]);
         }
 

@@ -193,7 +193,10 @@ export function estadoEnVivo(extra) {
         curso: 'Curso de automatizaciones',
         ceroMs: CERO,
         fps: 29.97,
-        idioma: 'es',
+        // En automático y oyendo español, que es como sale de fábrica: así la
+        // maqueta enseña el rótulo «Auto · ES» que se ve en una clase de verdad.
+        idioma: 'auto',
+        idiomaOido: 'es',
         claquetas: CLAQUETAS,
         vistas: VISTAS,
         dir: '/Volumes/Rodaje/Curso de automatizaciones',
@@ -287,7 +290,8 @@ export const AJUSTES = {
     carpetas: ['/Volumes/Rodaje/Curso de automatizaciones'],
     curso: 'Curso de automatizaciones',
     fps: 29.97,
-    idioma: 'es',
+    idioma: 'auto',
+    idiomaMigrado: true,
     dispositivo: 'Audio de Zoom (la llamada)',
     // Sin cámara de referencia: es como arranca la app, y es lo que deja que la
     // maqueta corra en una máquina sin ninguna cámara. Las fotos que se ven en

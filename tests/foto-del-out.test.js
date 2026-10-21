@@ -83,18 +83,26 @@ module.exports = function (t) {
         t.ok(/return \{ ok: false/.test(guardar));
     });
 
-    t.test('apagarla en Ajustes a mitad de clase la apaga de verdad', () => {
+    t.test('apagarla a mitad de clase la apaga de verdad, se elija donde se elija', () => {
         // El ajuste se leía UNA vez, al entrar a En vivo (`fotos.entrar`), así
         // que elegir «Ninguna» a mitad de una clase guardaba el cambio y no
         // soltaba nada: la cámara seguía encendida y las tomas que venían
         // seguían llevando foto hasta el final de la sesión. El caso que lo
         // pide es el que pasa: quedó activada por error.
+        //
+        // Y ahora se elige desde dos sitios —el selector de Ajustes y el
+        // rótulo de la barra de la clase—, así que los dos pasan por la MISMA
+        // función: dos caminos distintos para esto es el bug de arriba otra vez.
         const app = leer('src', 'js', 'app.js');
-        const cambio = tramo(app, "$('#aj-camara').addEventListener", '\n    });');
-        t.ok(/fotos\.cambiarCamara\(app\.ajustes\.camara\)/.test(cambio),
-            'el cambio de Ajustes llega a la clase en curso');
-        t.ok(cambio.indexOf('fotos.cambiarCamara') < cambio.indexOf('verLaCamara'),
+        const poner = tramo(app, 'async function ponerCamara', '\n}');
+        t.ok(/fotos\.cambiarCamara\(app\.ajustes\.camara\)/.test(poner),
+            'el cambio llega a la clase en curso');
+        t.ok(poner.indexOf('fotos.cambiarCamara') < poner.indexOf('verLaCamara'),
             'y antes que la vista previa, para no abrir la cámara dos veces');
+        t.ok(/\$\('#aj-camara'\)\.addEventListener\('change', e => ponerCamara\(e\.target\.value\)\)/.test(app),
+            'Ajustes entra por ahí');
+        t.ok(/ponerCamara: cual => ponerCamara\(cual\)/.test(app),
+            'y la barra de la clase también, por la misma puerta');
         const fn = tramo(fotos, 'export async function cambiarCamara', '\n}');
         t.ok(/if \(!grabando \|\| !camara\) \{[\s\S]{0,80}ojo\.soltar\(QUIEN\)/.test(fn),
             'sin cámara, se suelta la de la clase');

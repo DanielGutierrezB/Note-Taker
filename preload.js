@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('nt', {
     // palmada que la pastilla está señalando aunque ya haya pasado su ventana.
     grabarClaqueta: palmadaMs => ipcRenderer.invoke('grabar-claqueta', palmadaMs),
     grabarQuitarClaqueta: n => ipcRenderer.invoke('grabar-quitar-claqueta', n),
+    grabarIdioma: cual => ipcRenderer.invoke('grabar-idioma', cual),
     grabarEditar: cambio => ipcRenderer.invoke('grabar-editar', cambio),
     grabarEditarGrabada: (json, cambio) => ipcRenderer.invoke('grabar-editar-grabada', json, cambio),
     // Abrir una clase ya grabada en la misma pantalla de la clase, de solo

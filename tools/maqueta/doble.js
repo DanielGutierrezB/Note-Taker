@@ -248,6 +248,8 @@ window.nt = {
     grabarPcm: () => {},
     grabarClaqueta: async () => estadoEnVivo(),
     grabarQuitarClaqueta: async () => estadoEnVivo(),
+    // Con dos tomas releyéndose, que es lo que el aviso tiene que contar.
+    grabarIdioma: async cual => ({ ok: true, releyendo: 2, estado: estadoEnVivo({ idioma: cual }) }),
     grabarEditar: async c => {
         if (c && c.tipo === 'borde' && c.borde === 'in') return moverInEn(Number(c.paredMs));
         return cambiarEnVivo(c);

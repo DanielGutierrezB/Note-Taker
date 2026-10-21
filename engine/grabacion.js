@@ -45,6 +45,7 @@
  */
 
 const captura = require('./captura');
+const idiomas = require('./idiomas');
 const videoCrudo = require('./video-crudo');
 const registro = require('./registro');
 const aplausos = require('./aplausos');
@@ -481,6 +482,52 @@ function quitarClaqueta(n) {
     return espejo.resumen(sesion);
 }
 
+/**
+ * Cambia el idioma de la clase que se está grabando, y relee lo que ya pasó.
+ *
+ * Hasta acá el idioma se fijaba al apretar «Iniciar» y no se podía mover: quien
+ * arrancaba con el idioma equivocado se enteraba leyendo el transcript, y para
+ * entonces la clase entera estaba mal. Y mal no es «con faltas»: con el idioma
+ * equivocado Whisper TRADUCE. Medido el 20/10 sobre una clase real en inglés
+ * pedida en español, lo que salió fue «¿Qué es el skill prompt que se ha
+ * añadido?». Por eso el gesto existe y por eso no alcanza con cambiarlo de acá
+ * en adelante.
+ *
+ * **Las tomas cerradas se vuelven a leer.** Se les quita la marca de releídas y
+ * entran en la cola de siempre, que las atiende de a una (`relecturas.js`): su
+ * texto es el que va al XML y es el que está traducido. La abierta no hace
+ * falta tocarla —el ciclo ya la está oyendo con el idioma nuevo— y la
+ * descartada tampoco, que no va a ninguna parte.
+ *
+ * Lo que NO se toca son los bordes: una toma se abrió donde se abrió, y el
+ * «3, 2, 1» que la abrió se oyó igual en los dos idiomas.
+ *
+ * @returns {{ok:boolean, releyendo?:number, error?:string, estado:object|null}}
+ */
+function cambiarIdioma(cual) {
+    if (!sesion || !sesion.viva || sesion.terminando) {
+        return { ok: false, error: 'No hay una clase grabando.', estado: null };
+    }
+    if (!idiomas.esElegible(cual)) {
+        return { ok: false, error: `«${cual}» no es un idioma de los que la app oye.`, estado: espejo.resumen(sesion) };
+    }
+    if (cual === sesion.estado.idioma) return { ok: true, releyendo: 0, estado: espejo.resumen(sesion) };
+
+    sesion.estado.idioma = cual;
+    // Lo que se venía oyendo deja de valer como decisión: con el idioma puesto
+    // a mano, la pasada siguiente lo va a volver a medir contra el nuevo.
+    if (cual !== 'auto') sesion.estado.idiomaOido = null;
+
+    const paraReleer = sesion.estado.tomas.filter(t => t.outMs != null && !t.descartada);
+    for (const toma of paraReleer) {
+        delete toma.releida;
+        relecturas.encolar(sesion, toma.id);
+    }
+    registro.anotar('main', 'grabar.idioma', { idioma: cual, releyendo: paraReleer.length });
+    espejo.escribir(sesion);
+    return { ok: true, releyendo: paraReleer.length, estado: espejo.resumen(sesion) };
+}
+
 /* ─── El cierre ───────────────────────────────────────────────────────────*/
 
 /**
@@ -706,6 +753,7 @@ module.exports = {
     pcm,
     claqueta,
     quitarClaqueta,
+    cambiarIdioma,
     editar,
     editarGrabada: sesionesGrabadas.editarGrabada,
     // Con la secuencia en curso, para que la que se está grabando no se abra por

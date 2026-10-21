@@ -32,6 +32,7 @@ import * as cierre from './pantalla-cierre.js';
 import * as semanal from './pantalla-semanal.js';
 import * as dependencias from './dependencias.js';
 import * as ojo from './grabar/ojo.js';
+import * as rotuloBarra from './grabar/rotulo-barra.js';
 import * as fotos from './fotos.js';
 
 const app = {
@@ -91,12 +92,27 @@ const app = {
 
     // Pintar es parte de abrir: los ajustes se leen del archivo y la lista de
     // cámaras del sistema, y las dos cosas cambian mientras la app está abierta.
-    verAjustes() {
-        pintarAjustes();
+    async verAjustes() {
+        await pintarAjustes();
         dependencias.refrescar();
         verPanel('telon-ajustes', true);
     },
-    verDiagnostico() { pintarDiagnostico(); verPanel('telon-diagnostico', true); }
+    verDiagnostico() { pintarDiagnostico(); verPanel('telon-diagnostico', true); },
+
+    /**
+     * Guardar un ajuste desde una pantalla, con el mismo camino que Ajustes.
+     *
+     * Lo expone la app y no cada pantalla porque `app.ajustes` es de acá: una
+     * pantalla que guardara por su cuenta dejaría la copia de la app vieja, y
+     * Ajustes mostraría otra cosa que la barra.
+     */
+    guardarAjustes: parche => guardar(parche),
+
+    /** Las cámaras que hay, como opciones de menú, con la elegida marcada. */
+    camarasParaElegir: () => camarasParaElegir(),
+
+    /** Elegir una cámara desde cualquier sitio: Ajustes o la barra de la clase. */
+    ponerCamara: cual => ponerCamara(cual)
 };
 
 async function arrancar() {
@@ -131,6 +147,10 @@ async function arrancar() {
 
     conectarAjustes();
     conectarActualizaciones();
+    // Los rótulos de la barra —el idioma y la cámara— los usan las dos
+    // pantallas y el menú es uno solo en el documento, así que se conecta acá
+    // una vez, igual que el del clic derecho sobre una palabra.
+    rotuloBarra.conectar();
 
     // El modo decide qué pantalla abre la app, y es lo único que decide.
     await (app.ajustes.modo === 'semanal' ? app.irASemanal() : sesiones.ver());
@@ -171,6 +191,7 @@ async function revisarDependencias() {
     });
     dependencias.alActualizar(() => {
         const { requeridas, otras } = dependencias.faltan();
+        pintarResumenDeps(requeridas, otras);
         $('#deps-titulo').textContent = requeridas.length ? 'Falta algo para poder grabar' : 'Antes de empezar';
         $('#deps-dice').textContent = requeridas.length
             ? 'Sin lo que está en rojo, Note Taker no puede grabar ni escribir las notas. ' +
@@ -192,36 +213,66 @@ async function revisarDependencias() {
     }
 }
 
+/**
+ * Qué dice el resumen de «Lo que la app necesita», y si hay que abrirlo.
+ *
+ * Abierto solo cuando falta algo IMPRESCINDIBLE: eso no se puede grabar y hay
+ * que verlo sin buscarlo. Lo recomendado se nombra en el resumen y se deja
+ * plegado, que es la misma regla con la que el aviso de arranque insiste con
+ * una cosa y no con la otra.
+ *
+ * Y no se cierra solo: quien lo abrió para mirar algo está mirándolo, y que se
+ * le cierre en la cara al terminar una instalación es peor que dejarlo abierto.
+ */
+function pintarResumenDeps(requeridas, otras) {
+    const dice = $('#aj-deps-dice');
+    const caja = $('#aj-deps');
+    if (!dice || !caja) return;
+    const faltan = requeridas.concat(otras).map(d => d.nombre);
+    dice.textContent = faltan.length ? `· falta ${faltan.join(', ')}` : '· está todo';
+    dice.dataset.falta = requeridas.length ? 'si' : '';
+    if (requeridas.length) caja.open = true;
+}
+
 /* ─── Ajustes ─────────────────────────────────────────────────────────── */
 
 const FPS = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
 
+/**
+ * Guardar un pedazo de los ajustes y quedarse con lo que el motor contestó.
+ *
+ * Vive acá y no adentro de `conectarAjustes` porque ya no la usa solo ese
+ * panel: la barra de la clase cambia el idioma y la cámara sin abrirlo (ver
+ * `app.guardarAjustes`). Lo que importa es que `app.ajustes` quede con lo que
+ * el motor saneó y no con lo que la pantalla mandó, que no es lo mismo.
+ */
+async function guardar(parche) {
+    const r = await window.nt.ajustesGuardar(parche);
+    if (r.ok) app.ajustes = r.ajustes;
+    else avisar(r.error, 'error');
+    return r;
+}
+
 function conectarAjustes() {
     $('#aj-fps').innerHTML = FPS.map(f =>
         `<option value="${f}">${f} ${esNtsc(f) ? '(NTSC)' : ''}</option>`).join('');
-
-    const guardar = async parche => {
-        const r = await window.nt.ajustesGuardar(parche);
-        if (r.ok) app.ajustes = r.ajustes;
-        else avisar(r.error, 'error');
-    };
 
     // Cambiar de modo lleva a su pantalla en el acto, con el panel abierto por
     // encima: así se ve que el cambio hizo algo. Grabando no se cambia, que
     // sería dejar una grabación en una pantalla que ya no está.
     $('#aj-modo').addEventListener('change', async e => {
         const modo = e.target.value;
-        // Quien sabe si hay algo grabando es el motor: `grabar-estado` contesta
-        // null cuando no hay sesión viva. La pantalla guarda el último estado
-        // que vio, que no es lo mismo.
-        const viva = await window.nt.grabarEstado();
-        if (viva || semanal.grabando()) {
+        // La defensa, por si el campo se ve igual: `pintarAjustes` lo esconde
+        // grabando, pero una clase puede haber arrancado desde que el panel se
+        // pintó —el conteo abre tomas solo— y este `change` es lo último que
+        // puede impedir que una grabación se quede sin su pantalla.
+        if (await hayAlgoGrabando()) {
             e.target.value = app.ajustes.modo;
             avisar('Estás grabando: terminá antes de cambiar de modo.', 'error');
             return;
         }
         await guardar({ modo });
-        pintarAjustes();
+        await pintarAjustes();
         if (modo === 'semanal') {
             preparar.salir();
             vivo.salir();
@@ -237,16 +288,7 @@ function conectarAjustes() {
     $('#aj-idioma').addEventListener('change', e => guardar(app.ajustes.modo === 'semanal'
         ? { semanal: { idioma: e.target.value } }
         : { idioma: e.target.value }));
-    $('#aj-camara').addEventListener('change', async e => {
-        await guardar({ camara: e.target.value || null });
-        // La clase que esté en curso se entera en el acto. Antes el ajuste se
-        // leía una sola vez, al entrar a En vivo: elegir «Ninguna» a mitad de
-        // una clase guardaba el cambio y no apagaba nada, así que las tomas que
-        // seguían llevaban foto igual hasta el final. Va antes de la vista
-        // previa para que soltar y volver a tomar no abran la cámara dos veces.
-        await fotos.cambiarCamara(app.ajustes.camara);
-        await verLaCamara();
-    });
+    $('#aj-camara').addEventListener('change', e => ponerCamara(e.target.value));
     $('#btn-log').addEventListener('click', async () => {
         const r = await window.nt.registroDescargar();
         avisar(r.ok ? 'El registro quedó en Descargas.' : `No se pudo: ${r.error}`,
@@ -258,7 +300,22 @@ function esNtsc(f) {
     return [23.976, 29.97, 59.94].includes(f);
 }
 
-function pintarAjustes() {
+/**
+ * Si hay algo grabando ahora mismo. Se le pregunta al motor y no a la pantalla:
+ * `grabar-estado` contesta null cuando no hay sesión viva, mientras que la
+ * pantalla guarda el último estado que vio, que no es lo mismo.
+ */
+async function hayAlgoGrabando() {
+    return Boolean(await window.nt.grabarEstado()) || semanal.grabando();
+}
+
+async function pintarAjustes() {
+    // El modo no se muestra mientras se graba. No es que no se pueda cambiar
+    // —el `change` de abajo ya se planta, y se queda como defensa—: es que
+    // ofrecerlo en medio de una clase es ofrecer tirar la pantalla donde está
+    // esa clase, y la respuesta siempre va a ser que no. Lo que se esconde es
+    // la pregunta, no la respuesta.
+    $('#aj-modo-campo').hidden = await hayAlgoGrabando();
     $('#aj-modo').value = app.ajustes.modo;
     $('#aj-modo-dice').textContent = app.ajustes.modo === 'semanal'
         ? 'Grabás cámara, pantalla y voz; abrís cada toma diciendo «3, 2, 1» y la cerrás con '
@@ -280,23 +337,25 @@ function pintarAjustes() {
  * El idioma del modo en que se está, con su porqué.
  *
  * Son dos ajustes y un solo control porque son la misma pregunta hecha a dos
- * personas distintas: una clase es de un idioma de punta a punta —y ahí
- * detectarlo solo cuesta los 400 ms por pasada que medimos, 790 ms contra
- * 1200— mientras que quien cuenta su semana se pasa al inglés a mitad de frase.
- * De ahí que uno venga en español y el otro en automático.
+ * personas distintas: el editor da una clase de un idioma de punta a punta, y
+ * quien cuenta su semana se pasa al inglés a mitad de frase. Lo que cambió es
+ * que los dos vienen en automático, y el motivo está en `engine/ajustes.js`:
+ * detectar ya no cuesta 400 ms en cada pasada, y equivocarse sí cuesta, porque
+ * con el idioma equivocado Whisper no se queda corto, traduce.
  */
 function pintarIdioma() {
     const semanal = app.ajustes.modo === 'semanal';
     $('#aj-idioma-rotulo').textContent = semanal
         ? 'Idioma de tus vídeos' : 'Idioma de la clase';
     $('#aj-idioma').value = idiomaDelModo();
-    $('#aj-idioma-dice').textContent = semanal
-        ? 'Automático entiende el «3, 2, 1» y la «Pausa» lo mismo en español que en '
-          + 'inglés, y te deja cambiar de idioma a mitad de frase. Ponerlo fijo ahorra '
-          + 'unos 400 ms en cada pasada, o sea que la toma abre un pelo antes.'
-        : 'Puesto es mejor que automático cuando se sabe: detectarlo cuesta unos 400 ms '
-          + 'en cada pasada, y una clase es de un idioma de punta a punta. Automático es '
-          + 'para quien dé la clase en dos.';
+    $('#aj-idioma-dice').textContent =
+        'Automático elige entre español e inglés, y mientras grabás el rótulo de la barra '
+        + 'dice cuál está oyendo. Ponerlo a mano sirve cuando se sabe —y hace falta para el '
+        + 'portugués, que automático no elige—: ojo con dejarlo en el idioma equivocado, '
+        + 'porque entonces el transcript sale traducido. '
+        + (semanal
+            ? 'Acá conviene automático: contando tu semana es normal pasarse al inglés a mitad de frase.'
+            : 'Se puede cambiar en medio de una clase desde la barra, y las tomas ya cerradas se vuelven a leer.');
 }
 
 function idiomaDelModo() {
@@ -306,6 +365,58 @@ function idiomaDelModo() {
 }
 
 /* ─── La cámara de referencia ─────────────────────────────────────────── */
+
+/**
+ * Elegir la cámara de referencia, venga de donde venga el gesto.
+ *
+ * Son dos sitios —el selector de Ajustes y el rótulo de la barra de la clase—
+ * y tienen que hacer exactamente lo mismo: si divergieran, elegir «Ninguna»
+ * desde uno apagaría las fotos y desde el otro no, que es justo el bug que
+ * este camino ya tuvo una vez.
+ *
+ * Los tres pasos, en este orden:
+ *
+ *   1. se guarda, y `app.ajustes` queda con lo que el motor saneó;
+ *   2. **la clase en curso se entera en el acto.** Antes el ajuste se leía una
+ *      sola vez, al entrar a En vivo: elegir «Ninguna» a mitad de una clase
+ *      guardaba el cambio y no apagaba nada, así que las tomas que seguían
+ *      llevaban foto igual hasta el final;
+ *   3. y la vista previa de Ajustes, si está abierto. Va última para que
+ *      soltar y volver a tomar no abran la cámara dos veces.
+ */
+async function ponerCamara(cual) {
+    await guardar({ camara: cual || null });
+    await fotos.cambiarCamara(app.ajustes.camara);
+    const select = $('#aj-camara');
+    if (select) select.value = app.ajustes.camara || '';
+    await verLaCamara();
+}
+
+/**
+ * Las cámaras que hay ahora, como opciones del menú de la barra.
+ *
+ * La lista se pide en el momento y no se guarda, por lo mismo que en Ajustes:
+ * una cámara virtual aparece cuando alguien abre el OBS. Y la elegida sigue en
+ * la lista aunque hoy no esté conectada, porque desenchufar una cámara no es
+ * cambiar de ajuste.
+ */
+async function camarasParaElegir() {
+    const elegida = app.ajustes.camara || '';
+    const { lista } = await ojo.camaras();
+    const hay = (lista || []).map(c => c.nombre);
+    const todas = hay.includes(elegida) || !elegida ? hay : hay.concat([elegida]);
+    return [{
+        valor: '',
+        dice: 'Ninguna',
+        pista: 'Sin cámara no se saca la foto de cómo quedó la pantalla al cerrar cada toma.',
+        marcada: !elegida
+    }].concat(todas.map(n => ({
+        valor: n,
+        dice: hay.includes(n) ? n : `${n} (no está conectada)`,
+        pista: `La foto del OUT de cada toma sale de ${n}.`,
+        marcada: n === elegida
+    })));
+}
 
 /**
  * El selector de cámaras, con la elegida puesta.

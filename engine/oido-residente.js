@@ -27,6 +27,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const net = require('net');
 
+const idiomas = require('./idiomas');
 const paths = require('./paths');
 const transcribe = require('./transcribe');
 
@@ -193,8 +194,17 @@ function palabrasDe(respuesta) {
 /**
  * Transcribe un WAV de 16 kHz mono (el de `captura.recorte`).
  *
- * @returns {Promise<{words:Array, model:string}>} tira si el servidor no está o
- *   falla: quien llama cae al respaldo
+ * **Y dice qué idioma oyó, aunque se le haya pedido uno.** Es el hallazgo que
+ * hace barato detectar: el servidor contesta `detected_language` —y cuánto se
+ * parece el audio a cada idioma— en TODAS las pasadas, no solo en las que se
+ * piden con `auto`. Medido el 20/10 sobre dos clases reales: audio en inglés
+ * pedido en español contestó «detectó english, 100 %» en 871 ms, mientras que
+ * pedirlo con `auto` costó 1214 ms. O sea que vigilar el idioma sale gratis y
+ * detectarlo cuesta 400 ms, que es lo que `oir.escuchar` aprovecha para que
+ * «Automático» no sea más lento que tener el idioma puesto.
+ *
+ * @returns {Promise<{words:Array, model:string, oido:string|null, pesos:object}>}
+ *   tira si el servidor no está o falla: quien llama cae al respaldo
  */
 async function transcribir(wavPath, idioma) {
     if (!listo()) throw new Error('whisper-server no está listo');
@@ -208,7 +218,15 @@ async function transcribir(wavPath, idioma) {
         method: 'POST', body: form, signal: AbortSignal.timeout(PASADA_MAX_MS)
     });
     if (!r.ok) throw new Error(`whisper-server contestó ${r.status}`);
-    const salida = { words: palabrasDe(await r.json()), model: este.modelo.name };
+    const dicho = await r.json();
+    const salida = {
+        words: palabrasDe(dicho),
+        model: este.modelo.name,
+        // El que DETECTÓ, no el que se usó: con el idioma forzado los dos
+        // difieren, y es justo ahí donde saberlo sirve.
+        oido: idiomas.normalizar(dicho.detected_language),
+        pesos: dicho.language_probabilities || null
+    };
     fallas = 0;
     return salida;
 }

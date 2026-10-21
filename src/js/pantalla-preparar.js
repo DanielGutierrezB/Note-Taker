@@ -19,6 +19,7 @@
 import { $, esc, avisar, verVista } from './chrome.js';
 import { icono } from './iconos.js';
 import * as fuente from './grabar/fuente.js';
+import * as idiomas from './idiomas.js';
 import * as estados from './estados.js';
 
 let app = null;
@@ -199,10 +200,25 @@ function pintar() {
             titulo: 'Cómo va a quedar el XML',
             estado: { clave: 'listo', palabra: `${app.ajustes.fps} cuadros` },
             dice: `Los marcadores se calculan a ${app.ajustes.fps} cuadros por segundo, ` +
-                'que tiene que ser el de la secuencia donde vas a cortar. El idioma de la ' +
-                `clase está en ${esc(idiomaDicho(app.ajustes.idioma))}.`,
+                'que tiene que ser el de la secuencia donde vas a cortar.',
             arreglo: `<button class="btn btn-tenue" type="button" data-hace="ajustes"
-                        title="Abrir Ajustes para cambiar los cuadros por segundo y el idioma de la clase">
+                        title="Abrir Ajustes para cambiar los cuadros por segundo">
+                Cambiar en Ajustes</button>`
+        }),
+        // El idioma, en su propio renglón. Iba al final del de arriba, y ahí no
+        // lo leía nadie: empezar en el idioma equivocado no es un detalle del
+        // XML, es una clase entera traducida (ver `engine/idiomas.js`).
+        check({
+            listo: 'si',
+            titulo: 'En qué idioma habla la clase',
+            estado: { clave: 'listo', palabra: esc(idiomaDicho(app.ajustes.idioma)) },
+            dice: app.ajustes.idioma === 'auto'
+                ? 'Lo elige solo entre español e inglés, y mientras grabás el rótulo de la barra '
+                    + 'dice cuál está oyendo. Si la clase es en portugués, ponelo a mano.'
+                : `Si la clase no es en ${esc(idiomaDicho(app.ajustes.idioma))}, el transcript va a salir `
+                    + 'traducido. Se puede cambiar grabando, desde el rótulo de la barra.',
+            arreglo: `<button class="btn btn-tenue" type="button" data-hace="ajustes"
+                        title="Abrir Ajustes para cambiar el idioma de la clase">
                 Cambiar en Ajustes</button>`
         }),
         reanudar ? avisoReanudar() : ''
@@ -270,7 +286,7 @@ function queDice() {
 }
 
 function idiomaDicho(codigo) {
-    return { es: 'español', en: 'inglés', pt: 'portugués' }[codigo] || codigo;
+    return codigo === 'auto' ? 'automático' : idiomas.nombre(codigo).toLowerCase();
 }
 
 function avisoReanudar() {

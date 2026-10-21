@@ -139,6 +139,10 @@
           </div>
         </div>
         <span class="crece"></span>
+        <!-- Lo que estaba enterrado en Ajustes y se mira mientras se graba: en
+             qué idioma oye y de qué cámara sale la foto del OUT. Los dos se
+             cambian acá mismo, y los llena `pantalla-vivo.js`. -->
+        <span class="rotulos-barra" id="vivo-rotulos"></span>
         <div class="nivel" id="vivo-nivel"><div class="nivel-barra"></div></div>
         <!-- La claqueta es global y vive acá, con los controles, y no en la fila
              de la toma: al lado de «Cerrar toma» se apretaba por error. Lejos
@@ -250,6 +254,13 @@
      rehace cada segundo y se lo llevaría puesto. Lo llena `pantalla-vivo.js`. -->
 <div class="menu-palabra" id="menu-palabra" role="menu" hidden></div>
 
+<!-- ── El menú de un rótulo de la barra ───────────────────────────────
+     El idioma y la cámara de referencia, cambiados sin salir de la pantalla.
+     Vive acá afuera por lo mismo que el de arriba: la tarjeta del vídeo
+     semanal se rehace entera y se llevaría puesto un menú abierto adentro.
+     Lo llena `src/js/grabar/rotulo-barra.js`. -->
+<div class="menu-palabra" id="menu-barra" role="menu" hidden></div>
+
 <!-- ── Ajustes ────────────────────────────────────────────────────────
      Lo que no cambia durante una clase. El fps está acá y no en Preparar
      porque es del proyecto del editor y no de la sesión. -->
@@ -266,7 +277,7 @@
            significa algo: con «vídeo semanal» no hay secuencia, ni XML, ni
            editor. Es un ajuste y no un botón en la barra porque una persona usa
            uno de los dos y no los alterna. -->
-      <label class="campo">
+      <label class="campo" id="aj-modo-campo">
         <span class="rotulo">Para qué usás Note Taker</span>
         <select id="aj-modo">
           <option value="clase">Tomar notas de una clase, para el editor</option>
@@ -308,12 +319,19 @@
           es un fotograma por toma, guardado al lado de las notas y fuera del XML. Si la señal
           llega por NDI, ponela en una cámara virtual (la de OBS, por ejemplo) y elegila acá.</span>
       </div>
-      <div class="campo">
-        <span class="rotulo">Lo que la app necesita</span>
+      <!-- Plegado, y no porque estorbe: son siete renglones que se consultan
+           el primer día y nunca más, y abiertos empujaban fuera de la vista
+           todo lo que sí se cambia. El resumen dice si falta algo, que es la
+           única pregunta que uno le hace a esta sección. Se abre solo cuando
+           falta algo imprescindible (ver `dependencias.alActualizar`). -->
+      <details class="campo" id="aj-deps">
+        <summary class="rotulo">
+          Lo que la app necesita <span class="v3" id="aj-deps-dice"></span>
+        </summary>
         <span class="v3">Si falta algo, el botón de al lado lo instala. Los modelos se
           bajan una sola vez y quedan en tu carpeta de usuario.</span>
         <div id="deps-ajustes"></div>
-      </div>
+      </details>
       <div class="campo">
         <span class="rotulo">Actualizaciones</span>
         <div class="campo-fila">

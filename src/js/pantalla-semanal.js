@@ -41,6 +41,8 @@ import * as montaje from './semanal/montaje.js';
 import * as corte from './semanal/corte.js';
 import * as tarjetas from './semanal/tarjetas.js';
 import * as menuPalabra from './grabar/menu-de-palabra.js';
+import * as rotuloBarra from './grabar/rotulo-barra.js';
+import * as idiomas from './idiomas.js';
 import * as historia from './grabar/historia.js';
 import * as estadosToma from './grabar/estados-toma.js';
 import * as estados from './estados.js';
@@ -762,6 +764,11 @@ async function alClic(e) {
     }
     if (hace === 'descartar') return descartar(Number(boton.dataset.toma));
     if (hace === 'deshacer' || hace === 'rehacer') return volver(hace);
+    if (hace === 'idioma') {
+        rotuloBarra.abrir(boton, idiomas.opciones((estado.sesion && estado.sesion.idioma) || 'auto'),
+            cual => cambiarIdioma(cual));
+        return undefined;
+    }
     if (hace === 'reproducir') { montaje.alternar(); return undefined; }
     if (hace === 'opcion') return alternarOpcion(boton);
     if (hace === 'parar-en') {
@@ -977,6 +984,29 @@ async function descartar(id) {
  * mismo (`tarjetas.sePuedeDeshacer`).
  */
 const volver = cual => historia.volver(cual, nuevo => { estado.sesion = nuevo; pintar(); });
+
+/**
+ * El idioma, cambiado a mitad de la grabación.
+ *
+ * Lo mismo que en la clase y por el mismo camino, con una diferencia: acá se
+ * guarda en `semanal.idioma`, que es un ajuste aparte. Son la misma pregunta
+ * hecha a dos personas distintas y cada una tiene su respuesta.
+ */
+async function cambiarIdioma(cual) {
+    if (!estado.sesion || cual === estado.sesion.idioma) return;
+    const r = await window.nt.grabarIdioma(cual);
+    if (!r || !r.ok) {
+        avisar(r && r.error ? r.error : 'No se pudo cambiar el idioma.', 'error');
+        return;
+    }
+    if (r.estado) estado.sesion = r.estado;
+    await window.nt.ajustesGuardar({ semanal: { idioma: cual } });
+    pintar();
+    const como = idiomas.nombre(cual).toLowerCase();
+    avisar(r.releyendo
+        ? `Sigue en ${como}. Releyendo ${r.releyendo} toma${r.releyendo === 1 ? '' : 's'} ya cerrada${r.releyendo === 1 ? '' : 's'}.`
+        : `Sigue en ${como}.`, 'ok');
+}
 
 /**
  * Un cambio sobre una toma de la lista, por la puerta que corresponda.

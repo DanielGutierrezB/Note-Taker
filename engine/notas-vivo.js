@@ -157,6 +157,18 @@ function estadoNuevo(params) {
         // ellos. Cambiar el fps es empezar otra sesión.
         fps: p.fps || 30,
         idioma: p.idioma || 'es',
+        /**
+         * Y qué idioma se está OYENDO, que no siempre es el que se pidió.
+         *
+         * Lo pone el ciclo de señales con lo que contesta Whisper, que lo dice
+         * en cada pasada aunque el idioma esté puesto (ver `anotarLoQueSuena`
+         * en `ciclo-senales.js`). Sirve para dos cosas: con `auto` es lo que
+         * decide qué pedir la pasada siguiente —y lo que hace que detectar no
+         * cueste 400 ms en cada una— y con el idioma puesto es lo que deja que
+         * la barra avise cuando no coinciden. No va al sidecar: es de esta
+         * corrida y se vuelve a saber en dos pasadas.
+         */
+        idiomaOido: null,
         dispositivo: p.dispositivo || null,
         /**
          * Las claquetas, en orden y todas.

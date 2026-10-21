@@ -34,6 +34,8 @@ import * as fuente from './grabar/fuente.js';
 import { mostrador } from './grabar/turnos.js';
 import * as texto from './grabar/texto-toma.js';
 import * as menuPalabra from './grabar/menu-de-palabra.js';
+import * as rotuloBarra from './grabar/rotulo-barra.js';
+import * as idiomas from './idiomas.js';
 import * as fichas from './grabar/lista-tomas.js';
 import * as estadosToma from './grabar/estados-toma.js';
 import * as historia from './grabar/historia.js';
@@ -127,7 +129,9 @@ export function conectar(contexto) {
     $('#btn-rehacer').addEventListener('click', () => volver('rehacer'));
     $('#btn-deshacer').innerHTML = icono('deshacer');
     $('#btn-rehacer').innerHTML = icono('rehacer');
-    $('#btn-claqueta').innerHTML = `${icono('claqueta')} Claqueta`;
+    // La palabra se va con la ventana angosta y queda el icono: la fila va al
+    // límite a 900 px, y «Claqueta» está escrito debajo en su atajo, con la K.
+    $('#btn-claqueta').innerHTML = `${icono('claqueta')}<span class="rotulo-ancho">Claqueta</span>`;
 
     $('#ahora').addEventListener('click', alClic);
     $('#lista-vivo').addEventListener('click', alClic);
@@ -546,6 +550,63 @@ function pintarBarra() {
     // arrastra un borde o se escribe una nota, y sobre todo el vencimiento de la
     // palmada pasa SIN que el motor avise nada —es justamente que no avisó—.
     pintarPalmada();
+    pintarRotulos();
+}
+
+/**
+ * El idioma y la cámara, en la barra.
+ *
+ * Solo grabando: en una clase ya terminada cambiar el idioma no transcribiría
+ * nada —para eso está «Regenerar»— y la cámara de referencia no saca fotos de
+ * algo que ya pasó. Se esconden y no se apagan, por lo mismo que el resto del
+ * cromo de esta barra.
+ *
+ * Con el menú abierto no se redibujan: el rótulo es el botón del que cuelga, y
+ * rehacerlo debajo del menú deja el menú apuntando a un botón que ya no está.
+ */
+function pintarRotulos() {
+    const caja = $('#vivo-rotulos');
+    if (!caja) return;
+    if (esDeMirar()) { caja.innerHTML = ''; return; }
+    if (rotuloBarra.hay()) return;
+    const oido = estado.idiomaOido || null;
+    // El idioma puesto a mano y otro sonando: no es un error —se puede estar
+    // citando— pero con el idioma equivocado Whisper traduce la clase entera,
+    // así que se ve en ámbar (ver `engine/idiomas.js`).
+    const discrepa = estado.idioma !== 'auto' && oido && oido !== estado.idioma;
+    caja.innerHTML = rotuloBarra.rotulo({
+        id: 'vivo-idioma',
+        hace: 'idioma',
+        dice: idiomas.sigla(estado.idioma, oido),
+        // Angosto: solo las dos letras, que es la pregunta de verdad —en qué
+        // idioma está saliendo el transcript—. Que lo haya elegido solo o no
+        // se lee en el menú, que está a un clic.
+        corto: idiomas.sigla(estado.idioma === 'auto' ? (oido || 'auto') : estado.idioma, oido),
+        avisa: discrepa,
+        pista: discrepa
+            ? `Lo tenés en ${idiomas.nombre(estado.idioma).toLowerCase()} y suena a `
+                + `${idiomas.nombre(oido).toLowerCase()}. Con el idioma equivocado el transcript sale `
+                + 'TRADUCIDO: tocá acá para cambiarlo y las tomas se vuelven a leer.'
+            : `En qué idioma oye la clase${estado.idioma === 'auto' && oido
+                ? `: lo está eligiendo solo y ahora oye ${idiomas.nombre(oido).toLowerCase()}`
+                : ''}. Cambiarlo relee las tomas que ya cerraste.`
+    }) + rotuloBarra.rotulo({
+        id: 'vivo-camara',
+        hace: 'camara',
+        dice: camaraDice(),
+        // Angosto: si hay cámara o no, que es lo que se consulta de reojo.
+        // Cuál es, en el tooltip y en el menú.
+        corto: (app.ajustes && app.ajustes.camara) ? 'Cám.' : 'Sin cám.',
+        pista: `${(app.ajustes && app.ajustes.camara) || 'Sin cámara'}. De acá sale la foto de cómo `
+            + 'quedó la pantalla al cerrar cada toma. No se graba vídeo: es un fotograma por toma.'
+    });
+}
+
+/** Cómo se dice la cámara de referencia en la barra, en poco espacio. */
+function camaraDice() {
+    const cual = app.ajustes && app.ajustes.camara;
+    if (!cual) return 'Sin cámara';
+    return cual.length > 22 ? `${cual.slice(0, 21)}…` : cual;
 }
 
 function pintar() {
@@ -1582,6 +1643,16 @@ async function alClic(e) {
             break;
         }
         case 'claqueta': await pedir(() => window.nt.grabarClaqueta(palmadaParaEnganchar())); break;
+        case 'idioma':
+            rotuloBarra.abrir(boton, idiomas.opciones(estado.idioma), cual => cambiarIdioma(cual));
+            break;
+        case 'camara':
+            // La lista se pide al abrir el menú y no antes: una cámara virtual
+            // aparece cuando alguien abre el OBS, y una lista de hace una hora
+            // no tendría la que se está buscando. Es el mismo motivo por el que
+            // Ajustes la pide al abrirse (ver `pintarCamaras` en `app.js`).
+            rotuloBarra.abrir(boton, await app.camarasParaElegir(), cual => app.ponerCamara(cual));
+            break;
         // Los atajos de la barra: lo mismo que las teclas, con el mouse.
         case 'borde': await bordeDeToma(); break;
         case 'deshacer': await volver('deshacer'); break;
@@ -1886,6 +1957,33 @@ async function pedir(hacer) {
 }
 
 const volver = cual => historia.volver(cual, nuevo => { estado = nuevo; pintar(); });
+
+/**
+ * El idioma de la clase, cambiado a mitad.
+ *
+ * Dos cosas pasan y las dos se dicen: la clase que sigue se oye en el idioma
+ * nuevo, y las tomas que ya se cerraron se vuelven a leer —su texto es el que
+ * va al XML y es el que está en el idioma viejo—. Lo segundo tarda, así que se
+ * avisa cuántas son en vez de dejar la pantalla quieta.
+ *
+ * Y queda guardado en Ajustes para las clases siguientes: quien se equivocó de
+ * idioma una vez se iba a volver a equivocar mañana.
+ */
+async function cambiarIdioma(cual) {
+    if (!estado || cual === estado.idioma) return;
+    const r = await window.nt.grabarIdioma(cual);
+    if (!r || !r.ok) {
+        avisar(r && r.error ? r.error : 'No se pudo cambiar el idioma.', 'error');
+        return;
+    }
+    if (r.estado) estado = r.estado;
+    await app.guardarAjustes({ idioma: cual });
+    pintar();
+    const como = idiomas.nombre(cual).toLowerCase();
+    avisar(r.releyendo
+        ? `La clase sigue en ${como}. Releyendo ${r.releyendo} toma${r.releyendo === 1 ? '' : 's'} ya cerrada${r.releyendo === 1 ? '' : 's'}.`
+        : `La clase sigue en ${como}.`, 'ok');
+}
 
 /* ─── Las teclas ──────────────────────────────────────────────────────── */
 

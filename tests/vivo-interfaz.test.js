@@ -105,4 +105,82 @@ module.exports = function (t) {
         t.ok(/atajo-vistas-de/.test(html), 'el hueco está en el HTML');
         t.ok(/laDeTeclas \? `toma \$\{laDeTeclas\.id\}` : 'la que viene'/.test(js));
     });
+
+    /* ─── El idioma y la cámara, a la vista ──────────────────────────────
+     *
+     * Los dos estaban enterrados en Ajustes y eso costaba una clase entera:
+     * empezar con el idioma equivocado no deja un transcript con faltas, lo
+     * deja TRADUCIDO (ver `engine/idiomas.js`), y no había forma de notarlo
+     * sin leerlo. Ahora se ven en la barra y se cambian ahí.
+     */
+    t.group('en vivo · el idioma y la cámara en la barra');
+
+    const rotulos = tramo(js, 'function pintarRotulos() {', '\n}');
+
+    t.test('los dos rótulos tienen su hueco en la barra', () => {
+        t.ok(/id="vivo-rotulos"/.test(barra), 'y está en la fila de arriba, con el nivel');
+        t.ok(/id: 'vivo-idioma'/.test(rotulos) && /id: 'vivo-camara'/.test(rotulos));
+    });
+
+    t.test('solo grabando: una clase que se mira no transcribe nada', () => {
+        t.ok(/if \(esDeMirar\(\)\) \{ caja\.innerHTML = ''; return; \}/.test(rotulos),
+            'se esconden, como el resto del cromo que solo tiene sentido grabando');
+    });
+
+    t.test('con el menú abierto no se redibujan', () => {
+        // El rótulo es el botón del que cuelga el menú: rehacerlo debajo deja
+        // el menú apuntando a un botón que ya no está en el documento.
+        t.ok(/if \(rotuloBarra\.hay\(\)\) return;/.test(rotulos));
+    });
+
+    t.test('el idioma puesto que no coincide con lo que suena se ve en ámbar', () => {
+        t.ok(/estado\.idioma !== 'auto' && oido && oido !== estado\.idioma/.test(rotulos),
+            'solo con el idioma puesto a mano: en «auto» no hay nada que avisar');
+        t.ok(/TRADUCIDO/.test(rotulos), 'y el tooltip dice lo que está en juego');
+        const css = leer('src', 'css', 'style.css');
+        t.ok(/\.rotulo-barra\[data-avisa='si'\]/.test(css), 'con su estilo');
+    });
+
+    t.test('cambiar el idioma relee, lo guarda para mañana y lo cuenta', () => {
+        const fn = tramo(js, 'async function cambiarIdioma(cual) {', '\n}');
+        t.ok(/window\.nt\.grabarIdioma\(cual\)/.test(fn), 'se lo pide al motor');
+        t.ok(/app\.guardarAjustes\(\{ idioma: cual \}\)/.test(fn),
+            'y queda para las clases siguientes: quien se equivocó hoy se equivoca mañana');
+        t.ok(/r\.releyendo/.test(fn) && /Releyendo/.test(fn),
+            'y se dice cuántas tomas se están releyendo, que tarda');
+    });
+
+    t.test('a 900 px los rótulos pasan a su forma corta, y nada se esconde', () => {
+        // La barra iba al límite exacto a 900 px, que es el ancho mínimo de la
+        // ventana: los dos rótulos pedían 145 px más de los que había. Lo que
+        // cede está medido y escrito en el CSS; lo que no puede pasar es que se
+        // resuelva recortando con puntos suspensivos —«Auto · ES» cortado por
+        // la derecha se come justo el idioma— ni escondiendo un número.
+        const css = leer('src', 'css', 'style.css');
+        const estrecho = tramo(css, '@media (max-width: 1100px) {', '\n}\n');
+        t.ok(/\.rotulo-ancho \{\s*display: none;/.test(estrecho), 'se va la forma larga');
+        t.ok(/\.rotulo-angosto \{\s*display: inline;/.test(estrecho), 'y entra la corta');
+        t.ok(!/display: none/.test(estrecho.replace(/\.rotulo-ancho \{[^}]*\}/, '')),
+            'y no se esconde nada más: ni el timecode, ni el estado, ni los contadores');
+        // Los dos rótulos tienen que traerla: sin ella se repite la larga, la
+        // fila vuelve a desbordarse a 900 px y nadie se entera hasta medirla.
+        t.eq((rotulos.match(/\n\s+corto:/g) || []).length, 2,
+            'los dos rótulos dicen cuál es su forma corta');
+        // Los dos textos van en el documento, no se elige uno al dibujar: así
+        // el tooltip, el `aria` y el menú son los mismos a cualquier ancho.
+        const fn = tramo(leer('src', 'js', 'grabar', 'rotulo-barra.js'), 'export function rotulo(r) {', '\n}');
+        t.ok(/rotulo-ancho/.test(fn) && /rotulo-angosto/.test(fn));
+    });
+
+    t.test('la lista de cámaras se pide al abrir el menú, no antes', () => {
+        // Una cámara virtual aparece cuando alguien abre el OBS: una lista de
+        // hace una hora no tendría la que se está buscando.
+        t.ok(/case 'camara':[\s\S]{0,400}await app\.camarasParaElegir\(\)/.test(js));
+        const app = leer('src', 'js', 'app.js');
+        const fn = tramo(app, 'async function camarasParaElegir() {', '\n}');
+        t.ok(/await ojo\.camaras\(\)/.test(fn), 'y se pregunta al sistema en ese momento');
+        t.ok(/valor: '',[\s\S]{0,60}dice: 'Ninguna'/.test(fn), '«Ninguna» está entre las opciones');
+        t.ok(/no está conectada/.test(fn),
+            'y la elegida sigue en la lista desenchufada: eso no es cambiar de ajuste');
+    });
 };

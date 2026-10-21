@@ -1375,6 +1375,51 @@ select {
   gap: var(--sp-4);
 }
 
+/* De los dos rótulos, el que cabe. Los dos están siempre en el documento y es
+   el ancho de la ventana el que decide cuál se ve: así el tooltip, el `aria` y
+   el menú son los mismos, y no hay dos maneras de dibujar lo mismo. */
+.rotulo-angosto {
+  display: none;
+}
+
+/* A 900 px, que es el ancho mínimo de la ventana, esta fila va al límite: con
+   el idioma y la cámara adentro pide 145 px más de los que hay. Lo que cede es
+   el aire entre bloques —hay once huecos, así que bajarlos de 12 a 4 px devuelve
+   88 px— y los dos rótulos, que pasan a su forma corta: «ES» en vez de
+   «Auto · ES», con el resto en el tooltip. Se dice en el HTML y no se recorta
+   con puntos suspensivos porque lo que importa está al final y cortar por la
+   derecha se come justamente el idioma.
+
+   Lo que NO cede es nada de lo que se lee: ni el timecode, ni el estado, ni los
+   contadores. Y la fila no se parte en dos renglones aunque entrarían: el cromo
+   fijo de esta pantalla ya está en el 20 % de la ventana, que es el tope de
+   `tools/auditar.js`. A 1180 y 1440, que es donde se graba de verdad, nada de
+   esto se aplica. */
+@media (max-width: 1100px) {
+  .barra-arriba {
+    gap: var(--sp-3);
+  }
+
+  /* Y los contadores se juntan entre ellos, que son dos números de dos
+     caracteres con su palabra debajo: 16 px entre «6 tomas» y «3 claquetas»
+     es aire que acá no hay. */
+  .contadores {
+    gap: var(--sp-3);
+  }
+
+  .rotulo-ancho {
+    display: none;
+  }
+
+  .rotulo-angosto {
+    display: inline;
+  }
+
+  .nivel {
+    min-width: 32px;
+  }
+}
+
 /* Un número que se consulta, no el que ancla la pantalla. El timecode es el
    único de 32 px; este va en el mismo escalón que el estado y los contadores,
    porque se mira cuando uno quiere saber cuánto dura la clase cortada y no
@@ -1395,6 +1440,58 @@ select {
   flex-direction: column;
   gap: 1px;
   flex: 0 0 auto;
+}
+
+/* El idioma y la cámara de referencia: se consultan de reojo y se cambian ahí
+   mismo. Son botones y no pastillas porque se aprietan, y de 24 px de alto
+   porque es lo mínimo que se acierta con el mouse (`tools/medir-botones.js`).
+   Van juntos y pegados al nivel, en el extremo de la barra que no cambia
+   mientras se graba: lo de la izquierda —timecode, estado, contadores— se mira
+   seguido, y esto solo cuando algo no cuadra. */
+.rotulos-barra {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+}
+
+.rotulo-barra {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 24px;
+  max-width: 200px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.rotulo-barra:hover {
+  background: var(--layer-hover);
+  color: var(--text-primary);
+}
+
+.rotulo-barra[aria-expanded='true'] {
+  background: var(--layer-press);
+  color: var(--text-primary);
+}
+
+/* En ámbar cuando lo que dice no es lo que está pasando: el idioma puesto en
+   español y la clase sonando en inglés. No es un error —se puede estar citando
+   una frase— pero con el idioma equivocado Whisper TRADUCE la clase, así que
+   tiene que poder verse sin leer el tooltip. */
+.rotulo-barra[data-avisa='si'] {
+  border-color: var(--warn);
+  color: var(--warn);
 }
 
 .contadores {
