@@ -24,8 +24,44 @@
 import { $, esc } from '../chrome.js';
 import { icono } from '../iconos.js';
 
-/** Lo que el menú abierto está eligiendo, o null. */
+/**
+ * Lo que el menú abierto está eligiendo, o null.
+ *
+ * Guarda el id del rótulo y no el botón: el botón lo puede rehacer cualquier
+ * repintado, y un menú colgado de un botón que ya no está en la página se ubica
+ * contra una caja de cero —la esquina de arriba a la izquierda— y le devuelve
+ * el foco a la nada. El id es el mismo antes y después.
+ */
 let abierto = null;
+
+/** El rótulo del que cuelga el menú, el que esté en la página ahora. */
+const suRotulo = () => (abierto ? document.getElementById(abierto.id) : null);
+
+/** Lo último que se dibujó en cada caja de rótulos. */
+const dibujado = new WeakMap();
+
+/**
+ * Pone los rótulos en su caja, sin tocarla si no cambió nada.
+ *
+ * Las barras se repintan solas —la de la clase cada 150 ms, para que el
+ * timecode no se quede quieto— y rehacer el botón en cada vuelta lo cambiaba
+ * por otro en medio del clic. El navegador solo da el clic por hecho si se
+ * apretó y se soltó sobre el MISMO elemento, así que un clic de persona, que
+ * tarda lo mismo que una vuelta, se perdía casi siempre: medido, 0 de 15.
+ *
+ * Con el menú abierto tampoco se toca aunque haya cambiado: el rótulo se ve
+ * apretado mientras su menú está abierto, y redibujarlo lo soltaría. Lo que
+ * cambió entra en el primer repintado después de cerrar.
+ *
+ * @param {HTMLElement} caja donde van los rótulos
+ * @param {string} html lo que arma `rotulo`, o '' para vaciarla
+ */
+export function pintar(caja, html) {
+    if (dibujado.get(caja) === html) return;
+    if (caja.contains(suRotulo())) return;
+    dibujado.set(caja, html);
+    caja.innerHTML = html;
+}
 
 /**
  * El rótulo, para meterlo en el HTML de una barra.
@@ -60,18 +96,23 @@ export function rotulo(r) {
 /**
  * Abre el menú de un rótulo.
  *
- * @param {HTMLElement} boton el rótulo que se apretó
+ * Se ubica contra el rótulo que está en la página AHORA, buscado por su id, y
+ * no contra el que se apretó: la lista de cámaras se espera antes de abrir, y
+ * en esa espera el rótulo se pudo redibujar.
+ *
+ * @param {string} id el del rótulo que se apretó
  * @param {Array} opciones [{ valor, dice, pista, marcada }]
  * @param {Function} alElegir recibe el valor; cerrar sin elegir no la llama
  */
-export function abrir(boton, opciones, alElegir) {
+export function abrir(id, opciones, alElegir) {
     // Apretar el mismo rótulo otra vez lo cierra, que es lo que hace cualquier
     // menú y lo que uno prueba sin pensar.
-    const mismo = abierto && abierto.boton === boton;
+    const mismo = abierto && abierto.id === id;
     cerrar();
-    if (mismo) return;
+    const boton = document.getElementById(id);
+    if (mismo || !boton) return;
 
-    abierto = { boton, alElegir };
+    abierto = { id, alElegir };
     boton.setAttribute('aria-expanded', 'true');
     const menu = $('#menu-barra');
     menu.innerHTML = opciones.map(o => `<button class="menu-fila" type="button" role="menuitem"
@@ -97,22 +138,18 @@ export function abrir(boton, opciones, alElegir) {
 
 export function cerrar() {
     if (!abierto) return;
-    const { boton } = abierto;
+    const boton = suRotulo();
     abierto = null;
     const menu = $('#menu-barra');
     // Con el foco adentro, vaciar el menú lo dejaría en el `body`, y desde ahí
     // las teclas de la clase siguen andando de casualidad. Vuelve al rótulo,
     // que es de donde salió.
-    if (document.activeElement && menu.contains(document.activeElement)) {
-        if (boton.isConnected) boton.focus({ preventScroll: true });
+    if (boton && document.activeElement && menu.contains(document.activeElement)) {
+        boton.focus({ preventScroll: true });
     }
-    if (boton.isConnected) boton.setAttribute('aria-expanded', 'false');
+    if (boton) boton.setAttribute('aria-expanded', 'false');
     menu.hidden = true;
     menu.innerHTML = '';
-}
-
-export function hay() {
-    return Boolean(abierto);
 }
 
 /**
@@ -132,9 +169,13 @@ export function conectar() {
         cerrar();
         alElegir(valor);
     });
+    // Con `contains` y no con `===`: el rótulo tiene icono y texto adentro, y
+    // apretarlo sobre ellos es apretarlo. Comparando el objetivo exacto, eso
+    // cerraba el menú acá y el clic lo volvía a abrir en el acto.
     document.addEventListener('pointerdown', e => {
         if (!abierto) return;
-        if (e.target.closest('#menu-barra') || e.target === abierto.boton) return;
+        const rotulo = suRotulo();
+        if (e.target.closest('#menu-barra') || (rotulo && rotulo.contains(e.target))) return;
         cerrar();
     });
     document.addEventListener('keydown', e => {

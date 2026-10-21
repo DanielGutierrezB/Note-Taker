@@ -99,7 +99,9 @@ const estado = {
 
 export function conectar(contexto) {
     app = contexto;
-    $('#semanal-cuerpo').addEventListener('click', alClic);
+    // En la sección y no en el cuerpo: el rótulo del idioma vive en la fila del
+    // título, fuera de la tarjeta que se rehace.
+    $('#vista-semanal').addEventListener('click', alClic);
     $('#semanal-cuerpo').addEventListener('change', alCambio);
     $('#semanal-cuerpo').addEventListener('pointerdown', arrastrarPorLaLinea);
     document.addEventListener('keydown', alTeclado);
@@ -414,7 +416,12 @@ function pintar() {
     if (menuPalabra.hay()) { pendiente = true; return; }
     pendiente = false;
     const momento = MOMENTOS[estado.paso];
-    $('#semanal-reloj').hidden = estado.paso !== 'grabando';
+    const grabando = estado.paso === 'grabando' && estado.sesion;
+    $('#semanal-reloj').hidden = !grabando;
+    // Fuera de la tarjeta, que se rehace entera con cada estado: un rótulo
+    // adentro se cambiaba por otro en medio del clic (ver `rotuloBarra.pintar`).
+    rotuloBarra.pintar($('#semanal-rotulos'), grabando ? rotuloBarra.rotulo(idiomas.rotulo(
+        'semanal-idioma', estado.sesion.idioma || 'auto', estado.sesion.idiomaOido || null)) : '');
     $('#semanal-titulo').textContent = momento.titulo;
     $('#semanal-cuerpo').innerHTML = momento.tarjeta(estado);
     if (momento.luego) momento.luego();
@@ -765,7 +772,7 @@ async function alClic(e) {
     if (hace === 'descartar') return descartar(Number(boton.dataset.toma));
     if (hace === 'deshacer' || hace === 'rehacer') return volver(hace);
     if (hace === 'idioma') {
-        rotuloBarra.abrir(boton, idiomas.opciones((estado.sesion && estado.sesion.idioma) || 'auto'),
+        rotuloBarra.abrir(boton.id, idiomas.opciones((estado.sesion && estado.sesion.idioma) || 'auto'),
             cual => cambiarIdioma(cual));
         return undefined;
     }
@@ -988,38 +995,20 @@ const volver = cual => historia.volver(cual, nuevo => { estado.sesion = nuevo; p
 /**
  * El idioma, cambiado a mitad de la grabación.
  *
- * Lo mismo que en la clase y por el mismo camino —también pregunta si releer lo
- * ya cerrado—, con una diferencia: acá se guarda en `semanal.idioma`, que es un
- * ajuste aparte. Son la misma pregunta hecha a dos personas distintas y cada
- * una tiene su respuesta.
+ * Lo mismo que en la clase y por el mismo camino (`idiomas.cambiar`), con una
+ * diferencia: acá se guarda en `semanal.idioma`, que es un ajuste aparte. Son
+ * la misma pregunta hecha a dos personas distintas y cada una tiene su
+ * respuesta.
  */
 async function cambiarIdioma(cual) {
     if (!estado.sesion || cual === estado.sesion.idioma) return;
-    const tomas = estado.sesion.tomas || [];
-    const cerradas = tomas.filter(t => t.outMs != null && !t.descartada).length;
-    let releer = false;
-    if (cerradas) {
-        const dicho = await idiomas.preguntarSiReleer(cerradas, cual);
-        if (!dicho) return;
-        releer = dicho === 'releer';
-    }
-    const r = await window.nt.grabarIdioma(cual, { releer });
-    if (!r || !r.ok) {
-        avisar(r && r.error ? r.error : 'No se pudo cambiar el idioma.', 'error');
-        return;
-    }
-    if (r.estado) estado.sesion = r.estado;
+    const r = await idiomas.cambiar(cual, estado.sesion.tomas);
+    if (!r) return;
+    if (!r.ok) { avisar(r.error, 'error'); return; }
+    estado.sesion = r.estado;
     await window.nt.ajustesGuardar({ semanal: { idioma: cual } });
     pintar();
-    const como = idiomas.nombre(cual).toLowerCase();
-    if (r.releyendo) {
-        avisar(`Sigue en ${como}. Releyendo ${r.releyendo} toma`
-            + `${r.releyendo === 1 ? '' : 's'} ya cerrada${r.releyendo === 1 ? '' : 's'}.`, 'ok');
-    } else if (cerradas) {
-        avisar(`Sigue en ${como} de acá en adelante. Lo de antes queda como está.`, 'ok');
-    } else {
-        avisar(`Sigue en ${como}.`, 'ok');
-    }
+    avisar(r.aviso, 'ok');
 }
 
 /**

@@ -115,115 +115,87 @@ module.exports = function (t) {
      */
     t.group('en vivo · el idioma y la cámara en la barra');
 
+    // Cómo se comportan los rótulos y el cambio de idioma lo prueba andando
+    // `rotulos-de-la-barra.test.js`. Acá, que es lo que se puede leer del
+    // código: que esta pantalla los cablee por las piezas compartidas.
     const rotulos = tramo(js, 'function pintarRotulos() {', '\n}');
+    const camara = tramo(js, 'function rotuloDeCamara() {', '\n}');
 
     t.test('los dos rótulos tienen su hueco en la barra', () => {
         t.ok(/id="vivo-rotulos"/.test(barra), 'y está en la fila de arriba, con el nivel');
-        t.ok(/id: 'vivo-idioma'/.test(rotulos) && /id: 'vivo-camara'/.test(rotulos));
+        t.ok(/idiomas\.rotulo\('vivo-idioma', estado\.idioma, estado\.idiomaOido \|\| null\)/.test(rotulos),
+            'el de idioma es el mismo que el del vídeo semanal');
+        t.ok(/rotuloDeCamara\(\)/.test(rotulos) && /id: 'vivo-camara'/.test(camara),
+            'y el de cámara es de esta pantalla, que es la única con cámara de referencia');
     });
 
-    t.test('solo grabando: una clase que se mira no transcribe nada', () => {
-        t.ok(/if \(esDeMirar\(\)\) \{ caja\.innerHTML = ''; return; \}/.test(rotulos),
-            'se esconden, como el resto del cromo que solo tiene sentido grabando');
+    t.test('se ponen con rotuloBarra.pintar, nunca escribiendo el HTML a mano', () => {
+        // La barra se repinta cada 150 ms. Escribir el `innerHTML` directo
+        // rehacía los botones en medio del clic: medido, 0 de 15 agarraban.
+        t.ok(/rotuloBarra\.pintar\(caja, esDeMirar\(\) \? '' :/.test(rotulos),
+            'y en una clase que se mira, vacíos: ni transcribe ni saca fotos');
+        t.ok(!/innerHTML/.test(rotulos), 'nada de escribirlos a mano');
     });
 
-    t.test('con el menú abierto no se redibujan', () => {
-        // El rótulo es el botón del que cuelga el menú: rehacerlo debajo deja
-        // el menú apuntando a un botón que ya no está en el documento.
-        t.ok(/if \(rotuloBarra\.hay\(\)\) return;/.test(rotulos));
+    t.test('el menú se abre por el id del rótulo, no por el botón apretado', () => {
+        // La lista de cámaras se espera antes de abrir: el botón apretado pudo
+        // haberse redibujado, y el menú caía en la esquina.
+        t.ok(/case 'idioma':\s*\n\s*rotuloBarra\.abrir\(boton\.id,/.test(js));
+        t.ok(/rotuloBarra\.abrir\(boton\.id, await app\.camarasParaElegir\(\)/.test(js));
     });
 
-    t.test('el idioma puesto que no coincide con lo que suena se ve en ámbar', () => {
-        t.ok(/estado\.idioma !== 'auto' && oido && oido !== estado\.idioma/.test(rotulos),
-            'solo con el idioma puesto a mano: en «auto» no hay nada que avisar');
-        t.ok(/TRADUCIDO/.test(rotulos), 'y el tooltip dice lo que está en juego');
-        const css = leer('src', 'css', 'style.css');
-        t.ok(/\.rotulo-barra\[data-avisa='si'\]/.test(css), 'con su estilo');
+    t.test('la cámara dice de qué es, y tiene su forma corta', () => {
+        t.ok(/que: 'Cámara'/.test(camara) && /icono: 'camara'/.test(camara));
+        // Sin la corta se repite la larga, la fila vuelve a desbordarse a
+        // 900 px y nadie se entera hasta medirla.
+        t.ok(/\n\s+corto: /.test(camara));
     });
 
-    t.test('cambiar el idioma lo guarda para mañana y cuenta lo que relee', () => {
+    t.test('cambiar el idioma pasa por idiomas.cambiar y queda para mañana', () => {
         const fn = tramo(js, 'async function cambiarIdioma(cual) {', '\n}');
-        t.ok(/window\.nt\.grabarIdioma\(cual, \{ releer \}\)/.test(fn), 'se lo pide al motor');
+        t.ok(/idiomas\.cambiar\(cual, estado\.tomas\)/.test(fn), 'que es el que pregunta si releer');
+        t.ok(/if \(!r\) return;/.test(fn), 'cancelar no toca nada, ni los ajustes');
         t.ok(/app\.guardarAjustes\(\{ idioma: cual \}\)/.test(fn),
             'y queda para las clases siguientes: quien se equivocó hoy se equivoca mañana');
-        t.ok(/r\.releyendo/.test(fn) && /Releyendo/.test(fn),
-            'y se dice cuántas tomas se están releyendo, que tarda');
+        t.ok(/avisar\(r\.aviso, 'ok'\)/.test(fn), 'y dice lo que hizo');
     });
 
-    t.test('releer lo de atrás se pregunta, y solo cuando hay algo que releer', () => {
-        // Releer rehace el texto que va al Premiere, así que no se hace sin
-        // permiso: quien se da cuenta a mitad de que el idioma está mal tiene
-        // que poder arreglarlo sin miedo a romper lo que ya salió bien. Pero si
-        // no hay ninguna toma cerrada no hay nada que elegir, y preguntar ahí
-        // es un diálogo que estorba en medio de una clase.
-        const fn = tramo(js, 'async function cambiarIdioma(cual) {', '\n}');
-        t.ok(/t\.outMs != null && !t\.descartada/.test(fn),
-            'cuenta las cerradas con la misma regla que el motor');
-        t.ok(/if \(cerradas\) \{\s*\n\s*const dicho = await idiomas\.preguntarSiReleer\(cerradas, cual\);/
-            .test(fn), 'pregunta, y solo adentro del «si hay cerradas»');
-        t.ok(/if \(!dicho\) return;/.test(fn), 'cancelar no cambia ni el idioma');
-        t.ok(/releer = dicho === 'releer'/.test(fn), 'y la otra salida cambia sin releer');
-
-        const mod = leer('src', 'js', 'idiomas.js');
-        const preg = tramo(mod, 'export async function preguntarSiReleer(cuantas, a) {', '\n}');
-        t.ok(/window\.nt\.preguntar\(/.test(preg), 'por el diálogo del sistema, que bloquea');
-        t.eq((preg.match(/'Solo de acá en adelante', 'Cancelar'/g) || []).length, 1,
-            'con tres salidas: releer, seguir de acá, o no tocar nada');
-        t.ok(/return null;/.test(preg), 'y cerrarlo es no tocar nada');
-
-        // Y el puente existe: sin esto la ventana llama a algo que no está.
+    t.test('el diálogo de varias salidas existe de punta a punta', () => {
         t.ok(/preguntar: payload => ipcRenderer\.invoke\('preguntar', payload\)/
             .test(leer('preload.js')), 'el preload lo expone');
-        t.ok(/ipcMain\.handle\('preguntar'/.test(leer('main.js')), 'y el main lo atiende');
+        const main = tramo(leer('main.js'), "ipcMain.handle('preguntar',", '\n});');
+        t.ok(/buttons: \[\.\.\.formas\.map\(o => o\.dice\), 'Cancelar'\]/.test(main),
+            'cancelar lo pone el diálogo, al final: no se lo tiene que acordar quien pregunta');
+        t.ok(/cancelId: formas\.length/.test(main) && /defaultId: formas\.length/.test(main),
+            'y es el marcado, y el que contesta Escape');
+        t.ok(/return elegida \? elegida\.valor : null;/.test(main), 'vuelve el valor, o null');
     });
 
-    t.test('cada rótulo dice de qué es, no solo cómo está', () => {
+    t.test('la palabra entra solo donde hay lugar, el icono siempre', () => {
         // «Auto» a secas no contesta de qué habla: fue lo primero que se
-        // preguntó al verlo en la barra. Así que cada uno lleva su palabra
-        // —«Idioma», «Cámara»— y su icono. La palabra no cabe a cualquier
-        // ancho: medido, a 1180 px sobran 95 px en la fila y las dos palabras
-        // piden más que eso, así que entra a partir de 1200 px y donde no
-        // entra lo dice el icono, que está siempre.
-        t.ok(/que: 'Idioma'/.test(rotulos) && /que: 'Cámara'/.test(rotulos), 'los dos la traen');
-        t.ok(/icono: 'idioma'/.test(rotulos) && /icono: 'camara'/.test(rotulos), 'y su icono');
-        t.ok(/\n    idioma:\n/.test(leer('src', 'js', 'iconos.js')), 'que está dibujado');
-        const semanal = tramo(leer('src', 'js', 'semanal', 'tarjetas.js'),
-            'function rotuloDeIdioma(sesion) {', '\n}');
-        t.ok(/que: 'Idioma'/.test(semanal) && /icono: 'idioma'/.test(semanal),
-            'y el del vídeo semanal también, que es el mismo rótulo en otra barra');
-
-        const fn = tramo(leer('src', 'js', 'grabar', 'rotulo-barra.js'), 'export function rotulo(r) {', '\n}');
-        t.ok(/>\$\{icono\(r\.icono\)\}<span class="rotulo-que">/.test(fn),
-            'el icono va antes del texto, que es donde se lee como etiqueta');
-        t.ok(/aria-label="\$\{esc\(r\.que\)\}: \$\{esc\(r\.dice\)\}"/.test(fn),
-            'y el nombre accesible lo dice entero: a 900 px lo que se ve es «ES»');
-
+        // preguntó al verlo. La palabra no cabe a cualquier ancho —medido, a
+        // 1180 px sobran 95 px en la fila y las dos palabras piden más—, así que
+        // entra a partir de 1200 px y donde no entra lo dice el icono.
         const css = leer('src', 'css', 'style.css');
         t.ok(/\.rotulo-que \{\s*display: none;/.test(css), 'la palabra arranca escondida');
         t.ok(/@media \(min-width: 1200px\) \{\s*\n\s*\.rotulo-que \{\s*\n\s*display: inline;/.test(css),
             'y entra solo donde hay lugar medido');
+        t.ok(/\n    idioma:\n/.test(leer('src', 'js', 'iconos.js')), 'y el icono de idioma está dibujado');
+        t.ok(/\.rotulo-barra\[data-avisa='si'\]/.test(css), 'el ámbar tiene su estilo');
     });
 
     t.test('a 900 px los rótulos pasan a su forma corta, y nada se esconde', () => {
         // La barra iba al límite exacto a 900 px, que es el ancho mínimo de la
-        // ventana: los dos rótulos pedían 145 px más de los que había. Lo que
-        // cede está medido y escrito en el CSS; lo que no puede pasar es que se
-        // resuelva recortando con puntos suspensivos —«Auto · ES» cortado por
-        // la derecha se come justo el idioma— ni escondiendo un número.
+        // ventana. Lo que cede está medido y escrito en el CSS; lo que no puede
+        // pasar es que se resuelva recortando con puntos suspensivos —«Auto ·
+        // ES» cortado por la derecha se come justo el idioma— ni escondiendo un
+        // número.
         const css = leer('src', 'css', 'style.css');
         const estrecho = tramo(css, '@media (max-width: 1100px) {', '\n}\n');
         t.ok(/\.rotulo-ancho \{\s*display: none;/.test(estrecho), 'se va la forma larga');
         t.ok(/\.rotulo-angosto \{\s*display: inline;/.test(estrecho), 'y entra la corta');
         t.ok(!/display: none/.test(estrecho.replace(/\.rotulo-ancho \{[^}]*\}/, '')),
             'y no se esconde nada más: ni el timecode, ni el estado, ni los contadores');
-        // Los dos rótulos tienen que traerla: sin ella se repite la larga, la
-        // fila vuelve a desbordarse a 900 px y nadie se entera hasta medirla.
-        t.eq((rotulos.match(/\n\s+corto:/g) || []).length, 2,
-            'los dos rótulos dicen cuál es su forma corta');
-        // Los dos textos van en el documento, no se elige uno al dibujar: así
-        // el tooltip, el `aria` y el menú son los mismos a cualquier ancho.
-        const fn = tramo(leer('src', 'js', 'grabar', 'rotulo-barra.js'), 'export function rotulo(r) {', '\n}');
-        t.ok(/rotulo-ancho/.test(fn) && /rotulo-angosto/.test(fn));
     });
 
     t.test('la lista de cámaras se pide al abrir el menú, no antes', () => {

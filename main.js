@@ -347,27 +347,29 @@ ipcMain.handle('confirmar', async (event, { titulo, mensaje, ok } = {}) => {
 });
 
 /**
- * El mismo diálogo pero con más de dos salidas, para cuando «cancelar» y «no»
- * no son lo mismo: cambiar el idioma en medio de una clase se puede hacer
- * releyendo lo de atrás o solo de ahí en adelante, y son tres respuestas.
+ * El mismo diálogo pero con más de una forma de seguir, para cuando «cancelar»
+ * y «no» no son lo mismo: cambiar el idioma en medio de una clase se puede
+ * hacer releyendo lo de atrás o solo de ahí en adelante, y son tres respuestas.
  *
- * Devuelve el índice de la opción elegida. La última es siempre la de salir sin
- * hacer nada, que es la que contesta si cierran el diálogo con Escape.
+ * Cada opción trae su `valor` y vuelve ese valor, o `null` si se canceló —con
+ * el botón o con Escape—. «Cancelar» lo pone el diálogo, al final y marcado:
+ * no es una opción más que quien llama tenga que acordarse de poner última.
+ *
+ * @param {{titulo:string, mensaje:string, opciones:Array<{valor:string, dice:string}>}}
  */
 ipcMain.handle('preguntar', async (event, { titulo, mensaje, opciones } = {}) => {
-    const botones = Array.isArray(opciones) && opciones.length > 1
-        ? opciones
-        : ['Continuar', 'Cancelar'];
+    const formas = Array.isArray(opciones) ? opciones : [];
     const result = await dialog.showMessageBox(mainWindow, {
         type: 'question',
-        buttons: botones,
-        defaultId: botones.length - 1,
-        cancelId: botones.length - 1,
+        buttons: [...formas.map(o => o.dice), 'Cancelar'],
+        defaultId: formas.length,
+        cancelId: formas.length,
         title: titulo || 'Elegí',
         message: titulo || 'Elegí',
         detail: mensaje || ''
     });
-    return result.response;
+    const elegida = formas[result.response];
+    return elegida ? elegida.valor : null;
 });
 
 // El texto es de quien llama: el mismo diálogo sirve para elegir la carpeta del

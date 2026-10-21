@@ -231,7 +231,7 @@ window.nt = {
     // la pantalla después, no el diálogo, que lo dibuja el sistema.
     confirmar: async () => true,
     // Y a la primera de las que tienen varias salidas, que es la de hacer algo.
-    preguntar: async () => 0,
+    preguntar: async ({ opciones } = {}) => (opciones && opciones[0] ? opciones[0].valor : null),
     reveal: async ruta => { console.log('reveal', ruta); return true; },
     openPath: async () => '',
 

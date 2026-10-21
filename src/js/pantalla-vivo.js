@@ -561,62 +561,37 @@ function pintarBarra() {
  * algo que ya pasó. Se esconden y no se apagan, por lo mismo que el resto del
  * cromo de esta barra.
  *
- * Con el menú abierto no se redibujan: el rótulo es el botón del que cuelga, y
- * rehacerlo debajo del menú deja el menú apuntando a un botón que ya no está.
+ * Se piden en cada vuelta de la barra, pero solo se tocan si cambiaron: eso, y
+ * no tocarlos con el menú abierto, lo decide `rotuloBarra.pintar`.
  */
 function pintarRotulos() {
     const caja = $('#vivo-rotulos');
     if (!caja) return;
-    if (esDeMirar()) { caja.innerHTML = ''; return; }
-    if (rotuloBarra.hay()) return;
-    const oido = estado.idiomaOido || null;
-    // El idioma puesto a mano y otro sonando: no es un error —se puede estar
-    // citando— pero con el idioma equivocado Whisper traduce la clase entera,
-    // así que se ve en ámbar (ver `engine/idiomas.js`).
-    const discrepa = estado.idioma !== 'auto' && oido && oido !== estado.idioma;
-    caja.innerHTML = rotuloBarra.rotulo({
-        id: 'vivo-idioma',
-        hace: 'idioma',
-        que: 'Idioma',
-        icono: 'idioma',
-        dice: idiomas.sigla(estado.idioma, oido),
-        // Angosto: solo las dos letras, que es la pregunta de verdad —en qué
-        // idioma está saliendo el transcript—. Que lo haya elegido solo o no
-        // se lee en el menú, que está a un clic.
-        corto: idiomas.sigla(estado.idioma === 'auto' ? (oido || 'auto') : estado.idioma, oido),
-        avisa: discrepa,
-        pista: discrepa
-            ? `Lo tenés en ${idiomas.nombre(estado.idioma).toLowerCase()} y suena a `
-                + `${idiomas.nombre(oido).toLowerCase()}. Con el idioma equivocado el transcript sale `
-                + 'TRADUCIDO: tocá acá para cambiarlo.'
-            : `En qué idioma oye la clase${estado.idioma === 'auto' && oido
-                ? `: lo está eligiendo solo y ahora oye ${idiomas.nombre(oido).toLowerCase()}`
-                : ''}. Tocá para cambiarlo: pregunta si releer lo que ya cerraste.`
-    }) + rotuloBarra.rotulo({
+    rotuloBarra.pintar(caja, esDeMirar() ? '' :
+        rotuloBarra.rotulo(idiomas.rotulo('vivo-idioma', estado.idioma, estado.idiomaOido || null))
+        + rotuloBarra.rotulo(rotuloDeCamara()));
+}
+
+/**
+ * El rótulo de la cámara de referencia.
+ *
+ * «Ninguna» y no «Sin cámara» porque de qué habla el rótulo ya lo dicen el
+ * icono y la palabra: «Cámara: Sin cámara» dice dos veces lo mismo, y en esta
+ * fila cada letra de más se la paga otro. Angosto dice solo si hay o no, que es
+ * lo que se consulta de reojo; cuál es, en el tooltip y en el menú.
+ */
+function rotuloDeCamara() {
+    const cual = app.ajustes && app.ajustes.camara;
+    return {
         id: 'vivo-camara',
         hace: 'camara',
         que: 'Cámara',
         icono: 'camara',
-        dice: camaraDice(),
-        // Angosto: si hay cámara o no, que es lo que se consulta de reojo.
-        // Cuál es, en el tooltip y en el menú.
-        corto: (app.ajustes && app.ajustes.camara) ? 'Puesta' : 'Ninguna',
-        pista: `${(app.ajustes && app.ajustes.camara) || 'Sin cámara'}. De acá sale la foto de cómo `
-            + 'quedó la pantalla al cerrar cada toma. No se graba vídeo: es un fotograma por toma.'
-    });
-}
-
-/**
- * Cómo se dice la cámara de referencia en la barra, en poco espacio.
- *
- * «Ninguna» y no «Sin cámara» porque de qué habla el rótulo ya lo dicen el
- * icono y la palabra: «Cámara: Sin cámara» dice dos veces lo mismo, y en esta
- * fila cada letra de más se la paga otro.
- */
-function camaraDice() {
-    const cual = app.ajustes && app.ajustes.camara;
-    if (!cual) return 'Ninguna';
-    return cual.length > 22 ? `${cual.slice(0, 21)}…` : cual;
+        dice: !cual ? 'Ninguna' : cual.length > 22 ? `${cual.slice(0, 21)}…` : cual,
+        corto: cual ? 'Puesta' : 'Ninguna',
+        pista: `${cual || 'Sin cámara'}. De acá sale la foto de cómo quedó la pantalla al `
+            + 'cerrar cada toma. No se graba vídeo: es un fotograma por toma.'
+    };
 }
 
 function pintar() {
@@ -1654,14 +1629,14 @@ async function alClic(e) {
         }
         case 'claqueta': await pedir(() => window.nt.grabarClaqueta(palmadaParaEnganchar())); break;
         case 'idioma':
-            rotuloBarra.abrir(boton, idiomas.opciones(estado.idioma), cual => cambiarIdioma(cual));
+            rotuloBarra.abrir(boton.id, idiomas.opciones(estado.idioma), cual => cambiarIdioma(cual));
             break;
         case 'camara':
             // La lista se pide al abrir el menú y no antes: una cámara virtual
             // aparece cuando alguien abre el OBS, y una lista de hace una hora
             // no tendría la que se está buscando. Es el mismo motivo por el que
             // Ajustes la pide al abrirse (ver `pintarCamaras` en `app.js`).
-            rotuloBarra.abrir(boton, await app.camarasParaElegir(), cual => app.ponerCamara(cual));
+            rotuloBarra.abrir(boton.id, await app.camarasParaElegir(), cual => app.ponerCamara(cual));
             break;
         // Los atajos de la barra: lo mismo que las teclas, con el mouse.
         case 'borde': await bordeDeToma(); break;
@@ -1969,43 +1944,21 @@ async function pedir(hacer) {
 const volver = cual => historia.volver(cual, nuevo => { estado = nuevo; pintar(); });
 
 /**
- * El idioma de la clase, cambiado a mitad.
- *
- * La clase que sigue se oye en el idioma nuevo, y eso pasa siempre. Lo de atrás
- * es la pregunta: las tomas ya cerradas están transcritas en el idioma viejo y
- * ese texto es el que va al XML, así que releerlas arregla el transcript pero
- * también rehace lo que ya estaba. Se pregunta (`idiomas.preguntarSiReleer`) y
- * si no hay nada cerrado no se pregunta nada, que no habría qué elegir.
+ * El idioma de la clase, cambiado a mitad (`idiomas.cambiar`, que es el que
+ * pregunta si releer lo de atrás).
  *
  * Y queda guardado en Ajustes para las clases siguientes: quien se equivocó de
  * idioma una vez se iba a volver a equivocar mañana.
  */
 async function cambiarIdioma(cual) {
     if (!estado || cual === estado.idioma) return;
-    const cerradas = estado.tomas.filter(t => t.outMs != null && !t.descartada).length;
-    let releer = false;
-    if (cerradas) {
-        const dicho = await idiomas.preguntarSiReleer(cerradas, cual);
-        if (!dicho) return;
-        releer = dicho === 'releer';
-    }
-    const r = await window.nt.grabarIdioma(cual, { releer });
-    if (!r || !r.ok) {
-        avisar(r && r.error ? r.error : 'No se pudo cambiar el idioma.', 'error');
-        return;
-    }
-    if (r.estado) estado = r.estado;
+    const r = await idiomas.cambiar(cual, estado.tomas);
+    if (!r) return;
+    if (!r.ok) { avisar(r.error, 'error'); return; }
+    estado = r.estado;
     await app.guardarAjustes({ idioma: cual });
     pintar();
-    const como = idiomas.nombre(cual).toLowerCase();
-    if (r.releyendo) {
-        avisar(`La clase sigue en ${como}. Releyendo ${r.releyendo} toma`
-            + `${r.releyendo === 1 ? '' : 's'} ya cerrada${r.releyendo === 1 ? '' : 's'}.`, 'ok');
-    } else if (cerradas) {
-        avisar(`La clase sigue en ${como} de acá en adelante. Lo de antes queda como está.`, 'ok');
-    } else {
-        avisar(`La clase sigue en ${como}.`, 'ok');
-    }
+    avisar(r.aviso, 'ok');
 }
 
 /* ─── Las teclas ──────────────────────────────────────────────────────── */

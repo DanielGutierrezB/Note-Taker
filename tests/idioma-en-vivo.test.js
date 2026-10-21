@@ -445,22 +445,39 @@ module.exports = function (t) {
         const doble = leer('tools', 'maqueta', 'doble.js');
         t.ok(/grabarIdioma:/.test(doble),
             'y la maqueta lo tiene, o sus escenarios romperían al tocar el rótulo');
-        t.ok(/preguntar: async \(\) =>/.test(doble), 'con la pregunta contestada');
+        t.ok(/preguntar: async \(\{ opciones \} = \{\}\) =>/.test(doble),
+            'con la pregunta contestada por valor, como el diálogo de verdad');
         t.ok(/releyendo: \(opciones && opciones\.releer\) \? cerradas : 0/.test(doble),
             'y contestando distinto según lo que se pidió, que es lo que se va a mirar');
     });
 
-    t.test('las dos pantallas preguntan lo mismo antes de releer', () => {
-        // La clase y el vídeo semanal tienen cada una su `cambiarIdioma` —una
-        // guarda en `idioma` y la otra en `semanal.idioma`—, y es fácil
-        // arreglar una y dejar la otra releyendo sin preguntar.
+    t.test('las dos pantallas cambian el idioma y lo muestran con las mismas piezas', () => {
+        // La clase y el vídeo semanal tenían cada una su `cambiarIdioma` y su
+        // rótulo, casi iguales, y ya habían empezado a decir cosas distintas.
+        // Ahora preguntar, avisar y cómo se ve el rótulo son de `idiomas.js`; a
+        // cada pantalla le queda dónde lo guarda y cómo repinta.
         for (const cual of ['pantalla-vivo.js', 'pantalla-semanal.js']) {
             const fn = leer('src', 'js', cual);
             const cuerpo = fn.slice(fn.indexOf('async function cambiarIdioma(cual) {'));
-            t.ok(/if \(cerradas\) \{\s*\n\s*const dicho = await idiomas\.preguntarSiReleer\(cerradas, cual\);/
-                .test(cuerpo), `${cual} pregunta, y solo si hay algo que releer`);
-            t.ok(/grabarIdioma\(cual, \{ releer \}\)/.test(cuerpo), `${cual} manda la respuesta`);
+            t.ok(/await idiomas\.cambiar\(cual, /.test(cuerpo), `${cual} cambia por idiomas.cambiar`);
+            t.ok(!/grabarIdioma/.test(fn), `${cual} no le habla al motor por su cuenta`);
+            t.ok(/idiomas\.rotulo\(/.test(fn), `${cual} usa el rótulo compartido`);
+            t.ok(/rotuloBarra\.pintar\(/.test(fn), `${cual} lo pone sin rehacerlo en cada vuelta`);
         }
+    });
+
+    t.test('en el vídeo semanal el rótulo vive fuera de la tarjeta', () => {
+        // La tarjeta se rehace entera con cada estado, una vez por segundo
+        // grabando: un rótulo adentro se cambiaba por otro en medio del clic.
+        // Va en la fila del título, que no se rehace, al lado del reloj: el
+        // mismo sitio que tiene en la clase, al lado del timecode.
+        const titulo = leer('src', 'index.html').match(/<div class="seccion-titulo">[\s\S]*?id="semanal-reloj"/);
+        t.ok(titulo && /id="semanal-rotulos"/.test(titulo[0]), 'su caja es fija, en el HTML');
+        t.ok(/\$\('#vista-semanal'\)\.addEventListener\('click', alClic\)/
+            .test(leer('src', 'js', 'pantalla-semanal.js')),
+            'y el clic se escucha en la sección entera, o el rótulo quedaría sordo fuera del cuerpo');
+        t.ok(!/rotulos-barra|rotuloBarra|idiomas\./.test(leer('src', 'js', 'semanal', 'tarjetas.js')),
+            'y la tarjeta no dibuja ninguno');
     });
 
     /* ─── Ajustes, más corto ─────────────────────────────────────────────

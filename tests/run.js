@@ -46,6 +46,7 @@ const FILES = [
     'dividir-toma.test.js',
     'martillo.test.js',
     'idioma-en-vivo.test.js',
+    'rotulos-de-la-barra.test.js',
     'puente-grabar.test.js',
     'vivo-interfaz.test.js',
     'senales-del-texto.test.js',
