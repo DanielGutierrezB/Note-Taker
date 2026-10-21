@@ -1494,6 +1494,25 @@ select {
   color: var(--warn);
 }
 
+/* De qué es el rótulo, en metadato: «Idioma: Auto · ES». El dato es lo que se
+   lee de reojo, así que la palabra va un escalón más atrás y no compite.
+
+   Solo con la ventana ancha. Debajo de 1200 px la fila no tiene lugar para dos
+   palabras más —a 900 px no tiene ni uno— y de qué es cada rótulo lo dice el
+   icono, que está siempre. Medido: a 1180 px sobran 95 px en la fila y las dos
+   palabras piden más que eso. */
+.rotulo-que {
+  display: none;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+@media (min-width: 1200px) {
+  .rotulo-que {
+    display: inline;
+  }
+}
+
 .contadores {
   display: flex;
   gap: var(--sp-5);

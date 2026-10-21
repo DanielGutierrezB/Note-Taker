@@ -30,7 +30,11 @@ let abierto = null;
 /**
  * El rótulo, para meterlo en el HTML de una barra.
  *
- * @param {object} r { id, hace, dice, corto, pista, avisa }
+ * @param {object} r { id, hace, que, icono, dice, corto, pista, avisa }
+ *   `que` es de qué es el rótulo —«Idioma», «Cámara»— y `dice` cómo está. Sin
+ *   el `que`, «Auto» a secas no contesta de qué habla: eso fue lo primero que
+ *   se preguntó al verlo en la barra. Va escrito cuando hay lugar, y cuando no
+ *   lo dice el icono, que es el mismo concepto en 16 px.
  *   `corto` es lo que se ve con la ventana en su ancho mínimo, donde esta
  *   barra no tiene un píxel de sobra: se dice acá y no se recorta con puntos
  *   suspensivos porque lo que importa está al final —«Auto · ES»— y cortar por
@@ -38,12 +42,17 @@ let abierto = null;
  *   `avisa` lo pinta en ámbar: es para «lo tenés en español y suena a inglés»,
  *   que no es un error —se puede estar citando— pero hay que poder verlo de
  *   reojo sin leer el tooltip.
+ *
+ * El nombre accesible lo pone `aria-label` y no el texto de adentro: con la
+ * palabra escondida a ventana chica, lo que se lee en voz alta sería «ES».
  */
 export function rotulo(r) {
     return `<button class="rotulo-barra" type="button" id="${esc(r.id)}"
             data-hace="${esc(r.hace)}" aria-haspopup="menu" aria-expanded="false"
             ${r.avisa ? 'data-avisa="si"' : ''}
+            aria-label="${esc(r.que)}: ${esc(r.dice)}"
             title="${esc(r.pista || '')}"
+        >${icono(r.icono)}<span class="rotulo-que">${esc(r.que)}:</span
         ><span class="rotulo-ancho">${esc(r.dice)}</span
         ><span class="rotulo-angosto">${esc(r.corto || r.dice)}</span></button>`;
 }

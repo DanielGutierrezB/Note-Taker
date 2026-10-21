@@ -177,6 +177,33 @@ module.exports = function (t) {
         t.ok(/ipcMain\.handle\('preguntar'/.test(leer('main.js')), 'y el main lo atiende');
     });
 
+    t.test('cada rótulo dice de qué es, no solo cómo está', () => {
+        // «Auto» a secas no contesta de qué habla: fue lo primero que se
+        // preguntó al verlo en la barra. Así que cada uno lleva su palabra
+        // —«Idioma», «Cámara»— y su icono. La palabra no cabe a cualquier
+        // ancho: medido, a 1180 px sobran 95 px en la fila y las dos palabras
+        // piden más que eso, así que entra a partir de 1200 px y donde no
+        // entra lo dice el icono, que está siempre.
+        t.ok(/que: 'Idioma'/.test(rotulos) && /que: 'Cámara'/.test(rotulos), 'los dos la traen');
+        t.ok(/icono: 'idioma'/.test(rotulos) && /icono: 'camara'/.test(rotulos), 'y su icono');
+        t.ok(/\n    idioma:\n/.test(leer('src', 'js', 'iconos.js')), 'que está dibujado');
+        const semanal = tramo(leer('src', 'js', 'semanal', 'tarjetas.js'),
+            'function rotuloDeIdioma(sesion) {', '\n}');
+        t.ok(/que: 'Idioma'/.test(semanal) && /icono: 'idioma'/.test(semanal),
+            'y el del vídeo semanal también, que es el mismo rótulo en otra barra');
+
+        const fn = tramo(leer('src', 'js', 'grabar', 'rotulo-barra.js'), 'export function rotulo(r) {', '\n}');
+        t.ok(/>\$\{icono\(r\.icono\)\}<span class="rotulo-que">/.test(fn),
+            'el icono va antes del texto, que es donde se lee como etiqueta');
+        t.ok(/aria-label="\$\{esc\(r\.que\)\}: \$\{esc\(r\.dice\)\}"/.test(fn),
+            'y el nombre accesible lo dice entero: a 900 px lo que se ve es «ES»');
+
+        const css = leer('src', 'css', 'style.css');
+        t.ok(/\.rotulo-que \{\s*display: none;/.test(css), 'la palabra arranca escondida');
+        t.ok(/@media \(min-width: 1200px\) \{\s*\n\s*\.rotulo-que \{\s*\n\s*display: inline;/.test(css),
+            'y entra solo donde hay lugar medido');
+    });
+
     t.test('a 900 px los rótulos pasan a su forma corta, y nada se esconde', () => {
         // La barra iba al límite exacto a 900 px, que es el ancho mínimo de la
         // ventana: los dos rótulos pedían 145 px más de los que había. Lo que

@@ -66,6 +66,14 @@ const DIBUJOS = {
         '<rect x="3" y="7.2" width="12.6" height="9.6" rx="2"/>' +
         '<path d="m15.6 11.4 4.4-2.6v6.4l-4.4-2.6z"/>',
 
+    // El idioma: el globo con su meridiano, que es el dibujo que cualquiera ya
+    // leyó en un selector de idioma. A 16 px lo que lo separa del reloj es el
+    // meridiano vertical: sin él, un círculo con una raya es un reloj.
+    idioma:
+        '<circle cx="12" cy="12" r="8.4"/>' +
+        '<path d="M3.6 12h16.8"/>' +
+        '<path d="M12 3.6a5.2 8.4 0 0 1 0 16.8 5.2 8.4 0 0 1 0-16.8z"/>',
+
     /* ── Las acciones ─────────────────────────────────────────────── */
 
     // Empezar a grabar: el punto lleno. A trazo se lee como un círculo vacío,

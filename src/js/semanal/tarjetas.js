@@ -422,6 +422,8 @@ function rotuloDeIdioma(sesion) {
     return rotuloBarra.rotulo({
         id: 'semanal-idioma',
         hace: 'idioma',
+        que: 'Idioma',
+        icono: 'idioma',
         dice: idiomas.sigla(puesto, oido),
         corto: idiomas.sigla(puesto === 'auto' ? (oido || 'auto') : puesto, oido),
         avisa: discrepa,
@@ -430,7 +432,7 @@ function rotuloDeIdioma(sesion) {
                 + `${idiomas.nombre(oido).toLowerCase()}. Con el idioma equivocado el transcript sale TRADUCIDO.`
             : `En qué idioma oye${puesto === 'auto' && oido
                 ? `: lo está eligiendo solo y ahora oye ${idiomas.nombre(oido).toLowerCase()}`
-                : ''}. Cambiarlo relee las tomas que ya cerraste.`
+                : ''}. Tocá para cambiarlo: pregunta si releer lo que ya cerraste.`
     });
 }
 

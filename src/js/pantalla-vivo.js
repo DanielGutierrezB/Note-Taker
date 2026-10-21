@@ -577,6 +577,8 @@ function pintarRotulos() {
     caja.innerHTML = rotuloBarra.rotulo({
         id: 'vivo-idioma',
         hace: 'idioma',
+        que: 'Idioma',
+        icono: 'idioma',
         dice: idiomas.sigla(estado.idioma, oido),
         // Angosto: solo las dos letras, que es la pregunta de verdad —en qué
         // idioma está saliendo el transcript—. Que lo haya elegido solo o no
@@ -586,26 +588,34 @@ function pintarRotulos() {
         pista: discrepa
             ? `Lo tenés en ${idiomas.nombre(estado.idioma).toLowerCase()} y suena a `
                 + `${idiomas.nombre(oido).toLowerCase()}. Con el idioma equivocado el transcript sale `
-                + 'TRADUCIDO: tocá acá para cambiarlo y las tomas se vuelven a leer.'
+                + 'TRADUCIDO: tocá acá para cambiarlo.'
             : `En qué idioma oye la clase${estado.idioma === 'auto' && oido
                 ? `: lo está eligiendo solo y ahora oye ${idiomas.nombre(oido).toLowerCase()}`
-                : ''}. Cambiarlo relee las tomas que ya cerraste.`
+                : ''}. Tocá para cambiarlo: pregunta si releer lo que ya cerraste.`
     }) + rotuloBarra.rotulo({
         id: 'vivo-camara',
         hace: 'camara',
+        que: 'Cámara',
+        icono: 'camara',
         dice: camaraDice(),
         // Angosto: si hay cámara o no, que es lo que se consulta de reojo.
         // Cuál es, en el tooltip y en el menú.
-        corto: (app.ajustes && app.ajustes.camara) ? 'Cám.' : 'Sin cám.',
+        corto: (app.ajustes && app.ajustes.camara) ? 'Puesta' : 'Ninguna',
         pista: `${(app.ajustes && app.ajustes.camara) || 'Sin cámara'}. De acá sale la foto de cómo `
             + 'quedó la pantalla al cerrar cada toma. No se graba vídeo: es un fotograma por toma.'
     });
 }
 
-/** Cómo se dice la cámara de referencia en la barra, en poco espacio. */
+/**
+ * Cómo se dice la cámara de referencia en la barra, en poco espacio.
+ *
+ * «Ninguna» y no «Sin cámara» porque de qué habla el rótulo ya lo dicen el
+ * icono y la palabra: «Cámara: Sin cámara» dice dos veces lo mismo, y en esta
+ * fila cada letra de más se la paga otro.
+ */
 function camaraDice() {
     const cual = app.ajustes && app.ajustes.camara;
-    if (!cual) return 'Sin cámara';
+    if (!cual) return 'Ninguna';
     return cual.length > 22 ? `${cual.slice(0, 21)}…` : cual;
 }
 
