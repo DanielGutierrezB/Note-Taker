@@ -230,6 +230,8 @@ window.nt = {
     // La maqueta contesta que sí a todo: lo que se está mirando es cómo queda
     // la pantalla después, no el diálogo, que lo dibuja el sistema.
     confirmar: async () => true,
+    // Y a la primera de las que tienen varias salidas, que es la de hacer algo.
+    preguntar: async () => 0,
     reveal: async ruta => { console.log('reveal', ruta); return true; },
     openPath: async () => '',
 
@@ -248,8 +250,14 @@ window.nt = {
     grabarPcm: () => {},
     grabarClaqueta: async () => estadoEnVivo(),
     grabarQuitarClaqueta: async () => estadoEnVivo(),
-    // Con dos tomas releyéndose, que es lo que el aviso tiene que contar.
-    grabarIdioma: async cual => ({ ok: true, releyendo: 2, estado: estadoEnVivo({ idioma: cual }) }),
+    // Releyendo las que la pregunta dijo que iba a releer, y ninguna cuando
+    // contestaron que solo de ahí en adelante: el aviso cuenta las dos cosas y
+    // en la maqueta tienen que cuadrar con el diálogo que se acaba de ver.
+    grabarIdioma: async (cual, opciones) => {
+        const estado = estadoEnVivo({ idioma: cual });
+        const cerradas = estado.tomas.filter(t => t.outMs != null && !t.descartada).length;
+        return { ok: true, releyendo: (opciones && opciones.releer) ? cerradas : 0, estado };
+    },
     grabarEditar: async c => {
         if (c && c.tipo === 'borde' && c.borde === 'in') return moverInEn(Number(c.paredMs));
         return cambiarEnVivo(c);

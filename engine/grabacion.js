@@ -483,7 +483,8 @@ function quitarClaqueta(n) {
 }
 
 /**
- * Cambia el idioma de la clase que se está grabando, y relee lo que ya pasó.
+ * Cambia el idioma de la clase que se está grabando, y si se lo piden relee lo
+ * que ya pasó.
  *
  * Hasta acá el idioma se fijaba al apretar «Iniciar» y no se podía mover: quien
  * arrancaba con el idioma equivocado se enteraba leyendo el transcript, y para
@@ -493,18 +494,26 @@ function quitarClaqueta(n) {
  * añadido?». Por eso el gesto existe y por eso no alcanza con cambiarlo de acá
  * en adelante.
  *
- * **Las tomas cerradas se vuelven a leer.** Se les quita la marca de releídas y
- * entran en la cola de siempre, que las atiende de a una (`relecturas.js`): su
- * texto es el que va al XML y es el que está traducido. La abierta no hace
- * falta tocarla —el ciclo ya la está oyendo con el idioma nuevo— y la
- * descartada tampoco, que no va a ninguna parte.
+ * **Las tomas cerradas se vuelven a leer solo con `releer`.** Quien pregunta es
+ * la ventana, porque la decisión es de quien graba: releer rehace el texto que
+ * va al XML, que es justo el que está traducido, pero también pisa lo que ya
+ * estaba leído. Con `releer` se les quita la marca de releídas y entran en la
+ * cola de siempre, que las atiende de a una (`relecturas.js`). Sin `releer` el
+ * idioma cambia igual y lo ya leído se queda como está.
+ *
+ * La toma abierta no hace falta tocarla en ningún caso —el ciclo ya la está
+ * oyendo con el idioma nuevo— y la descartada tampoco, que no va a ninguna
+ * parte. Una cerrada que todavía no se leyó se va a leer con el idioma nuevo
+ * aunque digan que no: ahí no hay trabajo hecho que cuidar.
  *
  * Lo que NO se toca son los bordes: una toma se abrió donde se abrió, y el
  * «3, 2, 1» que la abrió se oyó igual en los dos idiomas.
  *
+ * @param {string} cual Idioma nuevo: uno de los que la app oye, o `auto`.
+ * @param {{releer?:boolean}} [opciones] `releer` rehace las tomas ya cerradas.
  * @returns {{ok:boolean, releyendo?:number, error?:string, estado:object|null}}
  */
-function cambiarIdioma(cual) {
+function cambiarIdioma(cual, opciones) {
     if (!sesion || !sesion.viva || sesion.terminando) {
         return { ok: false, error: 'No hay una clase grabando.', estado: null };
     }
@@ -518,7 +527,9 @@ function cambiarIdioma(cual) {
     // a mano, la pasada siguiente lo va a volver a medir contra el nuevo.
     if (cual !== 'auto') sesion.estado.idiomaOido = null;
 
-    const paraReleer = sesion.estado.tomas.filter(t => t.outMs != null && !t.descartada);
+    const paraReleer = (opciones && opciones.releer)
+        ? sesion.estado.tomas.filter(t => t.outMs != null && !t.descartada)
+        : [];
     for (const toma of paraReleer) {
         delete toma.releida;
         relecturas.encolar(sesion, toma.id);

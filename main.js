@@ -346,6 +346,30 @@ ipcMain.handle('confirmar', async (event, { titulo, mensaje, ok } = {}) => {
     return result.response === 0;
 });
 
+/**
+ * El mismo diálogo pero con más de dos salidas, para cuando «cancelar» y «no»
+ * no son lo mismo: cambiar el idioma en medio de una clase se puede hacer
+ * releyendo lo de atrás o solo de ahí en adelante, y son tres respuestas.
+ *
+ * Devuelve el índice de la opción elegida. La última es siempre la de salir sin
+ * hacer nada, que es la que contesta si cierran el diálogo con Escape.
+ */
+ipcMain.handle('preguntar', async (event, { titulo, mensaje, opciones } = {}) => {
+    const botones = Array.isArray(opciones) && opciones.length > 1
+        ? opciones
+        : ['Continuar', 'Cancelar'];
+    const result = await dialog.showMessageBox(mainWindow, {
+        type: 'question',
+        buttons: botones,
+        defaultId: botones.length - 1,
+        cancelId: botones.length - 1,
+        title: titulo || 'Elegí',
+        message: titulo || 'Elegí',
+        detail: mensaje || ''
+    });
+    return result.response;
+});
+
 // El texto es de quien llama: el mismo diálogo sirve para elegir la carpeta del
 // curso y para cualquier otra cosa, y no dicen lo mismo.
 ipcMain.handle('pick-folder', async (event, opciones) => {

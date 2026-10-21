@@ -988,13 +988,22 @@ const volver = cual => historia.volver(cual, nuevo => { estado.sesion = nuevo; p
 /**
  * El idioma, cambiado a mitad de la grabación.
  *
- * Lo mismo que en la clase y por el mismo camino, con una diferencia: acá se
- * guarda en `semanal.idioma`, que es un ajuste aparte. Son la misma pregunta
- * hecha a dos personas distintas y cada una tiene su respuesta.
+ * Lo mismo que en la clase y por el mismo camino —también pregunta si releer lo
+ * ya cerrado—, con una diferencia: acá se guarda en `semanal.idioma`, que es un
+ * ajuste aparte. Son la misma pregunta hecha a dos personas distintas y cada
+ * una tiene su respuesta.
  */
 async function cambiarIdioma(cual) {
     if (!estado.sesion || cual === estado.sesion.idioma) return;
-    const r = await window.nt.grabarIdioma(cual);
+    const tomas = estado.sesion.tomas || [];
+    const cerradas = tomas.filter(t => t.outMs != null && !t.descartada).length;
+    let releer = false;
+    if (cerradas) {
+        const dicho = await idiomas.preguntarSiReleer(cerradas, cual);
+        if (!dicho) return;
+        releer = dicho === 'releer';
+    }
+    const r = await window.nt.grabarIdioma(cual, { releer });
     if (!r || !r.ok) {
         avisar(r && r.error ? r.error : 'No se pudo cambiar el idioma.', 'error');
         return;
@@ -1003,9 +1012,14 @@ async function cambiarIdioma(cual) {
     await window.nt.ajustesGuardar({ semanal: { idioma: cual } });
     pintar();
     const como = idiomas.nombre(cual).toLowerCase();
-    avisar(r.releyendo
-        ? `Sigue en ${como}. Releyendo ${r.releyendo} toma${r.releyendo === 1 ? '' : 's'} ya cerrada${r.releyendo === 1 ? '' : 's'}.`
-        : `Sigue en ${como}.`, 'ok');
+    if (r.releyendo) {
+        avisar(`Sigue en ${como}. Releyendo ${r.releyendo} toma`
+            + `${r.releyendo === 1 ? '' : 's'} ya cerrada${r.releyendo === 1 ? '' : 's'}.`, 'ok');
+    } else if (cerradas) {
+        avisar(`Sigue en ${como} de acá en adelante. Lo de antes queda como está.`, 'ok');
+    } else {
+        avisar(`Sigue en ${como}.`, 'ok');
+    }
 }
 
 /**

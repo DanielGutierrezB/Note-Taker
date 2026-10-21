@@ -5,8 +5,8 @@
  * Es el lado de la ventana de `engine/idiomas.js`, y está duplicado por lo
  * mismo que `tools/maqueta/datos.js`: el motor es CommonJS y esto son módulos
  * que carga el navegador, así que no se pueden importar entre sí. Lo que vive
- * acá es solo cómo se dicen; qué idiomas hay y cuál se le pide a Whisper lo
- * decide el motor, que es quien transcribe.
+ * acá es cómo se dicen y qué se pregunta al cambiarlos; qué idiomas hay y cuál
+ * se le pide a Whisper lo decide el motor, que es quien transcribe.
  *
  * **Que no se separen lo comprueba una prueba** (`tests/idioma-en-vivo.test.js`):
  * si alguien agrega un idioma de un lado y no del otro, la suite lo caza. Sin
@@ -57,4 +57,35 @@ export function opciones(puesto) {
         dice: nombre(l),
         pista: `La clase entera en ${nombre(l).toLowerCase()}.`
     }))).map(o => ({ ...o, marcada: o.valor === puesto }));
+}
+
+/**
+ * Si cambiar el idioma a mitad tiene que rehacer lo de atrás, se pregunta.
+ *
+ * Cambiar el idioma y releer son dos cosas, y la segunda pisa trabajo hecho: el
+ * texto de las tomas cerradas es el que va al Premiere. Quien se da cuenta a
+ * mitad de que el idioma está mal quiere arreglarlo sin miedo a romper lo que
+ * ya salió bien, así que se decide acá y no por nosotros. Son tres respuestas y
+ * no dos —releer, seguir de acá en adelante, o no tocar nada—, por eso es
+ * `preguntar` y no `confirmar`.
+ *
+ * Lo pregunta la ventana y no el motor porque el motor no tiene a quién
+ * preguntarle: `grabacion.cambiarIdioma` recibe ya la respuesta.
+ *
+ * @param {number} cuantas Tomas cerradas que se releerían.
+ * @param {string} a Idioma nuevo.
+ * @returns {Promise<'releer'|'desde-aca'|null>} `null` si no quieren cambiar nada.
+ */
+export async function preguntarSiReleer(cuantas, a) {
+    const tomas = cuantas === 1 ? '1 toma' : `${cuantas} tomas`;
+    const cual = await window.nt.preguntar({
+        titulo: `¿Releer lo que ya se grabó en ${nombre(a).toLowerCase()}?`,
+        mensaje: `Hay ${tomas} ya cerrada${cuantas === 1 ? '' : 's'}, y su texto es el que `
+            + 'va al Premiere. Releerlas lo rehace con el idioma nuevo y tarda un rato; '
+            + 'si no, el idioma vale de acá en adelante y lo de atrás se queda como está.',
+        opciones: [`Releer ${tomas}`, 'Solo de acá en adelante', 'Cancelar']
+    });
+    if (cual === 0) return 'releer';
+    if (cual === 1) return 'desde-aca';
+    return null;
 }

@@ -218,10 +218,14 @@ async function unaClase(semilla, conBasura, seCae) {
                 grabacion.editar({ tipo: 'comentar', toma: t.id, desdeMs: p.t, hastaMs: p.hasta || p.t + 200, texto: p.texto, comentario: 'nota' });
             }],
             ['borrar-comentario', async () => { const t = tomaAlAzar(); if (t && (t.comentarios || []).length) grabacion.editar({ tipo: 'borrar-comentario', toma: t.id, indice: r.entre(0, t.comentarios.length) }); }],
-            // Cambiar el idioma a mitad relee todas las tomas cerradas de una
-            // vez, así que es el gesto que más cola genera: es justo el que
-            // tiene que convivir con deshacer, dividir y las caídas.
-            ['idioma', async () => { grabacion.cambiarIdioma(r.de(['auto', 'es', 'en', 'pt'])); }],
+            // Cambiar el idioma a mitad y pedir releer manda todas las tomas
+            // cerradas a la cola de una vez, así que es el gesto que más cola
+            // genera: es justo el que tiene que convivir con deshacer, dividir
+            // y las caídas. Sin releer no encola nada y el idioma cambia igual,
+            // y las dos respuestas caen acá para que ninguna quede sin martillo.
+            ['idioma', async () => {
+                grabacion.cambiarIdioma(r.de(['auto', 'es', 'en', 'pt']), { releer: r.si(0.5) });
+            }],
             ['claqueta', async () => { grabacion.claqueta(); }],
             ['quitar-claqueta', async () => { const c = s.estado.claquetas || []; if (c.length) grabacion.quitarClaqueta(r.de(c).n); }],
             ['deshacer', async () => { grabacion.deshacer(); }],
@@ -249,7 +253,10 @@ async function unaClase(semilla, conBasura, seCae) {
                 grabacion.editar(r.de(malos));
                 if (r.si(0.3)) grabacion.cerrarToma(NaN);
                 if (r.si(0.3)) grabacion.abrirToma('ayer');
-                if (r.si(0.3)) grabacion.cambiarIdioma(r.de(['fr', '', null, '--help', 42]));
+                if (r.si(0.3)) {
+                    grabacion.cambiarIdioma(r.de(['fr', '', null, '--help', 42]),
+                        r.de([undefined, null, {}, { releer: 'si' }, 'releer']));
+                }
             }]);
         }
 

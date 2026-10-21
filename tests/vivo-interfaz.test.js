@@ -141,13 +141,40 @@ module.exports = function (t) {
         t.ok(/\.rotulo-barra\[data-avisa='si'\]/.test(css), 'con su estilo');
     });
 
-    t.test('cambiar el idioma relee, lo guarda para mañana y lo cuenta', () => {
+    t.test('cambiar el idioma lo guarda para mañana y cuenta lo que relee', () => {
         const fn = tramo(js, 'async function cambiarIdioma(cual) {', '\n}');
-        t.ok(/window\.nt\.grabarIdioma\(cual\)/.test(fn), 'se lo pide al motor');
+        t.ok(/window\.nt\.grabarIdioma\(cual, \{ releer \}\)/.test(fn), 'se lo pide al motor');
         t.ok(/app\.guardarAjustes\(\{ idioma: cual \}\)/.test(fn),
             'y queda para las clases siguientes: quien se equivocó hoy se equivoca mañana');
         t.ok(/r\.releyendo/.test(fn) && /Releyendo/.test(fn),
             'y se dice cuántas tomas se están releyendo, que tarda');
+    });
+
+    t.test('releer lo de atrás se pregunta, y solo cuando hay algo que releer', () => {
+        // Releer rehace el texto que va al Premiere, así que no se hace sin
+        // permiso: quien se da cuenta a mitad de que el idioma está mal tiene
+        // que poder arreglarlo sin miedo a romper lo que ya salió bien. Pero si
+        // no hay ninguna toma cerrada no hay nada que elegir, y preguntar ahí
+        // es un diálogo que estorba en medio de una clase.
+        const fn = tramo(js, 'async function cambiarIdioma(cual) {', '\n}');
+        t.ok(/t\.outMs != null && !t\.descartada/.test(fn),
+            'cuenta las cerradas con la misma regla que el motor');
+        t.ok(/if \(cerradas\) \{\s*\n\s*const dicho = await idiomas\.preguntarSiReleer\(cerradas, cual\);/
+            .test(fn), 'pregunta, y solo adentro del «si hay cerradas»');
+        t.ok(/if \(!dicho\) return;/.test(fn), 'cancelar no cambia ni el idioma');
+        t.ok(/releer = dicho === 'releer'/.test(fn), 'y la otra salida cambia sin releer');
+
+        const mod = leer('src', 'js', 'idiomas.js');
+        const preg = tramo(mod, 'export async function preguntarSiReleer(cuantas, a) {', '\n}');
+        t.ok(/window\.nt\.preguntar\(/.test(preg), 'por el diálogo del sistema, que bloquea');
+        t.eq((preg.match(/'Solo de acá en adelante', 'Cancelar'/g) || []).length, 1,
+            'con tres salidas: releer, seguir de acá, o no tocar nada');
+        t.ok(/return null;/.test(preg), 'y cerrarlo es no tocar nada');
+
+        // Y el puente existe: sin esto la ventana llama a algo que no está.
+        t.ok(/preguntar: payload => ipcRenderer\.invoke\('preguntar', payload\)/
+            .test(leer('preload.js')), 'el preload lo expone');
+        t.ok(/ipcMain\.handle\('preguntar'/.test(leer('main.js')), 'y el main lo atiende');
     });
 
     t.test('a 900 px los rótulos pasan a su forma corta, y nada se esconde', () => {

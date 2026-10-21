@@ -1961,17 +1961,25 @@ const volver = cual => historia.volver(cual, nuevo => { estado = nuevo; pintar()
 /**
  * El idioma de la clase, cambiado a mitad.
  *
- * Dos cosas pasan y las dos se dicen: la clase que sigue se oye en el idioma
- * nuevo, y las tomas que ya se cerraron se vuelven a leer —su texto es el que
- * va al XML y es el que está en el idioma viejo—. Lo segundo tarda, así que se
- * avisa cuántas son en vez de dejar la pantalla quieta.
+ * La clase que sigue se oye en el idioma nuevo, y eso pasa siempre. Lo de atrás
+ * es la pregunta: las tomas ya cerradas están transcritas en el idioma viejo y
+ * ese texto es el que va al XML, así que releerlas arregla el transcript pero
+ * también rehace lo que ya estaba. Se pregunta (`idiomas.preguntarSiReleer`) y
+ * si no hay nada cerrado no se pregunta nada, que no habría qué elegir.
  *
  * Y queda guardado en Ajustes para las clases siguientes: quien se equivocó de
  * idioma una vez se iba a volver a equivocar mañana.
  */
 async function cambiarIdioma(cual) {
     if (!estado || cual === estado.idioma) return;
-    const r = await window.nt.grabarIdioma(cual);
+    const cerradas = estado.tomas.filter(t => t.outMs != null && !t.descartada).length;
+    let releer = false;
+    if (cerradas) {
+        const dicho = await idiomas.preguntarSiReleer(cerradas, cual);
+        if (!dicho) return;
+        releer = dicho === 'releer';
+    }
+    const r = await window.nt.grabarIdioma(cual, { releer });
     if (!r || !r.ok) {
         avisar(r && r.error ? r.error : 'No se pudo cambiar el idioma.', 'error');
         return;
@@ -1980,9 +1988,14 @@ async function cambiarIdioma(cual) {
     await app.guardarAjustes({ idioma: cual });
     pintar();
     const como = idiomas.nombre(cual).toLowerCase();
-    avisar(r.releyendo
-        ? `La clase sigue en ${como}. Releyendo ${r.releyendo} toma${r.releyendo === 1 ? '' : 's'} ya cerrada${r.releyendo === 1 ? '' : 's'}.`
-        : `La clase sigue en ${como}.`, 'ok');
+    if (r.releyendo) {
+        avisar(`La clase sigue en ${como}. Releyendo ${r.releyendo} toma`
+            + `${r.releyendo === 1 ? '' : 's'} ya cerrada${r.releyendo === 1 ? '' : 's'}.`, 'ok');
+    } else if (cerradas) {
+        avisar(`La clase sigue en ${como} de acá en adelante. Lo de antes queda como está.`, 'ok');
+    } else {
+        avisar(`La clase sigue en ${como}.`, 'ok');
+    }
 }
 
 /* ─── Las teclas ──────────────────────────────────────────────────────── */

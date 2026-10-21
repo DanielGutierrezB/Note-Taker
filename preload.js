@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('nt', {
 
     pickFolder: opciones => ipcRenderer.invoke('pick-folder', opciones),
     confirmar: payload => ipcRenderer.invoke('confirmar', payload),
+    preguntar: payload => ipcRenderer.invoke('preguntar', payload),
     reveal: target => ipcRenderer.invoke('reveal', target),
     openPath: target => ipcRenderer.invoke('open-path', target),
 
@@ -53,7 +54,7 @@ contextBridge.exposeInMainWorld('nt', {
     // palmada que la pastilla está señalando aunque ya haya pasado su ventana.
     grabarClaqueta: palmadaMs => ipcRenderer.invoke('grabar-claqueta', palmadaMs),
     grabarQuitarClaqueta: n => ipcRenderer.invoke('grabar-quitar-claqueta', n),
-    grabarIdioma: cual => ipcRenderer.invoke('grabar-idioma', cual),
+    grabarIdioma: (cual, opciones) => ipcRenderer.invoke('grabar-idioma', cual, opciones),
     grabarEditar: cambio => ipcRenderer.invoke('grabar-editar', cambio),
     grabarEditarGrabada: (json, cambio) => ipcRenderer.invoke('grabar-editar-grabada', json, cambio),
     // Abrir una clase ya grabada en la misma pantalla de la clase, de solo

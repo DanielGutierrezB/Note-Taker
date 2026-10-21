@@ -101,7 +101,7 @@ module.exports = function (t) {
         t.eq(notasXml.sidecar(s.estado).idioma, 'en');
     }));
 
-    t.test('las tomas ya cerradas se vuelven a leer, que es donde está el daño',
+    t.test('con releer, las tomas ya cerradas se vuelven a leer, que es donde está el daño',
         conClase(async ({ st, s, falso, correr }) => {
             // Dos cerradas y una abierta, más una desactivada.
             grabacion.abrirToma(st.ceroMs + 1000);
@@ -115,13 +115,48 @@ module.exports = function (t) {
             await reposo();
             falso.relecturas.length = 0;
 
-            const r = grabacion.cambiarIdioma('en');
+            const r = grabacion.cambiarIdioma('en', { releer: true });
             t.eq(r.releyendo, 1, 'solo la cerrada que sigue contando');
             await reposo();
             t.deep(falso.relecturas.map(x => x.toma), [1], 'y es esa la que se releyó');
             t.deep(falso.relecturas.map(x => x.idioma), ['en'], 'con el idioma nuevo');
             // La abierta no: el ciclo ya la está oyendo en el idioma nuevo.
             t.eq(s.estado.tomas[2].outMs, null, 'la tercera sigue abierta');
+        }));
+
+    t.test('sin releer el idioma cambia igual y lo de atrás queda intacto',
+        conClase(async ({ st, s, falso, correr }) => {
+            // La respuesta de quien no se quiere arriesgar: de acá en adelante
+            // en el idioma nuevo, y lo que ya salió bien que no se toque.
+            grabacion.abrirToma(st.ceroMs + 1000);
+            await correr(2);
+            grabacion.cerrarToma(st.ceroMs + 3000);
+            await reposo();
+            falso.relecturas.length = 0;
+            const marca = { inMs: s.estado.tomas[0].inMs, outMs: s.estado.tomas[0].outMs, orillaMs: 12000 };
+            s.estado.tomas[0].releida = marca;
+
+            const r = grabacion.cambiarIdioma('en');
+            t.ok(r.ok, 'el cambio se hace igual');
+            t.eq(r.releyendo, 0, 'y no manda nada a releer');
+            t.eq(s.estado.idioma, 'en', 'la clase que sigue se oye en el nuevo');
+            await reposo();
+            t.deep(falso.relecturas, [], 'ni por la cola entró nada');
+            t.deep(s.estado.tomas[0].releida, marca, 'la toma cerrada quedó como estaba');
+        }));
+
+    t.test('y entre las dos respuestas solo cambia la cola, no el idioma',
+        conClase(async ({ st, s, correr }) => {
+            grabacion.abrirToma(st.ceroMs + 1000);
+            await correr(2);
+            grabacion.cerrarToma(st.ceroMs + 3000);
+            await reposo();
+            // Con `auto` puesto a mano, lo que se venía oyendo deja de valer en
+            // los dos casos: eso es del idioma, no de la relectura.
+            s.estado.idiomaOido = 'en';
+            grabacion.cambiarIdioma('pt');
+            t.eq(s.estado.idiomaOido, null, 'sin releer también se olvida lo oído');
+            t.eq(notasXml.sidecar(s.estado).idioma, 'pt', 'y el sidecar lo dice igual');
         }));
 
     t.test('la marca de releída se quita, o la cola solo le completaría la orilla',
@@ -133,7 +168,7 @@ module.exports = function (t) {
             // Como la deja una relectura que ya corrió: con esa marca puesta,
             // `pasada` la manda a completar la orilla en vez de leerla entera.
             s.estado.tomas[0].releida = { inMs: s.estado.tomas[0].inMs, outMs: s.estado.tomas[0].outMs, orillaMs: 12000 };
-            grabacion.cambiarIdioma('en');
+            grabacion.cambiarIdioma('en', { releer: true });
             t.eq(s.estado.tomas[0].releida, undefined);
         }));
 
@@ -403,10 +438,29 @@ module.exports = function (t) {
     t.test('el canal existe de punta a punta', () => {
         // Un canal que la ventana llama y el puente no declara es una promesa
         // rechazada en medio de una clase.
-        t.ok(/grabarIdioma: cual => ipcRenderer\.invoke\('grabar-idioma', cual\)/.test(leer('preload.js')));
-        t.ok(/ipcMain\.handle\('grabar-idioma'/.test(leer('ipc', 'grabar.js')));
-        t.ok(/grabarIdioma:/.test(leer('tools', 'maqueta', 'doble.js')),
+        t.ok(/grabarIdioma: \(cual, opciones\) => ipcRenderer\.invoke\('grabar-idioma', cual, opciones\)/
+            .test(leer('preload.js')), 'con la respuesta de releer, que viaja con el idioma');
+        t.ok(/ipcMain\.handle\('grabar-idioma', \(event, cual, opciones\) =>\s*grabacion\.cambiarIdioma\(cual, opciones\)\)/
+            .test(leer('ipc', 'grabar.js')), 'y el ipc la pasa, o la respuesta se perdería en el camino');
+        const doble = leer('tools', 'maqueta', 'doble.js');
+        t.ok(/grabarIdioma:/.test(doble),
             'y la maqueta lo tiene, o sus escenarios romperían al tocar el rótulo');
+        t.ok(/preguntar: async \(\) =>/.test(doble), 'con la pregunta contestada');
+        t.ok(/releyendo: \(opciones && opciones\.releer\) \? cerradas : 0/.test(doble),
+            'y contestando distinto según lo que se pidió, que es lo que se va a mirar');
+    });
+
+    t.test('las dos pantallas preguntan lo mismo antes de releer', () => {
+        // La clase y el vídeo semanal tienen cada una su `cambiarIdioma` —una
+        // guarda en `idioma` y la otra en `semanal.idioma`—, y es fácil
+        // arreglar una y dejar la otra releyendo sin preguntar.
+        for (const cual of ['pantalla-vivo.js', 'pantalla-semanal.js']) {
+            const fn = leer('src', 'js', cual);
+            const cuerpo = fn.slice(fn.indexOf('async function cambiarIdioma(cual) {'));
+            t.ok(/if \(cerradas\) \{\s*\n\s*const dicho = await idiomas\.preguntarSiReleer\(cerradas, cual\);/
+                .test(cuerpo), `${cual} pregunta, y solo si hay algo que releer`);
+            t.ok(/grabarIdioma\(cual, \{ releer \}\)/.test(cuerpo), `${cual} manda la respuesta`);
+        }
     });
 
     /* ─── Ajustes, más corto ─────────────────────────────────────────────
