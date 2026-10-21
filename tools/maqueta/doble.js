@@ -255,8 +255,7 @@ window.nt = {
     // en la maqueta tienen que cuadrar con el diálogo que se acaba de ver.
     grabarIdioma: async (cual, opciones) => {
         const estado = estadoEnVivo({ idioma: cual });
-        const cerradas = estado.tomas.filter(t => t.outMs != null && !t.descartada).length;
-        return { ok: true, releyendo: (opciones && opciones.releer) ? cerradas : 0, estado };
+        return { ok: true, releyendo: (opciones && opciones.releer === true) ? estado.porReleer : 0, estado };
     },
     grabarEditar: async c => {
         if (c && c.tipo === 'borde' && c.borde === 'in') return moverInEn(Number(c.paredMs));

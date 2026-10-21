@@ -416,15 +416,27 @@ function pintar() {
     if (menuPalabra.hay()) { pendiente = true; return; }
     pendiente = false;
     const momento = MOMENTOS[estado.paso];
-    const grabando = estado.paso === 'grabando' && estado.sesion;
-    $('#semanal-reloj').hidden = !grabando;
-    // Fuera de la tarjeta, que se rehace entera con cada estado: un rótulo
-    // adentro se cambiaba por otro en medio del clic (ver `rotuloBarra.pintar`).
-    rotuloBarra.pintar($('#semanal-rotulos'), grabando ? rotuloBarra.rotulo(idiomas.rotulo(
-        'semanal-idioma', estado.sesion.idioma || 'auto', estado.sesion.idiomaOido || null)) : '');
+    $('#semanal-reloj').hidden = estado.paso !== 'grabando';
+    pintarRotulo();
     $('#semanal-titulo').textContent = momento.titulo;
     $('#semanal-cuerpo').innerHTML = momento.tarjeta(estado);
     if (momento.luego) momento.luego();
+}
+
+/**
+ * El idioma, en la fila del título y al lado del reloj, solo grabando.
+ *
+ * Fuera de la tarjeta, que se rehace entera cuando cambian las tomas: un rótulo
+ * adentro se cambiaba por otro en medio del clic. Y se pone al día con el reloj,
+ * cada segundo, y no con la tarjeta: lo que oye cambia sin que cambie ninguna
+ * toma —es el modo donde alguien se pasa al inglés a mitad de frase—, y atado a
+ * la tarjeta el «Auto · EN» y el ámbar no aparecían hasta la toma siguiente.
+ */
+function pintarRotulo() {
+    const s = estado.paso === 'grabando' && estado.sesion;
+    rotuloBarra.pintar($('#semanal-rotulos'), s
+        ? [idiomas.rotulo('semanal-idioma', s.idioma || 'auto', s.idiomaOido || null)]
+        : []);
 }
 
 /**
@@ -999,14 +1011,18 @@ const volver = cual => historia.volver(cual, nuevo => { estado.sesion = nuevo; p
  * diferencia: acá se guarda en `semanal.idioma`, que es un ajuste aparte. Son
  * la misma pregunta hecha a dos personas distintas y cada una tiene su
  * respuesta.
+ *
+ * Por `app.guardarAjustes` y no por el puente directo: la copia de los ajustes
+ * es de la app, y guardando por fuera quedaba vieja. El vídeo siguiente de la
+ * misma tanda arrancaba en el idioma de antes, que es el que lee de ahí.
  */
 async function cambiarIdioma(cual) {
     if (!estado.sesion || cual === estado.sesion.idioma) return;
-    const r = await idiomas.cambiar(cual, estado.sesion.tomas);
+    const r = await idiomas.cambiar(cual, estado.sesion);
     if (!r) return;
     if (!r.ok) { avisar(r.error, 'error'); return; }
     estado.sesion = r.estado;
-    await window.nt.ajustesGuardar({ semanal: { idioma: cual } });
+    await app.guardarAjustes({ semanal: { idioma: cual } });
     pintar();
     avisar(r.aviso, 'ok');
 }
@@ -1267,6 +1283,7 @@ async function repintarReloj() {
     await ponerLaVista(resumen);
     estado.sesion = resumen;
     $('#semanal-reloj').textContent = fmt.relojCorto(resumen.segundos);
+    pintarRotulo();
     // El atraso del ciclo, igual que el reloj y por lo mismo: los segundos
     // suben solos y meterlos en la huella de abajo repintaría la tarjeta cada
     // segundo, que es justo lo que la huella evita. Lo que entra en la huella

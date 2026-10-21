@@ -561,15 +561,16 @@ function pintarBarra() {
  * algo que ya pasó. Se esconden y no se apagan, por lo mismo que el resto del
  * cromo de esta barra.
  *
- * Se piden en cada vuelta de la barra, pero solo se tocan si cambiaron: eso, y
- * no tocarlos con el menú abierto, lo decide `rotuloBarra.pintar`.
+ * Se piden en cada vuelta de la barra, y `rotuloBarra.pintar` los pone al día
+ * sin rehacer los botones.
  */
 function pintarRotulos() {
     const caja = $('#vivo-rotulos');
     if (!caja) return;
-    rotuloBarra.pintar(caja, esDeMirar() ? '' :
-        rotuloBarra.rotulo(idiomas.rotulo('vivo-idioma', estado.idioma, estado.idiomaOido || null))
-        + rotuloBarra.rotulo(rotuloDeCamara()));
+    rotuloBarra.pintar(caja, esDeMirar() ? [] : [
+        idiomas.rotulo('vivo-idioma', estado.idioma, estado.idiomaOido || null),
+        rotuloDeCamara()
+    ]);
 }
 
 /**
@@ -1952,7 +1953,7 @@ const volver = cual => historia.volver(cual, nuevo => { estado = nuevo; pintar()
  */
 async function cambiarIdioma(cual) {
     if (!estado || cual === estado.idioma) return;
-    const r = await idiomas.cambiar(cual, estado.tomas);
+    const r = await idiomas.cambiar(cual, estado);
     if (!r) return;
     if (!r.ok) { avisar(r.error, 'error'); return; }
     estado = r.estado;

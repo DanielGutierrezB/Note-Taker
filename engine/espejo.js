@@ -165,6 +165,11 @@ function resumen(sesion) {
         // Y lo que de verdad suena, para que la barra pueda decir «Auto · EN» y
         // avisar cuando el idioma puesto no es el que se está hablando.
         idiomaOido: e.idiomaOido || null,
+        // Las que se releerían si se cambia el idioma pidiendo releer: las que
+        // van al XML, que es donde está el texto en juego. Lo cuenta el motor
+        // porque es el que relee; la ventana lo pregunta con este número y no
+        // con una cuenta suya, que se podía separar de la de acá.
+        porReleer: vivo.tomasQueQuedan(e).length,
         // Todas, en orden y con su número. La primera es la de referencia: es
         // contra ella que el editor correlaciona los archivos de Premiere.
         claquetas: e.claquetas || [],

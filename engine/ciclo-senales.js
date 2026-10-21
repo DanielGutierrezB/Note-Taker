@@ -14,6 +14,7 @@
  */
 
 const registro = require('./registro');
+const idiomas = require('./idiomas');
 const vivo = require('./notas-vivo');
 const espejo = require('./espejo');
 const residente = require('./oido-residente');
@@ -82,32 +83,17 @@ function oirTramo(desdeMs, hastaMs, liviano, s) {
 }
 
 /**
- * Cuántas pasadas seguidas tiene que sonar otro idioma para creerle.
+ * Qué idioma se está oyendo, después de esta pasada (`idiomas.anotarOido`).
  *
- * Una sola no alcanza: en una clase en español, seis segundos leyendo en voz
- * alta un error de la consola suenan a inglés de verdad, y con eso el rótulo
- * de la barra se pondría a parpadear. Dos seguidas ya son doce segundos
- * hablando en el otro idioma, que es un cambio y no una cita.
- */
-const PASADAS_PARA_CAMBIAR = 2;
-
-/**
- * Qué idioma se está oyendo, con la histéresis de arriba.
- *
- * Vale igual con el idioma puesto a mano y con `auto`, y es a propósito: con
- * `auto` es lo que decide qué pedir la pasada siguiente, y con el idioma
- * puesto es lo que deja que la barra avise «lo tenés en español y suena a
- * inglés» —que es el error que arruina una clase, porque Whisper con el idioma
- * equivocado no se queda corto: TRADUCE (ver `engine/idiomas.js`)—.
+ * Lo que se cree va en el estado —lo ven la barra y el resumen—; el otro idioma
+ * que viene sonando sin confirmar va en la sesión, que no se escribe.
  */
 function anotarLoQueSuena(s, oido) {
-    if (!oido || oido === s.estado.idiomaOido) { s.oidoSeguido = 0; return; }
-    s.oidoSeguido = (s.oidoCandidato === oido ? s.oidoSeguido : 0) + 1;
-    s.oidoCandidato = oido;
-    if (s.oidoSeguido < PASADAS_PARA_CAMBIAR) return;
-    s.estado.idiomaOido = oido;
-    s.oidoSeguido = 0;
-    registro.anotar('main', 'senal.idioma-oido', { oido, pedido: s.estado.idioma });
+    const r = idiomas.anotarOido(s.estado.idiomaOido, s.rachaOido, oido);
+    s.rachaOido = r.racha;
+    if (r.oido === s.estado.idiomaOido) return;
+    s.estado.idiomaOido = r.oido;
+    registro.anotar('main', 'senal.idioma-oido', { oido: r.oido, pedido: s.estado.idioma });
 }
 
 /**

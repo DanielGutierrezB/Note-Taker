@@ -43,7 +43,13 @@ const FPS_POSIBLES = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
 const RECIENTES = 6;
 
 const DEFAULTS = {
-    version: 1,
+    /**
+     * La forma del archivo. Sube cuando algo guardado tiene que leerse distinto
+     * de como se escribió: en la 2, el `es` que era de fábrica pasa a `auto`
+     * (ver `idioma` en `sanear`). Es una sola marca para todas las migraciones,
+     * en vez de un campo por cada una que se queda en el archivo para siempre.
+     */
+    version: 2,
     /**
      * Dónde caen las sesiones. `carpeta` es la que está en uso —donde cae la
      * próxima— y `carpetas` todas las que se usaron alguna vez, la activa
@@ -64,7 +70,7 @@ const DEFAULTS = {
      * Ese precio ya no se paga. `whisper-server` contesta qué idioma detectó
      * en TODAS las pasadas, también cuando se le pide uno puesto, así que
      * «Automático» pregunta de verdad una sola vez y después oye el que viene
-     * oyendo —rápido— sin dejar de vigilar (ver `quePedir` en `oir.js`).
+     * oyendo —rápido— sin dejar de vigilar (ver `quePedir` en `idiomas.js`).
      *
      * Y lo que inclinó la balanza es lo que cuesta equivocarse. Con el idioma
      * equivocado Whisper no se queda corto: TRADUCE. Medido el 20/10 sobre dos
@@ -76,16 +82,6 @@ const DEFAULTS = {
      * El portugués se elige a mano.
      */
     idioma: 'auto',
-    /**
-     * Que el `es` de fábrica de antes ya se pasó a `auto`, una sola vez.
-     *
-     * Hace falta porque `guardar` escribe el archivo entero: todo el mundo
-     * tiene un `idioma: "es"` escrito, lo haya elegido o no, así que mirando el
-     * archivo no hay manera de distinguir «lo dejé como venía» de «lo puse yo».
-     * Con la marca se pasa una vez a `auto` y nunca más: quien después elija
-     * español lo conserva, porque para entonces la marca ya está puesta.
-     */
-    idiomaMigrado: false,
     /**
      * La entrada de audio elegida la última vez, por su nombre y no por su id.
      *
@@ -238,10 +234,15 @@ function sanear(crudo) {
         // —haría falta saber si lleva `ntsc`—, así que se cae al de fábrica en
         // vez de arrastrar un número que después nadie sabe de dónde salió.
         fps: FPS_POSIBLES.includes(Number(c.fps)) ? Number(c.fps) : DEFAULTS.fps,
-        // El `es` que todo el mundo tiene escrito sin haberlo elegido pasa a
-        // `auto` una vez, y la marca queda puesta (ver `idiomaMigrado`).
-        idioma: c.idiomaMigrado ? idiomaSano(c.idioma, DEFAULTS.idioma) : DEFAULTS.idioma,
-        idiomaMigrado: true,
+        // Hasta la versión 2 el de fábrica era `es`, y todo el mundo lo tiene
+        // escrito lo haya elegido o no, porque `guardar` escribe el archivo
+        // entero. Ese pasa a `auto` una vez. Lo que alguien eligió distinto se
+        // queda como está: un `pt` pasado a `auto` le traduciría la clase, que
+        // `auto` oye solo español o inglés. Y un `es` elegido después de la 2
+        // también se queda, porque para entonces el archivo dice 2.
+        idioma: (Number(c.version) || 1) < 2 && c.idioma === 'es'
+            ? 'auto'
+            : idiomaSano(c.idioma, DEFAULTS.idioma),
         dispositivo: (typeof c.dispositivo === 'string' && c.dispositivo) || null,
         // Lo que haya guardado que no sea un nombre —el `false` de la versión en
         // la que esto era un sí o un no— se lee como «ninguna».

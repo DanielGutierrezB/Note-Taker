@@ -218,6 +218,10 @@ function iniciar(params) {
         // (`engine/relecturas.js`).
         cola: [],
         rehaciendo: null,
+        // El otro idioma que viene sonando sin confirmar todavía, y cuántas
+        // pasadas seguidas lleva (`idiomas.anotarOido`). El confirmado es
+        // `estado.idiomaOido`, que se escribe; esto no.
+        rachaOido: null,
         // Lo que el editor le hizo a las tomas a mano, para poder volver
         // (`engine/deshacer.js`). Nace con la sesión y muere con ella: las fotos
         // son de las tomas de ESTA clase, y deshacer con el historial de la
@@ -509,8 +513,13 @@ function quitarClaqueta(n) {
  * Lo que NO se toca son los bordes: una toma se abrió donde se abrió, y el
  * «3, 2, 1» que la abrió se oyó igual en los dos idiomas.
  *
+ * Releer son las tomas que van al XML (`tomasQueQuedan`), las mismas que cuenta
+ * `porReleer` en el resumen, que es el número que la ventana pregunta.
+ *
  * @param {string} cual Idioma nuevo: uno de los que la app oye, o `auto`.
- * @param {{releer?:boolean}} [opciones] `releer` rehace las tomas ya cerradas.
+ * @param {{releer?:boolean}} [opciones] `releer: true` rehace las tomas ya
+ *   cerradas. Solo `true`: cualquier otra cosa es no releer, que es lo que no
+ *   pisa nada.
  * @returns {{ok:boolean, releyendo?:number, error?:string, estado:object|null}}
  */
 function cambiarIdioma(cual, opciones) {
@@ -524,12 +533,15 @@ function cambiarIdioma(cual, opciones) {
 
     sesion.estado.idioma = cual;
     // Lo que se venía oyendo deja de valer como decisión: con el idioma puesto
-    // a mano, la pasada siguiente lo va a volver a medir contra el nuevo.
-    if (cual !== 'auto') sesion.estado.idiomaOido = null;
+    // a mano, la pasada siguiente lo va a volver a medir contra el nuevo. Y la
+    // racha que venía contando se va con él: si no, dos pasadas en inglés de
+    // antes del cambio podían confirmar la primera de después.
+    if (cual !== 'auto') {
+        sesion.estado.idiomaOido = null;
+        sesion.rachaOido = null;
+    }
 
-    const paraReleer = (opciones && opciones.releer)
-        ? sesion.estado.tomas.filter(t => t.outMs != null && !t.descartada)
-        : [];
+    const paraReleer = (opciones && opciones.releer === true) ? vivo.tomasQueQuedan(sesion.estado) : [];
     for (const toma of paraReleer) {
         delete toma.releida;
         relecturas.encolar(sesion, toma.id);

@@ -37,11 +37,8 @@ let abierto = null;
 /** El rótulo del que cuelga el menú, el que esté en la página ahora. */
 const suRotulo = () => (abierto ? document.getElementById(abierto.id) : null);
 
-/** Lo último que se dibujó en cada caja de rótulos. */
-const dibujado = new WeakMap();
-
 /**
- * Pone los rótulos en su caja, sin tocarla si no cambió nada.
+ * Pone los rótulos en su caja y los mantiene al día EN SU LUGAR.
  *
  * Las barras se repintan solas —la de la clase cada 150 ms, para que el
  * timecode no se quede quieto— y rehacer el botón en cada vuelta lo cambiaba
@@ -49,22 +46,42 @@ const dibujado = new WeakMap();
  * apretó y se soltó sobre el MISMO elemento, así que un clic de persona, que
  * tarda lo mismo que una vuelta, se perdía casi siempre: medido, 0 de 15.
  *
- * Con el menú abierto tampoco se toca aunque haya cambiado: el rótulo se ve
- * apretado mientras su menú está abierto, y redibujarlo lo soltaría. Lo que
- * cambió entra en el primer repintado después de cerrar.
+ * Así que el botón se hace una vez y después solo se le cambian el texto y los
+ * atributos: cuando «Auto · ES» pasa a «Auto · EN» es el mismo botón diciendo
+ * otra cosa, y un clic que caiga justo en ese momento agarra igual. Se rehacen
+ * solo cuando cambia CUÁLES hay —una clase que termina se queda sin ellos—, y
+ * entonces el menú que colgaba de uno se cierra, que ya no tiene de dónde.
  *
  * @param {HTMLElement} caja donde van los rótulos
- * @param {string} html lo que arma `rotulo`, o '' para vaciarla
+ * @param {Array<object>} rotulos lo que recibe `rotulo`, en orden; [] la vacía
  */
-export function pintar(caja, html) {
-    if (dibujado.get(caja) === html) return;
-    if (caja.contains(suRotulo())) return;
-    dibujado.set(caja, html);
-    caja.innerHTML = html;
+export function pintar(caja, rotulos) {
+    const cuales = rotulos.map(r => r.id).join(' ');
+    if (caja.dataset.rotulos !== cuales) {
+        if (caja.contains(suRotulo())) cerrar();
+        caja.dataset.rotulos = cuales;
+        caja.innerHTML = rotulos.map(rotulo).join('');
+        return;
+    }
+    for (const r of rotulos) ponerAlDia(document.getElementById(r.id), r);
+}
+
+/** Lo que cambia de un rótulo, puesto en el botón que ya está. */
+function ponerAlDia(boton, r) {
+    boton.setAttribute('aria-label', `${r.que}: ${r.dice}`);
+    boton.title = r.pista || '';
+    if (r.avisa) boton.setAttribute('data-avisa', 'si');
+    else boton.removeAttribute('data-avisa');
+    ponerTexto(boton.querySelector('.rotulo-ancho'), r.dice);
+    ponerTexto(boton.querySelector('.rotulo-angosto'), r.corto || r.dice);
+}
+
+function ponerTexto(nodo, texto) {
+    if (nodo.textContent !== texto) nodo.textContent = texto;
 }
 
 /**
- * El rótulo, para meterlo en el HTML de una barra.
+ * El HTML de un rótulo, la primera vez que entra en su caja.
  *
  * @param {object} r { id, hace, que, icono, dice, corto, pista, avisa }
  *   `que` es de qué es el rótulo —«Idioma», «Cámara»— y `dice` cómo está. Sin
@@ -82,7 +99,7 @@ export function pintar(caja, html) {
  * El nombre accesible lo pone `aria-label` y no el texto de adentro: con la
  * palabra escondida a ventana chica, lo que se lee en voz alta sería «ES».
  */
-export function rotulo(r) {
+function rotulo(r) {
     return `<button class="rotulo-barra" type="button" id="${esc(r.id)}"
             data-hace="${esc(r.hace)}" aria-haspopup="menu" aria-expanded="false"
             ${r.avisa ? 'data-avisa="si"' : ''}
@@ -178,10 +195,24 @@ export function conectar() {
         if (e.target.closest('#menu-barra') || (rotulo && rotulo.contains(e.target))) return;
         cerrar();
     });
+    // Con el menú abierto el teclado es del menú, y se escucha en la captura
+    // para llegar antes que cualquier pantalla: en el vídeo semanal, una letra
+    // de vista con el menú abierto le cambiaba la vista a una toma que no se
+    // estaba mirando. Escape lo cierra —antes que los telones— y las flechas
+    // van de una opción a otra. Enter y espacio siguen hasta el botón con foco,
+    // que es lo que lo aprieta, pero la pantalla no se entera; el Tab es del
+    // navegador.
     document.addEventListener('keydown', e => {
-        if (!abierto || e.key !== 'Escape') return;
-        // Antes que los telones: con un menú abierto, Escape cierra el menú.
+        if (!abierto || e.key === 'Tab') return;
         e.stopPropagation();
-        cerrar();
+        if (e.key === 'Escape') { cerrar(); return; }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            const filas = [...menu.querySelectorAll('.menu-fila')];
+            const i = filas.indexOf(document.activeElement);
+            const paso = e.key === 'ArrowDown' ? 1 : -1;
+            const cual = filas[(Math.max(0, i) + paso + filas.length) % filas.length];
+            if (cual) cual.focus({ preventScroll: true });
+        }
     }, true);
 }

@@ -84,7 +84,7 @@ module.exports = function (t) {
         // «3, 2, 1» ni transcript. Y la lista es corta a propósito: un idioma
         // de más es una manera nueva de que una clase salga traducida
         // (ver `engine/idiomas.js`).
-        const puesto = i => ajustes.sanear({ idioma: i, idiomaMigrado: true }).idioma;
+        const puesto = i => ajustes.sanear({ version: 2, idioma: i }).idioma;
         t.eq(puesto('auto'), 'auto');
         t.eq(puesto('en'), 'en');
         t.eq(puesto('pt'), 'pt');
@@ -97,13 +97,30 @@ module.exports = function (t) {
     t.test('el «es» de fábrica de antes pasa a «auto» una vez, y después se respeta lo elegido', () => {
         // `guardar` escribe el archivo entero, así que todo el mundo tiene un
         // `idioma: "es"` escrito lo haya elegido o no: mirando el archivo no se
-        // distingue «lo dejé como venía» de «lo puse yo». Por eso la marca.
-        const viejo = ajustes.sanear({ idioma: 'es' });
+        // distingue «lo dejé como venía» de «lo puse yo». Por eso la versión.
+        const viejo = ajustes.sanear({ version: 1, idioma: 'es' });
         t.eq(viejo.idioma, 'auto', 'el de antes se pasa a automático');
-        t.eq(viejo.idiomaMigrado, true, 'y queda dicho que ya se pasó');
+        t.eq(viejo.version, 2, 'y el archivo queda en la versión que ya lo pasó');
         t.eq(ajustes.sanear(viejo).idioma, 'auto', 'y no se vuelve a pasar');
-        // Quien después elija español lo conserva: la marca ya está puesta.
+        // Quien después elija español lo conserva: el archivo ya dice 2.
         t.eq(ajustes.sanear({ ...viejo, idioma: 'es' }).idioma, 'es');
+        t.eq(ajustes.sanear({ idioma: 'es' }).idioma, 'auto', 'sin versión escrita es un archivo de antes');
+    });
+
+    t.test('lo que alguien eligió distinto de «es» antes de la migración se queda', () => {
+        // Antes había tres idiomas y el de fábrica era español: un «en» o un
+        // «pt» en el archivo los eligió alguien. Pasar un «pt» a automático le
+        // traduce la clase, porque automático oye español o inglés y nada más.
+        t.eq(ajustes.sanear({ version: 1, idioma: 'pt' }).idioma, 'pt');
+        t.eq(ajustes.sanear({ version: 1, idioma: 'en' }).idioma, 'en');
+        t.eq(ajustes.sanear({ version: 1, idioma: 'auto' }).idioma, 'auto');
+    });
+
+    t.test('la marca de migración de antes ya no se escribe', () => {
+        // Un campo por migración se queda en el archivo para siempre; la
+        // versión es una sola marca para todas.
+        t.ok(!('idiomaMigrado' in ajustes.sanear({ version: 1, idioma: 'es', idiomaMigrado: true })));
+        t.ok(!('idiomaMigrado' in ajustes.DEFAULTS));
     });
 
     t.group('ajustes · el parche de cada pantalla');
@@ -158,8 +175,8 @@ module.exports = function (t) {
     });
 
     t.test('un idioma que la app no oye cae al de fábrica', () => {
-        t.eq(ajustes.sanear({ idioma: 'castellano', idiomaMigrado: true }).idioma, 'auto');
-        t.eq(ajustes.sanear({ idioma: 'pt', idiomaMigrado: true }).idioma, 'pt');
+        t.eq(ajustes.sanear({ version: 2, idioma: 'castellano' }).idioma, 'auto');
+        t.eq(ajustes.sanear({ version: 2, idioma: 'pt' }).idioma, 'pt');
     });
 
     t.test('la carpeta activa va primera en la lista', () => {

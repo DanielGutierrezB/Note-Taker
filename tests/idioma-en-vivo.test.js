@@ -29,6 +29,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const grabacion = require('../engine/grabacion');
 const ajustes = require('../engine/ajustes');
@@ -59,7 +60,7 @@ function conClase(fn, opciones) {
         const antes = { tramo: oirToma.tramo, leer: oirToma.leer };
         const falso = { pedidos: [], relecturas: [], contesta: 'es', palabras: [] };
         oirToma.tramo = async (_a, desde, hasta, liviano, idioma, oyendo) => {
-            falso.pedidos.push(oir.quePedir({ idioma, oyendo, liviano }));
+            falso.pedidos.push(idiomas.quePedir({ idioma, oyendo, liviano }));
             return { palabras: falso.palabras.filter(w => w.t >= desde && w.t <= hasta), oido: falso.contesta };
         };
         oirToma.leer = async (_a, toma, o) => {
@@ -86,6 +87,48 @@ function conClase(fn, opciones) {
             fs.rmSync(dir, { recursive: true, force: true });
         }
     };
+}
+
+/**
+ * `oir.escuchar` de verdad, con un `whisper-server` de mentira delante.
+ *
+ * `contesta(idioma, n)` decide qué devuelve la pasada número `n` pedida en
+ * `idioma`. Devuelve lo que se le pidió al servidor, en orden, y lo que contestó
+ * `escuchar`. Todo lo que toca disco o audio se tapa: lo que se mira es QUÉ se
+ * le pide a Whisper, que es lo que hace o deshace una clase traducida.
+ */
+async function conServidorFalso(contesta, params) {
+    const antes = {
+        recorte: captura.recorte, tirar: captura.tirar,
+        niveles: sonido.niveles, algoSuena: sonido.algoSuena, conSonido: sonido.conSonido,
+        sinCola: sonido.sinColaInventada, huecos: sonido.huecosConVoz,
+        listo: residente.listo, transcribir: residente.transcribir
+    };
+    const pedidos = [];
+    captura.recorte = () => ({ archivo: '/no/existe.wav', desdeSec: 0 });
+    captura.tirar = () => {};
+    sonido.niveles = () => ({ db: [0], hopSec: 0.02 });
+    sonido.algoSuena = () => true;
+    sonido.conSonido = words => ({ words, mudas: 0, quitadas: [] });
+    sonido.sinColaInventada = words => ({ words, inventadas: [] });
+    sonido.huecosConVoz = () => [];
+    residente.listo = () => true;
+    residente.transcribir = async (_a, idioma) => {
+        pedidos.push(idioma);
+        return { words: [], model: 'x', ...contesta(idioma, pedidos.length) };
+    };
+    try {
+        const r = await oir.escuchar({
+            sesion: { desdeMs: 0, archivo: '/no/existe.wav' },
+            desdeMs: 0, hastaMs: 6000, liviano: true, ...params
+        });
+        return { pedidos, r };
+    } finally {
+        Object.assign(captura, { recorte: antes.recorte, tirar: antes.tirar });
+        Object.assign(sonido, { niveles: antes.niveles, algoSuena: antes.algoSuena,
+            conSonido: antes.conSonido, sinColaInventada: antes.sinCola, huecosConVoz: antes.huecos });
+        Object.assign(residente, { listo: antes.listo, transcribir: antes.transcribir });
+    }
 }
 
 module.exports = function (t) {
@@ -144,6 +187,34 @@ module.exports = function (t) {
             t.deep(falso.relecturas, [], 'ni por la cola entró nada');
             t.deep(s.estado.tomas[0].releida, marca, 'la toma cerrada quedó como estaba');
         }));
+
+    t.test('el resumen dice cuántas se releerían, y son las que se releen',
+        conClase(async ({ st, s, correr }) => {
+            // La ventana pregunta «¿Releer N tomas?» con este número: si lo
+            // contara ella y el motor releyera otras, el diálogo mentiría.
+            grabacion.abrirToma(st.ceroMs + 1000);
+            await correr(2);
+            grabacion.cerrarToma(st.ceroMs + 3000);
+            grabacion.abrirToma(st.ceroMs + 4000);
+            await correr(2);
+            grabacion.cerrarToma(st.ceroMs + 6000);
+            grabacion.editar({ tipo: 'descartar', toma: 2, descartada: true });
+            grabacion.abrirToma(st.ceroMs + 7000);
+            await reposo();
+            const dice = espejo.resumen(s).porReleer;
+            t.eq(dice, 1, 'ni la abierta ni la descartada');
+            t.eq(grabacion.cambiarIdioma('en', { releer: true }).releyendo, dice, 'y relee esas');
+        }));
+
+    t.test('releer tiene que ser «true», no algo que se le parezca', conClase(async ({ st, correr }) => {
+        // Lo que no sea un sí explícito es no releer, que es lo que no pisa
+        // nada: un `"si"` que llegue por el puente no rehace media clase.
+        grabacion.abrirToma(st.ceroMs + 1000);
+        await correr(2);
+        grabacion.cerrarToma(st.ceroMs + 3000);
+        t.eq(grabacion.cambiarIdioma('en', { releer: 'si' }).releyendo, 0);
+        t.eq(grabacion.cambiarIdioma('es', { releer: 1 }).releyendo, 0);
+    }));
 
     t.test('y entre las dos respuestas solo cambia la cola, no el idioma',
         conClase(async ({ st, s, correr }) => {
@@ -224,20 +295,20 @@ module.exports = function (t) {
     t.group('el idioma · qué se le pide a Whisper');
 
     t.test('con el idioma puesto se pide ese, siempre', () => {
-        t.eq(oir.quePedir({ idioma: 'es', liviano: true }), 'es');
-        t.eq(oir.quePedir({ idioma: 'pt', liviano: true, oyendo: 'en' }), 'pt',
+        t.eq(idiomas.quePedir({ idioma: 'es', liviano: true }), 'es');
+        t.eq(idiomas.quePedir({ idioma: 'pt', liviano: true, oyendo: 'en' }), 'pt',
             'lo que suene no cambia lo que se pidió: alguien lo eligió');
-        t.eq(oir.quePedir({ idioma: 'en', liviano: false }), 'en');
+        t.eq(idiomas.quePedir({ idioma: 'en', liviano: false }), 'en');
     });
 
     t.test('con «auto», el ciclo pregunta una vez y después oye el que viene oyendo', () => {
         // Es lo que hace que automático no cueste 400 ms por pasada: medido el
         // 20/10, 1214 ms pidiendo «auto» contra 871 ms pidiendo el idioma.
-        t.eq(oir.quePedir({ idioma: 'auto', liviano: true }), 'auto',
+        t.eq(idiomas.quePedir({ idioma: 'auto', liviano: true }), 'auto',
             'la primera, cuando no sabe nada');
-        t.eq(oir.quePedir({ idioma: 'auto', liviano: true, oyendo: 'en' }), 'en',
+        t.eq(idiomas.quePedir({ idioma: 'auto', liviano: true, oyendo: 'en' }), 'en',
             'y después, el que suena');
-        t.eq(oir.quePedir({ idioma: 'auto', liviano: true, oyendo: 'pt' }), 'auto',
+        t.eq(idiomas.quePedir({ idioma: 'auto', liviano: true, oyendo: 'pt' }), 'auto',
             'un idioma que «auto» no elige no sirve de atajo');
     });
 
@@ -245,7 +316,7 @@ module.exports = function (t) {
         // Es una por toma, con la toma entera delante —donde detectar acierta
         // mucho más que en seis segundos— y los 400 ms no se los lleva nadie
         // que esté mirando.
-        t.eq(oir.quePedir({ idioma: 'auto', liviano: false, oyendo: 'es' }), 'auto');
+        t.eq(idiomas.quePedir({ idioma: 'auto', liviano: false, oyendo: 'es' }), 'auto');
     });
 
     t.group('el idioma · «Automático» elige entre español e inglés');
@@ -260,80 +331,59 @@ module.exports = function (t) {
         t.eq(idiomas.entreEsEIn('pt', null, null), 'es', 'y sin nada, el español');
     });
 
-    t.test('con un portugués detectado, la ventana se vuelve a leer en español',
-        async () => {
-            // Es lo que impide que una clase salga traducida, así que se prueba
-            // de verdad y no por la forma del código: se le pone delante un
-            // servidor que contesta «portuguese» y se mira QUÉ pidió después.
-            const antes = {
-                recorte: captura.recorte, tirar: captura.tirar,
-                niveles: sonido.niveles, algoSuena: sonido.algoSuena, conSonido: sonido.conSonido,
-                sinCola: sonido.sinColaInventada, huecos: sonido.huecosConVoz,
-                listo: residente.listo, transcribir: residente.transcribir
-            };
-            const pedidos = [];
-            captura.recorte = () => ({ archivo: '/no/existe.wav', desdeSec: 0 });
-            captura.tirar = () => {};
-            sonido.niveles = () => ({ db: [0], hopSec: 0.02 });
-            sonido.algoSuena = () => true;
-            sonido.conSonido = words => ({ words, mudas: 0, quitadas: [] });
-            sonido.sinColaInventada = words => ({ words, inventadas: [] });
-            sonido.huecosConVoz = () => [];
-            residente.listo = () => true;
-            residente.transcribir = async (_a, idioma) => {
-                pedidos.push(idioma);
-                return pedidos.length === 1
-                    // La primera dice portugués, y con el español muy por encima:
-                    // es un español con términos técnicos, no una clase en portugués.
-                    ? { words: [], model: 'x', oido: 'pt', pesos: { pt: 0.5, es: 0.9, en: 0.1 } }
-                    : { words: [], model: 'x', oido: 'es', pesos: null };
-            };
-            try {
-                const r = await oir.escuchar({
-                    sesion: { desdeMs: 0, archivo: '/no/existe.wav' },
-                    desdeMs: 0, hastaMs: 6000, liviano: true, idioma: 'auto'
-                });
-                t.deep(pedidos, ['auto', 'es'],
-                    'preguntó, no le gustó la respuesta, y volvió a leer en español');
-                t.eq(r.oido, 'es', 'y eso es lo que informa haber oído');
-            } finally { Object.assign(captura, { recorte: antes.recorte, tirar: antes.tirar });
-                Object.assign(sonido, { niveles: antes.niveles, algoSuena: antes.algoSuena,
-                    conSonido: antes.conSonido, sinColaInventada: antes.sinCola, huecosConVoz: antes.huecos });
-                Object.assign(residente, { listo: antes.listo, transcribir: antes.transcribir }); }
-        });
+    t.test('con un portugués detectado, la ventana se vuelve a leer en español', async () => {
+        // Es lo que impide que una clase salga traducida, así que se prueba de
+        // verdad y no por la forma del código: se le pone delante un servidor
+        // que contesta «portuguese» y se mira QUÉ pidió después.
+        const { pedidos, r } = await conServidorFalso((idioma, n) => (n === 1
+            // La primera dice portugués, y con el español muy por encima: es un
+            // español con términos técnicos, no una clase en portugués.
+            ? { oido: 'pt', pesos: { pt: 0.5, es: 0.9, en: 0.1 } }
+            : { oido: 'es', pesos: null }), { idioma: 'auto' });
+        t.deep(pedidos, ['auto', 'es'], 'preguntó, no le gustó la respuesta, y volvió a leer en español');
+        t.eq(r.oido, 'es', 'y eso es lo que informa haber oído');
+    });
 
-    t.test('y un español detectado no se vuelve a leer: sería pagar dos pasadas por nada',
-        async () => {
-            const antes = {
-                recorte: captura.recorte, tirar: captura.tirar,
-                niveles: sonido.niveles, algoSuena: sonido.algoSuena, conSonido: sonido.conSonido,
-                sinCola: sonido.sinColaInventada, huecos: sonido.huecosConVoz,
-                listo: residente.listo, transcribir: residente.transcribir
-            };
-            const pedidos = [];
-            captura.recorte = () => ({ archivo: '/no/existe.wav', desdeSec: 0 });
-            captura.tirar = () => {};
-            sonido.niveles = () => ({ db: [0], hopSec: 0.02 });
-            sonido.algoSuena = () => true;
-            sonido.conSonido = words => ({ words, mudas: 0, quitadas: [] });
-            sonido.sinColaInventada = words => ({ words, inventadas: [] });
-            sonido.huecosConVoz = () => [];
-            residente.listo = () => true;
-            residente.transcribir = async (_a, idioma) => {
-                pedidos.push(idioma);
-                return { words: [], model: 'x', oido: 'en', pesos: null };
-            };
-            try {
-                await oir.escuchar({
-                    sesion: { desdeMs: 0, archivo: '/no/existe.wav' },
-                    desdeMs: 0, hastaMs: 6000, liviano: true, idioma: 'auto'
-                });
-                t.deep(pedidos, ['auto'], 'una sola pasada');
-            } finally { Object.assign(captura, { recorte: antes.recorte, tirar: antes.tirar });
-                Object.assign(sonido, { niveles: antes.niveles, algoSuena: antes.algoSuena,
-                    conSonido: antes.conSonido, sinColaInventada: antes.sinCola, huecosConVoz: antes.huecos });
-                Object.assign(residente, { listo: antes.listo, transcribir: antes.transcribir }); }
-        });
+    t.test('y un español detectado no se vuelve a leer: sería pagar dos pasadas por nada', async () => {
+        const { pedidos } = await conServidorFalso(() => ({ oido: 'en', pesos: null }), { idioma: 'auto' });
+        t.deep(pedidos, ['auto'], 'una sola pasada');
+    });
+
+    t.test('con el idioma ya asentado, un portugués no se relee en el mismo que se pidió', async () => {
+        // Asentado en español, la pasada pide «es» y el servidor igual contesta
+        // qué detectó. Si detecta portugués y lo más parecido es el español,
+        // releer en «es» lo que se acaba de leer en «es» eran 870 ms por el
+        // mismo texto, en cada pasada donde el español sonara a portugués.
+        const { pedidos, r } = await conServidorFalso(
+            () => ({ oido: 'pt', pesos: { pt: 0.6, es: 0.8, en: 0.1 } }),
+            { idioma: 'auto', oyendo: 'es' });
+        t.deep(pedidos, ['es'], 'una sola pasada');
+        t.eq(r.oido, 'es', 'y lo oído es español, no portugués');
+    });
+
+    t.test('asentado en español, un portugués que se parece al inglés sí se relee en inglés', async () => {
+        const { pedidos, r } = await conServidorFalso((idioma, n) => (n === 1
+            ? { oido: 'pt', pesos: { pt: 0.6, es: 0.1, en: 0.7 } }
+            : { oido: 'en', pesos: null }), { idioma: 'auto', oyendo: 'es' });
+        t.deep(pedidos, ['es', 'en']);
+        t.eq(r.oido, 'en');
+    });
+
+    t.test('qué se oyó y con qué releer, como regla suelta', () => {
+        const auto = (pedido, oido, pesos) => idiomas.enAutomatico({ idioma: 'auto', pedido, oido, pesos, oyendo: null });
+        t.deep(auto('auto', 'en', null), { oido: 'en', releerCon: null }, 'lo que ya es de los dos, tal cual');
+        t.deep(auto('auto', 'pt', { es: 0.9 }), { oido: 'es', releerCon: 'es' });
+        t.deep(auto('es', 'pt', { es: 0.9 }), { oido: 'es', releerCon: null }, 'ya se pidió español');
+        t.deep(auto('es', null, null), { oido: null, releerCon: null }, 'sin detección no hay nada que hacer');
+        // Llevado a español o inglés AUNQUE la segunda lectura falle: con un
+        // «pt» la barra diría «Auto · PT», y la pasada siguiente volvería a
+        // pedir `auto` para siempre.
+        t.eq(auto('auto', 'pt', null).oido, 'es', 'nunca queda un portugués en automático');
+        t.deep(idiomas.enAutomatico({ idioma: 'pt', pedido: 'pt', oido: 'pt', pesos: null }),
+            { oido: 'pt', releerCon: null }, 'puesto a mano, lo que se eligió no se discute');
+        t.deep(idiomas.enAutomatico({ idioma: 'es', pedido: 'es', oido: 'en', pesos: null }),
+            { oido: 'en', releerCon: null }, 'y lo oído se informa tal cual, que es lo que pinta el ámbar');
+    });
 
     t.test('los nombres de whisper-server se entienden', () => {
         // El servidor contesta «spanish» y `whisper-cli` contesta «es»: con la
@@ -389,10 +439,49 @@ module.exports = function (t) {
             'o la barra avisaría de una discrepancia medida contra el idioma viejo');
     }));
 
-    t.test('la histéresis son dos pasadas, dicho en un solo sitio', () => {
-        const fn = leer('engine', 'ciclo-senales.js');
-        t.ok(/const PASADAS_PARA_CAMBIAR = 2;/.test(fn));
-        t.ok(/s\.oidoSeguido < PASADAS_PARA_CAMBIAR/.test(fn), 'y es lo que decide');
+    t.test('poner el idioma a mano también olvida la racha que venía contando', conClase(async ({ s, falso, correr }) => {
+        // Una pasada en inglés antes del cambio y una después no son dos
+        // seguidas: entre medio alguien dijo qué idioma es.
+        falso.contesta = 'en';
+        await correr(1);
+        grabacion.cambiarIdioma('es');
+        await correr(1);
+        t.eq(s.estado.idiomaOido, null, 'una sola después del cambio no alcanza');
+        await correr(1);
+        t.eq(s.estado.idiomaOido, 'en', 'y con dos después, sí');
+    }));
+
+    t.group('el idioma · la regla de la histéresis');
+
+    const anotar = pasadas => pasadas.reduce(
+        (a, oido) => idiomas.anotarOido(a.oido, a.racha, oido), { oido: 'es', racha: null }).oido;
+
+    t.test('dos pasadas seguidas en otro idioma lo cambian, una no', () => {
+        t.eq(idiomas.PASADAS_PARA_CAMBIAR, 2);
+        t.eq(anotar(['en']), 'es', 'pudo ser una cita');
+        t.eq(anotar(['en', 'en']), 'en');
+    });
+
+    t.test('un silencio en el medio no corta la cuenta', () => {
+        // Una pasada sin nada que oír no dice que se volvió al español: dice
+        // que nadie habló. Contándola como otra cosa, una pausa entre dos
+        // ventanas en inglés hacía empezar de cero.
+        t.eq(anotar(['en', null, 'en']), 'en');
+        t.eq(anotar(['en', null, null, 'en']), 'en');
+    });
+
+    t.test('volver al idioma de siempre sí la corta', () => {
+        t.eq(anotar(['en', 'es', 'en']), 'es');
+        t.eq(anotar(['en', 'pt', 'en']), 'es', 'y otro idioma distinto, también');
+    });
+
+    t.test('sin nada oído todavía también pide dos', () => {
+        // Al arrancar es cuando más fácil es que la primera ventana sea una
+        // cita, y con el idioma puesto a mano el ámbar parpadearía de entrada.
+        const desdeNada = pasadas => pasadas.reduce(
+            (a, oido) => idiomas.anotarOido(a.oido, a.racha, oido), { oido: null, racha: null }).oido;
+        t.eq(desdeNada(['es']), null);
+        t.eq(desdeNada(['es', 'es']), 'es');
     });
 
     t.group('el idioma · lo de fábrica');
@@ -413,18 +502,19 @@ module.exports = function (t) {
 
     t.group('el idioma · el motor y la ventana dicen lo mismo');
 
-    t.test('las dos listas de idiomas no se pueden separar', () => {
+    t.test('las dos listas de idiomas no se pueden separar', async () => {
         // `engine/idiomas.js` es CommonJS y `src/js/idiomas.js` son módulos que
-        // carga el navegador, así que no se pueden importar entre sí. Si se
-        // separan, la barra ofrece un idioma que el motor rechaza.
-        const ventana = leer('src', 'js', 'idiomas.js');
-        const lista = n => (ventana.match(new RegExp(`export const ${n} = \\[([^\\]]*)\\]`)) || [])[1];
-        const comoArray = s => (s || '').split(',').map(x => x.trim().replace(/'/g, '')).filter(Boolean);
-        t.deep(comoArray(lista('IDIOMAS')), idiomas.IDIOMAS, 'los que se pueden elegir');
-        t.deep(comoArray(lista('AUTOMATICOS')), idiomas.AUTOMATICOS, 'y entre los que decide «auto»');
+        // carga el navegador, así que no se pueden importar entre sí. Lo único
+        // que comparten es la lista; si se separa, la barra ofrece un idioma
+        // que el motor rechaza, o uno que el motor oye se queda sin nombre.
+        const ventana = await import(pathToFileURL(path.join(RAIZ, 'src', 'js', 'idiomas.js')).href);
+        t.deep(ventana.IDIOMAS, idiomas.IDIOMAS, 'los que se pueden elegir');
         for (const l of idiomas.IDIOMAS.concat(['auto'])) {
-            t.ok(ventana.includes(`${l}: '${idiomas.nombre(l)}'`), `${l} se llama igual en los dos`);
+            t.ok(ventana.nombre(l) !== l, `«${l}» tiene nombre en la pantalla`);
         }
+        t.deep(ventana.opciones('auto').map(o => o.valor), ['auto'].concat(idiomas.IDIOMAS),
+            'y el menú ofrece justo los que el motor acepta');
+        for (const o of ventana.opciones('auto')) t.ok(idiomas.esElegible(o.valor), `el motor acepta «${o.valor}»`);
     });
 
     t.test('el menú de la barra ofrece automático primero y los tres debajo', () => {
@@ -447,7 +537,7 @@ module.exports = function (t) {
             'y la maqueta lo tiene, o sus escenarios romperían al tocar el rótulo');
         t.ok(/preguntar: async \(\{ opciones \} = \{\}\) =>/.test(doble),
             'con la pregunta contestada por valor, como el diálogo de verdad');
-        t.ok(/releyendo: \(opciones && opciones\.releer\) \? cerradas : 0/.test(doble),
+        t.ok(/releyendo: \(opciones && opciones\.releer === true\) \? estado\.porReleer : 0/.test(doble),
             'y contestando distinto según lo que se pidió, que es lo que se va a mirar');
     });
 
@@ -473,9 +563,18 @@ module.exports = function (t) {
         // mismo sitio que tiene en la clase, al lado del timecode.
         const titulo = leer('src', 'index.html').match(/<div class="seccion-titulo">[\s\S]*?id="semanal-reloj"/);
         t.ok(titulo && /id="semanal-rotulos"/.test(titulo[0]), 'su caja es fija, en el HTML');
-        t.ok(/\$\('#vista-semanal'\)\.addEventListener\('click', alClic\)/
-            .test(leer('src', 'js', 'pantalla-semanal.js')),
+        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        t.ok(/\$\('#vista-semanal'\)\.addEventListener\('click', alClic\)/.test(semanal),
             'y el clic se escucha en la sección entera, o el rótulo quedaría sordo fuera del cuerpo');
+        // La tarjeta se repinta solo cuando cambian las tomas (`repintarReloj`
+        // y su huella). Lo que oye cambia sin que cambie ninguna, así que el
+        // rótulo se pone al día con el reloj, cada segundo: atado a la tarjeta,
+        // el «Auto · EN» y el ámbar no aparecían hasta la toma siguiente.
+        const reloj = semanal.slice(semanal.indexOf('async function repintarReloj() {'));
+        t.ok(/\$\('#semanal-reloj'\)\.textContent = [^\n]*\n\s*pintarRotulo\(\);/.test(reloj),
+            'el rótulo se pone al día con el reloj, no con la tarjeta');
+        t.ok(/app\.guardarAjustes\(\{ semanal: \{ idioma: cual \} \}\)/.test(semanal),
+            'y el idioma se guarda por la misma puerta que Ajustes, o el vídeo siguiente arranca en el viejo');
         t.ok(!/rotulos-barra|rotuloBarra|idiomas\./.test(leer('src', 'js', 'semanal', 'tarjetas.js')),
             'y la tarjeta no dibuja ninguno');
     });

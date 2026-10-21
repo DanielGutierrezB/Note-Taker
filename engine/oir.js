@@ -91,29 +91,6 @@ async function delResidente(archivo, idioma) {
 }
 
 /**
- * Qué idioma pedirle a Whisper esta pasada, y si hay que mirar lo que conteste.
- *
- * **Detectar cuesta 400 ms por pasada y vigilar sale gratis**, así que
- * «Automático» no pide `auto` todas las veces: pide `auto` la PRIMERA, cuando
- * todavía no sabe nada, y después pide el que viene oyendo —que es rápido— sin
- * dejar de mirar el `detected_language` que el servidor contesta igual (ver
- * `oido-residente.transcribir`). Medido el 20/10: 1214 ms con `auto` contra
- * 871 ms con el idioma puesto, sobre la misma ventana de seis segundos.
- *
- * Así «Automático» cuesta lo mismo que tenerlo puesto en todas las pasadas
- * menos la primera, y sigue cambiando solo si el profesor cambia de idioma.
- * Esa es la razón por la que ahora es lo de fábrica (ver `ajustes.js`).
- */
-function quePedir(p) {
-    if (p.idioma !== 'auto') return p.idioma || 'es';
-    // Una relectura siempre pregunta: es una por toma, con la toma entera
-    // delante —donde detectar acierta mucho más que en seis segundos— y los
-    // 400 ms no se los lleva nadie que esté mirando.
-    if (!p.liviano) return 'auto';
-    return idiomas.AUTOMATICOS.includes(p.oyendo) ? p.oyendo : 'auto';
-}
-
-/**
  * Escucha un tramo del reloj de pared y devuelve lo que se dijo.
  *
  * @param {object} params
@@ -122,7 +99,7 @@ function quePedir(p) {
  *   hastaMs   hora del día donde termina
  *   liviano   true para el ciclo de señales
  *   idioma    el de la clase, de Ajustes. `auto` lo decide entre español e
- *             inglés (ver `engine/idiomas.js` y `quePedir`)
+ *             inglés (ver `quePedir` en `engine/idiomas.js`)
  *   oyendo    qué idioma se viene oyendo, para no volver a detectarlo en cada
  *             pasada. Lo lleva la sesión (`estado.idiomaOido`)
  *   modelo    con qué leer el tramo grande, si no es el de siempre. Lo usa la
@@ -143,7 +120,7 @@ async function escuchar(params) {
     if (!recortado) return null;
 
     try {
-        const opciones = { language: quePedir(p) };
+        const opciones = { language: idiomas.quePedir(p) };
         // El liviano, si está. Es el respaldo de abajo: el ciclo en vivo pregunta
         // primero al servidor residente, que tiene cargado el grande, y esto es
         // para cuando el servidor no contestó. La búsqueda es la misma que muestra
@@ -186,20 +163,21 @@ async function escuchar(params) {
         // contesta aparte (`oido`); `whisper-cli` solo dice el que detectó
         // cuando se le preguntó con `auto`, y con el idioma puesto devuelve ese
         // mismo, que no es una detección y no se cree.
-        let oido = salida.oido != null
+        const detectado = salida.oido != null
             ? salida.oido
             : (opciones.language === 'auto' ? idiomas.normalizar(salida.language) : null);
 
-        // **Y `auto` elige entre español e inglés, nada más.** Un portugués
-        // detectado sobre una clase en español no es una clase en portugués: es
-        // una ventana de seis segundos que se parece. Dejarlo pasar no agrega
-        // un idioma, TRADUCE la clase entera (ver `engine/idiomas.js`). Así que
-        // se vuelve a leer esa ventana con el de los dos al que más se parezca.
-        if (p.idioma === 'auto' && oido && !idiomas.AUTOMATICOS.includes(oido)) {
-            const cual = idiomas.entreEsEIn(oido, salida.pesos, p.oyendo);
-            const otra = (p.liviano && await delResidente(recortado.archivo, cual))
-                || await transcribe.runWhisper(recortado.archivo, { ...opciones, language: cual });
-            if (otra) { salida = otra; oido = cual; }
+        // **Y `auto` elige entre español e inglés, nada más**: un portugués
+        // detectado se lleva al de los dos que más se le parezca, y si no es el
+        // que se pidió, la ventana se vuelve a leer con ese (`enAutomatico`).
+        const { oido, releerCon } = idiomas.enAutomatico({
+            idioma: p.idioma, pedido: opciones.language, oido: detectado,
+            pesos: salida.pesos, oyendo: p.oyendo
+        });
+        if (releerCon) {
+            const otra = (p.liviano && await delResidente(recortado.archivo, releerCon))
+                || await transcribe.runWhisper(recortado.archivo, { ...opciones, language: releerCon });
+            if (otra) salida = otra;
         }
 
         // Whisper rellena los silencios con repeticiones y con créditos de
@@ -243,6 +221,5 @@ async function escuchar(params) {
 
 module.exports = {
     aHoraDelDia,
-    quePedir,
     escuchar
 };

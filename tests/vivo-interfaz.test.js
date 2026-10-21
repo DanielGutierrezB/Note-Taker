@@ -132,7 +132,7 @@ module.exports = function (t) {
     t.test('se ponen con rotuloBarra.pintar, nunca escribiendo el HTML a mano', () => {
         // La barra se repinta cada 150 ms. Escribir el `innerHTML` directo
         // rehacía los botones en medio del clic: medido, 0 de 15 agarraban.
-        t.ok(/rotuloBarra\.pintar\(caja, esDeMirar\(\) \? '' :/.test(rotulos),
+        t.ok(/rotuloBarra\.pintar\(caja, esDeMirar\(\) \? \[\] : \[/.test(rotulos),
             'y en una clase que se mira, vacíos: ni transcribe ni saca fotos');
         t.ok(!/innerHTML/.test(rotulos), 'nada de escribirlos a mano');
     });
@@ -153,7 +153,7 @@ module.exports = function (t) {
 
     t.test('cambiar el idioma pasa por idiomas.cambiar y queda para mañana', () => {
         const fn = tramo(js, 'async function cambiarIdioma(cual) {', '\n}');
-        t.ok(/idiomas\.cambiar\(cual, estado\.tomas\)/.test(fn), 'que es el que pregunta si releer');
+        t.ok(/idiomas\.cambiar\(cual, estado\)/.test(fn), 'que es el que pregunta si releer');
         t.ok(/if \(!r\) return;/.test(fn), 'cancelar no toca nada, ni los ajustes');
         t.ok(/app\.guardarAjustes\(\{ idioma: cual \}\)/.test(fn),
             'y queda para las clases siguientes: quien se equivocó hoy se equivoca mañana');

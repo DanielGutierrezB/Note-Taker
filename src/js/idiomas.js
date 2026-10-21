@@ -1,24 +1,22 @@
 'use strict';
 /**
- * idiomas.js — Cómo se llama cada idioma en la pantalla.
+ * idiomas.js — El idioma, del lado de la ventana: cómo se llama cada uno, su
+ * rótulo en la barra y cómo se cambia mientras se graba.
  *
- * Es el lado de la ventana de `engine/idiomas.js`, y está duplicado por lo
- * mismo que `tools/maqueta/datos.js`: el motor es CommonJS y esto son módulos
- * que carga el navegador, así que no se pueden importar entre sí. Lo que vive
- * acá es cómo se dicen, su rótulo y cómo se cambian desde la ventana; qué
- * idiomas hay y cuál se le pide a Whisper lo decide el motor, que es quien
- * transcribe.
+ * Qué idiomas oye la app y qué se le pide a Whisper lo decide el motor
+ * (`engine/idiomas.js`), que es quien transcribe; lo que es de la pantalla vive
+ * solo acá. Lo único que tienen los dos es la lista de idiomas, porque el motor
+ * es CommonJS y esto son módulos que carga el navegador, y no se pueden
+ * importar entre sí.
  *
- * **Que no se separen lo comprueba una prueba** (`tests/idioma-en-vivo.test.js`):
- * si alguien agrega un idioma de un lado y no del otro, la suite lo caza. Sin
- * eso, la barra ofrecería un idioma que el motor rechaza, o al revés.
+ * **Que esa lista no se separe lo comprueba una prueba**
+ * (`tests/idioma-en-vivo.test.js`): si alguien agrega un idioma de un lado y no
+ * del otro, la suite lo caza. Sin eso, la barra ofrecería un idioma que el
+ * motor rechaza, o uno que el motor oye se quedaría sin nombre.
  */
 
 /** Lo que se puede elegir a mano. `auto` va aparte: no es un idioma, es una decisión. */
 export const IDIOMAS = ['es', 'en', 'pt'];
-
-/** Entre los que decide `auto`. El porqué está en `engine/idiomas.js`. */
-export const AUTOMATICOS = ['es', 'en'];
 
 const NOMBRES = { es: 'Español', en: 'Inglés', pt: 'Portugués', auto: 'Automático' };
 const SIGLAS = { es: 'ES', en: 'EN', pt: 'PT' };
@@ -112,13 +110,16 @@ export function opciones(puesto) {
  * Lo que queda en cada pantalla es lo que es de cada una: dónde se guarda para
  * la próxima vez y cómo se repinta.
  *
+ * Cuántas se releerían lo dice el motor (`porReleer` en el resumen), que es el
+ * que relee: una cuenta de la ventana se podía separar de la suya.
+ *
  * @param {string} cual el idioma nuevo
- * @param {Array} tomas las de la sesión, para contar las cerradas
+ * @param {object} sesion el resumen de lo que se está grabando
  * @returns {Promise<null|{ok:false, error:string}|{ok:true, estado:object, aviso:string}>}
  *   `null` si cancelaron, que no cambia nada.
  */
-export async function cambiar(cual, tomas) {
-    const cerradas = (tomas || []).filter(t => t.outMs != null && !t.descartada).length;
+export async function cambiar(cual, sesion) {
+    const cerradas = sesion.porReleer || 0;
     const dicho = cerradas ? await preguntarSiReleer(cerradas, cual) : 'desde-aca';
     if (!dicho) return null;
     const r = await window.nt.grabarIdioma(cual, { releer: dicho === 'releer' });

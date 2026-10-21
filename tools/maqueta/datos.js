@@ -188,7 +188,7 @@ export function estadoSemanal(extra) {
 
 /** El estado de una sesión en curso, como lo manda `espejo.resumen`. */
 export function estadoEnVivo(extra) {
-    return Object.assign({
+    const estado = Object.assign({
         secuencia: 'curso-de-automatizaciones_2026-09-29_09-00-00',
         curso: 'Curso de automatizaciones',
         ceroMs: CERO,
@@ -217,6 +217,10 @@ export function estadoEnVivo(extra) {
         historia: { atras: 3, adelante: 0, queAtras: 'poner la toma 4 en S', queAdelante: '' },
         tomas: TOMAS
     }, extra || {});
+    // Como `espejo.resumen`: las que van al XML (`tomasQueQuedan`), contadas
+    // sobre las tomas que hayan quedado puestas.
+    estado.porReleer = estado.tomas.filter(t => !t.descartada && t.inMs != null && t.outMs != null).length;
+    return estado;
 }
 
 /** Las sesiones que hay en la carpeta, como las manda `sesiones-grabadas.listar`. */
@@ -285,13 +289,12 @@ export const SESIONES = [
 ];
 
 export const AJUSTES = {
-    version: 1,
+    version: 2,
     carpeta: '/Volumes/Rodaje/Curso de automatizaciones',
     carpetas: ['/Volumes/Rodaje/Curso de automatizaciones'],
     curso: 'Curso de automatizaciones',
     fps: 29.97,
     idioma: 'auto',
-    idiomaMigrado: true,
     dispositivo: 'Audio de Zoom (la llamada)',
     // Sin cámara de referencia: es como arranca la app, y es lo que deja que la
     // maqueta corra en una máquina sin ninguna cámara. Las fotos que se ven en
