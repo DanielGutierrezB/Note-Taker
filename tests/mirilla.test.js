@@ -247,7 +247,15 @@ module.exports = function (t) {
             'sin esto la cara sale dos veces en el vídeo: la grabada y la que pone ffmpeg');
         t.deep(hecho.find(h => h[0] === 'setAlwaysOnTop'), ['setAlwaysOnTop', true, 'screen-saver'],
             'con «floating» se esconde debajo de una pantalla completa, que es cuando más falta hace');
-        t.deep(hecho.find(h => h[0] === 'setVisibleOnAllWorkspaces')[2], { visibleOnFullScreen: true });
+        t.deep(hecho.find(h => h[0] === 'setVisibleOnAllWorkspaces')[2],
+            { visibleOnFullScreen: true, skipTransformProcessType: true },
+            'sin transformar el proceso: eso escondía la ventana de la clase al encender la mirilla');
+    });
+
+    t.test('en macOS es un panel, que flota sobre una pantalla completa sin tocar el proceso', () => {
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        t.eq(m.ventanas[0].opciones.type, process.platform === 'darwin' ? 'panel' : undefined);
     });
 
     t.test('abre con su propio puente, que el paquete lleva', () => {
@@ -428,6 +436,29 @@ module.exports = function (t) {
         const salida = main.slice(main.indexOf("app.on('before-quit'"));
         t.ok(/^app\.on\('before-quit', \(\) => \{[\s\S]*?if \(mirilla\) mirilla\.cerrar\('la app se cierra'\);/.test(salida),
             'y al salir con ⌘Q también, sin esperar a la ventana de la app');
+    });
+
+    t.test('el dock trae la ventana de la clase aunque la mirilla esté abierta', () => {
+        // Contaba «alguna ventana»: con la mirilla abierta y la de la clase
+        // escondida, el clic en el dock no hacía nada.
+        const main = leer('main.js');
+        t.ok(/app\.on\('activate', traerLaVentana\)/.test(main), 'el dock pasa por traerLaVentana');
+        t.ok(!/getAllWindows\(\)\.length === 0/.test(main), 'y ya no cuenta ventanas');
+        const fn = main.slice(main.indexOf('function traerLaVentana() {'));
+        t.ok(/if \(!mainWindow \|\| mainWindow\.isDestroyed\(\)\) \{ createWindow\(\); return; \}/.test(fn),
+            'sin ventana, una nueva');
+        t.ok(/mainWindow\.show\(\);\s*mainWindow\.focus\(\);/.test(fn), 'y con ventana escondida, esa al frente');
+    });
+
+    t.test('una sola Note Taker a la vez', () => {
+        // Abrirla otra vez abría otra copia entera: quedaron dos, la primera con
+        // una grabación que nadie podía terminar.
+        const main = leer('main.js');
+        t.ok(/if \(!app\.requestSingleInstanceLock\(\)\) \{[\s\S]{0,200}app\.quit\(\);/.test(main),
+            'la segunda se va');
+        t.ok(/app\.on\('second-instance', traerLaVentana\)/.test(main), 'y le pasa el foco a la primera');
+        t.ok(/\} else \{\s*\n\s*app\.on\('second-instance'[\s\S]*?app\.whenReady\(\)/.test(main),
+            'y la que se va no llega a abrir su ventana ni su motor');
     });
 
     t.group('la mirilla · la cámara');

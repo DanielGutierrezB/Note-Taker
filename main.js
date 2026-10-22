@@ -131,22 +131,54 @@ process.on('unhandledRejection', reason => {
     console.error('Promesa rechazada:', reason);
 });
 
-app.whenReady().then(() => {
-    // Lo primero de todo, antes de anotar nada: el diario en disco. Si se
-    // abriera después, las líneas del arranque —que son las que explican una app
-    // que no llega ni a mostrar la ventana— quedarían solo en memoria.
-    const diario = registro.abrirDiario(app.getPath('userData'));
-    anotar('app.arranca', {
-        version: appVersion(),
-        electron: process.versions.electron,
-        arch: process.arch,
-        diario: diario.ok ? `guardando (${diario.teniamos} línea(s) de antes)` : `sin guardar: ${diario.error}`
+/**
+ * La ventana de la clase, al frente: la que hay aunque esté escondida, o una
+ * nueva si se cerró.
+ *
+ * Mirar si queda «alguna ventana» no alcanza, y así estaba: la mirilla es una
+ * ventana, así que con ella abierta y la de la clase escondida, el clic en el
+ * dock no hacía nada y la clase quedaba grabando sin ventana desde donde
+ * terminarla.
+ */
+function traerLaVentana() {
+    if (!mainWindow || mainWindow.isDestroyed()) { createWindow(); return; }
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+}
+
+/**
+ * Una sola Note Taker a la vez.
+ *
+ * Sin esto, abrirla otra vez abría otra copia entera, con su motor, su diario y
+ * su cámara: el editor perdió la ventana de una que estaba grabando, la volvió a
+ * abrir desde el dock, y quedaron dos —la primera con una grabación abierta que
+ * nadie podía terminar—. Ahora la segunda le pasa el foco a la primera y se va.
+ *
+ * Los guiones de `tools/` arrancan la app misma, así que con la app abierta
+ * tampoco corren: es lo que tiene que pasar, porque graban con el mismo motor,
+ * los mismos ajustes y el mismo diario.
+ */
+if (!app.requestSingleInstanceLock()) {
+    console.error('Ya hay una Note Taker abierta: le paso el foco a esa.');
+    app.quit();
+} else {
+    app.on('second-instance', traerLaVentana);
+    app.whenReady().then(() => {
+        // Lo primero de todo, antes de anotar nada: el diario en disco. Si se
+        // abriera después, las líneas del arranque —que son las que explican
+        // una app que no llega ni a mostrar la ventana— quedarían solo en memoria.
+        const diario = registro.abrirDiario(app.getPath('userData'));
+        anotar('app.arranca', {
+            version: appVersion(),
+            electron: process.versions.electron,
+            arch: process.arch,
+            diario: diario.ok ? `guardando (${diario.teniamos} línea(s) de antes)` : `sin guardar: ${diario.error}`
+        });
+        createWindow();
+        app.on('activate', traerLaVentana);
     });
-    createWindow();
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
-    });
-});
+}
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();

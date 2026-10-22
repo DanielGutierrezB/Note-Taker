@@ -170,6 +170,11 @@ function registrar({ ipcMain, BrowserWindow, screen, ventanaPrincipal, anotar })
         const sitio = sitioEn(elMonitor());
         const w = new BrowserWindow({
             ...sitio,
+            // Un panel en macOS: flota sobre una app a pantalla completa y en
+            // todos los escritorios por ser panel, sin pedirle nada al proceso
+            // (ver `setVisibleOnAllWorkspaces` abajo), y no le saca el foco a
+            // la app que se está presentando cuando se aprieta uno de sus botones.
+            type: process.platform === 'darwin' ? 'panel' : undefined,
             frame: false,
             transparent: true,
             backgroundColor: '#00000000',
@@ -195,7 +200,14 @@ function registrar({ ipcMain, BrowserWindow, screen, ventanaPrincipal, anotar })
         // `screen-saver` y no `floating`: con `floating` queda debajo de una app
         // en pantalla completa, que es justo cuando más falta hace verse.
         w.setAlwaysOnTop(true, 'screen-saver');
-        w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+        // **Sin transformar el proceso.** Por defecto esta llamada pasa la app a
+        // «de fondo» y la vuelve a traer, y eso, según los tipos de Electron,
+        // «esconde la ventana y el dock por un rato cada vez que se llama». Se
+        // llamaba cada vez que se encendía Profesor Preview, y la ventana de la
+        // clase se iba: el editor la vio desaparecer grabando, y una vez no
+        // volvió y la app quedó corriendo sin ventana. Siendo panel no hace
+        // falta la transformación para estar encima de una pantalla completa.
+        w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
         // Lo que la saca de la grabación de pantalla.
         w.setContentProtection(true);
         // Es una página y nada más: ni se va a otra ni abre ventanas.
