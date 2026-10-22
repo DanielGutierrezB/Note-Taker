@@ -72,7 +72,7 @@ const estado = {
     tomasAbiertas: 0,
     ficha: null,             // la toma desplegada abajo mientras graba, y la
                              // toma donde estoy parado en el editor del final
-    vista: 'R',              // la que va a llevar la toma siguiente
+    vista: tarjetas.DE_ENTRADA, // la que va a llevar la toma siguiente
     vistaHasta: 0,           // hasta qué toma ya se le puso la vista elegida
     vistas: [],              // las del motor, con el color de su marcador
     json: null,              // el sidecar de lo que se acaba de grabar

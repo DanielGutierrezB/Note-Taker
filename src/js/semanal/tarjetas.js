@@ -52,10 +52,15 @@ export const VISTAS = [
     { nombre: 'R', titulo: 'Screen', dice: 'Tu pantalla, con tu cámara en la esquina' }
 ];
 
-const DE_ENTRADA = 'R';
+export const DE_ENTRADA = 'R';
 
-export const laVista = nombre => VISTAS.find(v => v.nombre === nombre)
-    || VISTAS.find(v => v.nombre === DE_ENTRADA);
+/**
+ * Una vista por su nombre. Sin nombre es la de entrada, que es la que lleva una
+ * toma a la que nunca se le eligió; con uno que no se conoce —un sidecar viejo,
+ * un nombre roto— se dice ese nombre tal cual, antes que llamarlo «Screen».
+ */
+export const laVista = nombre => VISTAS.find(v => v.nombre === (nombre || DE_ENTRADA))
+    || { nombre, titulo: nombre, dice: '' };
 
 /**
  * La tecla de cada vista: la primera letra de su nombre en el motor.
@@ -275,7 +280,7 @@ export function tarjetaListo(estado) {
                   ? `Cambiar pantalla · ${esc(pantalla.nombre)}` : 'Elegir pantalla para grabar'}</span></button>
             <div class="semanal-col-2 semanal-verme">${verme(estado.mirilla)}</div>
 
-            <button class="btn btn-grabar" type="button" data-hace="grabar" ${puede ? '' : 'disabled'}
+            <button class="btn btn-rec btn-grabar semanal-cuadrado" type="button" data-hace="grabar" ${puede ? '' : 'disabled'}
                     title="${puede
                         ? 'Empieza a grabar la cámara, la pantalla y tu voz'
                         : 'Falta el micrófono: sin él no se puede oír el «3, 2, 1»'}">
@@ -307,7 +312,7 @@ function elPreview(estado) {
     return `
       <div class="campo semanal-preview">
         <span class="rotulo">Preview</span>
-        ${escena(estado, 'R')}
+        ${escena(estado, estado.vista)}
         <span class="v3">${estado.pantalla
             ? 'Así sale el vídeo: tu pantalla de fondo y tu cara en la esquina, del tamaño y en el '
                 + 'sitio en que van a salir. Si la cara tapa algo que vas a explicar, movelo ahora.'
@@ -356,7 +361,7 @@ export function tarjetaGrabando(estado) {
               · va a durar <b>${esc(fmt.relojCorto(cortado(cerradas)))}</b></span>
             <span class="crece"></span>
             ${laHistoria(estado.sesion)}
-            <button class="btn btn-terminar" type="button" data-hace="terminar"
+            <button class="btn btn-rec btn-terminar" type="button" data-hace="terminar"
                     title="Deja de grabar y te deja elegir qué toma va">Terminar</button>
           </div>
           ${atras ? `<p class="v3" id="semanal-atraso" style="margin:0" role="status">${esc(atras.porque)}</p>` : ''}
@@ -380,7 +385,7 @@ export function tarjetaGrabando(estado) {
             ${elegirVista(estado)}
             ${laVentana(estado)}
             <div class="semanal-col-2 semanal-verme">${verme(estado.mirilla)}</div>
-            <button class="btn btn-toma" type="button" data-hace="borde" data-abierta="${abierta ? 'si' : 'no'}"
+            <button class="btn ${abierta ? 'btn-rec' : 'btn-primario'} btn-toma semanal-cuadrado" type="button" data-hace="borde" data-abierta="${abierta ? 'si' : 'no'}"
                     title="${abierta
                         ? 'Cierra la toma acá, sin esperar a que se oiga «Pausa». Tecla: Enter'
                         : 'Abre una toma acá, sin esperar a que se oiga «3, 2, 1»: la voz tarda unos tres '

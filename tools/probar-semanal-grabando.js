@@ -53,6 +53,7 @@ const medir = p => p.evaluate(() => {
         tomaColor: color('[data-hace="borde"]'),
         tomaDice: raiz.querySelector('[data-hace="borde"]').textContent.trim(),
         tarjeta: raiz.querySelector('.semanal-grabando').dataset.toma,
+        pastilla: getComputedStyle(raiz.querySelector('#semanal-pastilla')).color,
         alto: innerHeight,
         sale: document.documentElement.scrollWidth > innerWidth
     };
@@ -94,6 +95,8 @@ const medir = p => p.evaluate(() => {
         decir(/Cerrar toma/.test(a.tomaDice) && a.tomaColor === ROJO && a.tarjeta === 'abierta',
             'con la toma abierta, cerrarla, en rojo');
         decir(a.marco === 'rgb(229, 72, 77)', `y el marco del preview en rojo (${a.marco})`);
+        decir(a.pastilla === 'rgb(255, 138, 138)' && m.pastilla !== a.pastilla,
+            `y la pastilla, que entre tomas no lo está (${m.pastilla} → ${a.pastilla})`);
         decir(cerca(a.toma.y, m.toma.y) && cerca(a.toma.x, m.toma.x), 'el cuadrado no se movió al abrirla');
     }
 

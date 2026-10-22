@@ -54,6 +54,12 @@ const laPantalla = () => leer('src', 'js', 'pantalla-semanal.js')
 const cargarTarjetas = () => import(
     pathToFileURL(path.join(RAIZ, 'src', 'js', 'semanal', 'tarjetas.js')).href);
 
+/** Las clases del botón que hace `hace`, en el HTML de una tarjeta. */
+function clasesDe(html, hace) {
+    const m = html.match(new RegExp(`class="([^"]*)" type="button" data-hace="${hace}"`));
+    return m ? m[1].split(/\s+/) : [];
+}
+
 module.exports = function (t) {
     t.group('modo semanal · la captura de pantalla');
 
@@ -408,11 +414,13 @@ module.exports = function (t) {
             const html = tarjetas.tarjetaGrabando({ ...base, sesion: { tomas, sueltas: [] } });
             const arriba = html.slice(html.indexOf('semanal-arriba'), html.indexOf('semanal-preview'));
             const controles = html.slice(html.indexOf('semanal-controles'), html.indexOf('data-texto'));
-            t.ok(/class="btn btn-terminar" type="button" data-hace="terminar"/.test(arriba),
-                'Terminar, arriba con deshacer y rehacer');
-            t.ok(/class="btn btn-toma" type="button" data-hace="borde"/.test(controles),
-                'y la toma en la rejilla, donde estaba Grabar');
-            t.ok(!html.includes('btn-primario'), 'sin el azul de siempre: cada una tiene el suyo');
+            t.ok(clasesDe(arriba, 'terminar').includes('btn-rec'),
+                'Terminar, arriba con deshacer y rehacer, en el rojo de grabar');
+            t.ok(clasesDe(controles, 'borde').includes('semanal-cuadrado'),
+                'y la toma en el cuadrado de la rejilla, donde estaba Grabar');
+            t.eq(clasesDe(controles, 'borde').includes('btn-rec'), tomas.length > 0,
+                'roja solo mientras la toma está abierta; cerrada, el primario azul');
+            t.eq(clasesDe(controles, 'borde').includes('btn-primario'), tomas.length === 0);
         }
     });
 
@@ -435,15 +443,19 @@ module.exports = function (t) {
     });
 
     t.test('el orden de los botones no cambia cuál se usa sin saber', async () => {
-        // Professor va primero porque así se pidieron los botones, pero una
-        // vista que no se conoce —un sidecar viejo, un nombre roto— se lee como
-        // Screen, que es para lo que existe el modo. Antes el respaldo era «la
-        // primera de la lista», y reordenarla lo habría cambiado sin avisar.
+        // Professor va primero porque así se pidieron los botones, pero la de
+        // entrada es Screen, que es para lo que existe el modo. Antes el
+        // respaldo era «la primera de la lista», y reordenarla lo habría
+        // cambiado sin avisar.
         const tarjetas = await cargarTarjetas();
         t.eq(tarjetas.VISTAS[0].nombre, 'PV', 'Professor primero');
-        t.eq(tarjetas.laVista('XX').nombre, 'R');
-        t.eq(tarjetas.laVista(undefined).nombre, 'R');
+        t.eq(tarjetas.DE_ENTRADA, 'R', 'y Screen de entrada');
+        t.eq(tarjetas.laVista(undefined).nombre, 'R', 'una toma sin vista lleva la de entrada');
         t.eq(tarjetas.laVista('PV').titulo, 'Professor');
+        // Una que no se conoce —un sidecar viejo, un nombre roto— se dice tal
+        // cual: llamarla «Screen» sería decir algo que no se pidió.
+        t.eq(tarjetas.laVista('XX').titulo, 'XX');
+        t.ok(/vista: tarjetas\.DE_ENTRADA/.test(laPantalla()), 'y la pantalla arranca con la misma');
     });
 
     t.test('con la toma abierta se dice en rojo, aunque la pastilla diga otra cosa', async () => {
@@ -459,8 +471,8 @@ module.exports = function (t) {
         const sin = tarjetas.tarjetaGrabando({ ...base, sesion: { tomas: [], sueltas: [] } });
         t.ok(/data-toma="no"/.test(sin) && /data-abierta="no"/.test(sin) && /Abrir toma/.test(sin));
         const css = leer('src', 'css', 'style.css');
-        t.ok(/\.semanal-grabando\[data-toma='abierta'\] \.semanal-escena \{\s*outline: 3px solid #e5484d;/.test(css),
-            'el marco del preview en rojo');
+        t.ok(/\.semanal-grabando\[data-toma='abierta'\] \.semanal-escena \{\s*outline: 3px solid var\(--rec-marca\);/.test(css),
+            'el marco del preview en el rojo de grabar');
     });
 
     t.test('la caja de la toma abierta enseña lo de antes del IN, con la pared bien dicha', async () => {
@@ -745,7 +757,7 @@ module.exports = function (t) {
     t.test('Grabar es el rojo de la tarjeta, y no queda ningún otro primario', async () => {
         const tarjetas = await cargarTarjetas();
         const html = tarjetas.tarjetaListo(paraEmpezar());
-        t.ok(/class="btn btn-grabar" type="button" data-hace="grabar"/.test(html));
+        t.ok(clasesDe(html, 'grabar').includes('btn-rec') && clasesDe(html, 'grabar').includes('semanal-cuadrado'));
         t.ok(!html.includes('btn-primario'), 'una sola acción principal por pantalla');
     });
 

@@ -217,7 +217,9 @@ export function deSesion(estado, audio) {
  * La misma prioridad que `deSesion` y por lo mismo: el ciclo que no llega va
  * antes que la toma abierta, porque es con una toma abierta cuando un
  * transcript atrasado le pone mal los bordes. Lo que cambia es la palabra de
- * reposo: acá no se está «escuchando» una clase, se espera el «3, 2, 1».
+ * reposo: acá no se está «escuchando» una clase, se espera el «3, 2, 1». Y la
+ * clave de la toma abierta: `grabando` y no `abierta`, porque lo que se dice
+ * sale en el vídeo y va en el rojo de grabar, no en el acento de la clase.
  *
  * @returns {{clave, palabra, porque?}} `porque` solo cuando va atrasado
  */
@@ -226,7 +228,7 @@ export function deSemanal(sesion) {
     if (atras) return atras;
     const abierta = ((sesion && sesion.tomas) || []).some(t => t.outMs == null);
     return abierta
-        ? { clave: 'abierta', palabra: 'toma abierta' }
+        ? { clave: 'grabando', palabra: 'toma abierta' }
         : { clave: 'listo', palabra: 'esperando el «3, 2, 1»' };
 }
 
