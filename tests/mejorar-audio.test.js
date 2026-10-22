@@ -290,7 +290,7 @@ module.exports = function (t) {
 
     t.test('viene encendida, y lo dice donde se puede leer sin mirar', async () => {
         const tarjetas = await import(pathToFileURL(path.join(
-            __dirname, '..', 'src', 'js', 'semanal', 'tarjetas.js')).href);
+            __dirname, '..', 'src', 'js', 'semanal', 'tarjetas-editor.js')).href);
         const html = tarjetas.tarjetaRevisar({ paso: 'revisar', mejorarAudio: true });
         t.ok(/data-campo="mejorar-audio"[^>]*aria-pressed="true"/.test(html),
             'sin la cajita de check, `aria-pressed` es lo único que lo cuenta');
@@ -298,7 +298,7 @@ module.exports = function (t) {
 
     t.test('apagada se dice igual de claro', async () => {
         const tarjetas = await import(pathToFileURL(path.join(
-            __dirname, '..', 'src', 'js', 'semanal', 'tarjetas.js')).href);
+            __dirname, '..', 'src', 'js', 'semanal', 'tarjetas-editor.js')).href);
         const html = tarjetas.tarjetaRevisar({ paso: 'revisar', mejorarAudio: false });
         t.ok(/data-campo="mejorar-audio"[^>]*aria-pressed="false"/.test(html), html.slice(0, 200));
     });
@@ -307,7 +307,7 @@ module.exports = function (t) {
         // Se fue del cuerpo de la pantalla al `title`. Que no se vea no
         // quiere decir que se pueda perder: es lo único que explica qué hace.
         const tarjetas = await import(pathToFileURL(path.join(
-            __dirname, '..', 'src', 'js', 'semanal', 'tarjetas.js')).href);
+            __dirname, '..', 'src', 'js', 'semanal', 'tarjetas-editor.js')).href);
         const html = tarjetas.tarjetaRevisar({ paso: 'revisar', mejorarAudio: true });
         t.ok(html.includes('al volumen de cualquier otro'), 'qué hace');
         t.ok(html.includes('ruido de fondo'), 'y la otra mitad');

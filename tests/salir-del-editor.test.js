@@ -51,11 +51,13 @@ const elPanel = extra => Object.assign({
 module.exports = async t => {
     const tarjetas = await import(pathToFileURL(
         path.join(RAIZ, 'src', 'js', 'semanal', 'tarjetas.js')).href);
+    const editor = await import(pathToFileURL(
+        path.join(RAIZ, 'src', 'js', 'semanal', 'tarjetas-editor.js')).href);
     const semanal = leer('src', 'js', 'pantalla-semanal.js');
 
     t.group('salir del editor · el botón de volver');
 
-    const elEditor = extra => tarjetas.tarjetaRevisar(Object.assign({
+    const elEditor = extra => editor.tarjetaRevisar(Object.assign({
         paso: 'revisar', ficha: null, vistas: [], grabada: { tomas: [] },
         montaje: { tomas: [] }, silencios: true, mejorarAudio: true, hecho: null
     }, extra || {}));

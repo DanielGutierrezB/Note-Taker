@@ -179,7 +179,7 @@ module.exports = function (t) {
         t.eq(silencios.AIRE_SEC, 0.3);
         const coma = n => String(n).replace('.', ',');
         const tarjetas = await import(pathToFileURL(
-            path.join(__dirname, '..', 'src', 'js', 'semanal', 'tarjetas.js')).href);
+            path.join(__dirname, '..', 'src', 'js', 'semanal', 'tarjetas-editor.js')).href);
         const html = tarjetas.tarjetaRevisar({ paso: 'revisar', silencios: false });
         t.ok(html.includes(`más de ${coma(silencios.LARGO_MIN_SEC)} s`),
             'y la opción dice el largo mínimo del motor');

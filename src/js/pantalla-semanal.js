@@ -14,7 +14,8 @@
  *
  * **Acá pasan cosas; lo que se VE está en `semanal/tarjetas.js`.** Cada momento
  * dibuja con una función pura de `estado` a HTML, y todas viven en ese otro
- * archivo. Este tiene los gestos, los dispositivos, el reloj y lo que se le pide
+ * archivo y en `semanal/tarjetas-editor.js`, las de después de grabar. Este
+ * tiene los gestos, los dispositivos, el reloj y lo que se le pide
  * al motor. Antes era todo junto y con el editor del corte final pasó de 484 a
  * 1.559 líneas: dejó de poderse abrir y entender de qué iba.
  *
@@ -41,6 +42,7 @@ import * as fichas from './grabar/lista-tomas.js';
 import * as montaje from './semanal/montaje.js';
 import * as corte from './semanal/corte.js';
 import * as tarjetas from './semanal/tarjetas.js';
+import * as editor from './semanal/tarjetas-editor.js';
 import * as alGrabar from './semanal/al-grabar.js';
 import * as menuPalabra from './grabar/menu-de-palabra.js';
 import * as rotuloBarra from './grabar/rotulo-barra.js';
@@ -390,14 +392,14 @@ const MOMENTOS = {
         tarjeta: tarjetas.tarjetaGrabando,
         luego: () => { pegarLaEscena(); montarTextos(); }
     },
-    mirando: { titulo: 'Mirando lo que grabaste', tarjeta: tarjetas.tarjetaMirando },
+    mirando: { titulo: 'Mirando lo que grabaste', tarjeta: editor.tarjetaMirando },
     revisar: {
         titulo: 'Mirá tu vídeo y elegí qué va',
-        tarjeta: tarjetas.tarjetaRevisar,
+        tarjeta: editor.tarjetaRevisar,
         luego: () => { pegarElMontaje(); montarTextos(); }
     },
-    cortando: { titulo: 'Cortando el vídeo', tarjeta: tarjetas.tarjetaCortando },
-    hecho: { titulo: 'Tu vídeo está listo', tarjeta: tarjetas.tarjetaHecho }
+    cortando: { titulo: 'Cortando el vídeo', tarjeta: editor.tarjetaCortando },
+    hecho: { titulo: 'Tu vídeo está listo', tarjeta: editor.tarjetaHecho }
 };
 
 /**

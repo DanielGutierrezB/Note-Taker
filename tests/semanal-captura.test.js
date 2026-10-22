@@ -42,6 +42,7 @@ const leer = (...partes) => fs.readFileSync(path.join(RAIZ, ...partes), 'utf8');
  * módulos y comprueban lo que devuelven.
  */
 const laPantalla = () => leer('src', 'js', 'pantalla-semanal.js')
+    + '\n' + leer('src', 'js', 'semanal', 'tarjetas-editor.js')
     + '\n' + leer('src', 'js', 'semanal', 'tarjetas.js');
 
 /**
@@ -53,6 +54,8 @@ const laPantalla = () => leer('src', 'js', 'pantalla-semanal.js')
  */
 const cargarTarjetas = () => import(
     pathToFileURL(path.join(RAIZ, 'src', 'js', 'semanal', 'tarjetas.js')).href);
+const cargarEditor = () => import(
+    pathToFileURL(path.join(RAIZ, 'src', 'js', 'semanal', 'tarjetas-editor.js')).href);
 
 /** Las clases del botón que hace `hace`, en el HTML de una tarjeta. */
 function clasesDe(html, hace) {
@@ -877,8 +880,8 @@ module.exports = function (t) {
         // Dibujando dos tomas y parándose en la segunda: abajo tiene que
         // aparecer esa y nada más. Una lista de todas era lo de la pantalla de
         // clase, y acá el editor es el vídeo arriba y la toma de abajo.
-        const tarjetas = await cargarTarjetas();
-        const html = tarjetas.tarjetaDeLaToma({ vistas: [] }, {
+        const editor = await cargarEditor();
+        const html = editor.tarjetaDeLaToma({ vistas: [] }, {
             id: 2, vista: 'R', fondo: 'pantalla', segundos: 4,
             palabras: [{ w: 'hola', t: 1000 }], antes: [], despues: []
         });
