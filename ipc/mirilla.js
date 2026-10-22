@@ -227,10 +227,26 @@ function registrar({ ipcMain, BrowserWindow, screen, ventanaPrincipal, anotar })
      */
     let ultimoEspejo = {};
 
-    function cerrar() {
-        if (ventana && !ventana.isDestroyed()) ventana.close();
+    /**
+     * Quitarla.
+     *
+     * `destroy` y no `close`: `close` es asíncrono y se puede cancelar, y el
+     * módulo la soltaba en el acto. Una que no terminaba de irse quedaba sin
+     * dueño, sin marco y encima de todo: el editor la vio con la app ya
+     * cerrada. Es un espejo sin nada que guardar, así que no hay nada que esperar.
+     *
+     * Queda anotado por qué, que es lo que faltaba en el diario para saber qué
+     * pasó la vez que quedó a la vista.
+     *
+     * @param {string} porque quién la quita: el botón, la ventana de la app, la salida
+     */
+    function cerrar(porque) {
+        quiereEstar = false;
+        const habia = Boolean(ventana && !ventana.isDestroyed());
+        if (habia) ventana.destroy();
         ventana = null;
         ultimoEspejo = {};
+        if (habia) anotar('mirilla.cerrada', { porque: porque || 'sin decir' });
     }
 
     /**
@@ -253,7 +269,7 @@ function registrar({ ipcMain, BrowserWindow, screen, ventanaPrincipal, anotar })
     ipcMain.handle('mirilla-poner', (event, encendida) => {
         if (!deLaApp(event)) return { ok: false };
         quiereEstar = Boolean(encendida);
-        if (!quiereEstar) { cerrar(); return { ok: true, visible: false }; }
+        if (!quiereEstar) { cerrar('se apagó'); return { ok: true, visible: false }; }
         const w = abrir();
         if (!w.isVisible() && !w.webContents.isLoading()) { w.showInactive(); acomodar(); }
         return { ok: true, visible: true };

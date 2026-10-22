@@ -82,6 +82,7 @@ function principal() {
         setBounds(b) { this.bordes = b; }
         getBounds() { return this.bordes; }
         close() { this.pidioCerrar = true; }
+        destroy() { this.destruida = true; this.cerrarse(); }
         /** El `closed` de verdad, cuando la prueba diga. */
         cerrarse() { this.cerrada = true; if (this.eventos.closed) this.eventos.closed(); }
     }
@@ -281,7 +282,49 @@ module.exports = function (t) {
         const [vieja, nueva] = m.ventanas;
         vieja.cerrarse();
         m.r.cerrar();
-        t.ok(nueva.pidioCerrar, 'la nueva se puede cerrar todavía');
+        t.ok(nueva.destruida, 'la nueva se puede cerrar todavía');
+    });
+
+    t.test('cerrar no deja ninguna viva, encienda y apague como se encienda', () => {
+        // Con `close`, una que no terminaba de irse quedaba sin dueño y encima
+        // de todo con la app ya cerrada, que es lo que vio el editor.
+        const m = principal();
+        for (const encendida of [true, false, true, true, false, true]) {
+            m.llamar('mirilla-poner', m.deLaApp, encendida);
+        }
+        m.r.cerrar('se cerró la ventana de la app');
+        t.ok(m.ventanas.length > 1, `se abrieron ${m.ventanas.length}`);
+        t.ok(m.ventanas.every(w => w.isDestroyed()), 'y no queda viva ninguna');
+    });
+
+    t.test('se destruye y no se le pide que se cierre', () => {
+        // `close` es asíncrono y se puede cancelar: una ventana sin marco que
+        // no se cierra es una que no hay forma de quitarse de encima.
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        m.llamar('mirilla-poner', m.deLaApp, false);
+        t.ok(m.ventanas[0].destruida && !m.ventanas[0].pidioCerrar);
+    });
+
+    t.test('después de cerrarla, una que termina de cargar tarde no aparece', () => {
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        const w = m.ventanas[0];
+        m.r.cerrar('la app se cierra');
+        w.visible = false;
+        w.eventos['ready-to-show']();
+        t.eq(w.visible, false);
+    });
+
+    t.test('queda en el diario cuándo y por qué se fue', () => {
+        // Faltaba: la vez que quedó a la vista, el diario decía cuándo se abrió
+        // y nada de cuándo se tendría que haber ido.
+        const m = principal();
+        m.llamar('mirilla-poner', m.deLaApp, true);
+        m.r.cerrar('la app se cierra');
+        t.deep(m.anotado.find(([ev]) => ev === 'mirilla.cerrada'), ['mirilla.cerrada', { porque: 'la app se cierra' }]);
+        m.r.cerrar('otra vez');
+        t.eq(m.anotado.filter(([ev]) => ev === 'mirilla.cerrada').length, 1, 'sin nada que cerrar no se anota nada');
     });
 
     t.test('y una que llega tarde a mostrarse no muestra a la otra', () => {
@@ -380,8 +423,11 @@ module.exports = function (t) {
         // que la abrió, no habría forma de quitársela de encima. Y en macOS la
         // app sigue viva después de cerrar su ventana, así que pasaría.
         const main = leer('main.js');
-        t.ok(/mainWindow\.on\('closed', \(\) => \{[\s\S]*?if \(mirilla\) mirilla\.cerrar\(\);/
+        t.ok(/mainWindow\.on\('closed', \(\) => \{[\s\S]*?if \(mirilla\) mirilla\.cerrar\('/
             .test(main), 'al cerrar la principal se cierra la mirilla');
+        const salida = main.slice(main.indexOf("app.on('before-quit'"));
+        t.ok(/^app\.on\('before-quit', \(\) => \{[\s\S]*?if \(mirilla\) mirilla\.cerrar\('la app se cierra'\);/.test(salida),
+            'y al salir con ⌘Q también, sin esperar a la ventana de la app');
     });
 
     t.group('la mirilla · la cámara');

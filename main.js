@@ -83,7 +83,7 @@ function createWindow() {
     // la app no se cierra al cerrar su ventana, así que esto no es hipotético.
     mainWindow.on('closed', () => {
         mainWindow = null;
-        if (mirilla) mirilla.cerrar();
+        if (mirilla) mirilla.cerrar('se cerró la ventana de la app');
     });
     mainWindow.loadFile('src/index.html');
     // El arnés de desarrollo (capturas, JS inyectado) vive en `dev-shot.js` y
@@ -153,6 +153,10 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+    // La mirilla, antes que nada y sin esperar a que se cierre la ventana de la
+    // app: con ⌘Q no se le pedía nada a ella, y una ventana encima de todo que
+    // tarda en irse es lo primero que se ve de una app que dice haberse cerrado.
+    if (mirilla) mirilla.cerrar('la app se cierra');
     // Y el último segundo del diario, que si no se pierde. Es el segundo más
     // interesante cuando alguien cierra la app porque se le quedó colgada. (La
     // grabación en curso la cierra su propio puente: `ipc/grabar.js`.)
