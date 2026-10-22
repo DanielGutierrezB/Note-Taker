@@ -781,17 +781,24 @@ module.exports = function (t) {
         }
     });
 
-    t.test('Grabar sin pantalla pregunta antes, y sin respuesta no graba', () => {
+    t.test('Grabar sin pantalla pregunta antes, y sin respuesta no graba', async () => {
         // Grabar solo con la cámara vale, así que se pregunta y no se niega.
+        const alGrabar = await import(
+            pathToFileURL(path.join(RAIZ, 'src', 'js', 'semanal', 'al-grabar.js')).href);
+        const preguntas = [];
+        const contesta = dicho => async p => { preguntas.push(p); return dicho; };
+
+        t.eq(await alGrabar.queHacer(true, contesta('elegir')), 'grabar', 'con pantalla, graba');
+        t.eq(preguntas.length, 0, 'sin preguntar nada');
+        t.eq(await alGrabar.queHacer(false, contesta('camara')), 'grabar', 'sin ella, solo si se elige la cámara');
+        t.deep(preguntas[0].opciones.map(o => o.valor), ['elegir', 'camara'], 'elegirla o grabar solo con la cámara');
+        t.eq(await alGrabar.queHacer(false, contesta('elegir')), 'elegir', 'elegirla no arranca a grabar');
+        t.eq(await alGrabar.queHacer(false, contesta(null)), null, 'y cancelar no hace nada');
+
         const semanal = leer('src', 'js', 'pantalla-semanal.js');
         t.ok(/if \(hace === 'grabar'\) return pedirGrabar\(boton\);/.test(semanal), 'el botón pasa por la pregunta');
-        const fn = semanal.slice(semanal.indexOf('async function pedirGrabar(boton) {'));
-        const cuerpo = fn.slice(0, fn.indexOf('\n}'));
-        t.ok(/if \(!estado\.pantalla\) \{/.test(cuerpo), 'solo sin pantalla');
-        t.ok(/valor: 'elegir'/.test(cuerpo) && /valor: 'camara'/.test(cuerpo), 'elegirla o grabar solo con la cámara');
-        t.ok(/if \(dicho === 'elegir'\) return elegirPantalla\(\);/.test(cuerpo), 'elegirla no arranca a grabar');
-        t.ok(/if \(dicho !== 'camara'\) return undefined;/.test(cuerpo), 'y cancelar no hace nada');
-        t.ok(/return grabar\(boton\);/.test(cuerpo));
+        t.ok(/alGrabar\.queHacer\(Boolean\(estado\.pantalla\), window\.nt\.preguntar\)/.test(semanal),
+            'y la pregunta es esa');
     });
 
     t.group('modo semanal · revisar antes de cortar');

@@ -535,8 +535,8 @@ module.exports = function (t) {
     t.test('en la pantalla de clase y en el vídeo de la semana', () => {
         const menu = leer('src', 'js', 'grabar', 'menu-de-palabra.js');
         t.ok(/puedeDividir: p\.puedeDividir === true/.test(menu), 'lo declara la pantalla');
-        t.ok(/dueño\.puedeDividir && cual !== 'espera' && paraIn/.test(menu),
-            'y solo sobre una toma que existe');
+        t.ok(/dueño\.puedeDividir && cual !== 'espera' && texto\.sePuedePartirEn\(donde, w\)/.test(menu),
+            'y solo dentro de una toma que existe, no sobre lo gris de sus costados');
         t.ok(/puedeDividir: true/.test(leer('src', 'js', 'pantalla-vivo.js')), 'la clase lo pide');
         const semanal = leer('src', 'js', 'pantalla-semanal.js');
         t.ok(/puedeDividir: true/.test(semanal), 'y la semanal también, que ahora lo sabe hacer');
@@ -550,8 +550,8 @@ module.exports = function (t) {
         const semanal = leer('src', 'js', 'pantalla-semanal.js');
         const fn = semanal.slice(semanal.indexOf('async function dividir(tomaId, ms) {'));
         t.ok(/await cambiarFicha\(tomaId, \{ tipo: 'dividir', paredMs: ms \}\)/.test(fn));
-        t.ok(/if \(partida && estado\.paso === 'revisar'\) pararEn\(tomaId \+ 1\);/.test(fn),
-            'y se para en la segunda mitad solo si de verdad se partió');
+        t.ok(/lasTomas\(\)\.find\(t => t\.inMs === ms\)/.test(fn) && /if \(segunda\) pararEn\(segunda\.id\);/.test(fn),
+            'y se para en la segunda mitad, la que empieza donde se partió: si no se partió, ninguna');
         t.ok(/if \(hace === 'dividir-aca'\) return dividirEnLaAguja\(\);/.test(semanal),
             'el botón de la aguja llega');
     });

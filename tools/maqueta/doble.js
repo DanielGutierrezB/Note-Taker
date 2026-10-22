@@ -789,9 +789,7 @@ async function aplicar() {
         // Hasta que quede elegida, y no un rato fijo: Grabar sin pantalla
         // pregunta antes de grabar, así que apretarlo antes de tiempo era
         // contestar esa pregunta en vez de grabar.
-        for (let i = 0; i < 50 && !document.querySelector('[data-hace="elegir-pantalla"][data-elegida="si"]'); i++) {
-            await espera(40);
-        }
+        await hastaQue('[data-hace="elegir-pantalla"][data-elegida="si"]', 'la pantalla elegida');
         // La pantalla de inicio, con la tarjeta de lo último grabado y sin ella.
         if (hay('semanal') || hay('semanal-primera-vez')) return;
         // Y con una carpeta elegida a mano: lo que se encontró ahí, para

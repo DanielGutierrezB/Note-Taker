@@ -311,6 +311,20 @@ export function queHaceElBorde(cual, borde) {
     return 'mover';
 }
 
+/**
+ * Si la toma se puede partir en esa palabra: una de adentro que no sea la
+ * primera. Lo gris de los costados no es de la toma —ahí se puede correr un
+ * borde, no partir—, y partir en la primera dejaría una mitad vacía. El motor
+ * dice lo mismo (`vivo.dividir`); esto es para no ofrecer lo que va a negar.
+ */
+export function sePuedePartirEn(texto, w) {
+    const lineaIn = texto.querySelector('.borde.es-in');
+    const lineaOut = texto.querySelector('.borde.es-out');
+    const antes = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    return Boolean(lineaIn) && antes(lineaIn, w) && palabraDespuesDe(lineaIn) !== w
+        && (!lineaOut || antes(w, lineaOut));
+}
+
 export function bordesQuePuede(texto, w) {
     const lineaIn = texto.querySelector('.borde.es-in');
     const lineaOut = texto.querySelector('.borde.es-out');

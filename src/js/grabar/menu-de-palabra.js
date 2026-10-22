@@ -118,13 +118,13 @@ function alClicDerecho(e) {
     const toma = hueco.dataset.toma ? Number(hueco.dataset.toma) : null;
     const bordes = texto.bordesQuePuede(donde, w);
     const opciones = bordes.map(o => ({ ...o, ...comoSeLlama(cual, o.borde) }));
-    // Y partir la toma por esa palabra. Se ofrece justo donde se podría poner el
-    // IN sobre una toma que ya existe, y no es casualidad: las dos dicen «acá
-    // empieza algo». La diferencia es qué pasa con lo de antes — el IN lo deja
-    // afuera y dividir lo deja en una toma propia.
-    const paraIn = bordes.find(o => o.borde === 'in');
-    if (dueño.puedeDividir && cual !== 'espera' && paraIn) {
-        opciones.push({ borde: 'dividir', ms: paraIn.ms, ...NOMBRES.dividir });
+    // Y partir la toma por esa palabra, si es de adentro: las dos, IN y partir,
+    // dicen «acá empieza algo», pero el IN también se corre sobre lo gris y
+    // partir solo cabe dentro de la toma (`sePuedePartirEn`). La diferencia es
+    // qué pasa con lo de antes — el IN lo deja afuera y dividir lo deja en una
+    // toma propia.
+    if (dueño.puedeDividir && cual !== 'espera' && texto.sePuedePartirEn(donde, w)) {
+        opciones.push({ borde: 'dividir', ms: Number(w.dataset.t), ...NOMBRES.dividir });
     }
     if (!opciones.length) return false;
     abierto = { cual, toma, dueño };

@@ -41,6 +41,7 @@ import * as fichas from './grabar/lista-tomas.js';
 import * as montaje from './semanal/montaje.js';
 import * as corte from './semanal/corte.js';
 import * as tarjetas from './semanal/tarjetas.js';
+import * as alGrabar from './semanal/al-grabar.js';
 import * as menuPalabra from './grabar/menu-de-palabra.js';
 import * as rotuloBarra from './grabar/rotulo-barra.js';
 import * as idiomas from './idiomas.js';
@@ -643,12 +644,14 @@ function ponerBorde(cual, tomaId, borde, ms) {
  *
  * En el editor, después se para en la segunda mitad con su ficha abierta: se
  * parte para cambiarle algo —casi siempre la vista— y es la que hay que tener
- * delante. Solo si de verdad se partió: si el motor dijo que no, la toma de al
- * lado ya existía y pararse ahí sería llevarte a otra toma sin motivo.
+ * delante. Se la busca por dónde empieza, que es justo `ms`: si el motor dijo
+ * que no, ninguna empieza ahí y no se mueve nada, y no hace falta saber qué
+ * número le pone el motor a la mitad nueva.
  */
 async function dividir(tomaId, ms) {
-    const partida = await cambiarFicha(tomaId, { tipo: 'dividir', paredMs: ms });
-    if (partida && estado.paso === 'revisar') pararEn(tomaId + 1);
+    await cambiarFicha(tomaId, { tipo: 'dividir', paredMs: ms });
+    const segunda = estado.paso === 'revisar' && lasTomas().find(t => t.inMs === ms);
+    if (segunda) pararEn(segunda.id);
 }
 
 /**
@@ -659,12 +662,12 @@ async function dividir(tomaId, ms) {
  * sabe la hora, y `corte.dondePartir` la lleva a la palabra que empieza ahí
  * para no cortar una por la mitad.
  */
-function dividirEnLaAguja() {
+async function dividirEnLaAguja() {
     const v = estado.enVivo;
     const enElPlan = v && ((estado.montaje && estado.montaje.tomas) || []).find(t => t.id === v.toma);
     const toma = enElPlan && lasTomas().find(t => t.id === v.toma);
-    if (!toma || enElPlan.desdeMs == null) return undefined;
-    return dividir(toma.id, corte.dondePartir(toma, enElPlan.desdeMs + (v.dentro || 0) * 1000));
+    if (!toma || enElPlan.desdeMs == null) return;
+    await dividir(toma.id, corte.dondePartir(toma, enElPlan.desdeMs + (v.dentro || 0) * 1000));
 }
 
 function unTexto(cual, toma, previo) {
@@ -1068,19 +1071,17 @@ async function cambiarIdioma(cual) {
  * el motor la contesta entera; terminada, el cambio va al sidecar y reescribe
  * el XML. Es la misma distinción que en la clase, y la hace el paso y no quien
  * aprieta el botón.
- *
- * @returns {Promise<boolean>} si el cambio entró
  */
 async function cambiarFicha(id, cambio) {
     if (estado.paso !== 'revisar') {
         const r = await window.nt.grabarEditar({ ...cambio, toma: id });
         if (r) { estado.sesion = r; pintar(); }
-        return Boolean(r);
+        return;
     }
     const r = await window.nt.grabarEditarGrabada(estado.json, { ...cambio, toma: id });
     if (!r || !r.ok) {
         avisar((r && r.error) || 'No se pudo guardar ese cambio.', 'error');
-        return false;
+        return;
     }
     estado.grabada = r.estado;
     // Y el montaje otra vez, siempre: cualquiera de los tres cambios mueve lo
@@ -1095,7 +1096,6 @@ async function cambiarFicha(id, cambio) {
     // mentira y escondía un `spawnSync` por clic en el proceso principal.
     await traerElMontaje();
     pintar();
-    return true;
 }
 
 /**
@@ -1237,38 +1237,18 @@ async function elegirPantalla() {
     const r = await filmar.elegirPantalla();
     if (!r.ok) {
         if (r.error) avisar(r.error, 'error');
-        return false;
+        return;
     }
     estado.pantalla = { nombre: r.nombre, ancho: r.ancho, alto: r.alto };
     mirilla.contarLaPantalla(estado, filmar.laPantalla());
     pintar();
-    return true;
 }
 
-/**
- * «Grabar», y sin pantalla elegida, preguntar antes.
- *
- * Sin pantalla el vídeo sale solo con la cámara, llenando el cuadro. Es un vídeo
- * que vale —por eso se pregunta y no se niega—, pero casi siempre quiere decir
- * que se olvidó de elegirla, y eso se descubre recién al mirar lo grabado.
- *
- * Elegir pantalla desde la pregunta no arranca a grabar: el preview cambia, y
- * es para mirarlo antes de apretar Grabar otra vez.
- */
+/** «Grabar», y sin pantalla elegida, preguntar antes (`al-grabar.js`). */
 async function pedirGrabar(boton) {
-    if (!estado.pantalla) {
-        const dicho = await window.nt.preguntar({
-            titulo: 'Todavía no elegiste pantalla',
-            mensaje: 'Si grabás así, el vídeo sale solo con tu cámara, llenando el cuadro.',
-            opciones: [
-                { valor: 'elegir', dice: 'Elegir pantalla' },
-                { valor: 'camara', dice: 'Grabar solo con la cámara' }
-            ]
-        });
-        if (dicho === 'elegir') return elegirPantalla();
-        if (dicho !== 'camara') return undefined;
-    }
-    return grabar(boton);
+    const que = await alGrabar.queHacer(Boolean(estado.pantalla), window.nt.preguntar);
+    if (que === 'elegir') await elegirPantalla();
+    if (que === 'grabar') await grabar(boton);
 }
 
 /**

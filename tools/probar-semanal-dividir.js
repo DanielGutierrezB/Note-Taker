@@ -56,17 +56,18 @@ const pedidos = p => p.evaluate(() => window.pedidos);
     const boton = await p.$('[data-hace="dividir-aca"]');
     decir(Boolean(boton), 'el botón está en la barra del montaje');
     decir(boton && !(await p.evaluate(b => b.disabled, boton)), 'y se puede apretar');
-    // Las palabras de la toma que se está mirando, para saber qué hora tiene
-    // que pedir: una de ellas, nunca una cualquiera.
-    const deLaToma = await p.evaluate(() => [...document.querySelectorAll('#semanal-cuerpo [data-texto="cerrada"] [data-t]')]
-        .map(w => Number(w.dataset.t)));
+    // Las palabras de adentro de la toma que se está mirando, sin lo gris de los
+    // costados: la aguja está en su principio, así que el corte tiene que caer
+    // en la segunda —la primera es el IN, y partir ahí no parte nada—.
+    const deLaToma = await p.evaluate(() => [...document.querySelectorAll(
+        '#semanal-cuerpo [data-texto="cerrada"] [data-t]:not(.es-orilla)')].map(w => Number(w.dataset.t)));
     await espiar(p, 'grabarEditarGrabada');
     await p.click('[data-hace="dividir-aca"]');
     await espera(600);
     let pedido = (await pedidos(p))[0] || {};
     decir(pedido.tipo === 'dividir', `le pide al motor dividir (${JSON.stringify(pedido)})`);
-    decir(deLaToma.includes(pedido.paredMs) && pedido.paredMs !== deLaToma[0],
-        'en una palabra de la toma, que no es la primera: no corta ninguna por la mitad');
+    decir(deLaToma.length > 2 && pedido.paredMs === deLaToma[1],
+        'en la palabra donde está la aguja, la segunda de la toma: no corta ninguna por la mitad');
 
     console.log('\n── En el editor: el clic derecho sobre una palabra\n');
     await p.goto(`${sitio.url}?e=semanal-revisar`, { waitUntil: 'networkidle0' });
@@ -86,6 +87,8 @@ const pedidos = p => p.evaluate(() => window.pedidos);
         .map(b => b.textContent.trim()));
     decir(deAntes.includes('Poner el IN acá'),
         `lo de antes del IN se ve y deja correr el IN hasta ahí (${deAntes.join(' · ')})`);
+    decir(!deAntes.some(o => /Dividir/.test(o)),
+        'pero no ofrece partir: esa palabra no es de la toma, y el motor lo negaría');
     await p.keyboard.press('Escape');
     await espera(150);
 
