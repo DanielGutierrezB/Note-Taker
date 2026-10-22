@@ -615,6 +615,92 @@ module.exports = function (t) {
             'y entran todos los tramos de pantalla, no solo el primero');
     });
 
+    t.group('modo semanal · antes de grabar, un preview y los controles debajo');
+
+    // Lo pidió el editor al ver que elegir pantalla corría Grabar hacia abajo:
+    // arriba una sola vista, «Preview», y debajo cámara y micrófono, pantalla y
+    // Profesor Preview, y Grabar al costado.
+
+    t.test('un solo preview, sin las miniaturas sueltas de antes', async () => {
+        const tarjetas = await cargarTarjetas();
+        const html = tarjetas.tarjetaListo(paraEmpezar());
+        t.eq((html.match(/class="semanal-escena"/g) || []).length, 1, 'el vídeo, una vez');
+        t.ok(/class="campo semanal-preview">\s*<span class="rotulo">Preview<\/span>/.test(html), 'con su nombre');
+        t.ok(!html.includes('id="semanal-camara"') && !html.includes('id="semanal-pantalla"'),
+            'ni la miniatura de la cámara ni la de la pantalla');
+    });
+
+    t.test('en el orden que se pidió', async () => {
+        const tarjetas = await cargarTarjetas();
+        const html = tarjetas.tarjetaListo(paraEmpezar());
+        const orden = ['semanal-preview', 'data-campo="camara"', 'data-campo="micro"',
+            'data-hace="elegir-pantalla"', 'data-hace="mirilla"', 'data-hace="grabar"', 'Cómo se graba'];
+        const donde = orden.map(x => html.indexOf(x));
+        t.ok(donde.every(i => i >= 0), 'están todos');
+        t.deep(donde.slice().sort((a, b) => a - b), donde, orden.join(' → '));
+    });
+
+    t.test('elegir pantalla no mueve nada: los controles son los mismos con y sin', async () => {
+        // Lo que empujaba Grabar era una fila que aparecía al elegir pantalla.
+        // Ahora cambian textos y atributos, y la forma es la misma.
+        const tarjetas = await cargarTarjetas();
+        const forma = html => html.slice(html.indexOf('semanal-controles'), html.indexOf('Cómo se graba'))
+            .replace(/>[^<]*</g, '><')
+            .replace(/\s(title|data-elegida|aria-pressed)="[^"]*"/g, '');
+        t.eq(forma(tarjetas.tarjetaListo(paraEmpezar({ pantalla: null }))),
+            forma(tarjetas.tarjetaListo(paraEmpezar())));
+    });
+
+    t.test('el botón de pantalla dice lo que falta, o cuál está', async () => {
+        const tarjetas = await cargarTarjetas();
+        const sin = tarjetas.tarjetaListo(paraEmpezar({ pantalla: null }));
+        t.ok(sin.includes('Elegir pantalla para grabar') && sin.includes('data-elegida="no"'),
+            'sin pantalla, morado lleno: es lo que falta');
+        const con = tarjetas.tarjetaListo(paraEmpezar());
+        t.ok(con.includes('Cambiar pantalla · Pantalla 1') && con.includes('data-elegida="si"'),
+            'con una, dice cuál y baja a teñido');
+    });
+
+    t.test('Grabar es el rojo de la tarjeta, y no queda ningún otro primario', async () => {
+        const tarjetas = await cargarTarjetas();
+        const html = tarjetas.tarjetaListo(paraEmpezar());
+        t.ok(/class="btn btn-grabar" type="button" data-hace="grabar"/.test(html));
+        t.ok(!html.includes('btn-primario'), 'una sola acción principal por pantalla');
+    });
+
+    t.test('sin micrófono se dice por qué, debajo del nivel, y Grabar no se puede apretar', async () => {
+        const tarjetas = await cargarTarjetas();
+        const html = tarjetas.tarjetaListo(paraEmpezar({
+            audio: { abierto: false, pico: 0, error: 'No se pudo acceder al audio: Requested device not found' }
+        }));
+        const micro = html.slice(html.indexOf('semanal-micro'), html.indexOf('elegir-pantalla'));
+        t.ok(micro.includes('Requested device not found'), 'en la columna del micrófono');
+        t.ok(/data-hace="grabar" disabled/.test(html));
+    });
+
+    t.test('Profesor Preview se llama igual encendido y apagado', async () => {
+        // Lo que dice si está puesta es el color, no otro nombre.
+        const tarjetas = await cargarTarjetas();
+        for (const puesta of [false, true]) {
+            const b = tarjetas.verme(puesta);
+            t.ok(b.includes('Profesor Preview'), `${puesta ? 'encendido' : 'apagado'}`);
+            t.ok(b.includes(`aria-pressed="${puesta}"`));
+        }
+    });
+
+    t.test('Grabar sin pantalla pregunta antes, y sin respuesta no graba', () => {
+        // Grabar solo con la cámara vale, así que se pregunta y no se niega.
+        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        t.ok(/if \(hace === 'grabar'\) return pedirGrabar\(boton\);/.test(semanal), 'el botón pasa por la pregunta');
+        const fn = semanal.slice(semanal.indexOf('async function pedirGrabar(boton) {'));
+        const cuerpo = fn.slice(0, fn.indexOf('\n}'));
+        t.ok(/if \(!estado\.pantalla\) \{/.test(cuerpo), 'solo sin pantalla');
+        t.ok(/valor: 'elegir'/.test(cuerpo) && /valor: 'camara'/.test(cuerpo), 'elegirla o grabar solo con la cámara');
+        t.ok(/if \(dicho === 'elegir'\) return elegirPantalla\(\);/.test(cuerpo), 'elegirla no arranca a grabar');
+        t.ok(/if \(dicho !== 'camara'\) return undefined;/.test(cuerpo), 'y cancelar no hace nada');
+        t.ok(/return grabar\(boton\);/.test(cuerpo));
+    });
+
     t.group('modo semanal · revisar antes de cortar');
 
     const semanal = laPantalla();

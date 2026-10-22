@@ -786,7 +786,12 @@ async function aplicar() {
         // pantalla que este escenario retrata, así que acá se termina.
         if (hay('semanal-sin-pantalla')) return;
         await apretar('[data-hace="elegir-pantalla"]', 'Elegir pantalla');
-        await espera(120);
+        // Hasta que quede elegida, y no un rato fijo: Grabar sin pantalla
+        // pregunta antes de grabar, así que apretarlo antes de tiempo era
+        // contestar esa pregunta en vez de grabar.
+        for (let i = 0; i < 50 && !document.querySelector('[data-hace="elegir-pantalla"][data-elegida="si"]'); i++) {
+            await espera(40);
+        }
         // La pantalla de inicio, con la tarjeta de lo último grabado y sin ella.
         if (hay('semanal') || hay('semanal-primera-vez')) return;
         // Y con una carpeta elegida a mano: lo que se encontró ahí, para

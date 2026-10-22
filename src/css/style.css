@@ -551,7 +551,7 @@ b {
   color: var(--text-primary);
 }
 
-/* Algo que se enciende y conviene ver que está: «Verme al grabar». Apagado va
+/* Algo que se enciende y conviene ver que está: «Profesor Preview». Apagado va
    teñido de acento, que dice «esto se puede activar» sin pelearle al primario
    de la tarjeta —«Grabar», o «Abrir/Cerrar toma»—; en gris tenue se perdía
    entre los textos. Encendido va lleno, que es lo que se ve de reojo. */
@@ -2352,11 +2352,151 @@ kbd {
   text-align: left;
 }
 
-/* La vista previa de la pantalla elegida es más ancha que la de la cámara: lo
-   que hay que reconocer ahí es una ventana con su contenido, no una cara. */
-.semanal-pantalla-previa {
-  width: 168px;
-  height: 94px;
+/* El preview de antes de grabar: el vídeo, grande y al centro. Siempre del
+   mismo tamaño, tenga pantalla o no, así que elegirla cambia lo que se ve
+   adentro y no mueve nada de lo de abajo —era lo que empujaba Grabar—. */
+.semanal-preview .semanal-escena {
+  width: 100%;
+  max-width: 760px;
+  align-self: center;
+  border-radius: 8px;
+}
+
+/* Con dos renglones reservados, diga lo que diga: con pantalla la explicación
+   es más larga y bajaba los controles un renglón, que era volver a mover
+   Grabar por la puerta de atrás. */
+.semanal-preview > .v3 {
+  align-self: center;
+  max-width: 760px;
+  min-height: 2lh;
+  text-align: center;
+}
+
+/* Cámara sobre pantalla y micrófono sobre Profesor Preview, en una rejilla:
+   así los de cada columna miden siempre lo mismo. La tercera columna es Grabar,
+   un cuadrado de la altura de las dos filas.
+
+   La fila del medio tiene un mínimo y no un alto: con el micrófono caído, el
+   porqué va debajo del nivel, y ahí Grabar se estira con ella en vez de pisarlo.
+   La tercera columna mide lo que miden las dos filas juntas —54 + 8 de hueco +
+   36—, que es lo que lo hace cuadrado. */
+.semanal-controles {
+  display: grid;
+  grid-template-columns: 1fr 1fr 98px;
+  grid-template-rows: auto minmax(54px, auto) 36px;
+  column-gap: var(--sp-3);
+  row-gap: var(--sp-3);
+}
+
+.semanal-col-1 { grid-column: 1; }
+.semanal-col-2 { grid-column: 2; }
+
+.semanal-controles > .rotulo {
+  grid-row: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.semanal-controles > .rotulo .hp-ico {
+  width: 14px;
+  height: 14px;
+  flex-basis: 14px;
+}
+
+.semanal-controles > select,
+.semanal-micro {
+  grid-row: 2;
+  align-self: start;
+  min-width: 0;
+}
+
+.semanal-controles select {
+  width: 100%;
+  height: 36px;
+}
+
+.semanal-micro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* El nivel, del ancho del desplegable y justo debajo: es de él. */
+.semanal-micro .nivel {
+  flex: none;
+  width: 100%;
+  max-width: none;
+}
+
+.semanal-controles > .btn-pantalla,
+.semanal-verme {
+  grid-row: 3;
+  min-width: 0;
+}
+
+.semanal-controles > .btn-pantalla,
+.semanal-verme > .btn {
+  width: 100%;
+  height: 36px;
+  justify-content: center;
+  font-size: 13px;
+}
+
+/* Elegir pantalla: morado, como el botón de compartir de macOS, que es el que
+   se aprieta después. Sin pantalla es lo que falta y tiene que verse; con una
+   elegida baja a teñido, que ya no es lo que falta. El nombre de la ventana
+   puede ser largo, y se corta con puntos antes que romper la fila. */
+.btn-pantalla {
+  background: #6357e6;
+  border-color: #6357e6;
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-pantalla:hover:not(:disabled) {
+  background: #6f64ee;
+  border-color: #6f64ee;
+}
+
+.btn-pantalla[data-elegida='si'] {
+  background: color-mix(in srgb, #8c82ff 16%, transparent);
+  border-color: color-mix(in srgb, #8c82ff 45%, transparent);
+  color: #b3acff;
+}
+
+.btn-pantalla[data-elegida='si']:hover:not(:disabled) {
+  background: color-mix(in srgb, #8c82ff 24%, transparent);
+}
+
+.semanal-pantalla-dice {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Grabar: rojo, como cualquier botón de grabar, y la acción principal de esta
+   tarjeta. Cuadrado y de la altura de las dos filas, a la derecha: no se mueve
+   elijas lo que elijas arriba. */
+.btn-grabar {
+  grid-column: 3;
+  grid-row: 2 / span 2;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+  background: #d1363a;
+  border-color: #d1363a;
+  color: #fff;
+  /* El escalón más grande de la escala: el botón es un cuadrado de casi cien
+     píxeles, y con la letra de un botón cualquiera se veía vacío. */
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.btn-grabar:hover:not(:disabled) {
+  background: #dc4246;
+  border-color: #dc4246;
 }
 
 /* El reproductor y, a su lado, lo que hay que decidir antes de exportar.

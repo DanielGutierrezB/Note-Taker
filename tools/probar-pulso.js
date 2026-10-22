@@ -63,8 +63,7 @@ async function correr({ win }) {
 
     // Con qué entró cada fuente, que es lo que ahora queda anotado.
     const fuente = await js(`(async () => {
-        const v = document.querySelector('#semanal-escena-camara')
-            || document.querySelector('#semanal-camara');
+        const v = document.querySelector('#semanal-escena-camara');
         const p = v && v.srcObject && v.srcObject.getVideoTracks()[0];
         const s = p ? p.getSettings() : null;
         return s ? s.width + 'x' + s.height : 'sin cámara';
@@ -73,8 +72,7 @@ async function correr({ win }) {
 
     decir('matándole la pista de la cámara, a propósito…');
     const muerta = await js(`(() => {
-        const v = document.querySelector('#semanal-escena-camara')
-            || document.querySelector('#semanal-camara');
+        const v = document.querySelector('#semanal-escena-camara');
         const p = v && v.srcObject && v.srcObject.getVideoTracks()[0];
         if (!p) return 'no había pista';
         p.stop();

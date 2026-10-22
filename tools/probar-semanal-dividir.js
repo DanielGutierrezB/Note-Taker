@@ -11,7 +11,7 @@
  *   · grabando, cambiar de vista con una toma abierta le pide al motor que la
  *     parta DESDE AHORA, y no que le cambie la vista entera.
  *
- * Y que «Verme al grabar» se vea como algo que se enciende: azul teñido
+ * Y que «Profesor Preview» se vea como algo que se enciende: azul teñido
  * apagado, y lleno encendido.
  *
  * Lo que el motor hace con cada pedido lo prueba la suite
@@ -120,7 +120,7 @@ const pedidos = p => p.evaluate(() => window.pedidos);
     decir(!todos.some(x => x && x.tipo === 'vista' && x.vista === otra),
         'y no le cambia la vista a la toma entera');
 
-    console.log('\n── «Verme al grabar»\n');
+    console.log('\n── «Profesor Preview»\n');
     const color = () => p.evaluate(() => {
         const b = document.querySelector('#vista-semanal [data-hace="mirilla"]');
         const c = getComputedStyle(b);

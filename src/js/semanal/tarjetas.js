@@ -109,7 +109,11 @@ export function escena(estado, vista) {
  *
  * En azul y no en gris (`.btn-acento`): tenue se perdía entre los textos de la
  * tarjeta y no se leía como algo que se puede encender. Lleno cuando está
- * puesta, para que se vea de un vistazo que la ventanita está abierta.
+ * puesta, para que se vea de un vistazo que la ventanita está abierta; el
+ * nombre no cambia, lo que cambia es el color.
+ *
+ * «Profesor Preview» y no «Verme al grabar»: es el nombre con que el editor
+ * la pidió, y el que usa el equipo para el plano del profesor.
  */
 export function verme(puesta) {
     return `
@@ -119,7 +123,7 @@ export function verme(puesta) {
                   ? 'Cierra la ventanita flotante'
                   : 'Abre una ventanita en esa misma esquina de tu pantalla, encima de todo, '
                       + 'con tu cámara del tamaño en que va a salir. No se graba a sí misma'}">
-        ${icono('camara')} ${puesta ? 'Me estoy viendo' : 'Verme al grabar'}</button>`;
+        ${icono('camara')} Profesor Preview</button>`;
 }
 
 /**
@@ -230,63 +234,44 @@ function filaDeSesion(u, o) {
 /** Antes de grabar: qué se va a grabar, y el botón. */
 export function tarjetaListo(estado) {
     const puede = estado.audio.abierto && (estado.pantalla || estado.camara);
+    const pantalla = estado.pantalla;
     return `
       ${tarjetaDeLaUltima(estado)}
       <div class="tarjeta">
         <div class="tarjeta-cuerpo semanal-campos">
-          <div class="campo">
-            <span class="rotulo">Tu cámara</span>
-            <div class="campo-fila">
-              <select class="camara-elige" data-campo="camara">
-                ${opciones(estado.camaras.map(c => c.nombre), estado.camara && estado.camara.nombre)}
-              </select>
-              <video id="semanal-camara" class="camara-previa" muted playsinline></video>
-            </div>
-            <span class="v3">Va en la esquina de abajo a la derecha del vídeo, siempre.</span>
-          </div>
+          ${elPreview(estado)}
 
-          <div class="campo">
-            <span class="rotulo">Tu voz</span>
-            <div class="campo-fila">
-              <select class="camara-elige" data-campo="micro">
+          <div class="semanal-controles">
+            <span class="rotulo semanal-col-1">${icono('camara')} Cámara</span>
+            <span class="rotulo semanal-col-2">${icono('microfono')} Micrófono</span>
+
+            <select class="semanal-col-1" data-campo="camara" aria-label="Cámara">
+              ${opciones(estado.camaras.map(c => c.nombre), estado.camara && estado.camara.nombre)}
+            </select>
+            <div class="semanal-col-2 semanal-micro">
+              <select data-campo="micro" aria-label="Micrófono">
                 ${opciones(estado.entradas.filter(e => e.tipo !== 'app').map(e => e.nombre),
                     estado.micro && estado.micro.nombre)}
               </select>
               <div class="nivel" id="semanal-nivel"><div class="nivel-barra"></div></div>
+              ${estado.audio.abierto ? '' : `<span class="v3 semanal-sin-micro">${
+                  esc(estado.audio.error || 'Sin micrófono no se puede grabar.')}</span>`}
             </div>
-            <span class="v3">${estado.audio.abierto
-                ? 'Decí algo: si la barra no se mueve, elegí otra entrada.'
-                : esc(estado.audio.error || 'Sin micrófono no se puede grabar.')}</span>
-          </div>
 
-          <div class="campo">
-            <span class="rotulo">Tu pantalla</span>
-            <div class="campo-fila">
-              <button class="btn" type="button" data-hace="elegir-pantalla"
-                      title="Abre el selector de macOS para elegir qué pantalla o qué ventana se graba">
-                ${estado.pantalla ? 'Elegir otra…' : 'Elegir pantalla…'}</button>
-              ${estado.pantalla
-                ? `<video id="semanal-pantalla" class="camara-previa semanal-pantalla-previa"
-                          muted playsinline></video>
-                   <span class="v2">${esc(estado.pantalla.nombre)}</span>`
-                : '<span class="v2">Todavía no elegiste ninguna.</span>'}
-            </div>
-            <span class="v3">${estado.pantalla
-                ? 'Es el fondo del vídeo. Si cambiás de ventana a mitad de la grabación, se graba el cambio.'
-                : 'Sin pantalla, el vídeo sale con tu cámara a pantalla completa.'}</span>
-          </div>
+            <button class="btn btn-pantalla semanal-col-1" type="button" data-hace="elegir-pantalla"
+                    data-elegida="${pantalla ? 'si' : 'no'}"
+                    title="${pantalla
+                        ? `Grabando ${esc(pantalla.nombre)}. Si cambiás de ventana a mitad de la grabación, se graba el cambio`
+                        : 'Abre el selector de macOS para elegir qué pantalla o qué ventana se graba'}">
+              ${icono('pantalla')}<span class="semanal-pantalla-dice">${pantalla
+                  ? `Cambiar pantalla · ${esc(pantalla.nombre)}` : 'Elegir pantalla para grabar'}</span></button>
+            <div class="semanal-col-2 semanal-verme">${verme(estado.mirilla)}</div>
 
-          <div class="campo">
-            <span class="rotulo">Así va a quedar</span>
-            <div class="campo-fila">
-              ${escena(estado, 'R')}
-              <div class="crece">
-                <span class="v3">Es el vídeo, no la cámara: tu pantalla de fondo y tu cara
-                  en la esquina, del tamaño y en el sitio en que van a salir. Si la cara tapa algo
-                  que vas a explicar, movelo ahora.</span>
-                <div class="campo-fila" style="margin-top:8px">${verme(estado.mirilla)}</div>
-              </div>
-            </div>
+            <button class="btn btn-grabar" type="button" data-hace="grabar" ${puede ? '' : 'disabled'}
+                    title="${puede
+                        ? 'Empieza a grabar la cámara, la pantalla y tu voz'
+                        : 'Falta el micrófono: sin él no se puede oír el «3, 2, 1»'}">
+              Grabar</button>
           </div>
 
           <div class="campo">
@@ -297,16 +282,28 @@ export function tarjetaListo(estado) {
               Oír la voz tarda unos segundos, así que si preferís no esperar, <b>Enter</b> abre y
               cierra la toma en el acto.</span>
           </div>
-
-          <div class="campo-fila" style="margin-top:8px">
-            <span class="crece"></span>
-            <button class="btn btn-primario" type="button" data-hace="grabar" ${puede ? '' : 'disabled'}
-                    title="${puede
-                        ? 'Empieza a grabar la cámara, la pantalla y tu voz'
-                        : 'Falta el micrófono: sin él no se puede oír el «3, 2, 1»'}">
-              Grabar</button>
-          </div>
         </div>
+      </div>`;
+}
+
+/**
+ * El preview: una sola vista, al centro y siempre del mismo tamaño.
+ *
+ * Antes eran tres cosas —la miniatura de la cámara, la de la pantalla y «Así va
+ * a quedar»— y elegir pantalla hacía aparecer una fila que empujaba Grabar
+ * hacia abajo. Ahora es el vídeo y nada más (`escena`): sin pantalla, tu cámara
+ * llenando el cuadro, que es como sale; con pantalla, la pantalla de fondo y la
+ * cámara en la esquina. Cambia lo que se ve adentro, no lo que ocupa.
+ */
+function elPreview(estado) {
+    return `
+      <div class="campo semanal-preview">
+        <span class="rotulo">Preview</span>
+        ${escena(estado, 'R')}
+        <span class="v3">${estado.pantalla
+            ? 'Así sale el vídeo: tu pantalla de fondo y tu cara en la esquina, del tamaño y en el '
+                + 'sitio en que van a salir. Si la cara tapa algo que vas a explicar, movelo ahora.'
+            : 'Todavía no elegiste pantalla. Cuando la elijas, acá vas a ver cómo queda el vídeo.'}</span>
       </div>`;
 }
 

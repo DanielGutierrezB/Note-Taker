@@ -153,7 +153,7 @@ async function laPasada({ win, arg }) {
     const pantalla = await js(`(async () => {
         document.querySelector('[data-hace="elegir-pantalla"]').click();
         await new Promise(r => setTimeout(r, 2500));
-        const v = document.querySelector('#semanal-pantalla');
+        const v = document.querySelector('#semanal-escena-fondo');
         const pista = v && v.srcObject && v.srcObject.getVideoTracks()[0];
         const s = pista ? pista.getSettings() : null;
         return s ? s.width + 'x' + s.height : 'no quedó elegida';

@@ -333,7 +333,7 @@ async function abrirLaCamara() {
     });
     if (!r.ok) { avisar(r.error, 'error'); return; }
     app.ajustes = (await window.nt.ajustesGuardar({ camara: estado.camara.nombre })).ajustes;
-    pegarLaCamara();
+    pegarLaEscena();
 }
 
 /**
@@ -351,9 +351,6 @@ function pegar(sel, stream) {
     video.srcObject = stream;
     video.play().catch(() => {});
 }
-
-const pegarLaCamara = () => pegar('#semanal-camara', ojo.elStream());
-const pegarLaPantalla = () => pegar('#semanal-pantalla', filmar.laPantalla());
 
 function pegarLaEscena() {
     pegar('#semanal-escena-fondo', filmar.laPantalla());
@@ -384,7 +381,7 @@ const MOMENTOS = {
     listo: {
         titulo: 'Tu vídeo de la semana',
         tarjeta: tarjetas.tarjetaListo,
-        luego: () => { pegarLaCamara(); pegarLaPantalla(); pegarLaEscena(); }
+        luego: () => pegarLaEscena()
     },
     grabando: {
         titulo: 'Grabando',
@@ -793,17 +790,7 @@ async function alClic(e) {
     if (!boton || boton.disabled) return;
     const hace = boton.dataset.hace;
 
-    if (hace === 'elegir-pantalla') {
-        const r = await filmar.elegirPantalla();
-        if (!r.ok) {
-            if (r.error) avisar(r.error, 'error');
-            return;
-        }
-        estado.pantalla = { nombre: r.nombre, ancho: r.ancho, alto: r.alto };
-        mirilla.contarLaPantalla(estado, filmar.laPantalla());
-        pintar();
-        return;
-    }
+    if (hace === 'elegir-pantalla') return elegirPantalla();
     if (hace === 'cambiar-pantalla') return cambiarPantalla(boton);
     if (hace === 'mirilla') return laMirilla(!estado.mirilla);
     if (hace === 'vista') return cambiarVista(boton.dataset.vista);
@@ -835,7 +822,7 @@ async function alClic(e) {
         pintar();
         return undefined;
     }
-    if (hace === 'grabar') return grabar(boton);
+    if (hace === 'grabar') return pedirGrabar(boton);
     if (hace === 'terminar') return terminar(boton);
     if (hace === 'exportar') return exportar(boton);
     if (hace === 'ajustar') return ajustar();
@@ -1226,6 +1213,49 @@ async function cambiarVista(nombre) {
         if (r) estado.sesion = r;
     }
     pintar();
+}
+
+/**
+ * Elegir qué pantalla o ventana se graba, con el selector de macOS.
+ *
+ * @returns {Promise<boolean>} si quedó una elegida
+ */
+async function elegirPantalla() {
+    const r = await filmar.elegirPantalla();
+    if (!r.ok) {
+        if (r.error) avisar(r.error, 'error');
+        return false;
+    }
+    estado.pantalla = { nombre: r.nombre, ancho: r.ancho, alto: r.alto };
+    mirilla.contarLaPantalla(estado, filmar.laPantalla());
+    pintar();
+    return true;
+}
+
+/**
+ * «Grabar», y sin pantalla elegida, preguntar antes.
+ *
+ * Sin pantalla el vídeo sale solo con la cámara, llenando el cuadro. Es un vídeo
+ * que vale —por eso se pregunta y no se niega—, pero casi siempre quiere decir
+ * que se olvidó de elegirla, y eso se descubre recién al mirar lo grabado.
+ *
+ * Elegir pantalla desde la pregunta no arranca a grabar: el preview cambia, y
+ * es para mirarlo antes de apretar Grabar otra vez.
+ */
+async function pedirGrabar(boton) {
+    if (!estado.pantalla) {
+        const dicho = await window.nt.preguntar({
+            titulo: 'Todavía no elegiste pantalla',
+            mensaje: 'Si grabás así, el vídeo sale solo con tu cámara, llenando el cuadro.',
+            opciones: [
+                { valor: 'elegir', dice: 'Elegir pantalla' },
+                { valor: 'camara', dice: 'Grabar solo con la cámara' }
+            ]
+        });
+        if (dicho === 'elegir') return elegirPantalla();
+        if (dicho !== 'camara') return undefined;
+    }
+    return grabar(boton);
 }
 
 /**

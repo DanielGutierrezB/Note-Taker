@@ -66,6 +66,12 @@ const DIBUJOS = {
         '<rect x="3" y="7.2" width="12.6" height="9.6" rx="2"/>' +
         '<path d="m15.6 11.4 4.4-2.6v6.4l-4.4-2.6z"/>',
 
+    // La pantalla que se graba: el monitor con su pie. Es el dibujo del botón
+    // de compartir de macOS, que es lo que se aprieta después.
+    pantalla:
+        '<rect x="3" y="4.6" width="18" height="12" rx="2"/>' +
+        '<path d="M8.6 20h6.8M12 16.6V20"/>',
+
     // El idioma: el globo con su meridiano, que es el dibujo que cualquiera ya
     // leyó en un selector de idioma. A 16 px lo que lo separa del reloj es el
     // meridiano vertical: sin él, un círculo con una raya es un reloj.
