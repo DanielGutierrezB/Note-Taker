@@ -94,6 +94,23 @@ async function aPunto(p, sitio, escenario) {
         decir(cerca(sin.preview.alto, m.preview.alto), 'y el preview mide lo mismo con pantalla y sin');
     }
 
+    // Y que entre en la ventana, de alto. Con el preview fijo en 760 px de ancho
+    // las instrucciones quedaban afuera aun en el tamaño de fábrica, y en una
+    // ventana más baja se iban también los controles: lo vio el editor al
+    // abrirla en su computador, y acá se medía solo a 900 de alto.
+    console.log('\n── Entra en la ventana, de alto\n');
+    for (const [ancho, alto] of [[1180, 840], [1000, 690], [1440, 900]]) {
+        await p.setViewport({ width: ancho, height: alto });
+        await aPunto(p, sitio, 'semanal');
+        const m = await p.evaluate(() => {
+            const raiz = document.querySelector('#vista-semanal');
+            const ultima = [...raiz.querySelectorAll('.semanal-campos > .campo')].pop().getBoundingClientRect();
+            return { abajo: Math.round(ultima.bottom), alto: innerHeight,
+                preview: Math.round(raiz.querySelector('.semanal-preview .semanal-escena').getBoundingClientRect().width) };
+        });
+        decir(m.abajo <= m.alto, `a ${ancho}×${alto} se ven hasta las instrucciones (terminan en ${m.abajo}, el preview mide ${m.preview})`);
+    }
+
     console.log('\n── Grabar sin pantalla pregunta\n');
     await p.setViewport({ width: 1180, height: 900 });
     const probar = async contesta => {

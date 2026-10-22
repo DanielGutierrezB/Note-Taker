@@ -2355,9 +2355,14 @@ kbd {
 /* El preview de antes de grabar: el vídeo, grande y al centro. Siempre del
    mismo tamaño, tenga pantalla o no, así que elegirla cambia lo que se ve
    adentro y no mueve nada de lo de abajo —era lo que empujaba Grabar—. */
+/* Y del tamaño que deje la ventana: lo demás —la barra, lo último que se grabó,
+   los controles y las instrucciones— ocupa unos 500 px de alto, y con el preview
+   fijo en 760 de ancho las instrucciones quedaban fuera aun en el tamaño de
+   fábrica (1180 × 840). Así el preview crece con la altura hasta 760 y no baja
+   de 320, que era el tamaño de la vista previa de antes. */
 .semanal-preview .semanal-escena {
-  width: 100%;
-  max-width: 760px;
+  width: clamp(320px, calc((100vh - 500px) * 16 / 9), 760px);
+  max-width: 100%;
   align-self: center;
   border-radius: 8px;
 }
