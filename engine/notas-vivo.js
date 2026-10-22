@@ -781,7 +781,9 @@ function abrirToma(estado, ms, opciones) {
  *
  *   · las palabras y las dos orillas se reparten por el corte, sin releer nada;
  *   · la **vista** la heredan las dos, porque el gesto es justamente cambiarle
- *     la vista a una de ellas y hay que poder ver cuál se cambió;
+ *     la vista a una de ellas y hay que poder ver cuál se cambió. Salvo que se
+ *     pida otra para la segunda (`vista`): es cambiar de plano a mitad de
+ *     una toma, y una vista que no existe no parte nada;
  *   · el **OUT** y su foto son del final, así que son de la segunda;
  *   · la **nota de la toma** se queda en la primera y no se copia. Es un
  *     marcador del XML: duplicarla pondría dos marcadores iguales en Premiere,
@@ -797,10 +799,12 @@ function abrirToma(estado, ms, opciones) {
  * @param {object} estado el de la sesión, se muta
  * @param {object} toma la que se parte
  * @param {number} ms la hora de la palabra que abre la segunda mitad
+ * @param {{vista?: string}} [cambio] la vista con que sigue la segunda mitad
  * @returns {{primera:object, segunda:object}|null} null si no se puede partir ahí
  */
-function dividir(estado, toma, ms) {
+function dividir(estado, toma, ms, { vista } = {}) {
     if (!toma || !Number.isFinite(ms)) return null;
+    if (vista != null && !VISTAS.some(v => v.nombre === vista)) return null;
     if (toma.inMs == null || ms <= toma.inMs) return null;
     if (toma.outMs != null && ms >= toma.outMs) return null;
     // Que las dos mitades sean tomas y no un fotograma: el mismo mínimo con el
@@ -813,7 +817,7 @@ function dividir(estado, toma, ms) {
 
     const segunda = {
         id: toma.id + 1,
-        vista: toma.vista,
+        vista: vista || toma.vista,
         comentario: '',
         cuenta: '',
         inMs: ms,

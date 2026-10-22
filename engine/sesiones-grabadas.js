@@ -434,7 +434,7 @@ function editarGrabada(json, cambio) {
         // pidió para «las tomas anteriores o editando las notas tomadas».
         const toma = (estado.tomas || []).find(t => t.id === c.toma);
         if (!toma) throw new Error(`Esa sesión no tiene la toma ${c.toma}.`);
-        const r = vivo.dividir(estado, toma, Number(c.paredMs));
+        const r = vivo.dividir(estado, toma, Number(c.paredMs), { vista: c.vista });
         if (!r) {
             throw new Error('No puedo dividir ahí: el corte cae sobre un borde de la toma. ' +
                 'Elegí una palabra del medio.');

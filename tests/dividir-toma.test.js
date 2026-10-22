@@ -105,6 +105,17 @@ module.exports = function (t) {
         t.eq(r.primera.vista, 'PV');
     });
 
+    t.test('o la segunda sigue con otra, si se pide: cambiar de plano a mitad', () => {
+        const toma = unaToma();
+        const r = vivo.dividir(estadoCon(toma), toma, seg(20), { vista: 'R' });
+        t.eq(r.primera.vista, 'PV', 'lo de antes sigue como estaba');
+        t.eq(r.segunda.vista, 'R', 'y lo de después, con la nueva');
+        const otra = unaToma();
+        t.eq(vivo.dividir(estadoCon(otra), otra, seg(20), { vista: 'NO-EXISTE' }), null,
+            'una vista que no existe no parte nada, antes que partir sin ella');
+        t.eq(otra.outMs, unaToma().outMs, 'y la toma queda entera');
+    });
+
     t.test('la nota de la toma no se duplica: sería dos marcadores iguales en Premiere', () => {
         const toma = unaToma();
         const r = vivo.dividir(estadoCon(toma), toma, seg(20));
@@ -571,7 +582,8 @@ module.exports = function (t) {
         // editando las notas tomadas.»
         const grabadas = leer('engine', 'sesiones-grabadas.js');
         t.ok(/c\.tipo === 'dividir'/.test(grabadas), 'entra por `editarGrabada`');
-        t.ok(/vivo\.dividir\(estado, toma, Number\(c\.paredMs\)\)/.test(grabadas));
+        t.ok(/vivo\.dividir\(estado, toma, Number\(c\.paredMs\), \{ vista: c\.vista \}\)/.test(grabadas),
+            'con la misma vista opcional que grabando');
         t.ok(/referencias\.renumerar\(sitio\.base, estado\.secuencia/.test(grabadas),
             'con sus fotos');
     });

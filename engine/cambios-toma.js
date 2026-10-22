@@ -143,7 +143,8 @@ function editar(sesion, cambio) {
         // porque su paso no es de una toma sola —aparece otra y los números
         // corren— y el portero de abajo no sabría qué fotografiar.
         case 'dividir':
-            return dividir(sesion, toma, c) || espejo.resumen(sesion);
+            dividir(sesion, toma, c);
+            return espejo.resumen(sesion);
         // Los otros cinco se resuelven con lo que ya está escrito, así que son
         // los mismos que se hacen sobre una clase ya terminada (`editarGrabada`
         // en `clases-grabadas.js`), y de ahí que los aplique la misma función.
@@ -352,22 +353,16 @@ function eliminar(sesion, toma) {
  * una vez. En dos pasos, un deshacer dejaba la toma partida con la vista vieja
  * en las dos mitades, que no es nada que alguien haya querido.
  *
- * @returns {object|null} el resumen, o null si no se pudo partir ahí
+ * @returns {boolean} si se partió
  */
 function dividir(sesion, toma, c) {
     const ms = Number(c.paredMs);
-    const vista = esVista(c.vista) ? c.vista : null;
+    const vista = c.vista || null;
     const antes = historial.foto(toma);
-    const r = vivo.dividir(sesion.estado, toma, ms);
-    // No se pudo partir ahí —el corte cae sobre un borde, o deja media toma de
-    // una décima—: sin cambio no hay paso, igual que un borde que no se movió.
-    if (!r) return null;
-    if (vista) r.segunda.vista = vista;
-
-    correrLoDeAfuera(sesion, r.movidas);
-    // Y la foto del OUT se va con el OUT, que ahora es de la segunda mitad. Va
-    // DESPUÉS de las movidas: para entonces su sitio ya quedó libre.
-    correrLoDeAfuera(sesion, [{ de: toma.id, a: r.segunda.id }]);
+    // No se pudo partir ahí —el corte cae sobre un borde, deja media toma de
+    // una décima, o pide una vista que no existe—: sin cambio no hay paso,
+    // igual que un borde que no se movió.
+    if (!partir(sesion, toma, ms, vista)) return false;
 
     historial.anotar(sesion.historia, {
         que: comoSeLlama({ ...c, vista, toma: toma.id }),
@@ -380,10 +375,28 @@ function dividir(sesion, toma, c) {
         antes,
         despues: historial.foto(toma)
     });
+    espejo.escribir(sesion);
+    return true;
+}
+
+/**
+ * El corte en sí, que es lo mismo al partir y al rehacer una división: el
+ * reparto (`vivo.dividir`), lo que guarda un número de toma fuera del estado,
+ * y las dos mitades a releer.
+ *
+ * @returns {boolean} si se partió
+ */
+function partir(sesion, toma, ms, vista) {
+    const id = toma.id;
+    const r = vivo.dividir(sesion.estado, toma, ms, { vista });
+    if (!r) return false;
+    correrLoDeAfuera(sesion, r.movidas);
+    // Y la foto del OUT se va con el OUT, que ahora es de la segunda mitad. Va
+    // DESPUÉS de las movidas: para entonces su sitio ya quedó libre.
+    correrLoDeAfuera(sesion, [{ de: id, a: r.segunda.id }]);
     relecturas.encolar(sesion, r.primera.id);
     relecturas.encolar(sesion, r.segunda.id);
-    espejo.escribir(sesion);
-    return espejo.resumen(sesion);
+    return true;
 }
 
 const esVista = v => vivo.VISTAS.some(x => x.nombre === v);
@@ -405,9 +418,11 @@ const esVista = v => vivo.VISTAS.some(x => x.nombre === v);
 function vistaDesdeAhora(sesion, toma, c) {
     if (!esVista(c.vista) || toma.vista === c.vista) return espejo.resumen(sesion);
     const ahora = espejo.grabadoHastaMs(sesion);
-    const partir = toma.outMs == null && ahora - toma.inMs >= PARA_PARTIR_MS;
-    return (partir && dividir(sesion, toma, { tipo: 'dividir', toma: toma.id, paredMs: ahora, vista: c.vista }))
-        || editar(sesion, { tipo: 'vista', toma: toma.id, vista: c.vista });
+    const sePuede = toma.outMs == null && ahora - toma.inMs >= PARA_PARTIR_MS;
+    if (sePuede && dividir(sesion, toma, { tipo: 'dividir', toma: toma.id, paredMs: ahora, vista: c.vista })) {
+        return espejo.resumen(sesion);
+    }
+    return editar(sesion, { tipo: 'vista', toma: toma.id, vista: c.vista });
 }
 
 /**
@@ -448,14 +463,7 @@ function volverDivision(sesion, paso, hacia) {
     if (hacia === 'adelante') {
         const toma = tomas.find(t => t.id === paso.id);
         if (!toma) return false;
-        const r = vivo.dividir(sesion.estado, toma, paso.ms);
-        if (!r) return false;
-        if (paso.vista) r.segunda.vista = paso.vista;
-        correrLoDeAfuera(sesion, r.movidas);
-        correrLoDeAfuera(sesion, [{ de: paso.id, a: r.segunda.id }]);
-        relecturas.encolar(sesion, r.primera.id);
-        relecturas.encolar(sesion, r.segunda.id);
-        return true;
+        return partir(sesion, toma, paso.ms, paso.vista || null);
     }
 
     const segunda = tomas.find(t => t.id === paso.id + 1);
