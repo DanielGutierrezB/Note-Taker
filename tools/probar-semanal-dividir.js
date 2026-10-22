@@ -21,17 +21,8 @@
  *   node tools/probar-semanal-dividir.js
  */
 
-const puppeteer = require('puppeteer-core');
-const maqueta = require('./maqueta/abrir');
+const { abrir, espera } = require('./lib/arnes');
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const espera = ms => new Promise(r => setTimeout(r, ms));
-
-let mal = 0;
-function decir(bien, texto) {
-    console.log(`   ${bien ? '✓' : '✗'} ${texto}`);
-    if (!bien) mal += 1;
-}
 
 /** Todo lo que la pantalla le pida al motor por esa puerta queda anotado. */
 const espiar = (p, puerta) => p.evaluate(puerta => {
@@ -42,16 +33,11 @@ const espiar = (p, puerta) => p.evaluate(puerta => {
 const pedidos = p => p.evaluate(() => window.pedidos);
 
 (async () => {
-    const sitio = await maqueta.levantar(4821);
-    const nave = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
-    const p = await nave.newPage();
-    const errores = [];
-    p.on('pageerror', e => errores.push(e.message));
+    const { p, ir, decir, terminar } = await abrir(4821);
     await p.setViewport({ width: 1440, height: 900 });
 
     console.log('\n── En el editor: «Dividir acá» en la aguja\n');
-    await p.goto(`${sitio.url}?e=semanal-revisar`, { waitUntil: 'networkidle0' });
-    await p.evaluate(() => window.maquetaPuesta);
+    await ir('semanal-revisar');
     await espera(800);
     const boton = await p.$('[data-hace="dividir-aca"]');
     decir(Boolean(boton), 'el botón está en la barra del montaje');
@@ -70,8 +56,7 @@ const pedidos = p => p.evaluate(() => window.pedidos);
         'en la palabra donde está la aguja, la segunda de la toma: no corta ninguna por la mitad');
 
     console.log('\n── En el editor: el clic derecho sobre una palabra\n');
-    await p.goto(`${sitio.url}?e=semanal-revisar`, { waitUntil: 'networkidle0' });
-    await p.evaluate(() => window.maquetaPuesta);
+    await ir('semanal-revisar');
     await espera(800);
     // Lo gris de antes del IN es para correr el IN hacia atrás, que es lo que
     // pidió el editor para ajustar cortes: tiene que ofrecerlo.
@@ -113,8 +98,7 @@ const pedidos = p => p.evaluate(() => window.pedidos);
         `y parte justo en esa palabra (${JSON.stringify(pedido)})`);
 
     console.log('\n── Grabando: cambiar de vista con una toma abierta\n');
-    await p.goto(`${sitio.url}?e=semanal-grabando`, { waitUntil: 'networkidle0' });
-    await p.evaluate(() => window.maquetaPuesta);
+    await ir('semanal-grabando');
     await espera(500);
     // Con el botón y no con el mouse: en la maqueta la tarjeta queda más abajo
     // de lo que entra en la ventana, y lo que se mira es qué se le pide al motor.
@@ -155,9 +139,5 @@ const pedidos = p => p.evaluate(() => window.pedidos);
     decir(encendido.pressed === 'true' && encendido.fondo === 'rgb(122, 180, 255)',
         `encendido, azul lleno (fondo ${encendido.fondo})`);
 
-    decir(!errores.length, errores.length ? `errores de JS: ${errores[0]}` : 'ni un error de JS');
-    console.log(`\n${mal ? '✗ ' + mal + ' mal' : '✓ todo bien'}\n`);
-    await nave.close();
-    await sitio.bajar();
-    process.exit(mal ? 1 : 0);
+    await terminar();
 })();

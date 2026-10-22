@@ -14,6 +14,7 @@
 
 import * as ojo from '../grabar/ojo.js';
 import { coloresDeVista } from '../colores.js';
+import { laAbierta } from './tarjetas.js';
 
 /**
  * Lo que la mirilla tiene que mostrar, sacado del estado de la pantalla.
@@ -35,7 +36,7 @@ import { coloresDeVista } from '../colores.js';
  * @param {boolean} camaraAbierta si la cámara de esta ventana tiene stream
  */
 export function espejoDe(estado, camaraAbierta) {
-    const abierta = (estado.sesion && estado.sesion.tomas || []).find(t => t.outMs == null);
+    const abierta = laAbierta(estado);
     const vista = abierta ? (abierta.vista || estado.vista) : estado.vista;
     const c = coloresDeVista(estado.vistas, vista);
     return {

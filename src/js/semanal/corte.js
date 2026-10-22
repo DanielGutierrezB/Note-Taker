@@ -153,6 +153,12 @@ export const TOLERANCIA_PALABRA_MS = 200;
  * última que empezó antes, y sin palabras de ninguna clase, con la hora tal
  * cual: partir un tramo mudo no corta nada que se oiga.
  *
+ * Es una propuesta y no la regla: quien decide si se puede partir ahí es el
+ * motor (`vivo.dividir`), que también niega dejar una mitad de menos de una
+ * décima. Si la niega, lo dice, y no se parte nada. Las palabras se filtran por
+ * el IN grabado y no por el corrido al silencio porque el motor parte en ese
+ * reloj: la palabra del IN abre la toma, y partir ahí no parte nada.
+ *
  * @param {object} toma la grabada, con `inMs` y sus `palabras` en el reloj de la clase
  * @param {number} ms dónde está la aguja, en el mismo reloj
  * @returns {number} la hora donde empieza la segunda mitad

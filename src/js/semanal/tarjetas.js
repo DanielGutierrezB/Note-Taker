@@ -72,6 +72,9 @@ export const laVista = nombre => VISTAS.find(v => v.nombre === (nombre || DE_ENT
  */
 export const teclaDe = vista => vista.nombre[0];
 
+/** La toma abierta mientras se graba, o undefined entre tomas. */
+export const laAbierta = estado => ((estado.sesion && estado.sesion.tomas) || []).find(t => t.outMs == null);
+
 /**
  * La escena: cómo va a quedar la toma, montada con los dos vídeos de ahora.
  *
@@ -339,7 +342,7 @@ function elPreview(estado) {
  * cierra— y nada más. Entre tomas, el botón de abrirla va en azul.
  */
 export function tarjetaGrabando(estado) {
-    const abierta = (estado.sesion && estado.sesion.tomas || []).find(t => t.outMs == null);
+    const abierta = laAbierta(estado);
     const cerradas = (estado.sesion && estado.sesion.tomas || []).filter(t => t.outMs != null && !t.descartada);
     // El ciclo que no llega manda en la pastilla, por encima de «toma abierta»
     // (ver `deSemanal` en `estados.js`). Y se dice además en un renglón, porque

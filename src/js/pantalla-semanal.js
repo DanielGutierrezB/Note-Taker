@@ -1132,7 +1132,7 @@ async function traerElMontaje() {
  * decir el «3, 2, 1».
  */
 async function cambiarPantalla(boton) {
-    const abierta = (estado.sesion && estado.sesion.tomas || []).find(t => t.outMs == null);
+    const abierta = tarjetas.laAbierta(estado);
     boton.disabled = true;
     let r;
     try {
@@ -1183,7 +1183,7 @@ async function bordeDeToma() {
     const previo = bordeEnVuelo;
     if (previo) await previo.catch(() => {});
     const mio = (async () => {
-        const abierta = (estado.sesion && estado.sesion.tomas || []).find(t => t.outMs == null);
+        const abierta = tarjetas.laAbierta(estado);
         const r = abierta
             ? await window.nt.grabarCerrarToma()
             : await window.nt.grabarAbrirToma();
@@ -1222,7 +1222,7 @@ async function bordeDeToma() {
 async function cambiarVista(nombre) {
     if (!tarjetas.VISTAS.some(v => v.nombre === nombre)) return;
     estado.vista = nombre;
-    const abierta = (estado.sesion && estado.sesion.tomas || []).find(t => t.outMs == null);
+    const abierta = tarjetas.laAbierta(estado);
     if (abierta) {
         const r = await window.nt.grabarEditar({ tipo: 'vista-desde-ahora', toma: abierta.id, vista: nombre });
         if (r) estado.sesion = r;

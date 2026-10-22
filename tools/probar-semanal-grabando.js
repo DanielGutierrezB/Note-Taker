@@ -15,19 +15,9 @@
  *   node tools/probar-semanal-grabando.js
  */
 
-const puppeteer = require('puppeteer-core');
-const maqueta = require('./maqueta/abrir');
-
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const espera = ms => new Promise(r => setTimeout(r, ms));
-const cerca = (a, b, tolerancia = 1.5) => Math.abs(a - b) <= tolerancia;
+const { abrir, espera, cerca } = require('./lib/arnes');
 const ROJO = 'rgb(209, 54, 58)';
 
-let mal = 0;
-function decir(bien, texto) {
-    console.log(`   ${bien ? '✓' : '✗'} ${texto}`);
-    if (!bien) mal += 1;
-}
 
 const medir = p => p.evaluate(() => {
     const raiz = document.querySelector('#vista-semanal');
@@ -60,17 +50,12 @@ const medir = p => p.evaluate(() => {
 });
 
 (async () => {
-    const sitio = await maqueta.levantar(4829);
-    const nave = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
-    const p = await nave.newPage();
-    const errores = [];
-    p.on('pageerror', e => errores.push(e.message));
+    const { p, ir, decir, terminar } = await abrir(4829);
 
     for (const [ancho, alto] of [[900, 760], [1000, 690], [1180, 840], [1440, 900]]) {
         console.log(`\n── A ${ancho}×${alto}\n`);
         await p.setViewport({ width: ancho, height: alto });
-        await p.goto(`${sitio.url}?e=semanal-grabando`, { waitUntil: 'networkidle0' });
-        await p.evaluate(() => window.maquetaPuesta);
+            await ir('semanal-grabando');
         await espera(400);
         const m = await medir(p);
         decir(cerca(m.terminar.y, m.deshacer.y, 8) && m.terminar.x > m.deshacer.der,
@@ -100,9 +85,5 @@ const medir = p => p.evaluate(() => {
         decir(cerca(a.toma.y, m.toma.y) && cerca(a.toma.x, m.toma.x), 'el cuadrado no se movió al abrirla');
     }
 
-    decir(!errores.length, errores.length ? `errores de JS: ${errores[0]}` : 'ni un error de JS');
-    console.log(`\n${mal ? '✗ ' + mal + ' mal' : '✓ todo bien'}\n`);
-    await nave.close();
-    await sitio.bajar();
-    process.exit(mal ? 1 : 0);
+    await terminar();
 })();

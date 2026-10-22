@@ -14,18 +14,8 @@
  *   node tools/probar-semanal-preparar.js
  */
 
-const puppeteer = require('puppeteer-core');
-const maqueta = require('./maqueta/abrir');
+const { abrir, espera, cerca } = require('./lib/arnes');
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const espera = ms => new Promise(r => setTimeout(r, ms));
-const cerca = (a, b, tolerancia = 1.5) => Math.abs(a - b) <= tolerancia;
-
-let mal = 0;
-function decir(bien, texto) {
-    console.log(`   ${bien ? '✓' : '✗'} ${texto}`);
-    if (!bien) mal += 1;
-}
 
 /** Las cajas de todo lo que importa, relativas a la tarjeta. */
 const medir = p => p.evaluate(() => {
@@ -56,23 +46,14 @@ const medir = p => p.evaluate(() => {
     };
 });
 
-async function aPunto(p, sitio, escenario) {
-    await p.goto(`${sitio.url}?e=${escenario}`, { waitUntil: 'networkidle0' });
-    await p.evaluate(() => window.maquetaPuesta);
-    await espera(400);
-}
-
 (async () => {
-    const sitio = await maqueta.levantar(4825);
-    const nave = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
-    const p = await nave.newPage();
-    const errores = [];
-    p.on('pageerror', e => errores.push(e.message));
+    const { p, ir, decir, terminar } = await abrir(4825);
 
     for (const ancho of [900, 1180, 1440]) {
         console.log(`\n── A ${ancho} px\n`);
         await p.setViewport({ width: ancho, height: 900 });
-        await aPunto(p, sitio, 'semanal');
+        await ir('semanal');
+        await espera(400);
         const m = await medir(p);
         const izq = m.preview.x - m.cuerpo.x;
         const der = m.cuerpo.der - m.preview.der;
@@ -87,7 +68,8 @@ async function aPunto(p, sitio, escenario) {
         decir(m.rojo === 'rgb(209, 54, 58)', `rojo (${m.rojo})`);
         decir(!m.sale, 'nada se sale de la ventana');
 
-        await aPunto(p, sitio, 'semanal-sin-pantalla');
+        await ir('semanal-sin-pantalla');
+        await espera(400);
         const sin = await medir(p);
         decir(cerca(sin.grabarDesdeControles, m.grabarDesdeControles) && cerca(sin.grabar.alto, m.grabar.alto),
             'sin pantalla, Grabar está en el mismo sitio y del mismo tamaño: elegirla no lo mueve');
@@ -101,7 +83,8 @@ async function aPunto(p, sitio, escenario) {
     console.log('\n── Entra en la ventana, de alto\n');
     for (const [ancho, alto] of [[1180, 840], [1000, 690], [1440, 900]]) {
         await p.setViewport({ width: ancho, height: alto });
-        await aPunto(p, sitio, 'semanal');
+        await ir('semanal');
+        await espera(400);
         const m = await p.evaluate(() => {
             const raiz = document.querySelector('#vista-semanal');
             const ultima = [...raiz.querySelectorAll('.semanal-campos > .campo')].pop().getBoundingClientRect();
@@ -114,7 +97,8 @@ async function aPunto(p, sitio, escenario) {
     console.log('\n── Grabar sin pantalla pregunta\n');
     await p.setViewport({ width: 1180, height: 900 });
     const probar = async contesta => {
-        await aPunto(p, sitio, 'semanal-sin-pantalla');
+        await ir('semanal-sin-pantalla');
+        await espera(400);
         await p.evaluate(contesta => {
             window.preguntado = null;
             window.empezo = false;
@@ -139,9 +123,5 @@ async function aPunto(p, sitio, escenario) {
     decir(!elegir.empezo && /Cambiar pantalla/.test(elegir.pantalla || ''),
         '«Elegir pantalla» la elige y no arranca: el preview cambia, para mirarlo antes');
 
-    decir(!errores.length, errores.length ? `errores de JS: ${errores[0]}` : 'ni un error de JS');
-    console.log(`\n${mal ? '✗ ' + mal + ' mal' : '✓ todo bien'}\n`);
-    await nave.close();
-    await sitio.bajar();
-    process.exit(mal ? 1 : 0);
+    await terminar();
 })();
