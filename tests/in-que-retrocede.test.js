@@ -5,7 +5,7 @@
  * El gesto es «esto de acá para atrás no era la toma»: con el clic derecho
  * sobre una palabra, o arrastrando el IN. `moverInAbierta` saca de la toma todo
  * lo anterior y lo manda a `estado.sueltas`, que es de donde la ventana arma lo
- * gris de antes del IN (`antesDeLaAbierta` en `pantalla-vivo.js`).
+ * gris de antes del IN (`antesDeLaAbierta` en `grabar/alrededor-de-la-toma.js`).
  *
  * Y ahí estaba el agujero: el puente recortaba las sueltas a las últimas 120
  * palabras. Una toma de un par de minutos tiene más que eso, así que al correr

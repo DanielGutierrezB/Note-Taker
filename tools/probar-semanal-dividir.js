@@ -72,8 +72,25 @@ const pedidos = p => p.evaluate(() => window.pedidos);
     await p.goto(`${sitio.url}?e=semanal-revisar`, { waitUntil: 'networkidle0' });
     await p.evaluate(() => window.maquetaPuesta);
     await espera(800);
+    // Lo gris de antes del IN es para correr el IN hacia atrás, que es lo que
+    // pidió el editor para ajustar cortes: tiene que ofrecerlo.
+    const gris = await p.evaluate(() => {
+        const w = document.querySelector('#semanal-cuerpo [data-texto="cerrada"] [data-t].es-orilla');
+        w.scrollIntoView({ block: 'center' });
+        const r = w.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    await p.mouse.click(gris.x, gris.y, { button: 'right' });
+    await espera(300);
+    const deAntes = await p.evaluate(() => [...document.querySelectorAll('#menu-palabra .menu-fila')]
+        .map(b => b.textContent.trim()));
+    decir(deAntes.includes('Poner el IN acá'),
+        `lo de antes del IN se ve y deja correr el IN hasta ahí (${deAntes.join(' · ')})`);
+    await p.keyboard.press('Escape');
+    await espera(150);
+
     const palabra = await p.evaluate(() => {
-        const ws = [...document.querySelectorAll('#semanal-cuerpo [data-texto="cerrada"] [data-t]')];
+        const ws = [...document.querySelectorAll('#semanal-cuerpo [data-texto="cerrada"] [data-t]:not(.es-orilla)')];
         const w = ws[Math.floor(ws.length / 2)];
         w.scrollIntoView({ block: 'center' });
         const r = w.getBoundingClientRect();

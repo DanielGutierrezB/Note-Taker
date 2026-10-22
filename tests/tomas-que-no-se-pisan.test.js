@@ -224,15 +224,11 @@ module.exports = async t => {
         t.ok(/in/.test(di(libres[1])), 'sobre una libre de antes del IN, sí');
     });
 
-    t.test('la ventana y el motor eligen la MISMA toma anterior, en la clase de verdad', () => {
-        const codigo = fs.readFileSync(path.join(RAIZ, 'src', 'js', 'pantalla-vivo.js'), 'utf8');
-        // La copia de la ventana, sacada del archivo y corrida de verdad: así la
-        // prueba no se queda comparando contra una versión que ya cambió.
-        const cuerpo = codigo.slice(codigo.indexOf('function tomaAnterior(toma) {'),
-            codigo.indexOf('\n}', codigo.indexOf('function tomaAnterior(toma) {')) + 2);
-        t.ok(cuerpo.length > 100, 'la copia de la ventana está donde se la busca');
-        // eslint-disable-next-line no-new-func
-        const deLaVentana = new Function('estado', `${cuerpo} return tomaAnterior;`);
+    t.test('la ventana y el motor eligen la MISMA toma anterior, en la clase de verdad', async () => {
+        // La copia de la ventana es un módulo que importan las dos pantallas, y
+        // se carga ese: así la prueba no compara contra una versión que ya cambió.
+        const { tomaAnterior } = await import(
+            pathToFileURL(path.join(RAIZ, 'src', 'js', 'grabar', 'alrededor-de-la-toma.js')).href);
 
         // Los casos donde las dos podrían separarse: tomas fuera de orden en la
         // lista, una descartada en el medio, dos que se tocan, y una abierta.
@@ -244,10 +240,9 @@ module.exports = async t => {
             toma(5, 55000, 70000),
             { ...toma(6, 80000, 90000), outMs: null }
         ];
-        const ventana = deLaVentana({ tomas });
         for (const x of tomas) {
             const a = vivo.tomaAnterior(tomas, x);
-            const b = ventana(x);
+            const b = tomaAnterior({ tomas }, x);
             t.eq(b ? b.id : null, a ? a.id : null, `toma ${x.id}: las dos dicen lo mismo`);
         }
         // Y que de verdad estén contestando algo, no `null` seis veces.

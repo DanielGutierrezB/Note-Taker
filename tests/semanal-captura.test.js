@@ -463,31 +463,58 @@ module.exports = function (t) {
             'el marco del preview en rojo');
     });
 
-    t.test('la caja de la toma abierta no dibuja la pared de la toma anterior', async () => {
-        // Iba un `inMs` suelto donde `texto-toma` espera `{toma, ms, color}`, y
-        // la pastilla salía diciendo «fin de la toma undefined». Se vio en el
-        // MP4 de alguien grabándose: el fallo se exportó dentro del vídeo.
-        //
-        // Y acá esa marca no tiene trabajo: es la pared que frena el IN contra
-        // la toma de antes, y este modo no enseña nada de antes del IN.
+    t.test('la caja de la toma abierta enseña lo de antes del IN, con la pared bien dicha', async () => {
+        // Antes iba un `inMs` suelto donde `texto-toma` espera `{toma, ms,
+        // color}`, y la pastilla salía diciendo «fin de la toma undefined»: se
+        // vio en el MP4 de alguien grabándose. Después se le sacó el límite y
+        // lo de antes del IN, y con eso no había de dónde correr el IN hacia
+        // atrás. Ahora los dos salen de las cuentas de la clase, que arman el
+        // límite entero (`alrededor-de-la-toma.js`).
         const semanal = laPantalla();
         const caja = semanal.slice(semanal.indexOf("if (cual === 'abierta')"),
             semanal.indexOf("if (cual === 'cerrada'"));
-        t.ok(/antes: \[\]/.test(caja), 'sigue sin enseñar lo de antes del IN');
-        t.ok(!/limite:/.test(caja), 'así que no se le pasa ningún límite');
+        t.ok(/alrededor\.antesDeLaAbierta\(deLaSesion, abierta\)/.test(caja), 'pide lo de antes del IN');
+        t.ok(/antes: atras\.antes/.test(caja) && /limite: atras\.limite/.test(caja),
+            'y le pasa al texto lo que armó, no un número');
 
-        // Y que no sea una casualidad del texto: con un número, el módulo de
+        const alrededor = await import(
+            pathToFileURL(path.join(RAIZ, 'src', 'js', 'grabar', 'alrededor-de-la-toma.js')).href);
+        const previa = { id: 3, vista: 'R', inMs: 0, outMs: 5000, palabras: [{ t: 4000, texto: 'fin' }], despues: [] };
+        const abierta = { id: 4, vista: 'R', inMs: 8000, outMs: null, palabras: [] };
+        const atras = alrededor.antesDeLaAbierta({ tomas: [previa, abierta], sueltas: [{ t: 6000, texto: 'entre' }], vistas: [] }, abierta);
+        t.deep(atras.antes.map(w => w.texto), ['fin', 'entre'], 'el final de la anterior y lo de en medio');
+        t.eq(atras.limite.toma, 3, 'y la pared es un objeto con su toma');
+        t.eq(atras.limite.ms, 5000, 'puesta en el OUT de la anterior, que es hasta donde se corre el IN');
+
+        // Y por qué importa que sea un objeto: con un número, el módulo de
         // verdad escribe el «undefined» que se vio.
         dom.fingir();
         const texto = await import(
             pathToFileURL(path.join(RAIZ, 'src', 'js', 'grabar', 'texto-toma.js')).href);
         const conNumero = texto.textoDe({ modo: 'abierta', antes: [], limite: 123456,
             palabras: [], vacio: 'x' }, () => {});
-        t.ok(/undefined/.test(conNumero.textContent),
-            'un número ahí escribe «undefined»: por eso no va ninguno');
-        const sinNada = texto.textoDe({ modo: 'abierta', antes: [], palabras: [], vacio: 'x' },
-            () => {});
-        t.ok(!/undefined/.test(sinNada.textContent), 'y sin él, no');
+        t.ok(/undefined/.test(conNumero.textContent), 'un número ahí escribe «undefined»');
+        const conObjeto = texto.textoDe({ modo: 'abierta', antes: atras.antes, limite: atras.limite,
+            palabras: [], vacio: 'x' }, () => {});
+        t.ok(!/undefined/.test(conObjeto.textContent) && /fin de la toma 3/.test(conObjeto.textContent),
+            'y con el que arma la cuenta, dice «fin de la toma 3»');
+    });
+
+    t.test('en el editor, la toma enseña lo de antes del IN y lo de después del OUT', () => {
+        // Lo pidió el editor: para ajustar un corte tiene que ver lo que se dijo
+        // justo antes del IN, hasta donde termina la toma anterior. Son las
+        // cuentas de la clase, así que las dos pantallas dibujan lo mismo.
+        const semanal = laPantalla();
+        const caja = semanal.slice(semanal.indexOf("if (cual === 'cerrada'"),
+            semanal.indexOf('return null;', semanal.indexOf("if (cual === 'cerrada'")));
+        t.ok(/alrededor\.antesDeLaCerrada\(deLaSesion, toma\)/.test(caja), 'junta lo de antes del IN');
+        t.ok(/alrededor\.despuesDeLaCerrada\(deLaSesion, toma\)/.test(caja), 'y lo de después del OUT');
+        for (const campo of ['antes: atras.antes', 'limite: atras.limite',
+            'despues: adelante.despues', 'limiteDespues: adelante.limiteDespues']) {
+            t.ok(caja.includes(campo), `y se lo pasa al texto (${campo})`);
+        }
+        t.ok(/sueltas: laSesionMirada\(\)\.sueltas/.test(semanal),
+            'con las sueltas de la sesión que se está mirando, la grabada al revisar');
     });
 
     t.group('modo semanal · la escena en vivo');

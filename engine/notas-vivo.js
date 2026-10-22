@@ -936,7 +936,7 @@ function tomaAnterior(tomas, toma) {
  * antes del OUT de la toma anterior. Esto si sucede, solo parece que se demora
  * en cargar lo anterior. Cuando pues es un espacio compartido.» Tenía razón en
  * las dos mitades: el texto de la toma de antes ya está escrito y ahora se ve
- * (ver `antesDeLaAbierta` en pantalla-vivo.js), y por eso mismo el IN no puede
+ * (ver `antesDeLaAbierta` en grabar/alrededor-de-la-toma.js), y por eso mismo el IN no puede
  * meterse ahí — las dos tomas se quedarían con las mismas palabras y el XML
  * tendría dos bloques pisados sobre el mismo tramo de clase.
  *

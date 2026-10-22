@@ -36,6 +36,7 @@ import * as fuente from './grabar/fuente.js';
 import * as ojo from './grabar/ojo.js';
 import * as filmar from './grabar/filmar.js';
 import * as texto from './grabar/texto-toma.js';
+import * as alrededor from './grabar/alrededor-de-la-toma.js';
 import * as fichas from './grabar/lista-tomas.js';
 import * as montaje from './semanal/montaje.js';
 import * as corte from './semanal/corte.js';
@@ -595,10 +596,14 @@ function montarTextos() {
     }
 }
 
+/** La sesión que se está mirando: la viva, o la ya grabada en el editor. */
+function laSesionMirada() {
+    return (estado.paso === 'revisar' ? estado.grabada : estado.sesion) || {};
+}
+
 /** Las tomas con su texto: las de la sesión viva, o las de la ya grabada. */
 function lasTomas() {
-    if (estado.paso === 'revisar') return (estado.grabada && estado.grabada.tomas) || [];
-    return (estado.sesion && estado.sesion.tomas) || [];
+    return laSesionMirada().tomas || [];
 }
 
 /**
@@ -676,27 +681,35 @@ function unTexto(cual, toma, previo) {
         }, suyo, previo);
     }
 
+    // Lo de antes del IN y después del OUT, igual que en la clase y con las
+    // mismas cuentas (`alrededor-de-la-toma.js`): el final de la toma vecina con
+    // su marca, que frena el borde, y lo que se dijo entre las dos. Acá iba solo
+    // la orilla corta de la relectura, sin marca, y con la toma abierta nada:
+    // no había texto de donde correr el IN hacia atrás.
+    const deLaSesion = { tomas, sueltas: laSesionMirada().sueltas, vistas: estado.vistas };
+
     if (cual === 'abierta') {
         const abierta = tomas.find(t => t.outMs == null);
-        // Sin `limite`: es la marca «fin de la toma N» que frena el IN, y acá no
-        // tiene nada que frenar porque `antes` va vacío —este modo no enseña lo
-        // que se dijo antes del IN—. Iba un `inMs` suelto, que es un número
-        // donde `texto-toma` espera `{toma, ms, color}`, y la pastilla salía
-        // dibujada en el vídeo diciendo «fin de la toma undefined».
+        const atras = abierta ? alrededor.antesDeLaAbierta(deLaSesion, abierta) : { antes: [], limite: null };
         return texto.textoDe({
             modo: 'abierta',
-            antes: [],
+            antes: atras.antes,
+            limite: atras.limite,
             palabras: (abierta && abierta.palabras) || [],
             vacio: 'Todavía no se oyó nada de esta toma.'
         }, suyo, previo);
     }
 
     if (cual === 'cerrada' && toma) {
+        const atras = alrededor.antesDeLaCerrada(deLaSesion, toma);
+        const adelante = alrededor.despuesDeLaCerrada(deLaSesion, toma);
         return texto.textoDe({
             modo: 'cerrada',
-            antes: toma.antes,
+            antes: atras.antes,
+            limite: atras.limite,
             palabras: toma.palabras,
-            despues: toma.despues,
+            despues: adelante.despues,
+            limiteDespues: adelante.limiteDespues,
             vacio: 'Esta toma no tiene texto.'
         }, suyo, previo);
     }

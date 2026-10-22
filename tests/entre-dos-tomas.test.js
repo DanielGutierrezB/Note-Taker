@@ -29,6 +29,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const grabacion = require('../engine/grabacion');
 const oirToma = require('../engine/oir-toma');
@@ -88,6 +89,10 @@ function sacar(cual, conQue) {
         `${partes} return ${cual};`);
     return estado => fabrica(estado, coloresDeVista, 25, 300);
 }
+
+/** Las cuentas de alrededor de una toma, el módulo de verdad que usan las dos pantallas. */
+const cargarAlrededor = () => import(
+    pathToFileURL(path.join(__dirname, '..', 'src', 'js', 'grabar', 'alrededor-de-la-toma.js')).href);
 
 /** Los colores de una vista, con la misma firma que en `colores.js`. */
 function coloresDeVista(vistas, nombre) {
@@ -161,7 +166,7 @@ module.exports = function (t) {
                 'y sigue a mano para meterlo en una toma o para leerlo');
         }));
 
-    t.test('una toma CERRADA también junta lo de antes de su IN', () => {
+    t.test('una toma CERRADA también junta lo de antes de su IN', async () => {
         // El agujero que quedaba: la pantalla juntaba tres fuentes a la derecha
         // del OUT (`despuesDeLaCerrada`) y a la izquierda del IN mandaba solo
         // `toma.antes`, la orilla de la relectura. O sea que el tramo de en
@@ -170,15 +175,16 @@ module.exports = function (t) {
         // relectura no terminara no había NI UNA palabra antes del IN, así que
         // el arrastre no tenía dónde apoyarse.
         //
-        // Se corre el código de la ventana sacado del archivo, como en
-        // `tomas-que-no-se-pisan`: así la prueba no mide una copia que ya cambió.
-        const deLaVentana = sacar('antesDeLaCerrada', ['tomaAnterior', 'sueltasEntre']);
+        // Se corre el módulo de verdad, el mismo que importan las dos pantallas.
+        const { antesDeLaCerrada } = await cargarAlrededor();
         const T = Date.parse('2026-10-13T16:00:00');
         const palabras = (desde, textos) => textos.map((texto, i) => ({
             t: desde + i * 1000, hasta: desde + i * 1000 + 300, texto
         }));
         const estado = {
-            vistas: [{ nombre: 'PV', color: '#718637', tinta: '#fff' }],
+            // Las de verdad, con su color de marcador: el límite lleva el color de
+            // la vista de la toma anterior, que es el del marcador en Premiere.
+            vistas: vivo.VISTAS,
             tomas: [
                 {
                     id: 11, vista: 'PV', inMs: T, outMs: T + 20000,
@@ -197,21 +203,22 @@ module.exports = function (t) {
             sueltas: []
         };
 
-        const atras = deLaVentana(estado)(estado.tomas[1]);
+        const atras = antesDeLaCerrada(estado, estado.tomas[1]);
         t.deep(atras.antes.filter(w => !w.de).map(w => w.texto), ['entonces', 'esa', 'sería'],
             'lo hablado entre las dos aparece antes del IN de la 12');
         t.ok(atras.antes.some(w => w.de && w.de.id === 11),
             'y el final de la 11 se asoma, marcado como suyo');
         t.eq(atras.limite.toma, 11, 'con la marca de dónde termina la 11');
         t.eq(atras.limite.ms, T + 20000, 'puesta en su OUT, que es la pared del IN');
-        t.eq(atras.limite.color, '#718637', 'y del color de su vista');
+        const colores = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'js', 'colores.js')).href);
+        t.eq(atras.limite.color, colores.coloresDeVista(vivo.VISTAS, 'PV').color, 'y del color de su vista');
     });
 
-    t.test('y nada de lo que ya es de una toma se cuela ahí', () => {
+    t.test('y nada de lo que ya es de una toma se cuela ahí', async () => {
         // La otra mitad: juntar tres fuentes no puede traer al gris palabras que
         // están DENTRO de una toma, porque entonces el mismo texto se leería dos
         // veces y el IN podría entrar donde no entra.
-        const deLaVentana = sacar('antesDeLaCerrada', ['tomaAnterior', 'sueltasEntre']);
+        const { antesDeLaCerrada } = await cargarAlrededor();
         const T = Date.parse('2026-10-13T16:00:00');
         const w = (ms, texto) => ({ t: ms, hasta: ms + 300, texto });
         const estado = {
@@ -233,7 +240,7 @@ module.exports = function (t) {
             sueltas: []
         };
 
-        const atras = deLaVentana(estado)(estado.tomas[1]);
+        const atras = antesDeLaCerrada(estado, estado.tomas[1]);
         const grises = atras.antes.filter(x => !x.de).map(x => x.texto);
         t.deep(grises, ['en-medio'], 'solo el tramo de nadie, no lo que es de la 1');
         t.ok(!atras.antes.some(x => x.t >= estado.tomas[1].inMs),
@@ -273,7 +280,7 @@ module.exports = function (t) {
         const desde = codigo.indexOf("} else if (cual === 'cerrada' && toma) {");
         const rama = codigo.slice(desde, codigo.indexOf('}, soltar, previo));', desde));
         t.ok(desde !== -1, 'la rama está donde se la busca');
-        t.ok(/antesDeLaCerrada\(toma\)/.test(rama), 'junta lo de antes del IN');
+        t.ok(/alrededor\.antesDeLaCerrada\(estado, toma\)/.test(rama), 'junta lo de antes del IN');
         t.ok(/antes: atras\.antes/.test(rama), 'y se lo pasa al texto');
         t.ok(/limite: atras\.limite/.test(rama),
             'con la marca de la toma anterior, que es la pared del arrastre');

@@ -80,7 +80,7 @@ const TOMAS = [
         // La toma de antes de la abierta: su texto se ve durante la toma
         // siguiente, en lo gris de antes del IN y con su color, para poder hacer
         // scroll y seleccionar sin esperar a que esta cierre (ver
-        // `antesDeLaAbierta` en pantalla-vivo.js). Tiene palabras aunque esté
+        // `antesDeLaAbierta` en grabar/alrededor-de-la-toma.js). Tiene palabras aunque esté
         // «sin releer» porque es lo que pasa de verdad: el ciclo en vivo ya las
         // escribió y la relectura solo las afina.
         id: 6, vista: 'PV', comentario: 'Preguntas', cuenta: '3, 2, 1.',
