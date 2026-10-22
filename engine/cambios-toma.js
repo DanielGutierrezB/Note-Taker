@@ -22,7 +22,16 @@ const vivo = require('./notas-vivo');
 
 /** Los cambios de una toma que esta puerta conoce; cualquier otro no es un cambio. */
 const TIPOS = new Set(['vista', 'nota', 'descartar', 'comentar', 'editar-comentario',
-    'borrar-comentario', 'borde', 'dividir', 'reabrir', 'eliminar']);
+    'borrar-comentario', 'borde', 'dividir', 'vista-desde-ahora', 'reabrir', 'eliminar']);
+
+/**
+ * Cuánto tiene que llevar abierta una toma para que cambiarle la vista la parta.
+ *
+ * Menos que esto es corregir la vista que se acaba de poner, no cambiar de
+ * plano: partir dejaría un pedacito de un segundo con la vista que no se
+ * quería, y en el vídeo un corte que no va a ninguna parte.
+ */
+const PARA_PARTIR_MS = 2000;
 
 /**
  * Lo que el editor cambia a mano desde la pantalla.
@@ -33,6 +42,10 @@ const TIPOS = new Set(['vista', 'nota', 'descartar', 'comentar', 'editar-comenta
  *   nota              { texto }                       la nota del director
  *   descartar         { descartada }                  desactivar: fuera del XML, o de vuelta
  *   borde             { borde:'in'|'out', paredMs }   mover un borde a una palabra
+ *   dividir           { paredMs, vista? }             partirla en una palabra; `vista`
+ *                                                     es la de la segunda mitad
+ *   vista-desde-ahora { vista }                       la abierta cambia de plano en
+ *                                                     este instante (`vistaDesdeAhora`)
  *   reabrir           —                               "Pausa" cerró de más
  *   comentar          { desdeMs, hastaMs, texto, comentario }  sobre un pedazo del texto
  *   editar-comentario { indice, comentario }          corregir lo que se escribió
@@ -76,6 +89,9 @@ function editar(sesion, cambio) {
         registro.anotar('main', 'grabar.cambio-desconocido', { tipo: String(c.tipo) });
         return espejo.resumen(sesion);
     }
+    // No es un cambio propio sino la elección entre dos que ya existen: partir
+    // la toma, o cambiarle la vista entera. Cada uno anota su paso.
+    if (c.tipo === 'vista-desde-ahora') return vistaDesdeAhora(sesion, toma, c);
 
     const antes = historial.foto(toma);
 
@@ -127,7 +143,7 @@ function editar(sesion, cambio) {
         // porque su paso no es de una toma sola —aparece otra y los números
         // corren— y el portero de abajo no sabría qué fotografiar.
         case 'dividir':
-            return dividir(sesion, toma, c);
+            return dividir(sesion, toma, c) || espejo.resumen(sesion);
         // Los otros cinco se resuelven con lo que ya está escrito, así que son
         // los mismos que se hacen sobre una clase ya terminada (`editarGrabada`
         // en `clases-grabadas.js`), y de ahí que los aplique la misma función.
@@ -232,7 +248,7 @@ function comoSeLlama(c) {
         case 'editar-comentario': return `corregir un comentario de ${cual}`;
         case 'borrar-comentario': return `quitar un comentario de ${cual}`;
         case 'borde': return `mover el ${c.borde === 'in' ? 'IN' : 'OUT'} de ${cual}`;
-        case 'dividir': return `dividir ${cual}`;
+        case 'dividir': return c.vista ? `pasar a ${c.vista} a mitad de ${cual}` : `dividir ${cual}`;
         case 'reabrir': return `reabrir ${cual}`;
         case 'eliminar': return `descartar ${cual}`;
         case 'abrir': return `abrir ${cual}`;
@@ -330,14 +346,23 @@ function eliminar(sesion, toma) {
  *
  * Las dos mitades se releen: cada una es ahora un tramo distinto del audio, y
  * sus orillas también cambiaron.
+ *
+ * Con `vista`, la segunda mitad sale ya con esa: es cambiar de plano a mitad de
+ * una toma, y partir y cambiarle la vista son un solo gesto, que se deshace de
+ * una vez. En dos pasos, un deshacer dejaba la toma partida con la vista vieja
+ * en las dos mitades, que no es nada que alguien haya querido.
+ *
+ * @returns {object|null} el resumen, o null si no se pudo partir ahí
  */
 function dividir(sesion, toma, c) {
     const ms = Number(c.paredMs);
+    const vista = esVista(c.vista) ? c.vista : null;
     const antes = historial.foto(toma);
     const r = vivo.dividir(sesion.estado, toma, ms);
     // No se pudo partir ahí —el corte cae sobre un borde, o deja media toma de
     // una décima—: sin cambio no hay paso, igual que un borde que no se movió.
-    if (!r) return espejo.resumen(sesion);
+    if (!r) return null;
+    if (vista) r.segunda.vista = vista;
 
     correrLoDeAfuera(sesion, r.movidas);
     // Y la foto del OUT se va con el OUT, que ahora es de la segunda mitad. Va
@@ -345,11 +370,13 @@ function dividir(sesion, toma, c) {
     correrLoDeAfuera(sesion, [{ de: toma.id, a: r.segunda.id }]);
 
     historial.anotar(sesion.historia, {
-        que: comoSeLlama({ ...c, toma: toma.id }),
+        que: comoSeLlama({ ...c, vista, toma: toma.id }),
         tipo: 'dividir',
         id: toma.id,
-        // Dónde se partió, que es lo único que hace falta para volver a hacerlo.
+        // Dónde se partió y con qué vista quedó la segunda, que es lo único que
+        // hace falta para volver a hacerlo.
         ms,
+        vista,
         antes,
         despues: historial.foto(toma)
     });
@@ -357,6 +384,30 @@ function dividir(sesion, toma, c) {
     relecturas.encolar(sesion, r.segunda.id);
     espejo.escribir(sesion);
     return espejo.resumen(sesion);
+}
+
+const esVista = v => vivo.VISTAS.some(x => x.nombre === v);
+
+/**
+ * Cambiar de plano con la toma abierta: desde ESTE instante, no desde el IN.
+ *
+ * El gesto es el del vídeo semanal: estás grabando, abrís la mirilla y pasás a
+ * «Yo» porque lo que sigue lo querés contar a cámara. Lo que ya dijiste con la
+ * pantalla sigue con la pantalla. Antes le cambiaba la vista a la toma entera,
+ * y lo de atrás pasaba a cámara también. Así que se parte donde llegó el audio
+ * —la hora del motor, que es la del WAV— y la segunda mitad, que sigue abierta,
+ * se lleva la vista nueva (`dividir`).
+ *
+ * Con la toma recién abierta (`PARA_PARTIR_MS`) no se parte: es corregir la
+ * vista que se acaba de poner, y va a la toma entera. Lo mismo si ya está
+ * cerrada, que no hay un «ahora» dentro de ella, o si el corte no se puede hacer.
+ */
+function vistaDesdeAhora(sesion, toma, c) {
+    if (!esVista(c.vista) || toma.vista === c.vista) return espejo.resumen(sesion);
+    const ahora = espejo.grabadoHastaMs(sesion);
+    const partir = toma.outMs == null && ahora - toma.inMs >= PARA_PARTIR_MS;
+    return (partir && dividir(sesion, toma, { tipo: 'dividir', toma: toma.id, paredMs: ahora, vista: c.vista }))
+        || editar(sesion, { tipo: 'vista', toma: toma.id, vista: c.vista });
 }
 
 /**
@@ -399,6 +450,7 @@ function volverDivision(sesion, paso, hacia) {
         if (!toma) return false;
         const r = vivo.dividir(sesion.estado, toma, paso.ms);
         if (!r) return false;
+        if (paso.vista) r.segunda.vista = paso.vista;
         correrLoDeAfuera(sesion, r.movidas);
         correrLoDeAfuera(sesion, [{ de: paso.id, a: r.segunda.id }]);
         relecturas.encolar(sesion, r.primera.id);

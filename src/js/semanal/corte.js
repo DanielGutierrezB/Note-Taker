@@ -133,6 +133,37 @@ export function conElTexto(plan, grabadas) {
     });
 }
 
+/**
+ * Cuánto se le perdona a la aguja: una palabra que empezó hace menos que esto
+ * todavía cuenta como «la que está sonando».
+ */
+export const TOLERANCIA_PALABRA_MS = 200;
+
+/**
+ * Dónde partir una toma para que la segunda mitad empiece en la aguja.
+ *
+ * En la primera palabra que empieza desde la aguja, y no en la hora exacta: la
+ * aguja casi nunca cae entre dos palabras, y partir en la hora corta la que
+ * está sonando por la mitad, en el vídeo y en el texto. Es la misma regla que
+ * «Dividir la toma acá» del clic derecho, donde la palabra elegida abre la
+ * segunda mitad. Una palabra que arrancó apenas antes de la aguja
+ * (`TOLERANCIA_PALABRA_MS`) cuenta como esa: es la que se estaba oyendo al parar.
+ *
+ * Sin una palabra después —la aguja en el silencio del final— se queda con la
+ * última que empezó antes, y sin palabras de ninguna clase, con la hora tal
+ * cual: partir un tramo mudo no corta nada que se oiga.
+ *
+ * @param {object} toma la grabada, con `inMs` y sus `palabras` en el reloj de la clase
+ * @param {number} ms dónde está la aguja, en el mismo reloj
+ * @returns {number} la hora donde empieza la segunda mitad
+ */
+export function dondePartir(toma, ms) {
+    const adentro = (toma.palabras || []).filter(w => w.t > toma.inMs).map(w => w.t);
+    const despues = adentro.filter(t => t >= ms - TOLERANCIA_PALABRA_MS);
+    if (despues.length) return Math.min(...despues);
+    return adentro.length ? Math.max(...adentro) : ms;
+}
+
 /* ── Que se oiga donde se ve ────────────────────────────────────────────
  *
  * El montaje son dos `<video>` sueltos: uno trae la imagen que se mira y el

@@ -146,6 +146,44 @@ module.exports = async t => {
         t.eq(corte.lasQueVan(p).map(x => x.id).join(','), '1,3,4');
     });
 
+    t.group('el corte del editor · dónde parte «Dividir acá»');
+
+    // Una toma que empieza en el segundo 10, con cuatro palabras: el corte cae
+    // siempre en una de ellas, que es la que abre la segunda mitad.
+    const conPalabras = {
+        inMs: 10000,
+        palabras: [10000, 11000, 13000, 16000].map(t => ({ t, texto: `p${t}` }))
+    };
+
+    t.test('en la primera palabra que empieza desde la aguja', () => {
+        t.eq(corte.dondePartir(conPalabras, 12000), 13000, 'entre dos palabras, la de después');
+        t.eq(corte.dondePartir(conPalabras, 13000), 13000, 'justo en una, esa');
+        t.eq(corte.dondePartir(conPalabras, 14500), 16000,
+            'a mitad de una que ya sonaba, la siguiente: no se corta por la mitad');
+    });
+
+    t.test('una palabra que arrancó apenas antes cuenta como la que estaba sonando', () => {
+        // Es la que se oía al parar: dejarla en la primera mitad sería cortar
+        // en la que viene, que es lo que el editor no estaba mirando.
+        t.eq(corte.dondePartir(conPalabras, 13000 + corte.TOLERANCIA_PALABRA_MS), 13000);
+        t.eq(corte.dondePartir(conPalabras, 13000 + corte.TOLERANCIA_PALABRA_MS + 1), 16000);
+    });
+
+    t.test('nunca en la primera palabra, que es el IN', () => {
+        // Partir en el IN no deja dos mitades: deja la misma toma y una vacía.
+        t.eq(corte.dondePartir(conPalabras, 9000), 11000);
+        t.eq(corte.dondePartir(conPalabras, 10000), 11000);
+    });
+
+    t.test('en el silencio del final, la última que empezó', () => {
+        t.eq(corte.dondePartir(conPalabras, 19000), 16000);
+    });
+
+    t.test('sin palabras, en la hora tal cual: partir un tramo mudo no corta nada', () => {
+        t.eq(corte.dondePartir({ inMs: 10000, palabras: [] }, 12345), 12345);
+        t.eq(corte.dondePartir({ inMs: 10000 }, 12345), 12345);
+    });
+
     t.group('el corte del editor · que se oiga donde se ve');
 
     // El signo es TODO acá, y es lo que estaba mal: el montaje corregía el

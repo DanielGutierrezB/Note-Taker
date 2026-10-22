@@ -397,6 +397,7 @@ function montajeDeSesion(json) {
     // con la misma regla, incluidos los repuestos —la toma que pedía la cámara
     // y no la tiene— y lo que se ve es de verdad lo que va a salir.
     const { trozos, avisos } = repartir({ tomas, pantallas, camara, camaraConAudio, wavs });
+    const desdeDe = new Map(tomas.map(t => [t.id, t.desdeMs]));
 
     // Dónde cae cada toma en cada archivo, y además de QUÉ archivo de pantalla
     // se trata: con los tramos ya no hay una sola, así que la ventana tiene que
@@ -460,6 +461,11 @@ function montajeDeSesion(json) {
             vista: t.vista,
             descartada: fuera.has(t.toma),
             segundos: tres(t.segundos),
+            // Dónde empieza en el reloj de la clase, que es el de las palabras y
+            // los bordes: el IN ya corrido al silencio, que es desde donde se
+            // reproduce. Con esto la aguja se traduce a una hora, y «Dividir
+            // acá» parte la toma donde se está mirando y no donde empezaba.
+            desdeMs: desdeDe.get(t.toma),
             // Cuál se ve entera. La otra, si está, va en la esquina.
             fondo: t.fondo.cual,
             camaraDesde: enCual(t, 'camara'),

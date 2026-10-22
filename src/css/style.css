@@ -551,6 +551,32 @@ b {
   color: var(--text-primary);
 }
 
+/* Algo que se enciende y conviene ver que está: «Verme al grabar». Apagado va
+   teñido de acento, que dice «esto se puede activar» sin pelearle al primario
+   de la tarjeta —«Grabar», o «Abrir/Cerrar toma»—; en gris tenue se perdía
+   entre los textos. Encendido va lleno, que es lo que se ve de reojo. */
+.btn-acento {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
+}
+
+.btn-acento:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.btn-acento[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.btn-acento[aria-pressed='true']:hover:not(:disabled) {
+  background: #8ec0ff;
+  border-color: #8ec0ff;
+}
+
 /* Destructiva: borra archivos del disco. El rojo va en el TEXTO y el borde, no
    en el relleno: un botón rojo lleno al lado del primario pelea por la
    atención, y esto no es la acción principal de ninguna pantalla. */

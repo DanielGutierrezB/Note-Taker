@@ -106,10 +106,14 @@ export function escena(estado, vista) {
  *
  * Se apaga sola al terminar: es una ventana flotante sobre todo lo demás, y
  * una que se quedara después de grabar sería una ventana que estorba.
+ *
+ * En azul y no en gris (`.btn-acento`): tenue se perdía entre los textos de la
+ * tarjeta y no se leía como algo que se puede encender. Lleno cuando está
+ * puesta, para que se vea de un vistazo que la ventanita está abierta.
  */
 export function verme(puesta) {
     return `
-      <button class="btn btn-tenue" type="button" data-hace="mirilla"
+      <button class="btn btn-acento" type="button" data-hace="mirilla"
               aria-pressed="${Boolean(puesta)}"
               title="${puesta
                   ? 'Cierra la ventanita flotante'
@@ -734,6 +738,9 @@ export function barraDelMontaje(estado, todas, van) {
                 id="semanal-reproducir"></button>
         <time class="tc" id="semanal-montado">${esc(fmt.relojCorto(v.montado || 0))}</time>
         <span class="v3">de ${esc(fmt.relojCorto(v.total || 0))}</span>
+        <button class="btn" type="button" data-hace="dividir-aca" ${v.toma == null ? 'disabled' : ''}
+                title="Parte la toma donde está la aguja, en la palabra que empieza ahí. La segunda mitad queda elegida abajo para cambiarle la vista">
+          ${icono('dividir')} Dividir acá</button>
         <span class="montaje-cuenta">
           <span class="v3">${van.length} toma${van.length === 1 ? '' : 's'} en el vídeo${
             fuera ? ` · ${fuera} fuera` : ''}</span>

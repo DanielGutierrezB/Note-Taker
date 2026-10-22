@@ -211,6 +211,15 @@ async function unaClase(semilla, conBasura, seCae) {
             ['eliminar', async () => { const t = tomaAlAzar(); if (t) grabacion.editar({ tipo: 'eliminar', toma: t.id }); }],
             ['descartar', async () => { const t = tomaAlAzar(); if (t) grabacion.editar({ tipo: 'descartar', toma: t.id, descartada: r.si(0.6) }); }],
             ['vista', async () => { const t = tomaAlAzar(); if (t) grabacion.editar({ tipo: 'vista', toma: t.id, vista: r.de(['PV', 'R', 'PA', 'PV+R']) }); }],
+            // Cambiar de plano grabando parte la abierta en el instante del
+            // audio, así que es el gesto que crea tomas sin que nadie elija la
+            // palabra: tiene que convivir con el conteo, deshacer y las caídas.
+            // A veces sobre una cerrada, o con una vista que no existe.
+            ['vista-desde-ahora', async () => {
+                const abierta = (s.estado.tomas || []).find(x => x.outMs == null);
+                const t = r.si(0.8) ? abierta : tomaAlAzar();
+                if (t) grabacion.editar({ tipo: 'vista-desde-ahora', toma: t.id, vista: r.de(['PV', 'R', 'S', 'XX']) });
+            }],
             ['nota', async () => { const t = tomaAlAzar(); if (t) grabacion.editar({ tipo: 'nota', toma: t.id, texto: r.de(['', 'ojo', 'cortar acá', 'x'.repeat(300)]) }); }],
             ['comentar', async () => {
                 const t = tomaAlAzar(); if (!t || !(t.palabras || []).length) return;

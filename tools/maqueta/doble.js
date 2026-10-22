@@ -463,6 +463,9 @@ window.nt = {
                     vista: t.vista,
                     descartada: Boolean(t.descartada),
                     segundos: largo,
+                    // Como el motor: dónde empieza en el reloj de la clase, que
+                    // es con lo que «Dividir acá» traduce la aguja a una hora.
+                    desdeMs: t.inMs,
                     fondo: sinPantalla ? 'camara' : pide,
                     camaraDesde: arranca,
                     pantallaDesde: sinPantalla ? null : arranca,

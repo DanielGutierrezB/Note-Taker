@@ -107,11 +107,14 @@ export function conectar(contexto) {
     document.addEventListener('keydown', alTeclado);
     // El clic derecho sobre UNA palabra pone ahí el IN o el OUT, igual que en
     // una clase y con el mismo módulo. Por `ponerBorde`, que es por donde entra
-    // el arrastre: las dos maneras tienen que pedir lo mismo.
+    // el arrastre: las dos maneras tienen que pedir lo mismo. Y parte la toma
+    // por esa palabra, que es como se cambia de plano sin cortar lo que se
+    // está diciendo: lo pidió el editor para el vídeo de la semana también.
     menuPalabra.conectar({
         raiz: '#vista-semanal',
         alCerrar: () => { if (pendiente) pintar(); },
-        alElegir: q => ponerBorde(q.cual, q.toma, q.borde, q.ms)
+        alElegir: q => ponerBorde(q.cual, q.toma, q.borde, q.ms),
+        puedeDividir: true
     });
     // El color de cada vista es el del marcador que va a aparecer en Premiere, y
     // quien los sabe es el motor: así lo que se ve mientras se graba es lo mismo
@@ -628,8 +631,38 @@ function ponerBorde(cual, tomaId, borde, ms) {
         case 'abrir': return window.nt.grabarAbrirToma(ms).then(contesta);
         case 'cerrar': return window.nt.grabarCerrarToma(ms).then(contesta);
         case 'mover': return cambiarFicha(tomaId, { tipo: 'borde', borde, paredMs: ms });
+        case 'dividir': return dividir(tomaId, ms);
         default: return undefined;
     }
+}
+
+/**
+ * Parte una toma en dos por `ms`, venga del clic derecho o de «Dividir acá».
+ *
+ * En el editor, después se para en la segunda mitad con su ficha abierta: se
+ * parte para cambiarle algo —casi siempre la vista— y es la que hay que tener
+ * delante. Solo si de verdad se partió: si el motor dijo que no, la toma de al
+ * lado ya existía y pararse ahí sería llevarte a otra toma sin motivo.
+ */
+async function dividir(tomaId, ms) {
+    const partida = await cambiarFicha(tomaId, { tipo: 'dividir', paredMs: ms });
+    if (partida && estado.paso === 'revisar') pararEn(tomaId + 1);
+}
+
+/**
+ * «Dividir acá»: parte la toma que se está mirando donde está la aguja.
+ *
+ * La aguja dice en qué toma está y cuántos segundos lleva dentro; el plan del
+ * montaje, en qué hora de la clase empieza esa toma (`desdeMs`). Con las dos se
+ * sabe la hora, y `corte.dondePartir` la lleva a la palabra que empieza ahí
+ * para no cortar una por la mitad.
+ */
+function dividirEnLaAguja() {
+    const v = estado.enVivo;
+    const enElPlan = v && ((estado.montaje && estado.montaje.tomas) || []).find(t => t.id === v.toma);
+    const toma = enElPlan && lasTomas().find(t => t.id === v.toma);
+    if (!toma || enElPlan.desdeMs == null) return undefined;
+    return dividir(toma.id, corte.dondePartir(toma, enElPlan.desdeMs + (v.dentro || 0) * 1000));
 }
 
 function unTexto(cual, toma, previo) {
@@ -789,6 +822,7 @@ async function alClic(e) {
         return undefined;
     }
     if (hace === 'reproducir') { montaje.alternar(); return undefined; }
+    if (hace === 'dividir-aca') return dividirEnLaAguja();
     if (hace === 'opcion') return alternarOpcion(boton);
     if (hace === 'parar-en') {
         // Con el ratón ya lo puso el arrastre, en el punto exacto. Con el
@@ -1034,17 +1068,19 @@ async function cambiarIdioma(cual) {
  * el motor la contesta entera; terminada, el cambio va al sidecar y reescribe
  * el XML. Es la misma distinción que en la clase, y la hace el paso y no quien
  * aprieta el botón.
+ *
+ * @returns {Promise<boolean>} si el cambio entró
  */
 async function cambiarFicha(id, cambio) {
     if (estado.paso !== 'revisar') {
         const r = await window.nt.grabarEditar({ ...cambio, toma: id });
         if (r) { estado.sesion = r; pintar(); }
-        return;
+        return Boolean(r);
     }
     const r = await window.nt.grabarEditarGrabada(estado.json, { ...cambio, toma: id });
     if (!r || !r.ok) {
         avisar((r && r.error) || 'No se pudo guardar ese cambio.', 'error');
-        return;
+        return false;
     }
     estado.grabada = r.estado;
     // Y el montaje otra vez, siempre: cualquiera de los tres cambios mueve lo
@@ -1059,6 +1095,7 @@ async function cambiarFicha(id, cambio) {
     // mentira y escondía un `spawnSync` por clic en el proceso principal.
     await traerElMontaje();
     pintar();
+    return true;
 }
 
 /**
@@ -1169,18 +1206,23 @@ async function bordeDeToma() {
 }
 
 /**
- * Cambiar qué se ve, mientras se graba.
+ * Cambiar qué se ve, mientras se graba: desde la mirilla, los botones de la
+ * tarjeta o las teclas, que pasan todos por acá.
  *
- * Si hay una toma abierta, es esa la que cambia: quien lo aprieta a mitad de
- * una toma está corrigiendo la que tiene delante. Si no hay ninguna, queda
- * elegido para la siguiente, que es el gesto que se pidió.
+ * Con una toma abierta, cambia DESDE AHORA (`vista-desde-ahora` en el motor):
+ * la toma se parte en este instante y lo que sigue va con la vista nueva, y lo
+ * que ya se dijo se queda con la de antes. Es pasar a cámara para contar algo
+ * sin que lo de la pantalla de recién pase a cámara también. Si la toma acaba
+ * de abrirse, el motor entiende que es corregir la vista y la cambia entera.
+ *
+ * Sin toma abierta queda elegido para la siguiente, que es el gesto que se pidió.
  */
 async function cambiarVista(nombre) {
     if (!tarjetas.VISTAS.some(v => v.nombre === nombre)) return;
     estado.vista = nombre;
     const abierta = (estado.sesion && estado.sesion.tomas || []).find(t => t.outMs == null);
     if (abierta) {
-        const r = await window.nt.grabarEditar({ tipo: 'vista', toma: abierta.id, vista: nombre });
+        const r = await window.nt.grabarEditar({ tipo: 'vista-desde-ahora', toma: abierta.id, vista: nombre });
         if (r) estado.sesion = r;
     }
     pintar();

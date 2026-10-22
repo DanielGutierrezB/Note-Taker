@@ -953,6 +953,27 @@ module.exports = function (t) {
         t.ok(r.recuadro.lado > 0 && r.recuadro.lado < 1, 'y el recuadro, en partes del ancho');
     });
 
+    t.test('el montaje dice dónde empieza cada toma en el reloj de la clase', async () => {
+        // Es con lo que «Dividir acá» traduce la aguja a una hora: la aguja dice
+        // cuántos segundos van de la toma, y esto desde qué hora se cuentan.
+        // Es el IN ya corrido al silencio, que es desde donde se reproduce, y no
+        // el IN pelado: contar desde ese partiría la toma corrida.
+        const sitio = sembrar({
+            tomas: [
+                { id: 1, vista: 'PV', inMs: T0 + 1000, outMs: T0 + 3000, palabras: [], comentarios: [],
+                  // Vigente: de esta versión de la cuenta y hecho contra estos
+                  // bordes, así que se usa tal cual y no se vuelve a calcular.
+                  ajuste: { v: 2, deInMs: T0 + 1000, inMs: T0 + 800, deOutMs: T0 + 3000, outMs: T0 + 3100,
+                      porQueIn: 'silencio', porQueOut: 'silencio' } },
+                { id: 2, vista: 'R', inMs: T0 + 6000, outMs: T0 + 9000, palabras: [], comentarios: [] }
+            ]
+        });
+        const m = exportar.montajeDeSesion(sitio.json);
+        t.eq(m.tomas[0].desdeMs, T0 + 800, 'con ajuste, en el IN corrido y no en el pelado');
+        t.eq(m.tomas[1].desdeMs, T0 + 6000, 'sin ajuste, en su IN');
+        t.near(m.tomas[0].segundos, 2.3, 0.01, 'y lo que dura se cuenta desde ahí mismo');
+    });
+
     t.test('el montaje y el corte eligen el MISMO fondo en cada toma', async () => {
         // Es lo único que de verdad importa de esta función: si el preview
         // eligiera distinto que ffmpeg, lo que se mira no sería lo que sale.

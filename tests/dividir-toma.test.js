@@ -427,16 +427,133 @@ module.exports = function (t) {
         });
     });
 
+    t.group('dividir · cambiar de vista con la toma abierta');
+
+    /**
+     * La toma 2 abierta desde el segundo 40, en «R», con el audio llegado hasta
+     * `segundos`: es el «ahora» del motor, que es el del WAV.
+     */
+    async function conLaAbierta(segundos, fn) {
+        await conUnaClase(async (s, st) => {
+            s.estado.tomas[1].outMs = null;
+            s.captura.segundos = segundos;
+            await fn(s, st, s.captura.desdeMs + segundos * 1000);
+        });
+    }
+
+    t.test('parte la toma en este instante, y lo que sigue va con la vista nueva', async () => {
+        // Estás con la pantalla, abrís la mirilla y pasás a «Yo» para contar lo
+        // que sigue a cámara: lo que ya dijiste sigue con la pantalla.
+        await conLaAbierta(46, async (s, st, ahora) => {
+            const r = grabacion.editar({ tipo: 'vista-desde-ahora', toma: 2, vista: 'PV' });
+            t.deep(r.tomas.map(x => x.id), [1, 2, 3], 'una toma más');
+            const [, antes, despues] = r.tomas;
+            t.eq(antes.outMs, ahora, 'lo de antes termina donde llegó el audio');
+            t.eq(antes.vista, 'R', 'y se queda con la vista que tenía');
+            t.eq(despues.inMs, ahora, 'lo que sigue arranca pegado');
+            t.eq(despues.vista, 'PV', 'con la vista nueva');
+            t.eq(r.abierta, 3, 'y sigue abierta: se está grabando');
+            t.eq(r.historia.queAtras, 'pasar a PV a mitad de la toma 2', 'un solo paso, dicho por lo que fue');
+        });
+    });
+
+    t.test('un solo deshacer lo devuelve todo: la toma entera y su vista', async () => {
+        // En dos pasos, deshacer dejaba la toma partida con la vista vieja en
+        // las dos mitades, que no es nada que alguien haya querido.
+        await conLaAbierta(46, async () => {
+            grabacion.editar({ tipo: 'vista-desde-ahora', toma: 2, vista: 'PV' });
+            const r = grabacion.deshacer();
+            t.ok(r.ok, r.error);
+            t.deep(r.estado.tomas.map(x => x.id), [1, 2]);
+            t.eq(r.estado.tomas[1].vista, 'R');
+            t.eq(r.estado.tomas[1].outMs, null, 'y vuelve abierta');
+        });
+    });
+
+    t.test('y rehacer la vuelve a partir con la vista nueva', async () => {
+        await conLaAbierta(46, async () => {
+            grabacion.editar({ tipo: 'vista-desde-ahora', toma: 2, vista: 'PV' });
+            grabacion.deshacer();
+            const r = grabacion.rehacer();
+            t.ok(r.ok, r.error);
+            t.eq(r.estado.tomas.find(x => x.id === 3).vista, 'PV', 'no solo el corte: también la vista');
+            t.eq(r.estado.tomas.find(x => x.id === 2).vista, 'R');
+        });
+    });
+
+    t.test('con la toma recién abierta no la parte: corrige la vista entera', async () => {
+        // A un segundo y medio de abrirla es corregir la vista que se acaba de
+        // poner. Partir dejaría un pedacito con la vista que no se quería.
+        await conLaAbierta(41.5, async () => {
+            const r = grabacion.editar({ tipo: 'vista-desde-ahora', toma: 2, vista: 'PV' });
+            t.deep(r.tomas.map(x => x.id), [1, 2], 'sin toma nueva');
+            t.eq(r.tomas[1].vista, 'PV', 'la toma entera cambió');
+            t.eq(r.historia.queAtras, 'poner la toma 2 en PV');
+        });
+    });
+
+    t.test('a los dos segundos justos ya la parte', async () => {
+        await conLaAbierta(42, async () => {
+            const r = grabacion.editar({ tipo: 'vista-desde-ahora', toma: 2, vista: 'PV' });
+            t.deep(r.tomas.map(x => x.id), [1, 2, 3]);
+        });
+    });
+
+    t.test('una toma cerrada no tiene «ahora»: cambia entera', async () => {
+        await conUnaClase(async (s) => {
+            s.captura.segundos = 80;
+            const r = grabacion.editar({ tipo: 'vista-desde-ahora', toma: 2, vista: 'PV' });
+            t.deep(r.tomas.map(x => x.id), [1, 2]);
+            t.eq(r.tomas[1].vista, 'PV');
+        });
+    });
+
+    t.test('la misma vista, o una que no existe, no hacen nada', async () => {
+        await conLaAbierta(46, async () => {
+            for (const vista of ['R', 'XX', '', null]) {
+                const r = grabacion.editar({ tipo: 'vista-desde-ahora', toma: 2, vista });
+                t.deep(r.tomas.map(x => x.id), [1, 2], `«${vista}» no parte nada`);
+                t.eq(r.tomas[1].vista, 'R');
+            }
+            t.ok(!grabacion.deshacer().ok, 'ni deja un paso que deshacer');
+        });
+    });
+
     t.group('dividir · dónde se ofrece');
 
-    t.test('en la pantalla de clase sí, y en el vídeo de la semana no', () => {
+    t.test('en la pantalla de clase y en el vídeo de la semana', () => {
         const menu = leer('src', 'js', 'grabar', 'menu-de-palabra.js');
         t.ok(/puedeDividir: p\.puedeDividir === true/.test(menu), 'lo declara la pantalla');
         t.ok(/dueño\.puedeDividir && cual !== 'espera' && paraIn/.test(menu),
             'y solo sobre una toma que existe');
         t.ok(/puedeDividir: true/.test(leer('src', 'js', 'pantalla-vivo.js')), 'la clase lo pide');
-        t.ok(!/puedeDividir/.test(leer('src', 'js', 'pantalla-semanal.js')),
-            'y la semanal no, que no lo sabe hacer');
+        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        t.ok(/puedeDividir: true/.test(semanal), 'y la semanal también, que ahora lo sabe hacer');
+        t.ok(/case 'dividir': return dividir\(tomaId, ms\);/.test(semanal),
+            'y lo atiende: sin esto el menú ofrecía un botón que no hacía nada');
+    });
+
+    t.test('en el vídeo de la semana, por la misma puerta que los demás cambios', () => {
+        // `cambiarFicha` elige la puerta: grabando, el motor en memoria;
+        // terminada, el sidecar. Y vuelve a armar el montaje después.
+        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const fn = semanal.slice(semanal.indexOf('async function dividir(tomaId, ms) {'));
+        t.ok(/await cambiarFicha\(tomaId, \{ tipo: 'dividir', paredMs: ms \}\)/.test(fn));
+        t.ok(/if \(partida && estado\.paso === 'revisar'\) pararEn\(tomaId \+ 1\);/.test(fn),
+            'y se para en la segunda mitad solo si de verdad se partió');
+        t.ok(/if \(hace === 'dividir-aca'\) return dividirEnLaAguja\(\);/.test(semanal),
+            'el botón de la aguja llega');
+    });
+
+    t.test('cambiar de vista grabando pasa por el gesto que parte', () => {
+        // La mirilla, los botones de la tarjeta y las teclas llaman todos a
+        // `cambiarVista`, así que la regla es una sola.
+        const semanal = leer('src', 'js', 'pantalla-semanal.js');
+        const fn = semanal.slice(semanal.indexOf('async function cambiarVista(nombre) {'));
+        t.ok(/tipo: 'vista-desde-ahora', toma: abierta\.id, vista: nombre/.test(fn.slice(0, 600)));
+        t.ok(/g\.hace === 'vista' && puedeVista\(\)\) cambiarVista\(g\.vista\)/.test(semanal), 'la mirilla');
+        t.ok(/if \(hace === 'vista'\) return cambiarVista\(boton\.dataset\.vista\)/.test(semanal), 'los botones');
+        t.ok(/return cambiarVista\(v\.nombre\)/.test(semanal), 'y las teclas');
     });
 
     t.test('el gesto entra por la misma puerta que los bordes', () => {
