@@ -2370,7 +2370,8 @@ kbd {
 /* Con dos renglones reservados, diga lo que diga: con pantalla la explicación
    es más larga y bajaba los controles un renglón, que era volver a mover
    Grabar por la puerta de atrás. */
-.semanal-preview > .v3 {
+.semanal-preview > .v3,
+.semanal-preview > .v2 {
   align-self: center;
   max-width: 760px;
   min-height: 2lh;
@@ -2502,6 +2503,175 @@ kbd {
 .btn-grabar:hover:not(:disabled) {
   background: #dc4246;
   border-color: #dc4246;
+}
+
+/* ─── Mientras graba ───────────────────────────────────────────────────
+   Los mismos pesos que antes de grabar: arriba cómo va, el preview al centro y
+   debajo la rejilla, con la acción de la toma donde estaba Grabar. */
+
+.semanal-arriba {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.semanal-cuenta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.semanal-cuenta b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Terminar, en la esquina y rojo mientras se graba: tiene que verse que está
+   ahí. Lejos de la acción de la toma y más ancho que ella, para no confundirlos. */
+.btn-terminar {
+  min-width: 140px;
+  height: 36px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #d1363a;
+  border-color: #d1363a;
+  color: #fff;
+}
+
+.btn-terminar:hover:not(:disabled) {
+  background: #dc4246;
+  border-color: #dc4246;
+}
+
+/* Qué se está mirando, encima del preview: la toma de ahora o la que viene. */
+.semanal-escena-dice {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* El micrófono, debajo del preview y de su mismo ancho. Separado lo que ocupa
+   el marco rojo de la toma abierta (3 px y 2 de aire), que si no lo pisa. */
+.semanal-micro-vivo {
+  margin-top: 6px;
+  align-self: center;
+  width: clamp(320px, calc((100vh - 500px) * 16 / 9), 760px);
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.semanal-micro-vivo .hp-ico {
+  width: 14px;
+  height: 14px;
+  flex-basis: 14px;
+}
+
+.semanal-micro-vivo > span {
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.semanal-micro-vivo .nivel {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
+/* La rejilla de grabar: arriba la vista a lo ancho de las dos columnas, abajo
+   cambiar ventana y Profesor Preview, y la toma en el cuadrado de la derecha
+   —36 + 8 de hueco + 36—. */
+.semanal-controles-grabando {
+  grid-template-columns: 1fr 1fr 80px;
+  grid-template-rows: auto 36px 36px;
+}
+
+.semanal-vista-rotulo {
+  grid-column: 1 / span 2;
+}
+
+.semanal-vistas-grabando {
+  grid-column: 1 / span 2;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-width: 0;
+}
+
+.semanal-vistas-grabando .btn {
+  height: 36px;
+  font-size: 13px;
+}
+
+/* Abrir la toma en azul; cerrarla, en el rojo de «esto sale en el vídeo». */
+/* En dos renglones —«Abrir / toma»—: en un cuadrado de 80 px no entra en uno
+   con el relleno de un botón, y la medición lo encontró saliéndose de su caja. */
+.btn-toma {
+  grid-column: 3;
+  grid-row: 2 / span 2;
+  width: 100%;
+  height: 100%;
+  padding: var(--sp-2);
+  flex-direction: column;
+  gap: 6px;
+  white-space: normal;
+  line-height: 1.2;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.btn-toma kbd {
+  margin: 0;
+}
+
+.btn-toma:hover:not(:disabled) {
+  background: #8ec0ff;
+  border-color: #8ec0ff;
+}
+
+.btn-toma[data-abierta='si'] {
+  background: #d1363a;
+  border-color: #d1363a;
+  color: #fff;
+}
+
+.btn-toma[data-abierta='si']:hover:not(:disabled) {
+  background: #dc4246;
+  border-color: #dc4246;
+}
+
+/* Con la toma abierta, todo lo que dice «esto sale en el vídeo» va en rojo, y
+   nada más. Colgado de `data-toma` y no del estado de la pastilla: con el ciclo
+   atrasado la pastilla dice el atraso, y la toma sigue saliendo igual. */
+.semanal-grabando[data-toma='abierta'] {
+  border-left-color: #e5484d;
+}
+
+.semanal-grabando .pastilla[data-estado='abierta'] {
+  background: rgba(229, 72, 77, 0.16);
+  color: #ff8a8e;
+}
+
+.semanal-grabando[data-toma='abierta'] .semanal-escena {
+  outline: 3px solid #e5484d;
+  outline-offset: 2px;
+}
+
+.semanal-grabando[data-toma='abierta'] .semanal-escena-dice {
+  background: #e5484d;
 }
 
 /* El reproductor y, a su lado, lo que hay que decidir antes de exportar.

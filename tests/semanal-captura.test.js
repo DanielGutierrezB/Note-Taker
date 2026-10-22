@@ -397,17 +397,70 @@ module.exports = function (t) {
             'y la toma abierta a mano se lleva la vista que ya estaba elegida');
     });
 
-    t.test('grabando, el único botón primario es el borde', () => {
-        // La tarjeta tiene que gritar una sola cosa, y mientras se graba esa
-        // cosa no es «Terminar».
-        const semanal = laPantalla();
-        const tarjeta = semanal.slice(semanal.indexOf('function tarjetaGrabando'),
-            semanal.indexOf('function elegirVista'));
-        t.eq((tarjeta.match(/btn-primario/g) || []).length, 1, 'uno y nada más');
-        t.ok(/data-hace="borde"[\s\S]{0,400}btn-primario|btn-primario[\s\S]{0,400}data-hace="borde"/
-            .test(tarjeta), 'y es el del borde');
-        t.ok(/data-hace="terminar"/.test(tarjeta) && !/btn-primario" type="button" data-hace="terminar"/
-            .test(tarjeta), 'Terminar queda como un botón normal');
+    t.test('grabando, la toma es el cuadrado de la derecha y Terminar va aparte, en la esquina', async () => {
+        // Lo pidió el editor: Terminar arriba a la derecha, ancho y rojo, para
+        // que se vea que está ahí. Lo que no puede pasar es que se confunda con
+        // el borde de la toma, que es lo que se aprieta sin mirar: van en
+        // sitios distintos y con formas distintas.
+        const tarjetas = await cargarTarjetas();
+        const base = { paso: 'grabando', vista: 'R', vistas: [], avisos: [], pantalla: null };
+        for (const tomas of [[], [{ id: 2, vista: 'R', inMs: 1000, outMs: null, palabras: [] }]]) {
+            const html = tarjetas.tarjetaGrabando({ ...base, sesion: { tomas, sueltas: [] } });
+            const arriba = html.slice(html.indexOf('semanal-arriba'), html.indexOf('semanal-preview'));
+            const controles = html.slice(html.indexOf('semanal-controles'), html.indexOf('data-texto'));
+            t.ok(/class="btn btn-terminar" type="button" data-hace="terminar"/.test(arriba),
+                'Terminar, arriba con deshacer y rehacer');
+            t.ok(/class="btn btn-toma" type="button" data-hace="borde"/.test(controles),
+                'y la toma en la rejilla, donde estaba Grabar');
+            t.ok(!html.includes('btn-primario'), 'sin el azul de siempre: cada una tiene el suyo');
+        }
+    });
+
+    t.test('grabando, en el orden que se pidió', async () => {
+        const tarjetas = await cargarTarjetas();
+        const html = tarjetas.tarjetaGrabando({
+            paso: 'grabando', vista: 'R', vistas: [], avisos: [],
+            pantalla: { nombre: 'Keynote', ancho: 1920, alto: 1080 },
+            micro: { nombre: 'DJI MIC MINI' }, sesion: { tomas: [], sueltas: [] }
+        });
+        const orden = ['semanal-pastilla', 'data-hace="deshacer"', 'data-hace="terminar"',
+            'class="semanal-escena"', 'semanal-micro-vivo', 'Lo que digas ahora',
+            'data-vista="PV"', 'data-vista="R"', 'data-hace="cambiar-pantalla"', 'data-hace="mirilla"',
+            'data-hace="borde"', 'data-texto="espera"'];
+        const donde = orden.map(x => html.indexOf(x));
+        t.ok(donde.every(i => i >= 0), `están todos (${orden.filter((x, i) => donde[i] < 0).join(', ')})`);
+        t.deep(donde.slice().sort((a, b) => a - b), donde, orden.join(' → '));
+        t.ok(/DJI MIC MINI/.test(html.slice(html.indexOf('semanal-micro-vivo'))), 'el micrófono, con su nombre');
+        t.ok(/>Professor</.test(html) && />Screen</.test(html), 'las vistas, con los nombres que pidió');
+    });
+
+    t.test('el orden de los botones no cambia cuál se usa sin saber', async () => {
+        // Professor va primero porque así se pidieron los botones, pero una
+        // vista que no se conoce —un sidecar viejo, un nombre roto— se lee como
+        // Screen, que es para lo que existe el modo. Antes el respaldo era «la
+        // primera de la lista», y reordenarla lo habría cambiado sin avisar.
+        const tarjetas = await cargarTarjetas();
+        t.eq(tarjetas.VISTAS[0].nombre, 'PV', 'Professor primero');
+        t.eq(tarjetas.laVista('XX').nombre, 'R');
+        t.eq(tarjetas.laVista(undefined).nombre, 'R');
+        t.eq(tarjetas.laVista('PV').titulo, 'Professor');
+    });
+
+    t.test('con la toma abierta se dice en rojo, aunque la pastilla diga otra cosa', async () => {
+        // El rojo cuelga de `data-toma` y no del estado de la pastilla: con el
+        // ciclo atrasado la pastilla dice el atraso, y la toma sale igual.
+        const tarjetas = await cargarTarjetas();
+        const base = { paso: 'grabando', vista: 'R', vistas: [], avisos: [], pantalla: null };
+        const abierta = { id: 4, vista: 'R', inMs: 1000, outMs: null, palabras: [] };
+        const con = tarjetas.tarjetaGrabando({ ...base, sesion: { tomas: [abierta], sueltas: [], atrasoSec: 31 } });
+        t.ok(/data-toma="abierta"/.test(con), 'la tarjeta lo dice');
+        t.ok(/data-abierta="si"/.test(con) && /Cerrar toma/.test(con), 'y el cuadrado la cierra');
+        t.ok(/Toma 4 · esto sale en el vídeo/.test(con), 'y el preview lo dice encima');
+        const sin = tarjetas.tarjetaGrabando({ ...base, sesion: { tomas: [], sueltas: [] } });
+        t.ok(/data-toma="no"/.test(sin) && /data-abierta="no"/.test(sin) && /Abrir toma/.test(sin));
+        const css = leer('src', 'css', 'style.css');
+        t.ok(/\.semanal-grabando\[data-toma='abierta'\] \.semanal-escena \{\s*outline: 3px solid #e5484d;/.test(css),
+            'el marco del preview en rojo');
     });
 
     t.test('la caja de la toma abierta no dibuja la pared de la toma anterior', async () => {
@@ -509,13 +562,14 @@ module.exports = function (t) {
         };
         const html = tarjetas.tarjetaGrabando({ ...base, sesion: { tomas: [], sueltas: [] } });
         t.ok(html.includes('data-hace="cambiar-pantalla"'), 'hay por dónde cambiar');
-        t.ok(html.includes('Keynote'), 'y se ve qué se está grabando, que si no no se sabe');
-        t.ok(html.includes('Cambiar ventana…'));
+        t.ok(html.includes('Cambiar ventana · Keynote'),
+            'y el botón dice qué se está grabando, que si no no se sabe');
 
         const sin = tarjetas.tarjetaGrabando({ ...base, pantalla: null, sesion: { tomas: [], sueltas: [] } });
         t.ok(sin.includes('data-hace="cambiar-pantalla"'),
             'y si se empezó sin pantalla, el mismo botón la suma a mitad de camino');
-        t.ok(sin.includes('Elegir pantalla…'));
+        t.ok(sin.includes('Elegir pantalla para grabar') && sin.includes('data-elegida="no"'),
+            'en el morado lleno de lo que falta, como antes de grabar');
     });
 
     t.test('con una toma abierta, el aviso dice lo que va a costar el cambio', async () => {

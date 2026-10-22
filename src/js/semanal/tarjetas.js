@@ -41,16 +41,21 @@ import { estiloDeVista } from '../colores.js';
  * mirando el mismo mapa vista→fuente que usa Premiere. Lo único propio de este
  * modo son los títulos, que hablan de quien se está grabando y no de un rodaje.
  *
- * Se arranca en «mi pantalla» porque es para lo que existe el modo: contar lo
- * que hiciste en la semana es enseñarlo. Quien quiera hablar a cámara lo elige,
- * y a partir de ahí se hereda, igual que en una clase.
+ * «Professor» y «Screen», en inglés y en este orden —la cámara a la izquierda—,
+ * que es como los nombró el editor. El orden es el de los botones, y nada más:
+ * la que se elige de entrada es «Screen» (`DE_ENTRADA`), porque es para lo que
+ * existe el modo: contar lo que hiciste en la semana es enseñarlo. Quien quiera
+ * hablar a cámara lo elige, y a partir de ahí se hereda, igual que en una clase.
  */
 export const VISTAS = [
-    { nombre: 'R', titulo: 'Mi pantalla', dice: 'Tu pantalla, con tu cámara en la esquina' },
-    { nombre: 'PV', titulo: 'Yo', dice: 'Tu cámara sola, llenando el cuadro' }
+    { nombre: 'PV', titulo: 'Professor', dice: 'Tu cámara sola, llenando el cuadro' },
+    { nombre: 'R', titulo: 'Screen', dice: 'Tu pantalla, con tu cámara en la esquina' }
 ];
 
-export const laVista = nombre => VISTAS.find(v => v.nombre === nombre) || VISTAS[0];
+const DE_ENTRADA = 'R';
+
+export const laVista = nombre => VISTAS.find(v => v.nombre === nombre)
+    || VISTAS.find(v => v.nombre === DE_ENTRADA);
 
 /**
  * La tecla de cada vista: la primera letra de su nombre en el motor.
@@ -78,8 +83,10 @@ export const teclaDe = vista => vista.nombre[0];
  * el mismo número y no hay forma de que la ventana lea el módulo de Node.
  *
  * @param {string} vista `PV` (la cámara sola) o cualquier otra (la pantalla)
+ * @param {string} [etiqueta] lo que se lee encima, en la esquina: grabando, qué
+ *   es lo que se está mirando —la toma de ahora o la que viene—
  */
-export function escena(estado, vista) {
+export function escena(estado, vista, etiqueta) {
     // La cámara llena el cuadro cuando la toma es de profesor, y también
     // cuando no hay pantalla: es lo mismo que decide `repartir`.
     const llena = vista === 'PV' || !estado.pantalla;
@@ -92,6 +99,7 @@ export function escena(estado, vista) {
             ? '<video id="semanal-escena-camara" class="semanal-escena-llena" muted playsinline></video>'
             : `<video id="semanal-escena-fondo" class="semanal-escena-fondo" muted playsinline></video>
                <video id="semanal-escena-camara" class="semanal-escena-esquina" muted playsinline></video>`}
+        ${etiqueta ? `<span class="semanal-escena-dice">${esc(etiqueta)}</span>` : ''}
       </div>`;
 }
 
@@ -308,12 +316,21 @@ function elPreview(estado) {
 }
 
 /**
- * Mientras graba: el reloj, el nivel, y si hay una toma abierta o no.
+ * Mientras graba, con los mismos pesos que antes de grabar: arriba cómo va, el
+ * preview al centro, y debajo la rejilla con la acción de la toma en el mismo
+ * sitio en que estaba Grabar.
  *
- * El único botón primario de esta tarjeta es el borde de la toma, y «Terminar»
- * queda como un botón normal: mientras se graba, lo que hay que poder apretar
- * sin pensar y sin mirar es el borde. Terminar se aprieta una vez, al final, y
- * con los ojos en la pantalla.
+ *   · arriba, la pastilla, cuántas tomas van y cuánto va a durar, deshacer y
+ *     rehacer, y Terminar en la esquina, ancho y rojo: mientras se graba tiene
+ *     que verse que está ahí;
+ *   · el preview, y justo debajo el micrófono con su nivel y qué hacer ahora;
+ *   · la rejilla: la vista de la toma —Professor y Screen— a lo ancho, debajo
+ *     cambiar ventana y Profesor Preview, y a la derecha Abrir o Cerrar toma,
+ *     el cuadrado de las dos filas.
+ *
+ * **Con la toma abierta, todo lo que dice «esto sale en el vídeo» va en rojo**
+ * —la pastilla, el borde de la tarjeta, el marco del preview y el botón que la
+ * cierra— y nada más. Entre tomas, el botón de abrirla va en azul.
  */
 export function tarjetaGrabando(estado) {
     const abierta = (estado.sesion && estado.sesion.tomas || []).find(t => t.outMs == null);
@@ -324,50 +341,58 @@ export function tarjetaGrabando(estado) {
     // grabando.
     const pastilla = estados.deSemanal(estado.sesion);
     const atras = pastilla.porque ? pastilla : null;
+    const vista = abierta ? (abierta.vista || estado.vista) : estado.vista;
+    const n = cerradas.length;
     return `
-      <div class="tarjeta guarda" data-estado="${pastilla.clave === 'listo' ? 'terminada' : pastilla.clave}">
-        <div class="tarjeta-cabeza">
-          <span class="pastilla" id="semanal-pastilla"
-                data-estado="${pastilla.clave}"
-                title="${atras ? esc(atras.porque) : ''}">
-            ${esc(pastilla.palabra)}</span>
-          <span class="crece"></span>
-          ${laHistoria(estado.sesion)}
-          <div class="nivel" id="semanal-nivel"><div class="nivel-barra"></div></div>
-        </div>
-        <div class="tarjeta-cuerpo">
-          ${atras ? `<p class="v3" id="semanal-atraso" style="margin:0 0 16px"
-            role="status">${esc(atras.porque)}</p>` : ''}
-          <div class="contadores" style="margin-bottom:16px">
-            <div class="contador"><span class="contador-num">${cerradas.length}</span>
-              <span class="rotulo">toma${cerradas.length === 1 ? '' : 's'} grabada${cerradas.length === 1 ? '' : 's'}</span></div>
-            <div class="contador"><span class="contador-num">${esc(fmt.relojCorto(cortado(cerradas)))}</span>
-              <span class="rotulo">va a durar</span></div>
+      <div class="tarjeta guarda semanal-grabando" data-estado="${pastilla.clave === 'listo' ? 'terminada' : pastilla.clave}"
+           data-toma="${abierta ? 'abierta' : 'no'}">
+        <div class="tarjeta-cuerpo semanal-campos">
+          <div class="semanal-arriba">
+            <span class="pastilla" id="semanal-pastilla"
+                  data-estado="${pastilla.clave}"
+                  title="${atras ? esc(atras.porque) : ''}">
+              ${esc(pastilla.palabra)}</span>
+            <span class="semanal-cuenta"><b>${n}</b> toma${n === 1 ? '' : 's'} grabada${n === 1 ? '' : 's'}
+              · va a durar <b>${esc(fmt.relojCorto(cortado(cerradas)))}</b></span>
+            <span class="crece"></span>
+            ${laHistoria(estado.sesion)}
+            <button class="btn btn-terminar" type="button" data-hace="terminar"
+                    title="Deja de grabar y te deja elegir qué toma va">Terminar</button>
           </div>
-          <span class="v2">${abierta
-            ? 'Estás dentro de una toma: esto es lo que va a salir en el vídeo. Decí «Pausa» '
-                + 'para cerrarla, o apretá Enter.'
-            : 'Lo que digas ahora no sale en el vídeo. Decí «3, 2, 1» para abrir la toma siguiente, '
-                + 'o apretá Enter.'}</span>
-          <div class="campo-fila" style="margin-top:12px">
-            <button class="btn btn-primario" type="button" data-hace="borde"
+          ${atras ? `<p class="v3" id="semanal-atraso" style="margin:0" role="status">${esc(atras.porque)}</p>` : ''}
+
+          <div class="campo semanal-preview">
+            ${escena(estado, vista, abierta
+                ? `Toma ${abierta.id} · esto sale en el vídeo` : 'La toma siguiente sale así')}
+            <div class="semanal-micro-vivo">
+              ${icono('microfono')}<span>${esc((estado.micro && estado.micro.nombre) || 'Micrófono')}</span>
+              <div class="nivel" id="semanal-nivel"><div class="nivel-barra"></div></div>
+            </div>
+            <span class="v2">${abierta
+                ? `Estás dentro de la toma ${abierta.id}: esto sale en el vídeo. Decí <b>«Pausa»</b> `
+                    + 'o apretá <b>Enter</b> para cerrarla.'
+                : 'Lo que digas ahora no sale en el vídeo. Decí <b>«3, 2, 1»</b> o apretá <b>Enter</b> '
+                    + 'para abrir la toma.'}</span>
+          </div>
+
+          <div class="semanal-controles semanal-controles-grabando">
+            <span class="rotulo semanal-vista-rotulo">${abierta ? 'Esta toma se ve' : 'La toma siguiente se ve'}</span>
+            ${elegirVista(estado)}
+            ${laVentana(estado)}
+            <div class="semanal-col-2 semanal-verme">${verme(estado.mirilla)}</div>
+            <button class="btn btn-toma" type="button" data-hace="borde" data-abierta="${abierta ? 'si' : 'no'}"
                     title="${abierta
                         ? 'Cierra la toma acá, sin esperar a que se oiga «Pausa». Tecla: Enter'
-                        : 'Abre una toma acá, sin esperar a que se oiga «3, 2, 1». Si ya venías '
+                        : 'Abre una toma acá, sin esperar a que se oiga «3, 2, 1»: la voz tarda unos tres '
+                            + 'segundos en oírse, y con Enter el borde cae donde lo apretás. Si ya venías '
                             + 'hablando, el IN retrocede hasta donde arrancó la frase. Tecla: Enter'}">
               <kbd>⏎</kbd>${abierta ? 'Cerrar toma' : 'Abrir toma'}</button>
-            <span class="v3 crece">La voz tarda unos segundos en oírse: desde que decís «1» hasta
-              que la toma abre pasan unos tres. Con Enter el borde cae donde lo apretás.</span>
           </div>
-          <div class="campo-fila" style="margin-top:16px; align-items:flex-start">
-            ${escena(estado, abierta ? (abierta.vista || estado.vista) : estado.vista)}
-            <div class="crece">
-              ${elegirVista(estado, abierta)}
-              <div class="campo-fila" style="margin-top:8px">${verme(estado.mirilla)}</div>
-            </div>
-          </div>
-          ${laVentana(estado, abierta)}
-          <div class="campo" style="margin-top:16px">
+          ${abierta && estado.pantalla ? `<span class="v3">Con la toma ${abierta.id} abierta, cambiar de
+            ventana ahora la deja a caballo entre dos y esa toma saldría con tu cámara. Cerrala primero
+            y cambiá antes de abrir la que viene.</span>` : ''}
+
+          <div class="campo">
             <span class="rotulo">${abierta ? `Lo que va diciendo la toma ${abierta.id}`
                 : 'Lo que se está oyendo'}</span>
             <div data-texto="${abierta ? 'abierta' : 'espera'}"
@@ -379,13 +404,8 @@ export function tarjetaGrabando(estado) {
                     + 'hasta la palabra donde empezaste: eso abre la toma desde ahí.'}</span>
           </div>
           ${lasFichas(estado)}
-          ${estado.avisos.length ? `<ul class="prproj-avisos v3" style="margin-top:12px">
+          ${estado.avisos.length ? `<ul class="prproj-avisos v3" style="margin:0">
             ${estado.avisos.map(a => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
-          <div class="campo-fila" style="margin-top:16px">
-            <span class="crece"></span>
-            <button class="btn" type="button" data-hace="terminar"
-                    title="Deja de grabar y te deja elegir qué toma va">Terminar</button>
-          </div>
         </div>
       </div>`;
 }
@@ -430,27 +450,22 @@ function laHistoria(sesion) {
  * Sin pantalla elegida el botón sirve para sumarla a mitad de grabación: las
  * tomas de antes saldrán con la cámara y las de después con la pantalla, que es
  * lo mismo que hace cualquier otro tramo.
+ *
+ * Es el mismo botón morado de antes de grabar, y dice cuál se está grabando:
+ * antes eso era un renglón aparte, y el botón no decía de qué era.
  */
-function laVentana(estado, abierta) {
+function laVentana(estado) {
     const hay = Boolean(estado.pantalla);
     return `
-      <div class="campo-fila" style="margin-top:16px; align-items:flex-start">
-        <div class="crece">
-          <span class="rotulo">De tu pantalla se está grabando</span>
-          <span class="v2">${hay
-        ? esc(estado.pantalla.nombre)
-        : 'Nada: el vídeo sale con tu cámara a pantalla completa.'}</span>
-        </div>
-        <button class="btn" type="button" data-hace="cambiar-pantalla"
-                title="${hay
-        ? 'Abre el selector de macOS para grabar otra ventana. La de ahora sigue grabando '
-            + 'mientras elegís, así que no se pierde nada en el medio.'
-        : 'Abre el selector de macOS para sumar tu pantalla a partir de acá'}">
-          ${hay ? 'Cambiar ventana…' : 'Elegir pantalla…'}</button>
-      </div>
-      ${abierta ? `<span class="v3">Con la toma ${abierta.id} abierta, cambiar de ventana ahora
-        la deja a caballo entre dos y esa toma saldría con tu cámara. Cerrala primero y cambiá
-        antes de abrir la que viene.</span>` : ''}`;
+      <button class="btn btn-pantalla semanal-col-1" type="button" data-hace="cambiar-pantalla"
+              data-elegida="${hay ? 'si' : 'no'}"
+              title="${hay
+        ? `Se está grabando ${esc(estado.pantalla.nombre)}. Abre el selector de macOS para grabar otra `
+            + 'ventana; la de ahora sigue grabando mientras elegís, así que no se pierde nada en el medio.'
+        : 'Nada de tu pantalla: el vídeo sale con tu cámara a pantalla completa. Abre el selector '
+            + 'de macOS para sumar tu pantalla a partir de acá'}">
+        ${icono('pantalla')}<span class="semanal-pantalla-dice">${hay
+            ? `Cambiar ventana · ${esc(estado.pantalla.nombre)}` : 'Elegir pantalla para grabar'}</span></button>`;
 }
 
 /**
@@ -568,24 +583,22 @@ export function vistasDeFicha(estado, t, sale) {
  * se trabaja de verdad: se dice «Pausa», se elige con qué se sigue y se arranca
  * la toma siguiente ya decidida. Al final se puede cambiar igual, mirando las
  * fotos, pero quien ya lo sabía mientras grababa no tiene que volver a pensarlo.
+ *
+ * Los dos a lo ancho de la fila, cada uno con su mitad: es lo que más se toca
+ * mientras se graba, después de la toma. Qué es cada uno lo dice el preview, que
+ * cambia en el acto; el porqué, el tooltip.
  */
-export function elegirVista(estado, abierta) {
+export function elegirVista(estado) {
     return `
-      <div class="campo">
-        <span class="rotulo">${abierta ? 'En esta toma se ve' : 'En la toma siguiente se va a ver'}</span>
-        <span class="semanal-vistas" role="group" aria-label="Qué se ve en la toma">
-          ${VISTAS.map(v => `
-            <button class="btn btn-tenue btn-vista${estado.vista === v.nombre ? ' es-elegida' : ''}"
-                    type="button" data-hace="vista" data-vista="${v.nombre}"
-                    style="${estiloDeVista(estado.vistas, v.nombre)}"
-                    aria-pressed="${estado.vista === v.nombre}"
-                    title="${esc(v.dice)}. Tecla: ${esc(teclaDe(v))}">
-              <kbd>${esc(teclaDe(v))}</kbd>${esc(v.titulo)}</button>`).join('')}
-        </span>
-        <span class="v3">${esc(laVista(estado.vista).dice)}.${abierta
-            ? ''
-            : ' Elegilo ahora y la toma que abras con «3, 2, 1» ya sale así.'}</span>
-      </div>`;
+      <span class="semanal-vistas semanal-vistas-grabando" role="group" aria-label="Qué se ve en la toma">
+        ${VISTAS.map(v => `
+          <button class="btn btn-tenue btn-vista${estado.vista === v.nombre ? ' es-elegida' : ''}"
+                  type="button" data-hace="vista" data-vista="${v.nombre}"
+                  style="${estiloDeVista(estado.vistas, v.nombre)}"
+                  aria-pressed="${estado.vista === v.nombre}"
+                  title="${esc(v.dice)}. Elegilo y la toma que sigue sale así. Tecla: ${esc(teclaDe(v))}">
+            <kbd>${esc(teclaDe(v))}</kbd>${esc(v.titulo)}</button>`).join('')}
+      </span>`;
 }
 
 /** Mientras se sacan las fotos de cada toma: son unos segundos. */
@@ -807,7 +820,7 @@ export function tarjetaDeLaToma(estado, t) {
             ${vistasDeFicha(estado, t, sale)}
             <span class="v3 crece">${sale === t.vista
                 ? 'Lo que elijas se ve arriba en el acto.'
-                : `Pediste ${esc(laVista(t.vista).titulo.toLowerCase())} y esa toma no lo tiene
+                : `Pediste «${esc(laVista(t.vista).titulo)}» y esa toma no lo tiene
                    grabado: sale con lo otro.`}</span>
             ${estadosDe(estado, t)}
           </div>
