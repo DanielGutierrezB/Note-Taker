@@ -241,17 +241,50 @@ function grafo(p) {
  */
 const audioSabido = new Map();
 
-/** Si un archivo de vídeo trae audio dentro. */
-function tieneAudio(ruta) {
+/**
+ * Cuánto se le perdona a la pista de audio de la cámara contra su imagen. Las
+ * dos las escribe el mismo grabador y terminan juntas salvo por un pedazo.
+ */
+const AUDIO_Y_IMAGEN = 0.03;
+
+/**
+ * Si el vídeo de la cámara trae audio dentro, y si ese audio sirve.
+ *
+ * **Sirve solo si dura lo que dura la imagen.** Con un micrófono Bluetooth
+ * —unos AirPods en modo llamada, a 24 kHz—, el grabador de Chromium escribe la
+ * pista declarando 24 kHz pero con las muestras a 48: dura el doble que la
+ * imagen y suena a media velocidad, grave y robótica, y cada segundo se
+ * atrasa medio. Pasó: un vídeo de la semana de 402 s con 804 s de audio, que
+ * salió con la voz de robot y desfasada. El WAV de esa misma grabación estaba
+ * perfecto, y es el que se usa en ese caso.
+ *
+ * @returns {{hay: boolean, sirve: boolean, porque?: string}}
+ */
+function audioDeLaCamara(ruta) {
     const ffprobe = paths.ffprobe();
-    if (!ffprobe.path || !ruta || !fs.existsSync(ruta)) return false;
+    if (!ffprobe.path || !ruta || !fs.existsSync(ruta)) return { hay: false, sirve: false };
     const clave = `${ruta}:${fs.statSync(ruta).size}`;
     if (audioSabido.has(clave)) return audioSabido.get(clave);
-    const r = spawnSync(ffprobe.path, ['-v', 'error', '-select_streams', 'a',
-        '-show_entries', 'stream=index', '-of', 'csv=p=0', ruta], { encoding: 'utf8' });
-    const hay = r.status === 0 && String(r.stdout || '').trim().length > 0;
-    audioSabido.set(clave, hay);
-    return hay;
+    const r = spawnSync(ffprobe.path, ['-v', 'error', '-show_entries', 'stream=codec_type,duration,sample_rate',
+        '-of', 'json', ruta], { encoding: 'utf8' });
+    let pistas = [];
+    try { pistas = (JSON.parse(r.stdout || '{}').streams) || []; } catch (e) { /* sin pistas que leer */ }
+    const audio = pistas.find(p => p.codec_type === 'audio');
+    const imagen = pistas.find(p => p.codec_type === 'video');
+    let dicho = { hay: Boolean(audio), sirve: Boolean(audio) };
+    if (audio && imagen && Number(imagen.duration) > 0) {
+        const razon = Number(audio.duration) / Number(imagen.duration);
+        if (!(Math.abs(razon - 1) <= AUDIO_Y_IMAGEN)) {
+            dicho = {
+                hay: true,
+                sirve: false,
+                porque: `El audio que grabó la cámara dura ${razon.toFixed(2)} veces su imagen `
+                    + `(a ${audio.sample_rate} Hz, suele pasar con un micrófono Bluetooth): se usa el del micrófono.`
+            };
+        }
+    }
+    audioSabido.set(clave, dicho);
+    return dicho;
 }
 
 /**
@@ -335,14 +368,16 @@ function abrirLaSesion(json) {
 
     const { videos, vacios } = videosDe(estado, sitio);
     const camara = videoCrudo.de(videos, 'camara');
+    const deLaCamara = camara ? audioDeLaCamara(camara.ruta) : { sirve: false };
     return {
-        sitio, estado, vacios,
+        sitio, estado,
+        vacios: deLaCamara.porque ? vacios.concat(deLaCamara.porque) : vacios,
         camara,
         // Todos los tramos: cambiar de ventana mientras se graba parte la
         // pantalla en varios archivos, y cuál le toca a cada toma lo decide
         // `repartir` por la hora.
         pantallas: videoCrudo.todas(videos, 'pantalla'),
-        camaraConAudio: Boolean(camara) && tieneAudio(camara.ruta),
+        camaraConAudio: deLaCamara.sirve,
         wavs: wavsDe(estado, sitio)
     };
 }
@@ -645,7 +680,7 @@ module.exports = {
     montajeDeSesion,
     repartir,
     grafo,
-    tieneAudio,
+    audioDeLaCamara,
     alLado,
     deSesion
 };

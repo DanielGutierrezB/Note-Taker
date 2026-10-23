@@ -19,6 +19,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { pathToFileURL } = require('url');
 
 const exportar = require('../engine/exportar-video');
 const videoCrudo = require('../engine/video-crudo');
@@ -1011,5 +1012,48 @@ module.exports = function (t) {
         t.ok(/quedaron guardados/.test(r.error), 'y dice que el material está a salvo');
         const brutos = fs.readdirSync(workspace.videoDir(sitio.dir));
         t.eq(brutos.length, 2, 'los dos vídeos siguen ahí');
+    });
+
+    t.group('exportar vídeo · el audio de la cámara a media velocidad');
+
+    t.test('un audio que no dura lo que la imagen no se usa, y se dice', () => {
+        // Lo que pasó con unos AirPods: 402 s de imagen y 804 de audio, que
+        // salió en el vídeo a media velocidad, grave y robótico.
+        const ffmpeg = paths.ffmpeg().path;
+        if (!ffmpeg) return;
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-audio-camara-'));
+        const armar = (nombre, segundosDeAudio) => {
+            const ruta = path.join(dir, nombre);
+            const r = spawnSync(ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=64x64:d=2:r=30',
+                '-f', 'lavfi', '-i', `sine=f=440:d=${segundosDeAudio}:sample_rate=24000`,
+                '-c:v', 'libx264', '-c:a', 'aac', ruta]);
+            if (r.status !== 0) throw new Error(String(r.stderr));
+            return ruta;
+        };
+        const rota = exportar.audioDeLaCamara(armar('rota.mp4', 4));
+        t.ok(rota.hay && !rota.sirve, 'el doble de largo: hay audio pero no sirve');
+        t.ok(/2\.00 veces su imagen/.test(rota.porque) && /se usa el del micrófono/.test(rota.porque),
+            `y se dice por qué (${rota.porque})`);
+        const buena = exportar.audioDeLaCamara(armar('buena.mp4', 2));
+        t.ok(buena.hay && buena.sirve && !buena.porque, 'del mismo largo, sirve');
+        t.deep(exportar.audioDeLaCamara(path.join(dir, 'no-esta.mp4')), { hay: false, sirve: false }, 'y sin archivo, nada');
+    });
+
+    t.test('al grabar, un micrófono que no está a 48 kHz no entra en el vídeo de la cámara', async () => {
+        const anotado = [];
+        global.window = global.window || {};
+        const antes = window.nt;
+        window.nt = { anotar: (e, d) => anotado.push([e, d]) };
+        try {
+            const filmar = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'js', 'grabar', 'filmar.js')).href);
+            const pista = tasa => ({ label: 'AirPods (Bluetooth)', getSettings: () => ({ sampleRate: tasa }) });
+            t.eq(filmar.vaEnElVideo(pista(24000)), null, 'a 24 kHz la cámara se graba muda, y el vídeo lleva el WAV');
+            t.eq(anotado[0][0], 'semanal.camara-sin-voz', 'y queda en el diario');
+            t.ok(filmar.vaEnElVideo(pista(48000)), 'a 48, la voz va con la cara como siempre');
+            t.ok(filmar.vaEnElVideo({ getSettings: () => ({}) }), 'sin tasa conocida, como estaba');
+            t.eq(filmar.vaEnElVideo(null), null);
+        } finally {
+            window.nt = antes;
+        }
     });
 };

@@ -513,6 +513,26 @@ function enganchar(l) {
 }
 
 /**
+ * La pista del micrófono, si puede ir dentro del vídeo de la cámara; si no, null.
+ *
+ * **Solo a 48 kHz.** Con un micrófono a otra tasa —unos AirPods en modo
+ * llamada, a 24 kHz—, el grabador MP4 de Chromium escribe la pista declarando
+ * la tasa del micrófono pero con las muestras a 48: el audio dura el doble que
+ * la imagen y suena a media velocidad, grave y robótico. Pasó en un vídeo de la
+ * semana, de 402 s de imagen y 804 de audio. El WAV de esa misma grabación
+ * estaba perfecto —pasa por un `AudioContext` a 48 fijos (`oido.js`)—, así que
+ * la cámara se graba muda y el vídeo lleva el WAV, alineado por los relojes.
+ * Sin tasa conocida se deja como estaba.
+ */
+export function vaEnElVideo(pista) {
+    if (!pista) return null;
+    const tasa = pista.getSettings ? pista.getSettings().sampleRate : null;
+    if (tasa == null || tasa === 48000) return pista;
+    window.nt.anotar('semanal.camara-sin-voz', { tasa, micro: pista.label });
+    return null;
+}
+
+/**
  * Arranca los dos grabadores.
  *
  * Los dos `start()` van seguidos y sin nada en medio —ni un `await`— porque la
@@ -524,7 +544,7 @@ function enganchar(l) {
 export async function empezar(avisos) {
     if (avisos && avisos.alAviso) estado.alAviso = avisos.alAviso;
 
-    const pistaDelMicro = oido.laPista();
+    const pistaDelMicro = vaEnElVideo(oido.laPista());
     const pedidos = [];
 
     const camara = ojo.elStream();

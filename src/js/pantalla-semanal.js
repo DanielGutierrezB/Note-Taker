@@ -1093,7 +1093,7 @@ async function cambiarFicha(id, cambio) {
     //
     // Es leer el sidecar y hacer restas, salvo la primera vez: el motor también
     // le pregunta a ffprobe si la cámara trae pista de audio, y eso sí es un
-    // proceso. Lo recuerda por archivo (`tieneAudio`), así que del segundo clic
+    // proceso. Lo recuerda por archivo (`audioDeLaCamara`), así que del segundo clic
     // en adelante no se lanza nada. Antes acá decía «no se toca ffmpeg», que era
     // mentira y escondía un `spawnSync` por clic en el proceso principal.
     await traerElMontaje();
