@@ -469,15 +469,17 @@ module.exports = async function (t) {
         });
         const config = carpetaPrproj.normalizar(soloLasDichas({ capturas: 2, vistas: { PV: [1], R: [2], X2: [2, 1] } }));
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.fuentes.map(f => f.clave), ['1', '2', '2+1']);
+        t.deep(plan.fuentes.map(f => f.clave), ['1', '2', 'X2:2+1']);
         t.deep(plan.grupos.map(g => g.nombre), ['Captura 1 sobre Captura 2'], 'las claves van de abajo hacia arriba');
         t.deep(plan.grupos.map(g => g.titulo), ['X2'], 'la anidación se llama como su vista');
-        t.deep(plan.clases[0].cortes[0].fuentes, ['2+1']);
+        t.deep(plan.clases[0].cortes[0].fuentes, ['X2:2+1']);
     });
 
-    t.test('dos vistas con la misma anidación la comparten, y lleva los dos nombres', () => {
-        // Es una sola secuencia: tocarle el encuadre a una le toca el encuadre a
-        // la otra, y el nombre tiene que decirlo antes de que pase.
+    t.test('dos vistas con las mismas capturas tienen cada una su anidación', () => {
+        // Dos vistas con la misma pareja apilada igual existen para tener dos
+        // encuadres, y el encuadre se pone adentro de la anidación. Antes la
+        // compartían y se llamaba «MG y X2»: acomodar una movía la otra. Lo
+        // encontró el editor armando S y MG.
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'X2', T0), toma(2, 30, 40, 'MG', T0)] });
         const config = carpetaPrproj.normalizar(soloLasDichas({
@@ -485,8 +487,11 @@ module.exports = async function (t) {
             vistas: { X2: { capturas: [2, 1], unidas: true }, MG: { capturas: [2, 1], unidas: true } }
         }));
         const plan = carpetaPrproj.planear([s], config);
-        t.eq(plan.grupos.length, 1, 'una sola anidación para las dos');
-        t.eq(plan.grupos[0].titulo, 'MG y X2', 'en el orden de las vistas');
+        t.deep(plan.grupos.map(g => g.titulo), ['MG', 'X2'], 'una para cada una, en el orden de las vistas');
+        t.deep(plan.grupos.map(g => g.ids), [[2, 1], [2, 1]], 'con las mismas capturas');
+        const deLaPista = vista => plan.pistas.find(p => p.vista === vista).clave;
+        t.eq(deLaPista('MG'), plan.grupos[0].clave, 'y la pista de MG usa la suya');
+        t.eq(deLaPista('X2'), plan.grupos[1].clave, 'y la de X2, la suya');
     });
 
     t.test('cada anidación lleva su color, y las vecinas no repiten', () => {
@@ -501,7 +506,7 @@ module.exports = async function (t) {
         t.eq(new Set(colores).size, plan.fuentes.length, `y ninguna repetida: ${colores.join(', ')}`);
         const sola = plan.fuentes.find(f => f.clave === '2');
         t.eq(sola.color, plan.colorDeCaptura.get(2), 'la pista de una captura, del color de su anidación');
-        const anidada = plan.fuentes.find(f => f.clave === '2+1');
+        const anidada = plan.fuentes.find(f => f.clave === 'X2:2+1');
         t.eq(anidada.color, carpetaPrproj.ETIQUETA_DE_VISTA.X2, 'y la que es una vista, del color de la vista');
     });
 
@@ -584,10 +589,10 @@ module.exports = async function (t) {
         // PV se queda con V1, R con V2 y V3 —la Captura 1 encima de la 2, que
         // es su apilado— y la anidación de S con V4 aunque nadie la haya
         // llamado. MG y X2 son «solo cuando las llamen»: no ponen nada.
-        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'R:2', 'R:1', 'S:1+2+3']);
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.ids.join('+')}`), ['PV:1', 'R:2', 'R:1', 'S:1+2+3']);
         t.deep(plan.pistas.map(p => p.siempre), [true, true, true, true]);
-        t.deep(plan.grupos.map(g => g.clave), ['1+2+3'], 'la anidación sale sin tomas suyas');
-        t.deep(plan.fuentes.map(f => f.clave), ['1', '2', '1+2+3'], 'tres medios para cuatro pistas');
+        t.deep(plan.grupos.map(g => g.clave), ['S:1+2+3'], 'la anidación sale sin tomas suyas');
+        t.deep(plan.fuentes.map(f => f.clave), ['1', '2', 'S:1+2+3'], 'tres medios para cuatro pistas');
         t.deep(plan.avisos, []);
     });
 
@@ -611,7 +616,7 @@ module.exports = async function (t) {
         // Lo que se pidió, renglón por renglón: PV en el 1, R en el 2 y el 3 con
         // la Captura 2 debajo y la 1 encima, S anidada en el 4, y MG y X2
         // fuera porque son «solo si las nombran».
-        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'R:2', 'R:1', 'S:1+2+3']);
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.ids.join('+')}`), ['PV:1', 'R:2', 'R:1', 'S:1+2+3']);
 
         // Y en cada toma de R la pista de PV está puesta pero apagada: eso es
         // «en todas». Se mira en el corte, que es lo que se le pasa al armado.
@@ -651,7 +656,7 @@ module.exports = async function (t) {
             vistas: { R: { capturas: [1, 2], unidas: false }, X2: { capturas: [2, 1], unidas: false } }
         }));
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['R:1', 'R:2', 'X2:2', 'X2:1'],
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.ids.join('+')}`), ['R:1', 'R:2', 'X2:2', 'X2:1'],
             'R con la 2 encima de la 1, y X2 al revés');
         t.deep(plan.avisos, [], 'y no hay nada que avisar');
         t.deep(plan.fuentes.map(f => f.clave), ['1', '2'], 'pero los medios siguen siendo dos');
@@ -693,7 +698,7 @@ module.exports = async function (t) {
         });
         const config = carpetaPrproj.normalizar(soloLasDichas({ capturas: 2, vistas: { R: [1, 2], X2: [2, 1] } }));
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.grupos.map(g => g.clave), ['1+2', '2+1'], 'dos anidaciones, una por apilado');
+        t.deep(plan.grupos.map(g => g.clave), ['R:1+2', 'X2:2+1'], 'dos anidaciones, una por apilado');
         t.deep(plan.grupos.map(g => g.nombre), ['Captura 2 sobre Captura 1', 'Captura 1 sobre Captura 2']);
     });
 
@@ -713,7 +718,7 @@ module.exports = async function (t) {
             }
         }));
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1']);
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.ids.join('+')}`), ['PV:1']);
         t.eq(plan.grupos.length, 0);
     });
 
@@ -733,7 +738,7 @@ module.exports = async function (t) {
             }
         }));
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'R:2']);
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.ids.join('+')}`), ['PV:1', 'R:2']);
         t.eq(plan.pistas[1].siempre, true, 'puesta en todas las tomas, apagada en las de PV');
     });
 
@@ -753,7 +758,7 @@ module.exports = async function (t) {
             }
         }));
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'R:2']);
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.ids.join('+')}`), ['PV:1', 'R:2']);
     });
 
     t.test('una anidación «en todas» entra aunque su vista no se haya llamado', () => {
@@ -766,8 +771,8 @@ module.exports = async function (t) {
             capturas: 3, vistas: { X2: { capturas: [1, 3], unidas: true, siempre: [1, 3] } }
         }));
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'X2:1+3']);
-        t.deep(plan.grupos.map(g => g.clave), ['1+3'], 'y es una anidación de verdad');
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.ids.join('+')}`), ['PV:1', 'X2:1+3']);
+        t.deep(plan.grupos.map(g => g.clave), ['X2:1+3'], 'y es una anidación de verdad');
         t.eq(plan.pistas[1].siempre, true);
     });
 
@@ -778,7 +783,7 @@ module.exports = async function (t) {
         const dir = carpeta();
         const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'PV', T0), toma(2, 30, 40, 'ZZ', T0)] });
         const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar(soloLasDichas({ capturas: 2 })));
-        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1', 'ZZ:1']);
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.ids.join('+')}`), ['PV:1', 'ZZ:1']);
         t.deep(plan.clases[0].cortes[1].fuentes, ['1'], 'y su toma apunta a esa fuente');
     });
 
@@ -791,7 +796,7 @@ module.exports = async function (t) {
             capturas: 3, vistas: { X2: { capturas: [1, 3], unidas: true, siempre: [] } }
         }));
         const plan = carpetaPrproj.planear([s], config);
-        t.deep(plan.pistas.map(p => `${p.vista}:${p.clave}`), ['PV:1']);
+        t.deep(plan.pistas.map(p => `${p.vista}:${p.ids.join('+')}`), ['PV:1']);
         t.eq(plan.grupos.length, 0);
     });
 

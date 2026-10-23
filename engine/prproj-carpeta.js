@@ -141,36 +141,25 @@ function nombreDeCaptura(id) {
 }
 
 /**
- * Una fuente es una captura sola o un grupo; su clave son los ids con `+`.
+ * Una fuente es una captura sola o la anidación de una vista.
  *
- * **Los ids van de abajo hacia arriba, como las pistas de Premiere**, y el
- * orden es parte de la clave: `1+2` y `2+1` son dos grupos distintos —la misma
- * pareja apilada al revés— y una carpeta puede necesitar los dos: la cámara en
- * recuadro sobre la pantalla en una vista, y al revés en otra.
+ * La de una captura es su número, y es una sola aunque la pidan tres vistas: es
+ * el mismo clip maestro. La de una anidación es su vista y sus ids con `+`
+ * —`S:1+2`—, y es de esa vista y de ninguna otra. Dos vistas con las mismas
+ * capturas apiladas igual existen para tener encuadres distintos —la pantalla
+ * entera con la cámara en la esquina, o la cámara grande—, y el encuadre se
+ * pone adentro de la anidación: compartida, acomodar una movía la otra.
+ *
+ * **Los ids van de abajo hacia arriba, como las pistas de Premiere**, así que
+ * `1+2` es la Captura 2 tapando a la 1, y `2+1` al revés.
  */
-function claveDeFuente(ids) {
-    return ids.join('+');
+function claveDeFuente(ids, vista) {
+    return ids.length > 1 ? `${vista}:${ids.join('+')}` : ids.join('+');
 }
 
 /** «Captura 2 sobre Captura 1» para `[1, 2]`: se nombra desde la que tapa. */
 function nombreDeFuente(ids) {
     return ids.slice().reverse().map(nombreDeCaptura).join(' sobre ');
-}
-
-/**
- * La anidación de una vista compuesta se llama como la vista: `PV`, `R`, `X2`.
- *
- * No como su composición. En la precortada, el clip de esa pista lleva el
- * nombre de la anidación, y lo que hace falta leer ahí es qué plano es, no de
- * qué capturas está hecho: eso se decide una vez en el menú y después estorba.
- * La composición sigue nombrada en los avisos, que es donde importa.
- *
- * Dos vistas pueden compartir una anidación —la misma pareja apilada igual— y
- * entonces lleva los dos nombres: es una sola secuencia y esconder que la
- * comparten haría que tocar el encuadre de una cambiara la otra sin avisar.
- */
-function nombreDeAnidacion(vistas) {
-    return vistas.slice().sort(porOrdenDeVistas).join(' y ');
 }
 
 // ─── El plan ─────────────────────────────────────────────────────────
@@ -295,17 +284,14 @@ function planear(sesiones, config) {
     // dueña**: la Captura 1 de PV y la Captura 1 de R son el mismo medio en dos
     // renglones distintos, cada uno con su apilado y su «en todas».
     //
-    // `usadas` junta los medios, sin repetir. Quién los pide se anota para
-    // poder nombrar una anidación por las vistas que la comparten.
+    // `usadas` junta los medios, sin repetir. Una anidación es de su vista
+    // (`claveDeFuente`), así que se anota de quién es.
     const usadas = new Map();
-    const quienPide = new Map();
     const anotar = (ids, vista) => {
-        const clave = claveDeFuente(ids);
+        const clave = claveDeFuente(ids, vista);
         if (!usadas.has(clave)) {
-            usadas.set(clave, { clave, ids, nombre: nombreDeFuente(ids) });
-            quienPide.set(clave, new Set());
+            usadas.set(clave, { clave, ids, nombre: nombreDeFuente(ids), vista: ids.length > 1 ? vista : null });
         }
-        quienPide.get(clave).add(vista);
         return clave;
     };
     const fuentesDe = vista => gruposDe(vistaDe(config, vista)).map(ids => anotar(ids, vista));
@@ -441,16 +427,15 @@ function planear(sesiones, config) {
     const fuentes = [...usadas.values()].sort((a, b) =>
         anidacion(a) - anidacion(b)
         || a.ids[0] - b.ids[0]
-        || a.ids.join(',').localeCompare(b.ids.join(','), 'en', { numeric: true }));
+        || a.ids.join(',').localeCompare(b.ids.join(','), 'en', { numeric: true })
+        || (a.vista && b.vista ? porOrdenDeVistas(a.vista, b.vista) : 0));
     const grupos = fuentes.filter(f => f.ids.length > 1);
 
-    // Cada anidación se llama como la vista o las vistas que la usan: dos
-    // vistas que armaron el mismo apilado comparten el medio aunque cada una
-    // tenga su propia pista.
-    for (const g of grupos) {
-        g.vistas = [...quienPide.get(g.clave)];
-        g.titulo = nombreDeAnidacion(g.vistas);
-    }
+    // Cada anidación se llama como su vista: `PV`, `R`, `X2`. No como su
+    // composición: en la precortada el clip lleva el nombre de la anidación, y
+    // lo que hace falta leer ahí es qué plano es, no de qué capturas está hecho.
+    // La composición sigue nombrada en los avisos, que es donde importa.
+    for (const g of grupos) g.titulo = g.vista;
 
     // Y cada una lleva su color: las capturas de la paleta, y las que son una
     // vista el de su vista. Si apareciera una vista sin traducción —una nueva en
@@ -461,7 +446,7 @@ function planear(sesiones, config) {
         colorDeCaptura.set(id, COLORES_DE_CAPTURA[(id - 1) % COLORES_DE_CAPTURA.length]);
     }
     grupos.forEach((g, i) => {
-        g.color = ETIQUETA_DE_VISTA[g.vistas[0]]
+        g.color = ETIQUETA_DE_VISTA[g.vista]
             || COLORES_DE_CAPTURA[(config.capturas + i) % COLORES_DE_CAPTURA.length];
     });
     for (const f of fuentes) {
