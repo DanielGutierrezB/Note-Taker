@@ -509,10 +509,14 @@ function montajeDeSesion(json) {
             pantallaRuta: (deCual(t, 'pantalla') || {}).ruta || null,
             // Y, si cambió de ventana a mitad de toma, todos con su sitio.
             pantallaPartes: partesDePantalla(t),
-            // El sonido solo si sale de la cámara. Cuando sale del WAV el
-            // montaje va mudo: sincronizar un tercer archivo en una vista
-            // previa no paga lo que cuesta, y para eso está el aviso.
-            conAudio: t.audio.cual === 'camara'
+            // De dónde suena: la cámara, o el WAV desde este segundo. Antes el
+            // montaje iba mudo cuando sonaba el WAV, y ese es el caso de
+            // cualquier micrófono que no esté a 48 kHz —unos AirPods—, que
+            // graba la cámara muda (`vaEnElVideo` en `filmar.js`): se editaba
+            // sin oír. Ahora el WAV suena, y lleva el reloj.
+            conAudio: t.audio.cual === 'camara',
+            audioRuta: t.audio.cual === 'camara' ? null : t.audio.ruta,
+            audioDesde: t.audio.cual === 'camara' ? null : tres(t.audio.desdeSec)
         })),
         // La esquina donde va la cámara, en partes del ancho del cuadro, para
         // que la ventana la ponga donde la va a poner ffmpeg sin repetir los

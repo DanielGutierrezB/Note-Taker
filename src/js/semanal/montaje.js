@@ -16,8 +16,10 @@
  * salto se nota —hay un parpadeo mientras busca— y está bien que se note: es un
  * montaje de trabajo, no el entregable.
  *
- * El que lleva el reloj es el que tiene el audio, que es la cámara. Al otro se
- * lo sigue y se lo corrige si se separa.
+ * El que lleva el reloj es el que tiene el audio: la cámara, o el WAV cuando la
+ * cámara se grabó muda —un micrófono que no está a 48 kHz, como unos AirPods
+ * (`vaEnElVideo` en `filmar.js`)—. Para el WAV hay un tercer elemento, un
+ * `<audio>`. A los que se ven se los sigue y se los corrige si se separan.
  *
  * **Y no se mantienen juntos solos.** Esta cabecera decía que sí, porque los
  * dos archivos arrancan en el mismo instante del reloj de pared —cierto: 1 ms
@@ -54,6 +56,8 @@ const AL_FILO = 0.02;
 let caja = null;
 let elCam = null;
 let elPan = null;
+// El WAV, cuando es de ahí de donde suena la toma.
+let elAud = null;
 let plan = [];
 let archivos = { camara: null, pantalla: null };
 // La esquina donde va la cámara, cuando el motor la manda.
@@ -96,6 +100,10 @@ export function montar(hueco, alCambio) {
         }
         elPan.className = 'montaje-pan';
         elCam.className = 'montaje-cam';
+        elAud = document.createElement('audio');
+        elAud.preload = 'auto';
+        elAud.className = 'montaje-aud';
+        caja.append(elAud);
     }
     // Se MUEVE al hueco nuevo, no se vuelve a hacer: mover un nodo no recarga
     // el vídeo, y rehacerlo lo dejaría en negro y buscando con cada repintado.
@@ -218,21 +226,28 @@ function arrancar() {
     for (const v of [elPan, elCam]) {
         if (v && v.dataset.ruta && v.style.display !== 'none') v.play().catch(() => {});
     }
+    if (suenaElWav(t)) elAud.play().catch(() => {});
     if (!tictac) tictac = setInterval(mirar, CADA_MS);
     decir();
 }
 
 export function pausar() {
-    for (const v of [elPan, elCam]) if (v) v.pause();
+    for (const v of [elPan, elCam, elAud]) if (v) v.pause();
     aVelocidadNormal();
     if (tictac) clearInterval(tictac);
     tictac = null;
     decir();
 }
 
+/** Si la toma suena desde el WAV y no desde la cámara. */
+function suenaElWav(t) {
+    return Boolean(elAud && t && t.audioRuta && t.audioDesde != null);
+}
+
 /** El que lleva el tiempo: el del audio si lo hay, y si no el del fondo. */
 function elMaestro(t) {
     if (!t) return null;
+    if (suenaElWav(t)) return elAud;
     if (t.conAudio && t.camaraDesde != null) return elCam;
     // **Con la pantalla en pedazos manda la cámara aunque no suene.** Un pedazo
     // nuevo es un `src` nuevo, y un `src` nuevo pone el reloj del elemento en
@@ -262,6 +277,7 @@ function enElNegro(t) {
  * necesitado el arreglo en las tres.
  */
 function enSuArchivo(t, v, dentro) {
+    if (v === elAud) return (t.audioDesde || 0) + dentro;
     if (v === elCam) return (t.camaraDesde || 0) + dentro;
     const p = laPieza(t);
     // El pedazo empieza en `enLaToma` y, dentro de su archivo, en `desdeSec`.
@@ -299,6 +315,29 @@ function buscar(t, segundos) {
         elCam.currentTime = enSuArchivo(t, elCam, dentro);
     }
     if (elPan && t.pantallaDesde != null) verPieza(t, dentro);
+    ponerElWav(t, dentro);
+}
+
+/**
+ * El WAV de la toma, en su segundo; o callado, si la toma suena desde la cámara.
+ *
+ * Como un pedazo de pantalla: un `src` nuevo tira los metadatos, así que el
+ * segundo se pone cuando llegan. Una carpeta puede tener más de un WAV —se
+ * reanudó a mitad—, y cada toma trae el suyo.
+ */
+function ponerElWav(t, dentro) {
+    const aud = elAud;
+    if (!aud) return;
+    if (!suenaElWav(t)) {
+        aud.pause();
+        return;
+    }
+    const seg = enSuArchivo(t, aud, dentro);
+    if (apuntar(aud, t.audioRuta)) {
+        aud.addEventListener('loadedmetadata', () => { aud.currentTime = seg; }, { once: true });
+    } else {
+        aud.currentTime = seg;
+    }
 }
 
 /**
@@ -384,12 +423,16 @@ function mirar() {
         verPieza(t, dentro);
         if (reproduciendo() && elPan.dataset.ruta) elPan.play().catch(() => {});
     }
-    // Y los dos juntos. Solo hace falta cuando los dos se ven a la vez —la toma
-    // con recuadro—: si el otro está escondido, que se separe no se nota y
-    // buscarlo cada tanto sí se nota. En el relevo en negro no hay nada que
+    // Y los que se ven, junto al que suena. Uno escondido no se junta: que se
+    // separe no se nota y buscarlo cada tanto sí se nota, y la toma siguiente
+    // lo pone en su sitio al buscar. En el relevo en negro no hay pantalla que
     // juntar: el fondo no está en ningún archivo, así que preguntar por su
     // posición daba `NaN` y el `NaN` terminaba en `playbackRate`.
-    if (hayRecuadro(t) && elCam.dataset.ruta && elPan.dataset.ruta && !enElNegro(t)) juntarlos(t, m);
+    for (const v of [elPan, elCam]) {
+        if (v === m || !v.dataset.ruta || v.style.display === 'none') continue;
+        if (v === elPan && enElNegro(t)) continue;
+        juntarlos(t, v);
+    }
     decir();
 }
 
@@ -408,8 +451,7 @@ function mirar() {
  * sonido no se nota y arregla 100 ms en poco más de un segundo. Buscar queda
  * para lo que no se alcanza estirando.
  */
-function juntarlos(t, maestro) {
-    const esclavo = maestro === elCam ? elPan : elCam;
+function juntarlos(t, esclavo) {
     const deberia = enSuArchivo(t, esclavo, dentroDe(t));
     const que = corte.comoAlcanzar(esclavo.currentTime - deberia);
     if (que.buscar) esclavo.currentTime = deberia;
@@ -418,7 +460,7 @@ function juntarlos(t, maestro) {
 
 /** Los dos a velocidad normal: al cambiar de toma y al parar. */
 function aVelocidadNormal() {
-    for (const v of [elPan, elCam]) if (v) v.playbackRate = 1;
+    for (const v of [elPan, elCam, elAud]) if (v) v.playbackRate = 1;
 }
 
 /**
@@ -462,10 +504,11 @@ function acomodar(t) {
             + `bottom:${recuadro.margen * 100 * recuadro.proporcion}%;`
             + `border-radius:${recuadro.redondeo * 100}%`;
     }
-    // La cámara suena siempre que esté puesta, se vea entera o en la esquina:
-    // es la única de las dos con pista de sonido.
+    // Suena una sola cosa: la cámara, se vea entera o en la esquina, cuando su
+    // pista sirve; si no, el WAV. La pantalla no trae sonido.
     elCam.muted = !t.conAudio;
     elPan.muted = true;
+    elAud.muted = false;
 }
 
 /** Dónde va, para la línea de tiempo y para el rótulo de la toma. */
@@ -487,7 +530,7 @@ function decir() {
 /** Al irse de la pantalla: parar y soltar los archivos. */
 export function soltar() {
     pausar();
-    for (const v of [elPan, elCam]) {
+    for (const v of [elPan, elCam, elAud]) {
         if (!v) continue;
         v.removeAttribute('src');
         delete v.dataset.ruta;
@@ -496,6 +539,7 @@ export function soltar() {
     caja = null;
     elCam = null;
     elPan = null;
+    elAud = null;
     plan = [];
     planPuesto = null;
     donde = -1;

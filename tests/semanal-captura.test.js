@@ -871,7 +871,7 @@ module.exports = function (t) {
         // preguntar por su posición daba `NaN` y el `NaN` terminaba en
         // `playbackRate`. Lo destapó reproducir de corrido, no una prueba.
         const mod = leer('src', 'js', 'semanal', 'montaje.js');
-        t.ok(/&& !enElNegro\(t\)\) juntarlos\(t, m\);/.test(mod), 'el tic lo saltea');
+        t.ok(/if \(v === elPan && enElNegro\(t\)\) continue;/.test(mod), 'el tic lo saltea');
         t.ok(/pan\.pause\(\);/.test(mod),
             'y la pantalla se para: escondida y corriendo se iría más allá de su archivo');
     });
