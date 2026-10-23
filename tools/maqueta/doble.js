@@ -536,7 +536,7 @@ window.nt = {
     mirillaEspejo: () => {},
     onMirillaGesto: () => {},
 
-    registroDescargar: async () => ({ ok: true, archivo: '/tmp/log.md' }),
+    reporteArmar: async () => ({ ok: true, archivo: '/Users/maqueta/Downloads/NoteTaker-reporte-20261023-174201.zip', partes: [], faltan: [] }),
     onUpdateProgress: cb => progresoUpdate.push(cb),
     onUpdateReady: cb => listaUpdate.push(cb)
 };

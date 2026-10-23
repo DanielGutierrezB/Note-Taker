@@ -34,6 +34,7 @@ import * as dependencias from './dependencias.js';
 import * as ojo from './grabar/ojo.js';
 import * as rotuloBarra from './grabar/rotulo-barra.js';
 import * as fotos from './fotos.js';
+import { anotarLosGestos } from './acciones.js';
 
 const app = {
     ajustes: null,
@@ -116,16 +117,20 @@ const app = {
 };
 
 async function arrancar() {
+    // Lo primero: desde acá cada gesto queda en el diario (`acciones.js`).
+    anotarLosGestos(window.nt.anotar);
     app.ajustes = await window.nt.ajustesLeer();
 
     $('#marca').innerHTML = `${icono('claqueta')}<span>Note Taker</span>`;
     $('#btn-ajustes').innerHTML = icono('ajustes');
     $('#btn-diagnostico').innerHTML = icono('diagnostico');
+    $('#btn-reporte').innerHTML = `${icono('reporte')}<span>Report</span>`;
     $('#btn-volver').innerHTML = `${icono('volver')}<span>Sesiones</span>`;
     $('#btn-volver').addEventListener('click', () => app.irASesiones());
 
     $('#btn-ajustes').addEventListener('click', () => app.verAjustes());
     $('#btn-diagnostico').addEventListener('click', () => app.verDiagnostico());
+    $('#btn-reporte').addEventListener('click', e => reportar(e.currentTarget));
     for (const b of $$('[data-cerrar]')) {
         b.addEventListener('click', () => cerrarPanel(b.dataset.cerrar));
     }
@@ -159,6 +164,54 @@ async function arrancar() {
     const info = await window.nt.appInfo();
     pintarVersion(info.version);
     window.nt.anotar('ventana.lista', { version: info.version });
+}
+
+/**
+ * Lo que solo ve la ventana, para el reporte: en qué pantalla está, de qué
+ * tamaño es, y qué micrófonos y cámaras le da el sistema. Esto último es lo que
+ * explicó el vídeo con la voz robótica: el micrófono era el de unos AirPods.
+ */
+async function loQueVeLaVentana() {
+    let dispositivos = [];
+    try {
+        dispositivos = (await navigator.mediaDevices.enumerateDevices()).map(d => ({
+            tipo: d.kind, nombre: d.label || '(sin permiso para ver el nombre)', predeterminado: d.deviceId === 'default'
+        }));
+    } catch (e) {
+        dispositivos = [{ error: e.message }];
+    }
+    const activa = document.querySelector('.vista.es-activa');
+    return {
+        pantalla: activa ? activa.id : null,
+        modo: app.ajustes.modo,
+        ventana: { ancho: window.innerWidth, alto: window.innerHeight, escala: window.devicePixelRatio },
+        idioma: navigator.language,
+        navegador: navigator.userAgent,
+        dispositivos
+    };
+}
+
+/**
+ * El botón «Report»: deja el .zip en Descargas y lo muestra en el Finder.
+ *
+ * Tarda unos segundos —mira con ffprobe cada audio y vídeo de las últimas
+ * grabaciones—, así que el botón dice que está trabajando y no se puede
+ * apretar dos veces.
+ */
+async function reportar(boton) {
+    if (boton.disabled) return;
+    const decia = boton.innerHTML;
+    boton.disabled = true;
+    boton.textContent = 'Armando…';
+    try {
+        const r = await window.nt.reporteArmar(await loQueVeLaVentana());
+        avisar(r.ok
+            ? `El reporte quedó en Descargas: ${r.archivo.split('/').pop()}. Mandalo tal cual.`
+            : `No se pudo armar el reporte: ${r.error}`, r.ok ? 'ok' : 'error');
+    } finally {
+        boton.disabled = false;
+        boton.innerHTML = decia;
+    }
 }
 
 /**
@@ -289,11 +342,7 @@ function conectarAjustes() {
         ? { semanal: { idioma: e.target.value } }
         : { idioma: e.target.value }));
     $('#aj-camara').addEventListener('change', e => ponerCamara(e.target.value));
-    $('#btn-log').addEventListener('click', async () => {
-        const r = await window.nt.registroDescargar();
-        avisar(r.ok ? 'El registro quedó en Descargas.' : `No se pudo: ${r.error}`,
-            r.ok ? 'ok' : 'error');
-    });
+    $('#btn-log').addEventListener('click', e => reportar(e.currentTarget));
 }
 
 function esNtsc(f) {

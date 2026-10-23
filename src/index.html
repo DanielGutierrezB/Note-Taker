@@ -24,6 +24,10 @@
          botón que la baja y la instala. -->
     <span class="version" id="app-version"></span>
     <button id="btn-update" class="btn btn-primario" type="button" hidden></button>
+    <!-- Reportar un problema es apretar esto y mandar el .zip que deja en
+         Descargas (`ipc/reporte.js`). -->
+    <button id="btn-reporte" class="btn btn-tenue" type="button"
+            title="Deja en Descargas un .zip con lo que hace falta para arreglar un problema: el registro de la app, el sistema y las últimas grabaciones, sin audio ni vídeo"></button>
     <button id="btn-diagnostico" class="btn btn-tenue btn-ico" type="button"
             title="Qué herramientas encontró la app y dónde"></button>
     <button id="btn-ajustes" class="btn btn-tenue btn-ico" type="button"
@@ -347,7 +351,7 @@
     </div>
     <div class="panel-pie">
       <button id="btn-log" class="btn btn-tenue" type="button"
-              title="Guardar en un archivo todo lo que la app anotó mientras corría, para mandarlo cuando algo salió raro">Guardar el registro</button>
+              title="Lo mismo que «Report», arriba: un .zip en Descargas para mandar cuando algo salió raro">Guardar un reporte</button>
       <button class="btn" type="button" data-cerrar="telon-ajustes"
               title="Cerrar Ajustes. Cada cosa se guarda al cambiarla, así que no hay nada que confirmar.">Cerrar</button>
     </div>

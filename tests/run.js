@@ -71,7 +71,8 @@ const FILES = [
     'prproj.test.js',
     'prproj-panel.test.js',
     'prproj-nidos.test.js',
-    'prproj-carpeta.test.js'
+    'prproj-carpeta.test.js',
+    'reporte.test.js'
 ];
 
 const filter = process.argv[2] || '';

@@ -13,7 +13,7 @@
  */
 
 const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, clipboard,
-    session, desktopCapturer, screen } = require('electron');
+    session, desktopCapturer, screen, systemPreferences } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -27,6 +27,8 @@ const ipcPrproj = require('./ipc/prproj');
 const ipcReferencias = require('./ipc/referencias');
 const ipcSemanal = require('./ipc/semanal');
 const ipcMirilla = require('./ipc/mirilla');
+const ipcReporte = require('./ipc/reporte');
+const { conDiario } = require('./ipc/con-diario');
 const devShot = require('./dev-shot');
 
 let mainWindow = null;
@@ -55,6 +57,15 @@ function send(channel, payload) {
 function anotar(evento, datos) {
     registro.anotar('main', evento, datos);
 }
+
+/**
+ * Los pedidos de la ventana, todos anotados (`ipc/con-diario.js`). Salvo el
+ * propio diario y las preguntas que la ventana hace solo para pintarse, que
+ * dirían lo mismo cada vez y no son acciones.
+ */
+const ipc = conDiario(ipcMain, anotar, new Set([
+    'registro-anotar', 'app-info', 'ajustes-leer', 'grabar-estado', 'grabar-vistas', 'audio-app-estado'
+]));
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -198,7 +209,7 @@ app.on('before-quit', () => {
 
 // ─── Puente con la ventana ────────────────────────────────────────────
 
-ipcMain.handle('app-info', () => ({
+ipc.handle('app-info', () => ({
     version: appVersion(),
     arch: process.arch,
     electron: process.versions.electron,
@@ -215,46 +226,28 @@ ipcMain.handle('app-info', () => ({
  * ordenamientos: qué pasó primero, si el clic o el ciclo que disparó, dejaría
  * de leerse. Con un solo registro, el orden del archivo es el orden real.
  */
-ipcMain.handle('registro-anotar', (event, { evento, datos } = {}) => {
+ipc.handle('registro-anotar', (event, { evento, datos } = {}) => {
     registro.anotar('ventana', evento, datos);
     return true;
 });
 
-/**
- * Escribe el diario en Descargas, que es la carpeta que el editor sabe
- * encontrar para adjuntar un archivo a un mail o a un chat.
- */
-ipcMain.handle('registro-descargar', () => {
-    anotar('registro.descarga', registro.estado());
-    const res = registro.escribir(app.getPath('downloads'), {
-        version: appVersion(),
-        electron: process.versions.electron,
-        plataforma: process.platform,
-        arquitectura: process.arch
-    });
-    // Se revela y no se abre: abrirlo lanza el editor de texto del sistema
-    // encima de la app, y lo que hace falta es tenerlo a mano para arrastrarlo.
-    if (res.ok) shell.showItemInFolder(res.archivo);
-    return res;
-});
-
-ipcMain.handle('doctor', async () => paths.doctor());
+ipc.handle('doctor', async () => paths.doctor());
 
 // Lo que falta, y el botón que lo instala (`engine/dependencias.js`). El avance
 // va por un canal aparte porque una descarga de 1,6 GB tarda minutos.
-ipcMain.handle('dependencias-estado', () => dependencias.estado());
-ipcMain.handle('dependencias-instalar', async (event, clave) => {
+ipc.handle('dependencias-estado', () => dependencias.estado());
+ipc.handle('dependencias-instalar', async (event, clave) => {
     const r = await dependencias.instalar(clave, p => {
         if (!event.sender.isDestroyed()) event.sender.send('dependencias-progreso', { clave, ...p });
     });
     registro.anotar('main', 'dependencias.instalar', { clave, ok: r.ok, error: r.error || null });
     return r;
 });
-ipcMain.handle('dependencias-cancelar', (event, clave) => dependencias.cancelar(clave));
+ipc.handle('dependencias-cancelar', (event, clave) => dependencias.cancelar(clave));
 
 // ─── Ajustes ──────────────────────────────────────────────────────────
 
-ipcMain.handle('ajustes-leer', () => ajustes.leer());
+ipc.handle('ajustes-leer', () => ajustes.leer());
 
 /**
  * Guarda un PARCHE sobre lo que hay, no el objeto entero.
@@ -265,7 +258,7 @@ ipcMain.handle('ajustes-leer', () => ajustes.leer());
  *
  * El parche entra un nivel adentro (ver `ajustes.conParche`).
  */
-ipcMain.handle('ajustes-guardar', (event, datos) => {
+ipc.handle('ajustes-guardar', (event, datos) => {
     const parche = datos || {};
     try {
         const guardados = ajustes.guardar(ajustes.conParche(ajustes.leer(), parche));
@@ -277,7 +270,7 @@ ipcMain.handle('ajustes-guardar', (event, datos) => {
     }
 });
 
-ipcMain.handle('carpeta-recordar', (event, ruta) => ajustes.recordarCarpeta(ruta));
+ipc.handle('carpeta-recordar', (event, ruta) => ajustes.recordarCarpeta(ruta));
 
 /**
  * Cuáles de las carpetas recordadas siguen en el disco.
@@ -286,7 +279,7 @@ ipcMain.handle('carpeta-recordar', (event, ruta) => ajustes.recordarCarpeta(ruta
  * externo se enchufa y se desenchufa, así que un "no está" escrito hoy sería
  * mentira mañana.
  */
-ipcMain.handle('carpetas-en-disco', (event, rutas) => {
+ipc.handle('carpetas-en-disco', (event, rutas) => {
     const salida = {};
     for (const ruta of rutas || []) {
         salida[ruta] = fs.existsSync(ruta);
@@ -296,7 +289,7 @@ ipcMain.handle('carpetas-en-disco', (event, rutas) => {
 
 // ─── Actualizaciones ──────────────────────────────────────────────────
 
-ipcMain.handle('update-check', async () => {
+ipc.handle('update-check', async () => {
     const res = await updates.check({ currentVersion: appVersion() });
     anotar('update.buscada', {
         hay: Boolean(res && res.hay),
@@ -313,7 +306,7 @@ ipcMain.handle('update-check', async () => {
  * ad-hoc, y el instalador silencioso de macOS valida firmas que no tenemos (ver
  * `engine/updates.js`). Abrir el PKG deja al editor a un clic de Continuar.
  */
-ipcMain.handle('update-download', async (event, payload) => {
+ipc.handle('update-download', async (event, payload) => {
     if (descargaEnCurso) return { ok: false, error: 'Ya se está descargando.' };
     const { url, nombre } = payload || {};
     if (!url) return { ok: false, error: 'No llegó de dónde bajarla.' };
@@ -338,12 +331,12 @@ ipcMain.handle('update-download', async (event, payload) => {
     }
 });
 
-ipcMain.handle('update-cancel', () => {
+ipc.handle('update-cancel', () => {
     if (descargaEnCurso) descargaEnCurso.abort();
     return { ok: true };
 });
 
-ipcMain.handle('update-install', async (event, target) => {
+ipc.handle('update-install', async (event, target) => {
     if (!target || !fs.existsSync(target)) {
         return { ok: false, error: 'El instalador ya no está donde se bajó.' };
     }
@@ -369,7 +362,7 @@ ipcMain.handle('update-install', async (event, target) => {
  * El diálogo nativo y no uno dibujado en la ventana: este es el que bloquea de
  * verdad y el que se ve igual con la app de fondo.
  */
-ipcMain.handle('confirmar', async (event, { titulo, mensaje, ok } = {}) => {
+ipc.handle('confirmar', async (event, { titulo, mensaje, ok } = {}) => {
     const result = await dialog.showMessageBox(mainWindow, {
         type: 'warning',
         buttons: [ok || 'Continuar', 'Cancelar'],
@@ -393,7 +386,7 @@ ipcMain.handle('confirmar', async (event, { titulo, mensaje, ok } = {}) => {
  *
  * @param {{titulo:string, mensaje:string, opciones:Array<{valor:string, dice:string}>}}
  */
-ipcMain.handle('preguntar', async (event, { titulo, mensaje, opciones } = {}) => {
+ipc.handle('preguntar', async (event, { titulo, mensaje, opciones } = {}) => {
     const formas = Array.isArray(opciones) ? opciones : [];
     const result = await dialog.showMessageBox(mainWindow, {
         type: 'question',
@@ -410,7 +403,7 @@ ipcMain.handle('preguntar', async (event, { titulo, mensaje, opciones } = {}) =>
 
 // El texto es de quien llama: el mismo diálogo sirve para elegir la carpeta del
 // curso y para cualquier otra cosa, y no dicen lo mismo.
-ipcMain.handle('pick-folder', async (event, opciones) => {
+ipc.handle('pick-folder', async (event, opciones) => {
     const o = opciones || {};
     const result = await dialog.showOpenDialog(mainWindow, {
         title: o.titulo || 'Elegí la carpeta del curso, donde van a caer las notas',
@@ -421,22 +414,23 @@ ipcMain.handle('pick-folder', async (event, opciones) => {
     return result.filePaths[0];
 });
 
-ipcMain.handle('reveal', (event, target) => {
+ipc.handle('reveal', (event, target) => {
     if (!target) return false;
     shell.showItemInFolder(target);
     return true;
 });
 
-ipcMain.handle('open-path', async (event, target) => {
+ipc.handle('open-path', async (event, target) => {
     if (!target) return 'No llegó ninguna ruta.';
     return shell.openPath(target);
 });
 
-ipcGrabar.registrar({ ipcMain, app, send, anotar });
-ipcPrproj.registrar({ ipcMain, dialog, ventana: () => mainWindow, send, anotar });
-ipcReferencias.registrar({ ipcMain, nativeImage, clipboard, anotar });
-ipcSemanal.registrar({ ipcMain, send, anotar });
+ipcGrabar.registrar({ ipcMain: ipc, app, send, anotar });
+ipcPrproj.registrar({ ipcMain: ipc, dialog, ventana: () => mainWindow, send, anotar });
+ipcReferencias.registrar({ ipcMain: ipc, nativeImage, clipboard, anotar });
+ipcSemanal.registrar({ ipcMain: ipc, send, anotar });
+ipcReporte.registrar({ ipcMain: ipc, app, shell, screen, systemPreferences, version: appVersion, anotar });
 mirilla = ipcMirilla.registrar({
-    ipcMain, BrowserWindow, screen,
+    ipcMain: ipc, BrowserWindow, screen,
     ventanaPrincipal: () => mainWindow, anotar
 });

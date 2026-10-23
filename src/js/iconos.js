@@ -155,6 +155,11 @@ const DIBUJOS = {
     diagnostico:
         '<path d="M4 12h3.6l2.2-6 4 12 2.2-6H20"/>',
 
+    /* El botón «Report»: una bandera, que es avisar de algo. */
+    reporte:
+        '<path d="M5.5 20.5V4.5"/>' +
+        '<path d="M5.5 5h11.2l-2.4 3.9 2.4 3.9H5.5"/>',
+
     finder:
         '<path d="M4.2 6.6a1.8 1.8 0 0 1 1.8-1.8h3.2l1.8 2.2h7a1.8 1.8 0 0 1 1.8 1.8v8.6a1.8 1.8 0 0 1-1.8 1.8H6a1.8 1.8 0 0 1-1.8-1.8z"/>' +
         '<path d="M12 11v5.2M9.6 13.6 12 11l2.4 2.6"/>',

@@ -131,11 +131,14 @@ contextBridge.exposeInMainWorld('nt', {
     fotoAbrir: ruta => ipcRenderer.invoke('foto-abrir', ruta),
     fotoCopiar: ruta => ipcRenderer.invoke('foto-copiar', ruta),
 
-    // El diario de la sesión. La ventana solo anota y pide el archivo: el
+    // El diario de la sesión. La ventana solo anota y pide el reporte: el
     // registro entero vive del lado de Node, para que las dos mitades queden en
     // un mismo orden y con un mismo reloj.
     anotar: (evento, datos) => ipcRenderer.invoke('registro-anotar', { evento, datos }),
-    registroDescargar: () => ipcRenderer.invoke('registro-descargar'),
+    // El botón «Report»: un .zip en Descargas con el diario y lo que hace falta
+    // para entender un problema (`ipc/reporte.js`). La ventana manda lo que solo
+    // ella ve: los micrófonos, las cámaras y en qué pantalla está.
+    reporteArmar: ventana => ipcRenderer.invoke('reporte-armar', ventana),
 
     onUpdateProgress: callback => {
         ipcRenderer.on('update-progress', (_event, payload) => callback(payload));

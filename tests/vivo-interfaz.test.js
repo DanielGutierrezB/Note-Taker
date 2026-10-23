@@ -163,7 +163,7 @@ module.exports = function (t) {
     t.test('el diálogo de varias salidas existe de punta a punta', () => {
         t.ok(/preguntar: payload => ipcRenderer\.invoke\('preguntar', payload\)/
             .test(leer('preload.js')), 'el preload lo expone');
-        const main = tramo(leer('main.js'), "ipcMain.handle('preguntar',", '\n});');
+        const main = tramo(leer('main.js'), "ipc.handle('preguntar',", '\n});');
         t.ok(/buttons: \[\.\.\.formas\.map\(o => o\.dice\), 'Cancelar'\]/.test(main),
             'cancelar lo pone el diálogo, al final: no se lo tiene que acordar quien pregunta');
         t.ok(/cancelId: formas\.length/.test(main) && /defaultId: formas\.length/.test(main),

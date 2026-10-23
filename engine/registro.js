@@ -116,26 +116,28 @@ function sanearTexto(texto) {
  * Los datos de una línea, sin nada que no se pueda compartir.
  *
  * Va en profundidad pero con freno: un objeto que se anida más de tres niveles
- * es un artefacto entero, y eso no es una línea de log.
+ * es un artefacto entero, y eso no es una línea de log. Un archivo del reporte
+ * sí lo es, y por eso el freno se puede correr (`tope`).
  */
-function sanear(valor, nivel) {
+function sanear(valor, nivel, tope) {
     const profundidad = nivel || 0;
+    const hasta = tope || 3;
     if (valor == null) return null;
     if (typeof valor === 'number' || typeof valor === 'boolean') return valor;
     if (typeof valor === 'string') return sanearTexto(valor);
-    if (profundidad >= 3) return '…';
+    if (profundidad >= hasta) return '…';
 
     if (Array.isArray(valor)) {
         // Diez alcanzan para ver de qué se habla; una lista de trece clases
         // entera por línea no.
-        const corta = valor.slice(0, 10).map(v => sanear(v, profundidad + 1));
+        const corta = valor.slice(0, 10).map(v => sanear(v, profundidad + 1, hasta));
         return valor.length > 10 ? [...corta, `… y ${valor.length - 10} más`] : corta;
     }
     if (typeof valor !== 'object') return String(valor);
 
     const salida = {};
     for (const [clave, v] of Object.entries(valor)) {
-        salida[clave] = SECRETOS.test(clave) ? OCULTO : sanear(v, profundidad + 1);
+        salida[clave] = SECRETOS.test(clave) ? OCULTO : sanear(v, profundidad + 1, hasta);
     }
     return salida;
 }
