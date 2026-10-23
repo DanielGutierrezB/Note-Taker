@@ -645,9 +645,24 @@ function comoSeLee(revision) {
     return partes.join('; ') || 'sin novedad';
 }
 
-/** Segundos → ticks, redondeado. Es la única traducción de tiempo del formato. */
-function aTicks(segundos) {
-    return Math.round((Number(segundos) || 0) * TICKS);
+/** Cuántos ticks de distancia a un cuadro son error de redondeo y no una hora. */
+const CASI_UN_CUADRO = 64;
+
+/**
+ * Segundos → ticks, redondeado. Es la única traducción de tiempo del formato.
+ *
+ * Con `cuadro` —los ticks de un cuadro de la secuencia—, una hora que cae a un
+ * par de ticks de un cuadro se escribe como ese cuadro exacto. Es el error de
+ * guardar segundos en un número decimal: pasados los 60 000 s de una carpeta
+ * entera, un segundo tiene unos dos ticks de precisión, y para Premiere un
+ * tick antes del cuadro ya es el cuadro anterior. Lo que no está cerca de un
+ * cuadro —un WAV puesto donde empieza, que va por muestra— no se mueve.
+ */
+function aTicks(segundos, cuadro) {
+    const ticks = Math.round((Number(segundos) || 0) * TICKS);
+    if (!cuadro) return ticks;
+    const enCuadro = Math.round(ticks / cuadro) * cuadro;
+    return Math.abs(ticks - enCuadro) <= CASI_UN_CUADRO ? enCuadro : ticks;
 }
 
 function aSegundos(ticks) {

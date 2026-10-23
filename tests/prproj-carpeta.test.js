@@ -460,6 +460,58 @@ module.exports = async function (t) {
         t.ok(plan.avisos.some(a => a.includes('no lleva precortada')));
     });
 
+    t.group('prproj de la carpeta · todo en su cuadro');
+
+    t.test('los cortes empiezan, terminan y entran en un cuadro, y siguen pegados', () => {
+        // Lo encontró el editor: la cuchilla en el playhead cortaba un cuadro
+        // antes o uno después. Los bordes nacen en milisegundos del audio y se
+        // escribían así; un clip que empieza a mitad de cuadro tiene su propia
+        // rejilla, corrida de la de la secuencia.
+        const dir = carpeta();
+        const s = sesion(dir, {
+            cero: T0 + 0.0137 * 1000,
+            tomas: [toma(1, 10.0123, 20.4871, 'PV', T0), toma(2, 31.2049, 40.9993, 'R', T0),
+                toma(3, 52.5551, 61.0017, 'PV', T0)]
+        });
+        const plan = carpetaPrproj.planear([s, sesion(dir, { cero: T0 + 2 * UNA_HORA + 0.0071 * 1000, secuencia: 'otra',
+            tomas: [toma(1, 5.0311, 9.9876, 'PV', T0 + 2 * UNA_HORA)] })], carpetaPrproj.normalizar(null, []), 30);
+        const cuadro = prproj.TICKS / 30;
+        const enCuadro = seg => prproj.aTicks(seg, cuadro) % cuadro === 0;
+        for (const clase of plan.clases) {
+            t.ok(enCuadro(clase.franja.desdeSeg) && enCuadro(clase.franja.largoSeg),
+                `${clase.nombre}: su franja en las anidaciones empieza y dura cuadros enteros`);
+            for (const c of clase.cortes) {
+                t.ok(enCuadro(c.desdeSeg) && enCuadro(c.hastaSeg) && enCuadro(c.entradaSeg),
+                    `${clase.nombre}, toma ${c.toma}: en cuadro (${c.desdeSeg}, ${c.hastaSeg}, ${c.entradaSeg})`);
+            }
+            clase.cortes.slice(1).forEach((c, i) => t.eq(c.desdeSeg, clase.cortes[i].hastaSeg, 'pegada a la anterior'));
+        }
+        t.ok(enCuadro(plan.largoSeg), 'y las anidaciones duran cuadros enteros');
+    });
+
+    t.test('el audio de referencia se corre lo mismo que la imagen', () => {
+        // La entrada en la anidación se lleva al cuadro; la del WAV, que va por
+        // muestra, se corre exactamente lo mismo para seguir sonando con ella.
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10.0123, 20.4871, 'PV', T0)] });
+        const plan = carpetaPrproj.planear([s], carpetaPrproj.normalizar(null, []), 30);
+        const [c] = plan.clases[0].cortes;
+        const sinRedondear = 10.0123;
+        t.ok(Math.abs((c.entradaSeg - plan.clases[0].franja.desdeSeg) - c.referencia.entradaSeg) < 1e-9,
+            'la referencia entra en el mismo instante de la clase que la imagen');
+        t.ok(Math.abs(c.referencia.entradaSeg - sinRedondear) <= 0.5 / 30 + 1e-9, 'a medio cuadro como mucho de donde estaba');
+    });
+
+    t.test('con el cuadro, una hora a un par de ticks de un cuadro se escribe como ese cuadro', () => {
+        // Pasados los 60 000 s, un segundo decimal tiene un par de ticks de
+        // precisión, y para Premiere un tick antes del cuadro es el anterior.
+        const cuadro = prproj.TICKS / 30;
+        const n = 1966081;
+        t.ok(Math.round((n / 30) * prproj.TICKS) !== n * cuadro, 'sin el cuadro, ese número cae dos ticks fuera');
+        t.eq(prproj.aTicks(n / 30, cuadro), n * cuadro, 'exacto en su cuadro');
+        t.eq(prproj.aTicks(1.234567, cuadro), prproj.aTicks(1.234567), 'y lo que no está cerca de un cuadro no se mueve');
+    });
+
     t.group('prproj de la carpeta · capturas y grupos');
 
     t.test('una vista de dos capturas es un grupo, y las capturas van antes que las anidaciones', () => {

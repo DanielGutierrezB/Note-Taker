@@ -222,6 +222,13 @@ class Taller {
         // El `<ID>` del panel de proyecto no es un GUID sino un entero que sube.
         // Se arranca por arriba de lo que haya para no pisar ninguno.
         this.proximoIdDePanel = mayorIdDePanel(proyecto) + 1;
+        // Los ticks de un cuadro de la secuencia, cuando se sepan (`fijarCuadros`).
+        this.cuadro = null;
+    }
+
+    /** Los cuadros por segundo de las secuencias que se arman, para escribir cada corte en su cuadro. */
+    fijarCuadros(fps) {
+        this.cuadro = Math.round(prproj.TICKS / fps);
     }
 
     /** Los `ObjectUID` nuevos de un clonado, por la clase que se pida. */
@@ -490,7 +497,7 @@ class Taller {
 
         const uidViejo = prproj.parte(this.moldes.secuencia)[1];
         const uidNuevo = prproj.parte(seq)[1];
-        const tics = prproj.aTicks(duracionSeg);
+        const tics = prproj.aTicks(duracionSeg, this.cuadro);
         for (const k of clonados) {
             const clase = p.clase(k);
             if (clase === 'VideoSequenceSource' || clase === 'AudioSequenceSource') {
@@ -637,8 +644,8 @@ class Taller {
         // Dónde cae en la línea de tiempo. `<Start>` se omite del archivo cuando
         // vale cero —es la regla de "los valores por defecto no se escriben"— así
         // que se saca el que pueda haber y se lo pone siempre delante del `<End>`.
-        const desde = prproj.aTicks(corte.desdeSeg);
-        const hasta = prproj.aTicks(corte.hastaSeg);
+        const desde = prproj.aTicks(corte.desdeSeg, this.cuadro);
+        const hasta = prproj.aTicks(corte.hastaSeg, this.cuadro);
         p.escribir(item, p.contenido(item)
             .replace(/\n(\t*)<Start>\d+<\/Start>/, '')
             .replace(/(\n(\t*))<End>\d+<\/End>/,
@@ -647,7 +654,7 @@ class Taller {
         // Qué pedazo del archivo se ve. El largo se toma de la línea de tiempo y
         // no de restar los puntos de origen: si difirieran, el clip quedaría
         // pidiéndole a Premiere que estire el tiempo.
-        const entrada = prproj.aTicks(corte.entradaSeg);
+        const entrada = prproj.aTicks(corte.entradaSeg, this.cuadro);
         p.escribir(clip, p.contenido(clip)
             .replace(/<InPoint>\d+<\/InPoint>/, `<InPoint>${entrada}</InPoint>`)
             .replace(/<OutPoint>\d+<\/OutPoint>/, `<OutPoint>${entrada + (hasta - desde)}</OutPoint>`));

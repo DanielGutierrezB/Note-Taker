@@ -230,15 +230,32 @@ function deXml(m) {
  * para todas las clases: primero las capturas solas, de la 1 en adelante, y
  * después los grupos. Así el V1 de una clase es el V1 de todas.
  *
+ * **Todo lo que se corta cae en un cuadro de la secuencia.** Los bordes nacen
+ * en milisegundos del audio —donde terminó una palabra— y Premiere solo corta
+ * en cuadros enteros: un clip que empieza a mitad de cuadro tiene su propia
+ * rejilla, corrida de la de la secuencia, y la cuchilla en el playhead caía un
+ * cuadro antes o uno después. Lo encontró el editor; en su carpeta eran fuera
+ * de cuadro casi todos los bordes de las precortadas. Así que cada clase
+ * empieza en un cuadro de las anidaciones y dura cuadros enteros, y cada corte
+ * empieza, termina y entra en la anidación en un cuadro. Cada borde se mueve
+ * medio cuadro como mucho, y todas las pistas de un corte con él.
+ *
+ * Lo único que no se redondea es el WAV de referencia entero adentro de las
+ * capturas: es contra lo que se sincroniza, y el audio se corta por muestra.
+ *
  * @param {object[]} sesiones lo que devuelve `sesiones-grabadas.listar`
  * @param {object} config lo que devuelve `normalizar`
+ * @param {number} [fps] los de la secuencia molde; sin él, los de las clases
  */
-function planear(sesiones, config) {
+function planear(sesiones, config, fps) {
     const avisos = [];
     const ordenadas = (sesiones || [])
         .filter(s => s && s.ceroMs != null)
         .slice()
         .sort((a, b) => a.ceroMs - b.ceroMs);
+    const porSegundo = fps || (ordenadas[0] && ordenadas[0].fps) || 30;
+    const enCuadro = seg => Math.round(seg * porSegundo) / porSegundo;
+    const cuadrosEnteros = seg => Math.ceil(seg * porSegundo - 1e-6) / porSegundo;
 
     const clases = [];
     let reloj = 0;
@@ -251,7 +268,7 @@ function planear(sesiones, config) {
         if (!sesion.terminada) {
             avisos.push(`${sesion.secuencia} quedó sin terminar: entra con lo que tenía guardado.`);
         }
-        const largoSeg = largoDe(sesion, wavs);
+        const largoSeg = cuadrosEnteros(largoDe(sesion, wavs));
         // Lo que lleva cada WAV encima: los mismos marcadores que el XML le pone
         // al clip maestro, medidos desde el arranque del archivo. Es el juego
         // completo de la sesión —tomas, claquetas y notas— porque un WAV de dos
@@ -268,9 +285,9 @@ function planear(sesiones, config) {
             franja: { desdeSeg: reloj, largoSeg },
             marcas
         });
-        reloj += largoSeg + nidos.AIRE_SEG;
+        reloj = cuadrosEnteros(reloj + largoSeg + nidos.AIRE_SEG);
     }
-    const largoSeg = clases.length ? Math.max(0, reloj - nidos.AIRE_SEG) : 0;
+    const largoSeg = clases.length ? cuadrosEnteros(Math.max(0, reloj - nidos.AIRE_SEG)) : 0;
 
     // Dónde cae un instante de una clase adentro de las anidaciones.
     const enNido = (clase, ms) => clase.franja.desdeSeg + notasXml.aSegundos(ms, clase.sesion.ceroMs);
@@ -307,30 +324,42 @@ function planear(sesiones, config) {
             const outMs = ajustar.outAjustado(toma);
             const largo = (outMs - inMs) / 1000;
             if (!(largo > 0)) continue;
+            // Los dos bordes en un cuadro, cada uno redondeado una sola vez:
+            // el final de una toma es el principio de la siguiente, así que
+            // siguen pegadas. Y la entrada en la anidación también, que es lo
+            // que hace que su rejilla sea la de la secuencia.
+            const desdeSeg = enCuadro(cursor);
+            const hastaSeg = enCuadro(cursor + largo);
+            const entradaEnNido = enNido(clase, inMs);
+            const entradaSeg = enCuadro(entradaEnNido);
 
             const wav = wavQueContiene(clase.wavs, inMs);
             let referencia = null;
             if (wav) {
-                const entradaSeg = (inMs - wav.desdeMs) / 1000;
+                // Corrida lo mismo que la entrada del vídeo, para que A2 siga
+                // sonando con la imagen que tiene encima.
+                const entradaRef = (inMs - wav.desdeMs) / 1000 + (entradaSeg - entradaEnNido);
                 // Una toma que cruza al WAV siguiente —la sesión se reanudó a mitad
                 // de toma— corta su referencia donde termina el archivo: más allá
                 // de ese WAV no hay audio que poner en A2.
-                const cabe = Math.min(largo, wav.segundos - entradaSeg);
+                const cabe = Math.min(hastaSeg - desdeSeg, wav.segundos - entradaRef);
                 if (cabe < largo - 0.05) {
                     avisos.push(`${clase.nombre}: la toma ${toma.id} cruza de un audio a otro; su referencia en A2 llega hasta donde termina el primero.`);
                 }
-                referencia = { ruta: wav.ruta, entradaSeg, largoSeg: cabe };
+                referencia = { ruta: wav.ruta, entradaSeg: Math.max(0, entradaRef), largoSeg: cabe };
             }
 
-            clase.cortes.push({
-                toma: toma.id,
-                vista,
-                fuentes: fuentesDe(vista),
-                desdeSeg: cursor,
-                hastaSeg: cursor + largo,
-                entradaSeg: enNido(clase, inMs),
-                referencia
-            });
+            if (hastaSeg > desdeSeg) {
+                clase.cortes.push({
+                    toma: toma.id,
+                    vista,
+                    fuentes: fuentesDe(vista),
+                    desdeSeg,
+                    hastaSeg,
+                    entradaSeg,
+                    referencia
+                });
+            }
 
             // **Solo las tomas que tienen algo escrito llevan marcador, y dura
             // lo que dura la toma.** En la precortada el plano ya se ve —es la
@@ -344,8 +373,8 @@ function planear(sesiones, config) {
                 clase.marcadores.push({
                     nombre: `${notasXml.nombreDeToma(toma)} · ${vista}`,
                     comentario: vivo.comentarioDeEntrada(toma),
-                    desdeSeg: cursor,
-                    hastaSeg: cursor + largo,
+                    desdeSeg,
+                    hastaSeg,
                     color: notasXml.colorDeVista(vista)
                 });
             }
@@ -356,8 +385,8 @@ function planear(sesiones, config) {
             for (const c of toma.comentarios || []) {
                 if (c.desdeMs == null) continue;
                 if (c.desdeMs < inMs || c.desdeMs >= outMs) continue;
-                const desde = cursor + (c.desdeMs - inMs) / 1000;
-                const hasta = c.hastaMs != null ? cursor + (Math.min(c.hastaMs, outMs) - inMs) / 1000 : desde;
+                const desde = enCuadro(cursor + (c.desdeMs - inMs) / 1000);
+                const hasta = c.hastaMs != null ? enCuadro(cursor + (Math.min(c.hastaMs, outMs) - inMs) / 1000) : desde;
                 clase.marcadores.push({
                     nombre: 'Nota',
                     comentario: vivo.limpio(c.comentario),
@@ -368,7 +397,7 @@ function planear(sesiones, config) {
             }
             cursor += largo;
         }
-        clase.duracionSeg = cursor;
+        clase.duracionSeg = enCuadro(cursor);
         if (!clase.cortes.length) {
             avisos.push(`${clase.nombre} no tiene tomas que vayan al XML: no lleva precortada`
                 + (clase.franja.largoSeg > 0 ? `, pero entra entera en ${BIN_PRE}.` : '.'));
@@ -826,6 +855,7 @@ async function generar(opciones) {
     if (fps == null) {
         return { ...vacio, error: 'No pude leer los cuadros por segundo de la secuencia de la plantilla.' };
     }
+    taller.fijarCuadros(fps);
     const distintas = sesiones.filter(s => !mismoFps(s.fps || 30, fps));
     if (distintas.length) {
         const cuales = [...new Set(distintas.map(s => s.fps || 30))].join(', ');
@@ -848,7 +878,7 @@ async function generar(opciones) {
         sesionesGrabadas.ajustarBordes(s, workspace.sesionDelSidecar(s.archivos.json));
     }
 
-    const plan = planear(sesiones, config);
+    const plan = planear(sesiones, config, fps);
     const avisos = plan.avisos.slice();
     const total = plan.clases.length;
 
