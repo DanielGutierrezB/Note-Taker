@@ -38,7 +38,7 @@ function wav(ruta) {
 function grabacion(base, nombre, haceMs) {
     const json = path.join(workspace.datosDir(base), `${nombre}${workspace.SUFIJO_SIDECAR}`);
     fs.mkdirSync(path.dirname(json), { recursive: true });
-    fs.writeFileSync(json, JSON.stringify({ secuencia: nombre, tomas: [] }));
+    fs.writeFileSync(json, JSON.stringify({ secuencia: nombre, tomas: [], archivo: path.join(os.homedir(), 'Downloads', nombre) }));
     wav(path.join(workspace.audioDir(base), `${nombre}-1.wav`));
     const t = new Date(Date.now() - haceMs);
     fs.utimesSync(json, t, t);
@@ -78,8 +78,9 @@ module.exports = async function (t) {
     t.test('los bytes no entran al diario, y lo que se calla no se anota', async () => {
         const handlers = {};
         const anotado = [];
+        // Como en main.js: lo que se anota pasa por `registro.sanear`.
         const ipc = conDiario({ handle: (c, fn) => { handlers[c] = fn; }, on: () => {} },
-            (e, d) => anotado.push([e, d]), new Set(['grabar-estado']));
+            (e, d) => anotado.push([e, registro.sanear(d)]), new Set(['grabar-estado']));
         ipc.handle('foto-guardar', async () => true);
         ipc.handle('grabar-estado', async () => ({ tomas: [] }));
         await handlers['foto-guardar']({}, { toma: 2, jpeg: new Uint8Array(50000) });
@@ -87,6 +88,22 @@ module.exports = async function (t) {
         t.eq(anotado.length, 1, 'el estado que la ventana pregunta para pintarse no se anota');
         t.eq(anotado[0][1].pide[0].jpeg, '‹50000 bytes›', 'y de una foto queda cuánto pesa, no la foto');
         t.deep(resumirRespuesta([1, 2]), { cuantos: 2 }, 'una lista de respuesta, por cuántos trae');
+    });
+
+    t.test('un diario que falla no cambia lo que contesta la acción', async () => {
+        const handlers = {};
+        const ipc = conDiario({ handle: (c, fn) => { handlers[c] = fn; } }, () => { throw new Error('disco lleno'); });
+        ipc.handle('ajustes-guardar', async () => ({ ok: true }));
+        t.deep(await handlers['ajustes-guardar']({}, { idioma: 'es' }), { ok: true }, 'se guardó, y la ventana lo sabe');
+    });
+
+    t.test('lo que alguien escribió queda como cuánto mide', async () => {
+        const handlers = {};
+        const anotado = [];
+        const ipc = conDiario({ handle: (c, fn) => { handlers[c] = fn; } }, (e, d) => anotado.push([e, registro.sanear(d)]));
+        ipc.handle('grabar-editar', async () => ({ ok: true }));
+        await handlers['grabar-editar']({}, { tipo: 'nota', toma: 3, comentario: 'esto lo dijo mal, repetir' });
+        t.deep(anotado[0][1].pide[0], { tipo: 'nota', toma: 3, comentario: '‹25 caracteres›' });
     });
 
     t.test('todos los módulos registran por el que anota', () => {
@@ -146,6 +163,9 @@ module.exports = async function (t) {
         const [sesion] = reporte.ultimasGrabaciones([curso]).filter(s => s.nombre === 'curso_clase-1');
         t.deep(reporte.mediosDe(sesion).map(m => path.basename(m)), ['curso_clase-1-1.wav'],
             'los WAV de las otras clases de la carpeta no son de esta');
+        // Y la 10 no es la 1: por prefijo a secas, la clase 1 se los llevaba.
+        grabacion(curso, 'curso_clase-10', 0);
+        t.deep(reporte.mediosDe(sesion).map(m => path.basename(m)), ['curso_clase-1-1.wav'], 'ni los de la clase 10');
     });
 
     t.test('los cuelgues: los de la app y de las últimas dos semanas', () => {
@@ -195,6 +215,8 @@ module.exports = async function (t) {
         t.ok(/AirPods de Daniel/.test(leer('ventana.json')), 'con el micrófono que veía la ventana');
         t.ok(fs.existsSync(path.join(abierto, raiz, 'grabaciones', 'curso_clase-1', `curso_clase-1${workspace.SUFIJO_SIDECAR}`)),
             'con el sidecar de la última grabación');
+        t.ok(!leer(`grabaciones/curso_clase-1/curso_clase-1${workspace.SUFIJO_SIDECAR}`).includes(os.homedir()),
+            'sin la carpeta de usuario adentro, como promete el LEEME');
         if (ffprobe) {
             const [ficha] = JSON.parse(leer('grabaciones/curso_clase-1/medios.json'));
             t.eq(ficha.archivo, 'curso_clase-1-1.wav');

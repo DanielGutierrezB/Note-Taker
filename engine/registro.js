@@ -125,6 +125,9 @@ function sanear(valor, nivel, tope) {
     if (valor == null) return null;
     if (typeof valor === 'number' || typeof valor === 'boolean') return valor;
     if (typeof valor === 'string') return sanearTexto(valor);
+    // Unos bytes —una foto, un pedazo de audio— son cuánto pesan, no una clave
+    // por byte: un Uint8Array recorrido como objeto era una línea de un mega.
+    if (valor instanceof ArrayBuffer || ArrayBuffer.isView(valor)) return `‹${valor.byteLength} bytes›`;
     if (profundidad >= hasta) return '…';
 
     if (Array.isArray(valor)) {

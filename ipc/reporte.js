@@ -87,11 +87,9 @@ function registrar(p) {
 
     ipcMain.handle('reporte-armar', async (event, ventana) => {
         const lasAjustes = ajustes.leer();
-        const [sistema, doctor, faltan] = await Promise.all([
-            laMac(),
-            Promise.resolve().then(() => paths.doctor()),
-            Promise.resolve().then(() => dependencias.estado())
-        ]);
+        const sistema = await laMac();
+        const doctor = paths.doctor();
+        const faltan = dependencias.estado();
         const r = await reporte.armar({
             dir: app.getPath('downloads'),
             cabecera: {
@@ -108,7 +106,10 @@ function registrar(p) {
             carpetas: [lasAjustes.carpeta, lasAjustes.semanal && lasAjustes.semanal.carpeta],
             ffprobe: (paths.ffprobe() || {}).path || null,
             cuelgues: path.join(os.homedir(), 'Library', 'Logs', 'DiagnosticReports'),
-            nombresDeLaApp: ['Note Taker', 'Electron']
+            // En desarrollo la app corre como «Electron», y así se llaman sus
+            // cuelgues; empaquetada, solo los suyos, no los de otra app hecha con
+            // Electron.
+            nombresDeLaApp: app.isPackaged ? ['Note Taker'] : ['Note Taker', 'Electron']
         });
         anotar('reporte.armado', { ok: r.ok, archivo: r.archivo, partes: r.partes, faltan: r.faltan, error: r.error });
         // Se muestra y no se abre: lo que hace falta es tenerlo a mano para

@@ -108,7 +108,8 @@ function ultimasGrabaciones(carpetas, cuantas) {
  * Los audios y vídeos de una grabación: los de su carpeta de audio, los de la
  * de vídeo y el vídeo ya cortado, que va suelto en la carpeta. Solo los suyos:
  * en un curso la carpeta de audio tiene los WAV de todas las clases, y se
- * reconocen por empezar con el nombre de la sesión.
+ * reconocen por llamarse como la sesión seguida de un guion o un punto. Por
+ * prefijo a secas, la clase 1 se llevaba los audios de la 10, la 11 y la 12.
  */
 function mediosDe(sesion) {
     const salida = [];
@@ -116,7 +117,8 @@ function mediosDe(sesion) {
         let nombres = [];
         try { nombres = fs.readdirSync(dir); } catch (e) { continue; }
         for (const n of nombres) {
-            if (!oculto(n) && n.startsWith(sesion.nombre) && MEDIOS.has(path.extname(n).toLowerCase())) salida.push(path.join(dir, n));
+            const suyo = n.startsWith(`${sesion.nombre}-`) || n.startsWith(`${sesion.nombre}.`);
+            if (!oculto(n) && suyo && MEDIOS.has(path.extname(n).toLowerCase())) salida.push(path.join(dir, n));
         }
     }
     return salida;
@@ -207,72 +209,81 @@ function leeme(nombre, cabecera, partes, faltan) {
  */
 async function armar(p) {
     const nombre = nombreDelReporte();
-    const trabajo = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-reporte-'));
-    const raiz = path.join(trabajo, nombre);
-    fs.mkdirSync(raiz);
-    const partes = [];
-    const faltan = [];
-
-    const poner = (archivo, que, contenido) => {
-        try {
-            const destino = path.join(raiz, archivo);
-            fs.mkdirSync(path.dirname(destino), { recursive: true });
-            fs.writeFileSync(destino, typeof contenido === 'string' ? contenido : `${JSON.stringify(contenido, null, 2)}\n`);
-            partes.push({ archivo, que });
-        } catch (e) {
-            faltan.push(`${archivo}: ${e.message}`);
-        }
-    };
-    const copiar = (origen, archivo, que) => {
-        try {
-            const destino = path.join(raiz, archivo);
-            fs.mkdirSync(path.dirname(destino), { recursive: true });
-            fs.copyFileSync(origen, destino);
-            partes.push({ archivo, que });
-        } catch (e) {
-            faltan.push(`${archivo}: ${e.message}`);
-        }
-    };
-
-    // El diario primero, con lo pendiente ya en disco: lo último que pasó es
-    // lo que se venía a mirar.
-    registro.volcar();
-    const guardadas = registro.leerDelDisco();
-    const lineas = guardadas.length ? guardadas : registro.todo();
-    poner('diario.md', 'el diario de todas las corridas, para leer', registro.texto(p.cabecera || {}, lineas));
-    poner('diario.ndjson', 'el mismo diario, una línea JSON por evento', `${lineas.map(l => JSON.stringify(l)).join('\n')}\n`);
-
-    poner('sistema.json', 'la Mac, las versiones y los permisos', registro.sanear(p.sistema || {}, 0, HONDO));
-    poner('ajustes.json', 'los ajustes de la app, sin secretos', registro.sanear(p.ajustes || {}, 0, HONDO));
-    poner('herramientas.json', 'qué herramientas y modelos encontró la app', registro.sanear(p.herramientas || {}, 0, HONDO));
-    poner('ventana.json', 'lo que ve la ventana: pantalla, micrófonos y cámaras', registro.sanear(p.ventana || {}, 0, HONDO));
-    if (p.grabando) poner('grabando.json', 'la grabación que estaba en curso', registro.sanear(p.grabando));
-
-    for (const sesion of ultimasGrabaciones(p.carpetas)) {
-        const dir = `grabaciones/${sesion.nombre}`;
-        copiar(sesion.json, `${dir}/${path.basename(sesion.json)}`, 'el sidecar: tomas, relojes y texto');
-        if (!p.ffprobe) continue;
-        const fichas = [];
-        for (const m of mediosDe(sesion)) fichas.push(await sondear(p.ffprobe, m));
-        poner(`${dir}/medios.json`, 'la ficha de cada audio y vídeo (ffprobe)', fichas);
-    }
-
-    for (const c of cuelguesDe(p.cuelgues, p.nombresDeLaApp || [], Date.now())) {
-        copiar(c, `cuelgues/${path.basename(c)}`, 'un reporte de cuelgue de macOS');
-    }
-
-    poner('LEEME.md', 'qué es cada cosa', leeme(nombre, p.cabecera || {}, partes, faltan));
-
-    const zip = path.join(p.dir, `${nombre}.zip`);
+    let trabajo = null;
     try {
+        trabajo = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-reporte-'));
+        const raiz = path.join(trabajo, nombre);
+        fs.mkdirSync(raiz);
+        const partes = [];
+        const faltan = [];
+
+        // Cada pedazo se arma y se escribe por su cuenta: si uno falla, se dice
+        // en el LEEME y los demás salen igual.
+        const poner = (archivo, que, armarlo) => {
+            try {
+                const contenido = armarlo();
+                const destino = path.join(raiz, archivo);
+                fs.mkdirSync(path.dirname(destino), { recursive: true });
+                fs.writeFileSync(destino, typeof contenido === 'string' ? contenido : `${JSON.stringify(contenido, null, 2)}\n`);
+                partes.push({ archivo, que });
+            } catch (e) {
+                faltan.push(`${archivo}: ${e.message}`);
+            }
+        };
+        // Lo que se copia de afuera —un sidecar, un cuelgue de macOS— trae rutas
+        // enteras con el nombre de usuario: viaja como texto, con la carpeta de
+        // usuario cambiada por `~`, que es lo que promete el LEEME.
+        const copiar = (origen, archivo, que) => poner(archivo, que, () => sinCasa(fs.readFileSync(origen, 'utf8')));
+
+        // El diario primero, con lo pendiente ya en disco: lo último que pasó es
+        // lo que se venía a mirar. Ya está saneado: se sanea al anotar.
+        const lineas = (() => {
+            registro.volcar();
+            const guardadas = registro.leerDelDisco();
+            return guardadas.length ? guardadas : registro.todo();
+        })();
+        poner('diario.md', 'el diario de todas las corridas, para leer', () => registro.texto(p.cabecera || {}, lineas));
+        poner('diario.ndjson', 'el mismo diario, una línea JSON por evento',
+            () => `${lineas.map(l => JSON.stringify(l)).join('\n')}\n`);
+
+        poner('sistema.json', 'la Mac, las versiones y los permisos', () => registro.sanear(p.sistema || {}, 0, HONDO));
+        poner('ajustes.json', 'los ajustes de la app, sin secretos', () => registro.sanear(p.ajustes || {}, 0, HONDO));
+        poner('herramientas.json', 'qué herramientas y modelos encontró la app', () => registro.sanear(p.herramientas || {}, 0, HONDO));
+        poner('ventana.json', 'lo que ve la ventana: pantalla, micrófonos y cámaras', () => registro.sanear(p.ventana || {}, 0, HONDO));
+        if (p.grabando) poner('grabando.json', 'la grabación que estaba en curso', () => registro.sanear(p.grabando));
+
+        let sesiones = [];
+        try { sesiones = ultimasGrabaciones(p.carpetas); } catch (e) { faltan.push(`las grabaciones: ${e.message}`); }
+        for (const sesion of sesiones) {
+            const dir = `grabaciones/${sesion.nombre}`;
+            copiar(sesion.json, `${dir}/${path.basename(sesion.json)}`, 'el sidecar: tomas, relojes y texto');
+            if (!p.ffprobe) continue;
+            const fichas = [];
+            for (const m of mediosDe(sesion)) fichas.push(await sondear(p.ffprobe, m));
+            poner(`${dir}/medios.json`, 'la ficha de cada audio y vídeo (ffprobe)', () => registro.sanear(fichas, 0, HONDO));
+        }
+
+        for (const c of cuelguesDe(p.cuelgues, p.nombresDeLaApp || [], Date.now())) {
+            copiar(c, `cuelgues/${path.basename(c)}`, 'un reporte de cuelgue de macOS');
+        }
+
+        poner('LEEME.md', 'qué es cada cosa', () => leeme(nombre, p.cabecera || {}, partes, faltan));
+
+        const zip = path.join(p.dir, `${nombre}.zip`);
         fs.mkdirSync(p.dir, { recursive: true });
         await comprimir(raiz, zip);
         return { ok: true, archivo: zip, partes: partes.map(x => x.archivo), faltan };
     } catch (e) {
-        return { ok: false, error: `No pude armar el .zip: ${e.message}` };
+        return { ok: false, error: `No pude armar el reporte: ${e.message}` };
     } finally {
-        fs.rmSync(trabajo, { recursive: true, force: true });
+        if (trabajo) fs.rmSync(trabajo, { recursive: true, force: true });
     }
+}
+
+/** Un texto con la carpeta de usuario cambiada por `~`. */
+function sinCasa(texto) {
+    const casa = os.homedir();
+    return casa && casa.length > 3 ? texto.split(casa).join('~') : texto;
 }
 
 module.exports = {
