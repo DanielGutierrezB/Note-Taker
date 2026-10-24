@@ -111,6 +111,9 @@ const PULSO_MS = 2000;
  */
 const SIN_NADA_MS = { camara: 15000, pantalla: 45000 };
 
+/** Lo que falta mandar de cada grabador: la promesa de su último pedazo. */
+const enVuelo = new WeakMap();
+
 const estado = {
     pantalla: null,          // el stream de la pantalla, elegido antes de grabar
     tipos: {},               // cual → el mimeType que su fuente aguanta
@@ -118,6 +121,8 @@ const estado = {
     pulso: null,             // el reloj que le toma el pulso a las pistas
     salud: new Map(),        // cual → { bytes, desdeMs, avisado, pistas }
     vigia: null,             // el que mira si la pantalla cambia de tamaño
+    relevo: Promise.resolve(), // la fila de relevos de la pantalla (`enFila`)
+    generacion: 0,           // sube al terminar: un relevo a medias se cancela
     alAviso: () => {}
 };
 
@@ -349,10 +354,13 @@ export async function cambiarPantalla() {
     if (!elegida.ok) return elegida;
 
     const anterior = estado.pantalla;
-    const r = await otroTramo(elegida.stream, elegida.tipo);
+    // La ventana de antes deja de vigilarse ya: un cambio de tamaño suyo ahora
+    // sería un relevo de una pantalla que se está yendo.
+    dejarDeVigilarElTamano();
+    const r = await enFila(() => otroTramo(elegida.stream, elegida.tipo));
     if (!r.ok) {
         for (const p of elegida.stream.getTracks()) p.stop();
-        if (r.cerrado && anterior) await soltarPantalla();
+        if (anterior) await soltarPantalla();
         return r;
     }
 
@@ -380,46 +388,80 @@ export async function cambiarPantalla() {
  * archivos, así que no lleva ni un `await` que no haga falta: medido, un
  * milisegundo.
  *
- * @returns {Promise<{ok: boolean, tramo?: number, error?: string, cerrado?: boolean}>}
- *   `cerrado` dice si el tramo de antes ya quedó cerrado cuando falló
+ * **Va siempre por `enFila`, de a uno.** Son un `stop` y dos viajes al motor,
+ * y en ese rato pueden llegar otro cambio de tamaño, un cambio de ventana o
+ * Terminar: dos relevos a la vez sobre la misma pantalla se pisaban el
+ * grabador, y uno a medias cuando se termina abría un archivo que nadie
+ * cerraba. Terminar sube `generacion`, y un relevo que la ve cambiar se va sin
+ * abrir nada, o cerrando lo que abrió.
+ *
+ * Si falla, el tramo de antes ya está cerrado: lo grabado hasta acá se queda,
+ * y desde ahora no hay pantalla, que se dice. Peor sería seguir como si nada y
+ * no grabar nada más.
+ *
+ * @returns {Promise<{ok: boolean, tramo?: number, error?: string, cancelado?: boolean}>}
  */
 async function otroTramo(stream, tipo) {
+    // Se pudo haber terminado mientras esperaba en la fila, o mientras el
+    // selector del sistema estaba abierto: sin grabación no hay relevo.
+    if (!grabando()) return { ok: false, cancelado: true };
+    const generacion = estado.generacion;
     const viejo = estado.grabadores.get('pantalla');
     if (viejo) {
-        await new Promise(listo => {
-            if (viejo.state === 'inactive') return listo();
-            // `onstop` entrega el pedazo que tenía a medias, y sin él el tramo
-            // pierde sus últimos segundos.
-            viejo.onstop = listo;
-            try { viejo.stop(); } catch (e) { listo(); }
-            return undefined;
-        });
+        await pararYSoltar(viejo);
         estado.grabadores.delete('pantalla');
-        // Los trozos viajan por `send`: un turno del bucle los deja llegar
-        // antes de pedir el cierre del archivo, igual que en `terminar`.
-        await new Promise(r => setTimeout(r, 50));
         await window.nt.semanalCerrar('pantalla');
     }
+    if (generacion !== estado.generacion) return { ok: false, cancelado: true };
 
     const abierto = await window.nt.semanalAbrir({ cual: 'pantalla', tipo, empezoMs: Date.now() });
-    if (!abierto.ok) {
-        // El tramo nuevo no se pudo abrir y el viejo ya está cerrado: lo que
-        // hay grabado hasta acá se queda, y se dice que desde ahora no hay
-        // pantalla. Peor sería seguir como si nada y no grabar nada más.
-        estado.salud.delete('pantalla');
-        estado.alAviso({ tipo: 'roto', cual: 'pantalla', error: abierto.error });
-        return { ok: false, error: abierto.error, cerrado: true };
+    if (generacion !== estado.generacion) {
+        if (abierto.ok) await window.nt.semanalCerrar('pantalla');
+        return { ok: false, cancelado: true };
     }
+    const fallo = async error => {
+        if (abierto.ok) await window.nt.semanalCerrar('pantalla');
+        estado.salud.delete('pantalla');
+        estado.alAviso({ tipo: 'roto', cual: 'pantalla', error });
+        return { ok: false, error };
+    };
+    if (!abierto.ok) return fallo(abierto.error);
 
     let grabador;
     try {
         grabador = new MediaRecorder(stream, { mimeType: tipo, videoBitsPerSecond: CALIDAD.pantalla });
     } catch (e) {
-        return { ok: false, error: `No se pudo preparar la pantalla nueva: ${e.message}`, cerrado: true };
+        return fallo(`No se pudo preparar la pantalla nueva: ${e.message}`);
     }
     enganchar({ cual: 'pantalla', grabador, stream, tipo, conAudio: false });
     grabador.start(CADA_MS);
     return { ok: true, tramo: abierto.tramo };
+}
+
+/** Pone un trabajo en la fila de relevos: corre cuando terminó el de antes. */
+function enFila(trabajo) {
+    const hecho = estado.relevo.then(trabajo);
+    estado.relevo = hecho.catch(() => {});
+    return hecho;
+}
+
+/**
+ * Para un grabador y espera a que su último pedazo haya salido para el motor.
+ *
+ * `onstop` llega después del último `dataavailable`, pero ese pedazo todavía
+ * tiene que convertirse en bytes antes de cruzar: sin esperarlo, el cierre del
+ * archivo podía llegar antes, y el pedazo terminaba al principio del siguiente.
+ */
+async function pararYSoltar(grabador) {
+    await new Promise(listo => {
+        if (grabador.state === 'inactive') return listo();
+        // `onstop` entrega el pedazo que tenía a medias, y sin él el tramo
+        // pierde sus últimos segundos.
+        grabador.onstop = listo;
+        try { grabador.stop(); } catch (e) { listo(); }
+        return undefined;
+    });
+    await (enVuelo.get(grabador) || Promise.resolve());
 }
 
 /**
@@ -459,15 +501,18 @@ function vigilarElTamano(stream) {
         if (!vigia.delTramo) { vigia.delTramo = ahora; return; }
         // Arrastrar el borde de una ventana son decenas de tamaños seguidos: un
         // relevo por vez, y al terminar se vuelve a mirar.
-        if (ahora === vigia.delTramo || vigia.partiendo || !grabando() || estado.pantalla !== stream) return;
+        if (ahora === vigia.delTramo || vigia.partiendo || !grabando() || estado.vigia !== vigia) return;
         const antes = vigia.delTramo;
-        vigia.delTramo = ahora;
         vigia.partiendo = true;
-        const r = await otroTramo(stream, estado.tipos.pantalla);
+        const r = await enFila(() => otroTramo(stream, estado.tipos.pantalla));
         vigia.partiendo = false;
-        window.nt.anotar('semanal.pantalla-otro-tamano', { de: antes, a: ahora, ok: r.ok, tramo: r.tramo, error: r.error });
+        if (r.cancelado || estado.vigia !== vigia) return;
+        // El tamaño del tramo nuevo es el que había al arrancarlo; si siguió
+        // cambiando mientras tanto, la vuelta de abajo lo nota.
+        vigia.delTramo = `${ojo.videoWidth}x${ojo.videoHeight}`;
+        window.nt.anotar('semanal.pantalla-otro-tamano', { de: antes, a: vigia.delTramo, ok: r.ok, tramo: r.tramo, error: r.error });
         if (!r.ok) {
-            if (r.cerrado) await soltarPantalla();
+            await soltarPantalla();
             return;
         }
         mirar();
@@ -572,12 +617,16 @@ function enganchar(l) {
         conAudio: l.conAudio
     });
 
-    l.grabador.ondataavailable = async e => {
+    // Los pedazos salen en fila: pasarlos a bytes es asíncrono, y sin la fila
+    // dos podían cruzar en otro orden, o el último después del cierre.
+    enVuelo.set(l.grabador, Promise.resolve());
+    l.grabador.ondataavailable = e => {
         if (!e.data || !e.data.size) return;
         const salud = estado.salud.get(l.cual);
         if (salud) salud.bytes += e.data.size;
-        const bytes = new Uint8Array(await e.data.arrayBuffer());
-        window.nt.semanalTrozo(l.cual, bytes);
+        enVuelo.set(l.grabador, enVuelo.get(l.grabador).then(async () => {
+            window.nt.semanalTrozo(l.cual, new Uint8Array(await e.data.arrayBuffer()));
+        }));
     };
     l.grabador.onerror = e => {
         estado.alAviso({
@@ -709,20 +758,14 @@ export async function empezar(avisos) {
  */
 export async function terminar() {
     dejarDeVigilarElTamano();
+    // Un relevo a medias se cancela y se espera: si siguiera, abriría un tramo
+    // de pantalla después de cerrar la sesión.
+    estado.generacion++;
+    await estado.relevo;
     if (estado.pulso) { clearInterval(estado.pulso); estado.pulso = null; }
     estado.salud.clear();
-    const paradas = [...estado.grabadores.values()].map(g => new Promise(listo => {
-        if (g.state === 'inactive') return listo();
-        g.onstop = listo;
-        try { g.stop(); } catch (e) { listo(); }
-        return undefined;
-    }));
-    await Promise.all(paradas);
+    await Promise.all([...estado.grabadores.values()].map(pararYSoltar));
     estado.grabadores.clear();
-    // Los pedazos viajan por `send`, así que el último puede ir todavía en el
-    // aire cuando esto vuelve: un turno del bucle de eventos los deja llegar
-    // antes de pedir el cierre de los archivos.
-    await new Promise(r => setTimeout(r, 50));
     const r = await window.nt.semanalCerrar();
     await soltarPantalla();
     return r;

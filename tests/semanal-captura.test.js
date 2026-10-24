@@ -109,14 +109,30 @@ module.exports = function (t) {
     });
 
     t.test('el tramo viejo se cierra entero antes de abrir el nuevo', () => {
-        const cambiar = filmar.slice(filmar.indexOf('export async function cambiarPantalla'));
-        t.ok(/viejo\.onstop = listo;/.test(cambiar),
+        const parar = filmar.slice(filmar.indexOf('async function pararYSoltar'));
+        t.ok(/grabador\.onstop = listo;/.test(parar),
             'se espera el último pedazo, que si no el tramo pierde sus segundos finales');
-        t.ok(/await window\.nt\.semanalCerrar\('pantalla'\)/.test(cambiar),
+        t.ok(/await \(enVuelo\.get\(grabador\)/.test(parar), 'y que haya salido para el motor, no un rato fijo');
+        const relevo = filmar.slice(filmar.indexOf('async function otroTramo'), filmar.indexOf('function enFila'));
+        t.ok(/await pararYSoltar\(viejo\)/.test(relevo), 'el relevo lo usa');
+        t.ok(/await window\.nt\.semanalCerrar\('pantalla'\)/.test(relevo),
             'y se cierra SOLO la pantalla, no la cámara');
-        const cierra = cambiar.indexOf("semanalCerrar('pantalla')");
-        const abre = cambiar.indexOf('semanalAbrir(');
+        const cierra = relevo.indexOf("semanalCerrar('pantalla')");
+        const abre = relevo.indexOf('semanalAbrir(');
         t.ok(cierra !== -1 && abre !== -1 && cierra < abre, 'en ese orden, que si no se pisan el archivo');
+    });
+
+    t.test('los relevos de la pantalla van de a uno, y terminar los cancela', () => {
+        // Cambiar de ventana, un cambio de tamaño y Terminar pueden llegar a la
+        // vez; dos relevos juntos se pisaban el grabador, y uno a medias al
+        // terminar abría un archivo que nadie cerraba.
+        t.ok(/await enFila\(\(\) => otroTramo\(elegida\.stream, elegida\.tipo\)\)/.test(filmar), 'cambiar de ventana pasa por la fila');
+        t.ok(/await enFila\(\(\) => otroTramo\(stream, estado\.tipos\.pantalla\)\)/.test(filmar), 'y el cambio de tamaño también');
+        const terminar = filmar.slice(filmar.indexOf('export async function terminar'));
+        t.ok(/estado\.generacion\+\+;\s*await estado\.relevo;/.test(terminar), 'terminar cancela el que esté a medias y lo espera');
+        const relevo = filmar.slice(filmar.indexOf('async function otroTramo'), filmar.indexOf('function enFila'));
+        t.ok((relevo.match(/generacion !== estado\.generacion/g) || []).length >= 2,
+            'y el relevo mira si lo cancelaron después de cada viaje al motor');
     });
 
     t.test('antes de grabar, cambiar de ventana y elegirla son lo mismo', () => {

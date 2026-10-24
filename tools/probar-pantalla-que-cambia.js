@@ -96,7 +96,11 @@ const servidor = http.createServer((req, res) => {
     await p.setViewport({ width: 700, height: 800 });
     console.log('cambio de tamaño a los 4 s');
     await new Promise(r => setTimeout(r, 4000));
+    // Y Terminar justo después de otro cambio de tamaño, con el relevo a medias:
+    // no puede quedar un grabador andando ni un archivo abierto.
+    await p.setViewport({ width: 1000, height: 700 });
     await p.evaluate(() => window.filmar.terminar());
+    const quedaGrabando = await p.evaluate(() => window.filmar.grabando());
     await new Promise(r => setTimeout(r, 500));
     const anotado = await p.evaluate(() => window.anotado.filter(([e]) => /otro-tamano/.test(e)));
     await nave.close();
@@ -105,8 +109,10 @@ const servidor = http.createServer((req, res) => {
     const decir = (bien, texto) => { console.log(`   ${bien ? '✓' : '✗'} ${texto}`); if (!bien) mal++; };
     const tramos = fs.readdirSync(DIR).filter(n => n.startsWith('pantalla')).sort();
     decir(eligio.e.ok, 'empezó a grabar la pantalla');
-    decir(tramos.length === 2, `dos tramos, uno por tamaño (${tramos.join(', ')})`);
-    decir(anotado.length === 1 && anotado[0][1].ok, `y quedó en el diario (${JSON.stringify(anotado[0] && anotado[0][1])})`);
+    decir(tramos.length >= 2, `un tramo por tamaño (${tramos.join(', ')})`);
+    decir(!quedaGrabando, 'terminar con un relevo a medias deja todo parado');
+    decir(Object.keys(abiertos).length === 0, `y ningún archivo abierto (${Object.keys(abiertos).join(', ') || 'ninguno'})`);
+    decir(anotado.length >= 1 && anotado[0][1].ok, `y quedó en el diario (${JSON.stringify(anotado[0] && anotado[0][1])})`);
     const ffmpeg = paths.ffmpeg().path;
     for (const t of tramos) {
         const r = spawnSync(ffmpeg, ['-hide_banner', '-v', 'error', '-i', path.join(DIR, t), '-f', 'null', '-'], { encoding: 'utf8' });
