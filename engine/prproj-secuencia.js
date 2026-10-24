@@ -208,6 +208,14 @@ function ponerPropiedades(proyecto, k, ancla, propiedades) {
  * Se le pide el molde una vez, encuentra sus ejemplares, y de ahí en adelante
  * `importarMedio`, `crearSecuencia` y `colocarCorte` son copias de esos.
  */
+/** Los ticks de un cuadro de una secuencia, leídos de su `VideoTrackGroup`, o null. */
+function ticksPorCuadroDe(proyecto, secuencia) {
+    if (!secuencia) return null;
+    const grupo = proyecto.refsDe(secuencia).find(k => proyecto.clase(k) === 'VideoTrackGroup');
+    const m = grupo ? /<FrameRate>(\d+)<\/FrameRate>/.exec(proyecto.contenido(grupo)) : null;
+    return m ? Number(m[1]) : null;
+}
+
 class Taller {
     /**
      * @param {prproj.Proyecto} proyecto
@@ -222,13 +230,10 @@ class Taller {
         // El `<ID>` del panel de proyecto no es un GUID sino un entero que sube.
         // Se arranca por arriba de lo que haya para no pisar ninguno.
         this.proximoIdDePanel = mayorIdDePanel(proyecto) + 1;
-        // Los ticks de un cuadro de la secuencia, cuando se sepan (`fijarCuadros`).
-        this.cuadro = null;
-    }
-
-    /** Los cuadros por segundo de las secuencias que se arman, para escribir cada corte en su cuadro. */
-    fijarCuadros(fps) {
-        this.cuadro = Math.round(prproj.TICKS / fps);
+        // Los ticks de un cuadro de las secuencias que se arman: las clona del
+        // molde, así que son los del molde. Es con lo que cada corte se escribe
+        // en su cuadro (`aTicks`). Sin molde que leer, null, y se escribe tal cual.
+        this.cuadro = ticksPorCuadroDe(proyecto, this.moldes.secuencia);
     }
 
     /** Los `ObjectUID` nuevos de un clonado, por la clase que se pida. */
