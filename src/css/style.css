@@ -2873,6 +2873,22 @@ kbd {
 .montaje-pan { object-fit: contain; }
 .montaje-cam { object-fit: cover; }
 
+/* Lo que la pantalla no puede mostrar en este punto (ver `decirSiEstaRota` en
+   `montaje.js`): un texto sobre el negro, que si no parece un fallo del editor. */
+.montaje-rota {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-6);
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.montaje-rota[hidden] { display: none; }
+
 /* Y de recuadro, el cuadrado de la esquina. El lado, el margen y el redondeo
    los manda el motor en partes del ancho (`recuadro` en `montajeDeSesion`),
    así que están escritos en un sitio y no en dos. */

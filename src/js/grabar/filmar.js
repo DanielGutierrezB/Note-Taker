@@ -117,6 +117,7 @@ const estado = {
     grabadores: new Map(),   // cual → MediaRecorder
     pulso: null,             // el reloj que le toma el pulso a las pistas
     salud: new Map(),        // cual → { bytes, desdeMs, avisado, pistas }
+    vigia: null,             // el que mira si la pantalla cambia de tamaño
     alAviso: () => {}
 };
 
@@ -347,10 +348,43 @@ export async function cambiarPantalla() {
     const elegida = await pedirPantalla(false);
     if (!elegida.ok) return elegida;
 
-    // Desde acá empieza el hueco, y todo lo que hay en medio es lo que lo
-    // alarga: ni un `await` que no haga falta.
-    const viejo = estado.grabadores.get('pantalla');
     const anterior = estado.pantalla;
+    const r = await otroTramo(elegida.stream, elegida.tipo);
+    if (!r.ok) {
+        for (const p of elegida.stream.getTracks()) p.stop();
+        if (r.cerrado && anterior) await soltarPantalla();
+        return r;
+    }
+
+    // Y recién ahora se suelta la de antes: soltarla primero habría dejado un
+    // hueco más largo por nada.
+    if (anterior) {
+        for (const p of anterior.getTracks()) { p.onended = null; p.stop(); }
+    }
+    quedarse(elegida.stream, elegida.pista);
+    estado.tipos.pantalla = elegida.tipo;
+    vigilarElTamano(elegida.stream);
+    window.nt.anotar('semanal.cambio-de-ventana', {
+        nombre: elegida.nombre, ancho: elegida.ancho, alto: elegida.alto, tramo: r.tramo
+    });
+    return { ok: true, nombre: elegida.nombre, ancho: elegida.ancho, alto: elegida.alto };
+}
+
+/**
+ * El relevo de un tramo de pantalla al siguiente: para el grabador, cierra su
+ * archivo, abre el que sigue y arranca otro grabador con `stream`.
+ *
+ * Lo usan los dos motivos para partir la pantalla: cambiar de ventana, con un
+ * stream nuevo, y que la ventana cambie de tamaño, con el mismo
+ * (`vigilarElTamano`). Todo lo que hay en medio es el hueco entre los dos
+ * archivos, así que no lleva ni un `await` que no haga falta: medido, un
+ * milisegundo.
+ *
+ * @returns {Promise<{ok: boolean, tramo?: number, error?: string, cerrado?: boolean}>}
+ *   `cerrado` dice si el tramo de antes ya quedó cerrado cuando falló
+ */
+async function otroTramo(stream, tipo) {
+    const viejo = estado.grabadores.get('pantalla');
     if (viejo) {
         await new Promise(listo => {
             if (viejo.state === 'inactive') return listo();
@@ -367,43 +401,85 @@ export async function cambiarPantalla() {
         await window.nt.semanalCerrar('pantalla');
     }
 
-    const abierto = await window.nt.semanalAbrir({
-        cual: 'pantalla', tipo: elegida.tipo, empezoMs: Date.now()
-    });
+    const abierto = await window.nt.semanalAbrir({ cual: 'pantalla', tipo, empezoMs: Date.now() });
     if (!abierto.ok) {
         // El tramo nuevo no se pudo abrir y el viejo ya está cerrado: lo que
         // hay grabado hasta acá se queda, y se dice que desde ahora no hay
         // pantalla. Peor sería seguir como si nada y no grabar nada más.
-        for (const p of elegida.stream.getTracks()) p.stop();
-        if (anterior) await soltarPantalla();
         estado.salud.delete('pantalla');
         estado.alAviso({ tipo: 'roto', cual: 'pantalla', error: abierto.error });
-        return { ok: false, error: abierto.error };
+        return { ok: false, error: abierto.error, cerrado: true };
     }
 
     let grabador;
     try {
-        grabador = new MediaRecorder(elegida.stream, {
-            mimeType: elegida.tipo, videoBitsPerSecond: CALIDAD.pantalla
-        });
+        grabador = new MediaRecorder(stream, { mimeType: tipo, videoBitsPerSecond: CALIDAD.pantalla });
     } catch (e) {
-        for (const p of elegida.stream.getTracks()) p.stop();
-        return { ok: false, error: `No se pudo preparar la pantalla nueva: ${e.message}` };
+        return { ok: false, error: `No se pudo preparar la pantalla nueva: ${e.message}`, cerrado: true };
     }
-    enganchar({ cual: 'pantalla', grabador, stream: elegida.stream, tipo: elegida.tipo, conAudio: false });
+    enganchar({ cual: 'pantalla', grabador, stream, tipo, conAudio: false });
     grabador.start(CADA_MS);
+    return { ok: true, tramo: abierto.tramo };
+}
 
-    // Y recién ahora se suelta la de antes: soltarla primero habría dejado un
-    // hueco más largo por nada.
-    if (anterior) {
-        for (const p of anterior.getTracks()) { p.onended = null; p.stop(); }
+/**
+ * Parte la pantalla en otro tramo cuando la ventana grabada cambia de tamaño.
+ *
+ * **El MP4 de Chromium no aguanta un cambio de tamaño.** Al cambiar, el
+ * codificador se reinicia con la configuración nueva, pero el archivo se queda
+ * con la del principio: desde ahí el decodificador del Mac no puede leer nada
+ * (Chrome da `PIPELINE_ERROR_DECODE`) y ffmpeg lo lee deshecho. Pasó en un
+ * vídeo de la semana: a los 86 s de pantalla el codificador se reinició, y en el
+ * editor esa parte salía en negro y en el exportado, rota. Pedir un tamaño fijo
+ * no sirve —Chromium sigue al de la ventana igual—, así que cada tamaño va en
+ * su archivo, que es lo mismo que hace cambiar de ventana. Medido: el primer
+ * archivo termina en el cambio, sin un cuadro roto, y los dos se leen enteros.
+ *
+ * Se mira con un `<video>` que no se muestra: su `resize` llega con el primer
+ * cuadro del tamaño nuevo, que es el mismo que recibe el grabador.
+ */
+function vigilarElTamano(stream) {
+    dejarDeVigilarElTamano();
+    const ojo = document.createElement('video');
+    ojo.muted = true;
+    // Mirar no puede costar la grabación: si este stream no se deja mirar, se
+    // graba igual que antes, sin partir por tamaño, y queda dicho en el diario.
+    try {
+        ojo.srcObject = stream;
+    } catch (e) {
+        window.nt.anotar('semanal.pantalla-sin-vigia', { error: e.message });
+        return;
     }
-    quedarse(elegida.stream, elegida.pista);
-    estado.tipos.pantalla = elegida.tipo;
-    window.nt.anotar('semanal.cambio-de-ventana', {
-        nombre: elegida.nombre, ancho: elegida.ancho, alto: elegida.alto, tramo: abierto.tramo
-    });
-    return { ok: true, nombre: elegida.nombre, ancho: elegida.ancho, alto: elegida.alto };
+    ojo.play().catch(() => {});
+    // El tamaño con que arrancó el tramo que se está grabando.
+    const vigia = { ojo, delTramo: null, partiendo: false };
+    const mirar = async () => {
+        if (!ojo.videoWidth) return;
+        const ahora = `${ojo.videoWidth}x${ojo.videoHeight}`;
+        if (!vigia.delTramo) { vigia.delTramo = ahora; return; }
+        // Arrastrar el borde de una ventana son decenas de tamaños seguidos: un
+        // relevo por vez, y al terminar se vuelve a mirar.
+        if (ahora === vigia.delTramo || vigia.partiendo || !grabando() || estado.pantalla !== stream) return;
+        const antes = vigia.delTramo;
+        vigia.delTramo = ahora;
+        vigia.partiendo = true;
+        const r = await otroTramo(stream, estado.tipos.pantalla);
+        vigia.partiendo = false;
+        window.nt.anotar('semanal.pantalla-otro-tamano', { de: antes, a: ahora, ok: r.ok, tramo: r.tramo, error: r.error });
+        if (!r.ok) {
+            if (r.cerrado) await soltarPantalla();
+            return;
+        }
+        mirar();
+    };
+    ojo.addEventListener('resize', mirar);
+    estado.vigia = vigia;
+}
+
+function dejarDeVigilarElTamano() {
+    if (!estado.vigia) return;
+    estado.vigia.ojo.srcObject = null;
+    estado.vigia = null;
 }
 
 export function laPantalla() {
@@ -415,6 +491,7 @@ export function tienePantalla() {
 }
 
 export async function soltarPantalla() {
+    dejarDeVigilarElTamano();
     estado.tipos.pantalla = null;
     if (!estado.pantalla) return;
     for (const pista of estado.pantalla.getTracks()) {
@@ -618,6 +695,7 @@ export async function empezar(avisos) {
 
     if (estado.pulso) clearInterval(estado.pulso);
     estado.pulso = setInterval(tomarElPulso, PULSO_MS);
+    if (abiertos.some(l => l.cual === 'pantalla')) vigilarElTamano(estado.pantalla);
 
     return { ok: true, grabando: abiertos.map(l => l.cual) };
 }
@@ -630,6 +708,7 @@ export async function empezar(avisos) {
  * segundos, que es justo donde está el final de la última toma.
  */
 export async function terminar() {
+    dejarDeVigilarElTamano();
     if (estado.pulso) { clearInterval(estado.pulso); estado.pulso = null; }
     estado.salud.clear();
     const paradas = [...estado.grabadores.values()].map(g => new Promise(listo => {

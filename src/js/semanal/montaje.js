@@ -58,6 +58,8 @@ let elCam = null;
 let elPan = null;
 // El WAV, cuando es de ahí de donde suena la toma.
 let elAud = null;
+// El aviso de que la pantalla no se puede mostrar en este punto.
+let elRota = null;
 let plan = [];
 let archivos = { camara: null, pantalla: null };
 // La esquina donde va la cámara, cuando el motor la manda.
@@ -103,7 +105,25 @@ export function montar(hueco, alCambio) {
         elAud = document.createElement('audio');
         elAud.preload = 'auto';
         elAud.className = 'montaje-aud';
-        caja.append(elAud);
+        elRota = document.createElement('p');
+        elRota.className = 'montaje-rota';
+        elRota.hidden = true;
+        elRota.textContent = 'Esta parte de la pantalla no se grabó bien y no se puede mostrar. '
+            + 'Pasa cuando la ventana cambia de tamaño mientras se graba.';
+        caja.append(elAud, elRota);
+        // El MP4 de un tramo donde la ventana cambió de tamaño (ver
+        // `vigilarElTamano` en `filmar.js`) no se deja decodificar desde ese
+        // punto. Se dice, en vez de dejar un negro que parece un fallo del editor.
+        const pan = elPan;
+        pan.addEventListener('error', () => {
+            if (pan !== elPan) return;
+            window.nt.anotar('semanal.montaje-no-decodifica', {
+                archivo: (pan.dataset.ruta || '').split('/').pop(), segundo: Math.round(pan.currentTime * 10) / 10,
+                error: pan.error && pan.error.message
+            });
+            decirSiEstaRota();
+        });
+        pan.addEventListener('loadeddata', decirSiEstaRota);
     }
     // Se MUEVE al hueco nuevo, no se vuelve a hacer: mover un nodo no recarga
     // el vídeo, y rehacerlo lo dejaría en negro y buscando con cada repintado.
@@ -160,7 +180,10 @@ export function poner(m) {
  * a `loadedmetadata`. Lo necesita la pantalla, que puede ser varios tramos.
  */
 function apuntar(v, ruta) {
-    if (!v || !ruta || v.dataset.ruta === ruta) return false;
+    // Uno que dio error se vuelve a cargar aunque sea el mismo archivo: un
+    // `<video>` con error no se recupera solo, y sin esto, después de pasar por
+    // un tramo que no se deja decodificar, todo el archivo quedaba en negro.
+    if (!v || !ruta || (v.dataset.ruta === ruta && !v.error)) return false;
     v.dataset.ruta = ruta;
     v.src = ruta;
     return true;
@@ -385,6 +408,7 @@ function verPieza(t, dentro) {
         pan.style.display = 'none';
         pan.playbackRate = 1;
         pan.pause();
+        decirSiEstaRota();
         return;
     }
     pan.style.display = seVe(t) ? '' : 'none';
@@ -394,6 +418,7 @@ function verPieza(t, dentro) {
     } else if (pan.dataset.ruta) {
         pan.currentTime = seg;
     }
+    decirSiEstaRota();
 }
 
 /** El tic: ¿sigue dentro de la toma, y siguen juntos los dos vídeos? */
@@ -476,6 +501,13 @@ function hayRecuadro(t) {
         && t.camaraDesde != null && t.pantallaDesde != null);
 }
 
+/** El aviso de pantalla rota: solo si la pantalla tendría que verse y no puede. */
+function decirSiEstaRota() {
+    if (!elRota || !elPan) return;
+    const t = laDeAhora();
+    elRota.hidden = !(elPan.error && seVe(t) && !enElNegro(t));
+}
+
 /** Qué se ve y dónde, que es lo único que distingue una vista de la otra. */
 function acomodar(t) {
     if (!caja) return;
@@ -509,6 +541,7 @@ function acomodar(t) {
     elCam.muted = !t.conAudio;
     elPan.muted = true;
     elAud.muted = false;
+    decirSiEstaRota();
 }
 
 /** Dónde va, para la línea de tiempo y para el rótulo de la toma. */
@@ -540,6 +573,7 @@ export function soltar() {
     elCam = null;
     elPan = null;
     elAud = null;
+    elRota = null;
     plan = [];
     planPuesto = null;
     donde = -1;
