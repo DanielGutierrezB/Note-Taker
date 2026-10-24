@@ -54,13 +54,22 @@ const tocable = destino => destino && destino.closest
 /**
  * Empieza a anotar. Una sola vez, al arrancar la ventana.
  *
- * @param {(evento: string, datos: object) => void} anotar
+ * @param {(evento: string, datos: object) => Promise|void} anotarEnElMotor `window.nt.anotar`
  */
-export function anotarLosGestos(anotar) {
+export function anotarLosGestos(anotarEnElMotor) {
+    // Anotar no puede fallar hacia afuera: si el puente rechazara, la promesa
+    // suelta sería otro `unhandledrejection`, que se anotaría, y así.
+    const anotar = (evento, datos) => {
+        try { Promise.resolve(anotarEnElMotor(evento, datos)).catch(() => {}); } catch (e) { /* el diario no manda */ }
+    };
+
     document.addEventListener('click', e => {
         const el = tocable(e.target);
         if (!el) return;
-        anotar('ui.clic', { pantalla: pantalla(), ...describir(el), derecho: e.button === 2 || undefined });
+        // Un clic en una etiqueta llega dos veces: el de la etiqueta y el que
+        // el navegador le manda al campo de adentro, que no lo apretó nadie.
+        if (e.detail === 0 && e.target.matches && e.target.matches('input, select, textarea') && e.target.closest('label')) return;
+        anotar('ui.clic', { pantalla: pantalla(), ...describir(el) });
     }, true);
 
     document.addEventListener('contextmenu', e => {

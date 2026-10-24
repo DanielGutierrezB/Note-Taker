@@ -18,6 +18,7 @@ const reporte = require('../engine/reporte');
 const registro = require('../engine/registro');
 const workspace = require('../engine/workspace');
 const paths = require('../engine/paths');
+const motorDeGrabacion = require('../engine/grabacion');
 const { conDiario, resumirRespuesta } = require('../ipc/con-diario');
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nt-reporte-prueba-'));
@@ -236,5 +237,32 @@ module.exports = async function (t) {
         fs.chmodSync(json, 0o644);
         t.ok(r.ok, 'el reporte sale igual');
         t.ok(r.faltan.some(f => /curso_clase-1/.test(f)), `y dice qué faltó (${r.faltan.join('; ')})`);
+    });
+
+    t.group('reporte · el diario no crece sin techo');
+
+    t.test('la deriva se avisa al duplicarse, no cada dos segundos', () => {
+        // Una entrada trabada sube un escalón cada dos segundos: avisando en cada
+        // uno, una instancia sin ventana llenó el diario durante más de un día.
+        let avisado = 0;
+        const avisos = [];
+        for (let escalon = 0; escalon <= 1800; escalon++) {
+            if (motorDeGrabacion.tocaAvisarDeriva(escalon, avisado)) { avisos.push(escalon); avisado = escalon; }
+        }
+        t.deep(avisos.slice(0, 5), [1, 2, 4, 8, 16], 'a los 2 s, 4, 8, 16…');
+        t.ok(avisos.length <= 12, `una hora trabado son ${avisos.length} avisos, no 1800`);
+    });
+
+    t.test('y se recorta mientras corre, no solo al abrir', () => {
+        // Este tiene que ir último: abre el diario en disco para todo el proceso.
+        const dir = tmp();
+        registro.abrirDiario(dir);
+        const archivo = path.join(dir, 'diario.ndjson');
+        const muchas = Math.ceil(registro.TOPE_EN_DISCO * 1.5) + 50;
+        for (let i = 0; i < muchas; i++) registro.anotar('main', 'prueba.linea', { i });
+        registro.volcar();
+        const lineas = fs.readFileSync(archivo, 'utf8').trim().split('\n');
+        t.ok(lineas.length <= registro.TOPE_EN_DISCO, `quedan ${lineas.length}, el tope es ${registro.TOPE_EN_DISCO}`);
+        t.eq(JSON.parse(lineas[lineas.length - 1]).datos.i, muchas - 1, 'y son las últimas, no las primeras');
     });
 };

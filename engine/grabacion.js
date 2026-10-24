@@ -373,15 +373,15 @@ function avisarReloj() {
  * encuentra cualquier otro de la misma familia, venga por donde venga —una tasa
  * mal declarada, muestras perdidas, una escucha que se calló—, por Zoom o por
  * micrófono. Lo normal es menos de un tercio de segundo: lo que tarda el audio
- * en llegar. Si se pasa, se avisa en pantalla y queda en el registro, y se
- * vuelve a avisar cada dos segundos más: un atraso que crece es una tasa mal
- * puesta, uno que salta y se queda es un hueco.
+ * en llegar. Si se pasa, se avisa en pantalla y queda en el registro (ver
+ * `tocaAvisarDeriva`): un atraso que crece es una tasa mal puesta, uno que salta
+ * y se queda es un hueco.
  */
 function vigilarDeriva() {
     if (!sesion || !sesion.captura) return;
     const deriva = (Date.now() - sesion.captura.desdeMs) - sesion.captura.segundos * 1000;
     const escalon = Math.floor(deriva / DERIVA_AVISO_MS);
-    if (escalon < 1 || escalon <= (sesion.derivaAvisada || 0)) return;
+    if (!tocaAvisarDeriva(escalon, sesion.derivaAvisada || 0)) return;
     sesion.derivaAvisada = escalon;
     registro.anotar('main', 'grabacion.deriva', {
         derivaMs: Math.round(deriva),
@@ -393,6 +393,25 @@ function vigilarDeriva() {
         mensaje: `El audio grabado va ${(deriva / 1000).toFixed(1)} s atrás del reloj. ` +
             'Los marcadores pueden quedar corridos: revisá la entrada en Preparar.'
     });
+}
+
+/**
+ * Si toca avisar de la deriva: la primera vez que pasa un escalón, y después
+ * cada vez que se duplica (2 s, 4, 8, 16…).
+ *
+ * Antes era cada escalón, o sea cada dos segundos mientras el audio siguiera
+ * atrasándose: con la entrada trabada, un cartel y una línea del diario cada
+ * dos segundos para siempre. Pasó con una instancia que se quedó grabando sin
+ * ventana: más de un día anotando, y el diario —que se recorta a un tope— perdió
+ * la historia de esa tarde, que era la que hacía falta mirar. Duplicando, un
+ * atraso que crece se sigue viendo crecer, y uno trabado deja una docena de
+ * líneas por hora.
+ *
+ * @param {number} escalon cuántos `DERIVA_AVISO_MS` va atrás
+ * @param {number} avisado el escalón del último aviso, o 0
+ */
+function tocaAvisarDeriva(escalon, avisado) {
+    return escalon >= 1 && escalon >= Math.max(1, avisado * 2);
 }
 
 /* ─── Las claquetas ───────────────────────────────────────────────────────
@@ -760,6 +779,7 @@ function reanudar(json, params) {
 }
 
 module.exports = {
+    tocaAvisarDeriva,
     CICLO_MS,
     SOLAPE_MS: ciclo.SOLAPE_MS,
     CONTEXTO_MS,

@@ -648,7 +648,10 @@ function enganchar(l) {
  * semana, de 402 s de imagen y 804 de audio. El WAV de esa misma grabación
  * estaba perfecto —pasa por un `AudioContext` a 48 fijos (`oido.js`)—, así que
  * la cámara se graba muda y el vídeo lleva el WAV, alineado por los relojes.
- * Sin tasa conocida se deja como estaba.
+ * A cualquier tasa que no sea 48 —un USB a 44,1 también—, porque es la única
+ * que se comprobó que Chromium mezcla bien, y el WAV sale bien siempre. Sin
+ * tasa conocida se deja como estaba: lo que diga `audioDeLaCamara`, en el
+ * export, es lo que manda, y atrapa la pista que salga mal igual.
  */
 export function vaEnElVideo(pista) {
     if (!pista) return null;

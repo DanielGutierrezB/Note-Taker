@@ -57,6 +57,11 @@ const TOPE = 3000;
 // diez megas de diario no le molesta a nadie, y perder la corrida de ayer sí.
 const TOPE_EN_DISCO = 30000;
 
+// Cuánto se deja pasar el tope mientras la app corre antes de recortar: con
+// margen, recortar —leer y reescribir el archivo— pasa de vez en cuando y no en
+// cada volcado.
+const MARGEN_DEL_TOPE = 1.5;
+
 // Cada cuánto se vuelca lo pendiente. Escribir en cada `anotar` serían miles de
 // escrituras por corrida para nada; juntarlas un segundo no pierde nada, porque
 // lo que de verdad no se puede perder —los errores— se vuelca en el acto.
@@ -88,6 +93,8 @@ let empezoEn = Date.now();
 // scripts anotan sin archivo y no pasa nada, se comportan como antes.
 let archivoDiario = null;
 let pendientes = [];
+// Cuántas líneas tiene el archivo, para recortarlo sin leerlo en cada volcado.
+let enDisco = 0;
 let temporizador = null;
 let fallaAlVolcar = null;
 
@@ -196,12 +203,9 @@ function abrirDiario(dir) {
         fs.mkdirSync(dir, { recursive: true });
         archivoDiario = path.join(dir, 'diario.ndjson');
         const habia = leerDelDisco();
-        if (habia.length > TOPE_EN_DISCO) {
-            const cola = habia.slice(-TOPE_EN_DISCO);
-            escribirAtomico(archivoDiario, `${cola.map(l => JSON.stringify(l)).join('\n')}\n`);
-            return { ok: true, archivo: archivoDiario, teniamos: cola.length };
-        }
-        return { ok: true, archivo: archivoDiario, teniamos: habia.length };
+        enDisco = habia.length;
+        if (habia.length > TOPE_EN_DISCO) recortar(habia);
+        return { ok: true, archivo: archivoDiario, teniamos: enDisco };
     } catch (err) {
         // Que no se pueda guardar la historia no puede impedir que la app abra:
         // se sigue anotando en memoria, que es como funcionaba antes.
@@ -229,6 +233,12 @@ function volcar() {
     try {
         fs.appendFileSync(archivoDiario, `${iban.map(l => JSON.stringify(l)).join('\n')}\n`);
         fallaAlVolcar = null;
+        enDisco += iban.length;
+        // Y se recorta también mientras corre, no solo al abrir: una sesión
+        // larga, con cada acción anotada, o una que se quedó grabando sin
+        // ventana, lo hacían crecer sin techo. Con margen, para no reescribir el
+        // archivo en cada volcado.
+        if (enDisco > TOPE_EN_DISCO * MARGEN_DEL_TOPE) recortar(leerDelDisco());
         return { ok: true, escritas: iban.length };
     } catch (err) {
         // No se reencolan: si el disco no acepta, reintentar para siempre haría
@@ -237,6 +247,13 @@ function volcar() {
         fallaAlVolcar = err.message;
         return { ok: false, error: err.message };
     }
+}
+
+/** Deja en el archivo las últimas `TOPE_EN_DISCO` líneas. */
+function recortar(lineasDelArchivo) {
+    const cola = lineasDelArchivo.slice(-TOPE_EN_DISCO);
+    escribirAtomico(archivoDiario, `${cola.map(l => JSON.stringify(l)).join('\n')}\n`);
+    enDisco = cola.length;
 }
 
 /** Lo que haya en el diario de disco, incluidas las corridas de otros días. */
