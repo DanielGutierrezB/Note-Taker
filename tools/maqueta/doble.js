@@ -478,7 +478,7 @@ window.nt = {
                         { negro: true, enLaToma: largo / 2, segundos: 0.5 },
                         { ruta: '/maqueta/semanal-pantalla-2.mp4', desdeSec: 2, enLaToma: largo / 2 + 0.5, segundos: largo / 2 - 0.5 }
                     ] : null,
-                    conAudio: true
+                    sonido: { cual: 'camara' }
                 };
             })
         };

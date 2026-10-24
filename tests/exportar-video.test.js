@@ -990,6 +990,21 @@ module.exports = function (t) {
         t.ok(m.tomas[1].camaraDesde != null, 'y la de pantalla sí sabe dónde está la cara');
     });
 
+    t.test('el montaje dice de dónde suena cada toma, y desde qué segundo del WAV', async () => {
+        // Un campo y no tres: «suena la cámara» o «suena el WAV desde acá», que
+        // es la misma elección que hace el corte. Con el sonido en tres campos se
+        // podía decir las dos cosas a la vez.
+        const sitio = sembrar({
+            tomas: [{ id: 1, vista: 'R', inMs: T0 + 6000, outMs: T0 + 9000, palabras: [], comentarios: [] }]
+        });
+        const m = exportar.montajeDeSesion(sitio.json);
+        const [toma] = m.tomas;
+        t.eq(toma.sonido.cual, 'wav', 'la cámara de prueba no trae audio, así que suena el WAV');
+        t.ok(/\.wav$/.test(toma.sonido.ruta), `con su archivo (${toma.sonido.ruta})`);
+        t.near(toma.sonido.desdeSec, 6, 0.01, 'desde el segundo del IN, contado en el WAV');
+        t.eq(toma.conAudio, undefined, 'y sin los campos de antes');
+    });
+
     t.test('una toma descartada también viene en el montaje: hay que poder volver a meterla', async () => {
         const sitio = sembrar({
             tomas: [

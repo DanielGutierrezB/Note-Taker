@@ -106,7 +106,7 @@ async function correr({ win, arg }) {
 
     // Hay que medir una toma con los dos a la vez: es la única donde se ve una
     // fuente y se oye la otra, y por lo tanto la única donde el desfase existe.
-    const toma = puesto.tomas.find(t => t.fondo === 'pantalla' && t.conAudio
+    const toma = puesto.tomas.find(t => t.fondo === 'pantalla' && t.sonido && t.sonido.cual === 'camara'
         && t.camaraDesde != null && !t.descartada);
     if (!toma) {
         console.log('   esta sesión no tiene ninguna toma de pantalla con la cámara al lado:');

@@ -111,19 +111,17 @@ export function montar(hueco, alCambio) {
         elRota.textContent = 'Esta parte de la pantalla no se grabó bien y no se puede mostrar. '
             + 'Pasa cuando la ventana cambia de tamaño mientras se graba.';
         caja.append(elAud, elRota);
-        // El MP4 de un tramo donde la ventana cambió de tamaño (ver
-        // `vigilarElTamano` en `filmar.js`) no se deja decodificar desde ese
-        // punto. Se dice, en vez de dejar un negro que parece un fallo del editor.
-        const pan = elPan;
-        pan.addEventListener('error', () => {
-            if (pan !== elPan) return;
-            window.nt.anotar('semanal.montaje-no-decodifica', {
-                archivo: (pan.dataset.ruta || '').split('/').pop(), segundo: Math.round(pan.currentTime * 10) / 10,
-                error: pan.error && pan.error.message
+        for (const v of todos()) {
+            // El segundo que se pidió antes de que el archivo cargara: se aplica
+            // al llegar los metadatos, y siempre el último que se pidió.
+            v.addEventListener('loadedmetadata', () => {
+                if (v.dataset.seg == null) return;
+                v.currentTime = Number(v.dataset.seg);
+                delete v.dataset.seg;
             });
-            decirSiEstaRota();
-        });
-        pan.addEventListener('loadeddata', decirSiEstaRota);
+            v.addEventListener('error', () => alFallar(v));
+        }
+        elPan.addEventListener('loadeddata', decir);
     }
     // Se MUEVE al hueco nuevo, no se vuelve a hacer: mover un nodo no recarga
     // el vídeo, y rehacerlo lo dejaría en negro y buscando con cada repintado.
@@ -255,23 +253,57 @@ function arrancar() {
 }
 
 export function pausar() {
-    for (const v of [elPan, elCam, elAud]) if (v) v.pause();
+    for (const v of todos()) v.pause();
     aVelocidadNormal();
     if (tictac) clearInterval(tictac);
     tictac = null;
     decir();
 }
 
-/** Si la toma suena desde el WAV y no desde la cámara. */
+/** Los tres elementos, en el orden en que arrancan. */
+const todos = () => [elPan, elCam, elAud].filter(Boolean);
+
+/**
+ * Si la toma suena desde el WAV y no desde la cámara. Un WAV que no cargó no
+ * suena: la toma vuelve a ir con el reloj de la cámara o de la pantalla, como
+ * iba antes de que el WAV sonara.
+ */
 function suenaElWav(t) {
-    return Boolean(elAud && t && t.audioRuta && t.audioDesde != null);
+    return Boolean(elAud && !elAud.error && t && t.sonido && t.sonido.cual === 'wav');
+}
+
+/** Si la toma suena desde la pista de audio de la cámara. */
+const suenaLaCamara = t => Boolean(t && t.sonido && t.sonido.cual === 'camara');
+
+/**
+ * Lo que pasa cuando un archivo no se deja leer.
+ *
+ * La pantalla: el MP4 de un tramo donde la ventana cambió de tamaño (ver
+ * `vigilarElTamano` en `filmar.js`) no se deja decodificar desde ese punto, y
+ * se dice encima en vez de dejar un negro que parece un fallo del editor. El
+ * WAV: deja de llevar el reloj, y la toma se vuelve a buscar con el que queda.
+ */
+function alFallar(v) {
+    window.nt.anotar('semanal.montaje-no-decodifica', {
+        cual: v === elAud ? 'wav' : (v === elCam ? 'camara' : 'pantalla'),
+        archivo: (v.dataset.ruta || '').split('/').pop(),
+        segundo: Math.round(v.currentTime * 10) / 10,
+        error: v.error && v.error.message
+    });
+    const t = laDeAhora();
+    if (v === elAud && t && t.sonido && t.sonido.cual === 'wav') {
+        const iba = [elPan, elCam].some(x => !x.paused);
+        irAlIndice(donde, { segundos: Math.max(0, elAud.currentTime - t.sonido.desdeSec), reproducir: iba });
+        return;
+    }
+    decir();
 }
 
 /** El que lleva el tiempo: el del audio si lo hay, y si no el del fondo. */
 function elMaestro(t) {
     if (!t) return null;
     if (suenaElWav(t)) return elAud;
-    if (t.conAudio && t.camaraDesde != null) return elCam;
+    if (suenaLaCamara(t) && t.camaraDesde != null) return elCam;
     // **Con la pantalla en pedazos manda la cámara aunque no suene.** Un pedazo
     // nuevo es un `src` nuevo, y un `src` nuevo pone el reloj del elemento en
     // cero: si el reloj de la toma saliera de ahí, cada cambio de ventana la
@@ -300,7 +332,7 @@ function enElNegro(t) {
  * necesitado el arreglo en las tres.
  */
 function enSuArchivo(t, v, dentro) {
-    if (v === elAud) return (t.audioDesde || 0) + dentro;
+    if (v === elAud) return (t.sonido.desdeSec || 0) + dentro;
     if (v === elCam) return (t.camaraDesde || 0) + dentro;
     const p = laPieza(t);
     // El pedazo empieza en `enLaToma` y, dentro de su archivo, en `desdeSec`.
@@ -334,9 +366,7 @@ function buscar(t, segundos) {
     // Nunca al filo mismo del final: ahí el tic da la toma por terminada y
     // salta a la siguiente, que no es donde se hizo clic.
     const dentro = Math.max(0, Math.min(Number(segundos) || 0, t.segundos - AL_FILO * 2));
-    if (elCam && elCam.dataset.ruta && t.camaraDesde != null) {
-        elCam.currentTime = enSuArchivo(t, elCam, dentro);
-    }
+    if (elCam && t.camaraDesde != null) ponerEn(elCam, archivos.camara, enSuArchivo(t, elCam, dentro));
     if (elPan && t.pantallaDesde != null) verPieza(t, dentro);
     ponerElWav(t, dentro);
 }
@@ -355,11 +385,24 @@ function ponerElWav(t, dentro) {
         aud.pause();
         return;
     }
-    const seg = enSuArchivo(t, aud, dentro);
-    if (apuntar(aud, t.audioRuta)) {
-        aud.addEventListener('loadedmetadata', () => { aud.currentTime = seg; }, { once: true });
-    } else {
-        aud.currentTime = seg;
+    ponerEn(aud, t.sonido.ruta, enSuArchivo(t, aud, dentro));
+}
+
+/**
+ * Pone un elemento en un archivo y en un segundo.
+ *
+ * Un `src` nuevo tira los metadatos y el segundo que se ponga en el mismo turno
+ * se pierde: se guarda en el elemento y lo aplica su oyente al cargar
+ * (`montar`). Guardarlo ahí, y no en un oyente de una vez por pedido, es lo
+ * que hace que gane el último: con dos pedidos antes de cargar, el primero
+ * llegaba tarde y pisaba al segundo.
+ */
+function ponerEn(v, ruta, seg) {
+    if (apuntar(v, ruta)) {
+        v.dataset.seg = String(seg);
+    } else if (v.dataset.ruta) {
+        if (v.dataset.seg != null) v.dataset.seg = String(seg);
+        else v.currentTime = seg;
     }
 }
 
@@ -408,17 +451,10 @@ function verPieza(t, dentro) {
         pan.style.display = 'none';
         pan.playbackRate = 1;
         pan.pause();
-        decirSiEstaRota();
         return;
     }
     pan.style.display = seVe(t) ? '' : 'none';
-    const seg = enSuArchivo(t, pan, dentro);
-    if (apuntar(pan, p.ruta)) {
-        pan.addEventListener('loadedmetadata', () => { pan.currentTime = seg; }, { once: true });
-    } else if (pan.dataset.ruta) {
-        pan.currentTime = seg;
-    }
-    decirSiEstaRota();
+    ponerEn(pan, p.ruta, enSuArchivo(t, pan, dentro));
 }
 
 /** El tic: ¿sigue dentro de la toma, y siguen juntos los dos vídeos? */
@@ -485,7 +521,7 @@ function juntarlos(t, esclavo) {
 
 /** Los dos a velocidad normal: al cambiar de toma y al parar. */
 function aVelocidadNormal() {
-    for (const v of [elPan, elCam, elAud]) if (v) v.playbackRate = 1;
+    for (const v of todos()) v.playbackRate = 1;
 }
 
 /**
@@ -502,9 +538,8 @@ function hayRecuadro(t) {
 }
 
 /** El aviso de pantalla rota: solo si la pantalla tendría que verse y no puede. */
-function decirSiEstaRota() {
+function pintarElAviso(t) {
     if (!elRota || !elPan) return;
-    const t = laDeAhora();
     elRota.hidden = !(elPan.error && seVe(t) && !enElNegro(t));
 }
 
@@ -538,16 +573,18 @@ function acomodar(t) {
     }
     // Suena una sola cosa: la cámara, se vea entera o en la esquina, cuando su
     // pista sirve; si no, el WAV. La pantalla no trae sonido.
-    elCam.muted = !t.conAudio;
+    elCam.muted = !suenaLaCamara(t);
     elPan.muted = true;
-    elAud.muted = false;
-    decirSiEstaRota();
 }
 
-/** Dónde va, para la línea de tiempo y para el rótulo de la toma. */
+/**
+ * Dónde va, para la línea de tiempo y para el rótulo de la toma. Y el aviso de
+ * pantalla rota, que depende de lo mismo: corre en cada tic y en cada cambio.
+ */
 function decir() {
-    if (!avisar) return;
     const t = laDeAhora();
+    pintarElAviso(t);
+    if (!avisar) return;
     const dentro = dentroDe(t);
     avisar({
         toma: t ? t.id : null,
@@ -563,10 +600,10 @@ function decir() {
 /** Al irse de la pantalla: parar y soltar los archivos. */
 export function soltar() {
     pausar();
-    for (const v of [elPan, elCam, elAud]) {
-        if (!v) continue;
+    for (const v of todos()) {
         v.removeAttribute('src');
         delete v.dataset.ruta;
+        delete v.dataset.seg;
         v.load();
     }
     caja = null;

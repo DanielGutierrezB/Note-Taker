@@ -485,7 +485,7 @@ function conUrls(m) {
         tomas: (m.tomas || []).map(t => ({
             ...t,
             pantallaRuta: url(t.pantallaRuta),
-            audioRuta: url(t.audioRuta),
+            sonido: t.sonido && t.sonido.cual === 'wav' ? { ...t.sonido, ruta: url(t.sonido.ruta) } : t.sonido,
             pantallaPartes: t.pantallaPartes
                 ? t.pantallaPartes.map(x => (x.negro ? x : { ...x, ruta: url(x.ruta) }))
                 : null
