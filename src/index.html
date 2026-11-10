@@ -483,34 +483,49 @@
      Qué capturas hay y qué capturas componen cada vista. Lo que se elige acá
      queda guardado en la carpeta (`prproj-carpeta.leerConfig`). -->
 <div class="telon" id="telon-prproj">
-  <div class="panel es-ancho">
+  <div class="panel es-prproj">
     <div class="panel-cabeza">
-      <span class="v1">Proyecto de Premiere</span>
+      <div class="pp-titulos">
+        <span class="v1">Proyecto de Premiere</span>
+        <span class="v3" id="prproj-dice"></span>
+      </div>
       <span class="crece"></span>
       <button id="btn-prproj-cerrar" class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-prproj"
               title="Cerrar sin generar nada. Lo elegido acá queda guardado en la carpeta."></button>
     </div>
-    <div class="panel-cuerpo">
-      <p class="v2" id="prproj-dice"></p>
-      <div class="campo">
-        <span class="rotulo">Capturas</span>
-        <div class="prproj-capturas" id="prproj-capturas"></div>
-        <p class="v3">Cada captura es una anidación vacía: ahí sueltas el vídeo de esa cámara o
-          pantalla y lo sincronizas con el audio de referencia que ya trae.</p>
+    <div class="panel-cuerpo pp-cuerpo">
+      <div class="pp-elegir">
+        <section class="pp-bloque">
+          <h3 class="pp-paso"><span class="pp-num">1</span><span class="pp-paso-titulo">Capturas</span>
+            <span class="ayuda" tabindex="0" title="Cada captura es una secuencia anidada vacía: ahí soltás el vídeo de esa cámara o pantalla y lo sincronizás con el audio que ya trae.">?</span></h3>
+          <div class="prproj-capturas" id="prproj-capturas"></div>
+        </section>
+        <section class="pp-bloque">
+          <h3 class="pp-paso"><span class="pp-num">2</span><span class="pp-paso-titulo">Qué se ve en cada vista</span>
+            <span class="ayuda" tabindex="0" id="prproj-pilas-dice">?</span></h3>
+          <div class="prproj-vistas" id="prproj-vistas"></div>
+        </section>
+        <div id="prproj-resultado"></div>
       </div>
-      <div class="campo">
-        <span class="rotulo">Qué capturas componen cada vista</span>
-        <div class="prproj-vistas" id="prproj-vistas"></div>
-        <p class="v3" id="prproj-pilas-dice"></p>
-      </div>
-      <p class="v3" id="prproj-destino"></p>
-      <div id="prproj-resultado"></div>
+      <section class="pp-bloque pp-mira">
+        <h3 class="pp-paso"><span class="pp-num">3</span><span class="pp-paso-titulo">Así queda cada clase en Premiere</span>
+          <span class="ayuda" tabindex="0" title="La secuencia precortada de una clase, con todas las pistas encendidas para que se vea qué hay en cada una. En Premiere, cada toma enciende las pistas de su vista. Se redibuja al cambiar lo de la izquierda.">?</span>
+          <span class="crece"></span><span class="pp-ejemplo" id="prproj-ejemplo"></span></h3>
+        <div class="pp-linea" id="prproj-linea"></div>
+        <div class="pp-leyenda">
+          <span><i class="pp-muestra"></i>Cada pista, del color de su vista</span>
+          <span><i class="pp-muestra es-anidada"></i>Secuencia anidada</span>
+          <span><i class="pp-muestra es-solo"></i>En pedazos: solo en las tomas de su vista</span>
+        </div>
+      </section>
     </div>
     <div class="panel-pie">
+      <span class="pp-destino" id="prproj-destino"></span>
+      <span class="crece"></span>
       <button class="btn btn-tenue" type="button" data-cerrar="telon-prproj"
               title="Cerrar sin generar nada. Lo elegido acá queda guardado en la carpeta.">Cerrar</button>
       <button id="btn-prproj-generar" class="btn btn-primario" type="button"
-              title="Escribir el proyecto en Proyecto/, adentro de la carpeta del curso. Si ya hay uno, el nuevo queda al lado sin pisarlo.">Generar</button>
+              title="Escribir el proyecto en Proyecto/, adentro de la carpeta del curso. Si ya hay uno, el nuevo queda al lado sin pisarlo.">Generar proyecto</button>
     </div>
   </div>
 </div>

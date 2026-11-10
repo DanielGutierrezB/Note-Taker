@@ -14,6 +14,8 @@ const ajustes = require('../engine/ajustes');
 const paths = require('../engine/paths');
 const grabacion = require('../engine/grabacion');
 const carpetaPrproj = require('../engine/prproj-carpeta');
+const prprojConfig = require('../engine/prproj-carpeta-config');
+const prprojPlan = require('../engine/prproj-plan');
 
 /**
  * Dónde va el proyecto de una carpeta: `<carpeta>/Proyecto/<carpeta>.prproj`.
@@ -59,6 +61,14 @@ function registrar({ ipcMain, dialog, ventana, send, anotar }) {
         try {
             const leida = carpetaPrproj.leerConfig(carpeta, ajustes.leer().prproj, grabacion.enCurso());
             return { ok: true, ...leida, destino: destinoDe(carpeta), plantilla: Boolean(paths.plantillaPrproj()) };
+        } catch (err) {
+            return { ok: false, error: err.message };
+        }
+    });
+
+    ipcMain.handle('prproj-pistas', (event, config, usadas) => {
+        try {
+            return { ok: true, pistas: prprojPlan.pistasDeLaPrecortada(prprojConfig.normalizar(config, usadas), usadas) };
         } catch (err) {
             return { ok: false, error: err.message };
         }

@@ -513,6 +513,21 @@ function repartirPistas(clases, config, anotar) {
 }
 
 /**
+ * Las pistas de vídeo que tendría una precortada con esta configuración, de
+ * abajo hacia arriba: V1 primero. Es lo que el menú dibuja antes de generar, y
+ * sale de `repartirPistas` para que lo dibujado sea lo que se va a generar.
+ *
+ * @param {object} config la del menú, ya normalizada
+ * @param {string[]} vistasUsadas las vistas que tienen tomas en la carpeta
+ * @returns {Array<{vista: string, ids: number[], siempre: boolean}>}
+ */
+function pistasDeLaPrecortada(config, vistasUsadas) {
+    const clases = [{ cortes: (vistasUsadas || []).map(vista => ({ vista })) }];
+    return repartirPistas(clases, config, claveDeFuente)
+        .map(p => ({ vista: p.vista, ids: p.ids, siempre: p.siempre }));
+}
+
+/**
  * La vista que queda encendida en la PRE: la primera que se usó en esta clase,
  * en el orden de las pistas, que ya es el de `VISTAS`. No la primera pista, que
  * puede ser una «en todas» que nadie llamó. Una clase sin tomas no usó ninguna
@@ -533,5 +548,6 @@ module.exports = {
     COLOR_DE_NOTA,
     nombreDeCaptura,
     nombreDeFuente,
+    pistasDeLaPrecortada,
     planear
 };

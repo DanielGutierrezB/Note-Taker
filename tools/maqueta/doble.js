@@ -126,6 +126,24 @@ const dependencias = DEPENDENCIAS.map(([clave, nombre, para, requerida, etiqueta
         accion: esta ? null : { tipo: 'descargar', etiqueta, bytes, peso } };
 });
 
+/**
+ * Las pistas de una precortada, con la regla de `prproj-plan.repartirPistas`:
+ * la maqueta no puede pedírselas al motor.
+ */
+function pistasDeLaMaqueta(config, usadas) {
+    const orden = ['PV', 'R', 'S', 'MG', 'X2'];
+    const pistas = [];
+    for (const vista of Object.keys(config.vistas).sort((a, b) => orden.indexOf(a) - orden.indexOf(b))) {
+        const v = config.vistas[vista];
+        const grupos = v.unidas && v.capturas.length > 1 ? [v.capturas.slice()] : v.capturas.map(id => [id]);
+        for (const ids of grupos) {
+            const siempre = ids.every(id => v.siempre.includes(id));
+            if (usadas.includes(vista) || siempre) pistas.push({ vista, ids, siempre });
+        }
+    }
+    return pistas;
+}
+
 /** El oyente del sonido de Zoom, para poder mandarle nivel desde `conAudio`. */
 let oyenteZoom = null;
 
@@ -333,10 +351,13 @@ window.nt = {
         },
         vistas: estadoEnVivo().vistas.map(v => ({ ...v, usada: ['PV', 'R', 'X2'].includes(v.nombre) })),
         clases: 3,
+        curso: String(carpeta).split('/').pop(),
+        ejemplo: { nombre: '03_curso-de-automatizaciones', segundos: 9820 },
         guardada: true,
         destino: `${carpeta}/Proyecto/${String(carpeta).split('/').pop()}.prproj`,
         plantilla: true
     }),
+    prprojPistas: async (config, usadas) => ({ ok: true, pistas: pistasDeLaMaqueta(config, usadas) }),
     prprojGenerar: async carpeta => ({
         ok: true,
         ruta: `${carpeta}/Proyecto/${String(carpeta).split('/').pop()}.prproj`,

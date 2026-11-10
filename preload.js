@@ -81,6 +81,7 @@ contextBridge.exposeInMainWorld('nt', {
     // El proyecto de Premiere de la carpeta (`ipc/prproj.js`): leer y guardar la
     // configuración del menú, y generar.
     prprojConfig: carpeta => ipcRenderer.invoke('prproj-config', carpeta),
+    prprojPistas: (config, usadas) => ipcRenderer.invoke('prproj-pistas', config, usadas),
     prprojGenerar: (carpeta, config) => ipcRenderer.invoke('prproj-generar', carpeta, config),
     onPrprojAviso: callback => {
         ipcRenderer.on('prproj-aviso', (_event, payload) => callback(payload));

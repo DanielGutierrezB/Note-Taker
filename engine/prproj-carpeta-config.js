@@ -126,8 +126,16 @@ function leerConfig(carpeta, ultima, enCurso) {
     const sesiones = carpeta ? sesionesGrabadas.listar([carpeta], enCurso) : [];
     const usadas = vistasUsadas(sesiones);
     const config = normalizar(guardada || ultima, usadas);
+    // La clase que el menú dibuja como ejemplo: la última que tiene tomas, que
+    // es la que se va a abrir primero en Premiere.
+    const ejemplo = sesiones.find(s => s.resumen && s.resumen.tomas) || sesiones[0];
     return {
         config,
+        curso: carpeta ? path.basename(carpeta) : '',
+        ejemplo: ejemplo ? {
+            nombre: String(ejemplo.secuencia || '').replace(/_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/, ''),
+            segundos: (ejemplo.resumen && ejemplo.resumen.segundos) || 0
+        } : null,
         vistas: vivo.VISTAS.map(v => ({
             nombre: v.nombre, titulo: v.titulo, colorDeMarcador: v.colorDeMarcador, usada: usadas.includes(v.nombre)
         })),

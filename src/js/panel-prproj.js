@@ -29,6 +29,7 @@
 import { $, esc, avisar, verPanel } from './chrome.js';
 import { icono } from './iconos.js';
 import { estiloDeVista } from './colores.js';
+import { duracion } from './formato.js';
 
 /** El tope de capturas del menú: más que esto no es una clase, es un estudio. */
 const MAX_CAPTURAS = 6;
@@ -36,7 +37,10 @@ const MAX_CAPTURAS = 6;
 let carpeta = null;
 let config = null;
 let vistas = [];
+let ejemplo = null;
 let generando = false;
+/** Cuál fue el último pedido de pistas: uno viejo que contesta tarde no se dibuja. */
+let pedidoDeLinea = 0;
 
 export function conectar() {
     $('#btn-prproj-cerrar').innerHTML = icono('cerrar');
@@ -75,15 +79,19 @@ export async function abrir(laCarpeta) {
             .map(([v, suya]) => [v, { capturas: [...suya.capturas], unidas: suya.unidas, siempre: [...suya.siempre] }]))
     };
     vistas = r.vistas;
+    ejemplo = r.ejemplo || null;
     $('#prproj-dice').textContent = r.clases
-        ? `Con las ${r.clases} clase(s) de esta carpeta: una anidación por captura para sincronizar, y cada clase precortada encima.`
-        : 'Esta carpeta todavía no tiene ninguna clase grabada.';
-    $('#prproj-destino').textContent = `Se guarda en ${r.destino}`;
+        ? `${r.curso} · ${r.clases === 1 ? '1 clase' : `${r.clases} clases`}`
+        : `${r.curso} · todavía no tiene ninguna clase grabada`;
+    $('#prproj-destino').innerHTML = `Se guarda en <code title="${esc(r.destino)}">${esc(r.destino)}</code>`;
+    $('#prproj-ejemplo').textContent = ejemplo
+        ? `${ejemplo.nombre}${ejemplo.segundos ? ` · ${duracion(ejemplo.segundos)}` : ''}`
+        : '';
     $('#prproj-resultado').innerHTML = r.plantilla
         ? ''
         : '<div class="aviso" data-tono="error">Falta la plantilla de Premiere que viene con la app: reinstalala.</div>';
     $('#btn-prproj-generar').disabled = !r.clases || !r.plantilla;
-    $('#btn-prproj-generar').textContent = 'Generar';
+    $('#btn-prproj-generar').textContent = 'Generar proyecto';
     pintar();
     verPanel('telon-prproj', true);
 }
@@ -107,8 +115,7 @@ function pintar() {
         const suya = config.vistas[v.nombre];
         const apagadas = ids.filter(id => !suya.capturas.includes(id));
         return `<div class="prproj-vista ${v.usada ? '' : 'es-sin-tomas'}" style="${estiloDeVista(vistas, v.nombre)}">
-            <span class="prproj-sigla">${esc(v.nombre)}</span>
-            <span class="prproj-titulo">${esc(v.titulo)}${v.usada ? '' : ' <span class="v3">· sin tomas</span>'}</span>
+            <span class="prproj-sigla" title="${esc(v.titulo)}${v.usada ? '' : ': ninguna clase de esta carpeta tiene tomas de esta vista'}">${esc(v.nombre)}</span>
             <span class="prproj-elige">
               <span class="prproj-pila ${suya.unidas ? 'es-anidada' : ''}">
                 ${suya.capturas.map(id => cajita(v, suya, id, true)).join('')}
@@ -118,6 +125,7 @@ function pintar() {
               ${apagadas.length ? '<span class="prproj-corte"></span>' : ''}
               ${apagadas.map(id => cajita(v, suya, id, false)).join('')}
             </span>
+            ${v.usada ? '' : '<span class="prproj-nota">sin tomas</span>'}
           </div>`;
     }).join('');
 
@@ -125,7 +133,7 @@ function pintar() {
     // vista no hay nada que ordenar ni que anidar, y sería una línea de ruido.
     // Lo de «en todas» está siempre, porque esa palabra está siempre.
     const hayPilas = Object.values(config.vistas).some(v => v.capturas.length > 1);
-    $('#prproj-pilas-dice').textContent = (hayPilas
+    $('#prproj-pilas-dice').title = (hayPilas
         ? 'Arrastrá las cajitas: la de la derecha va encima, como las pistas de Premiere.'
             + ' Dentro del recuadro van juntas en una anidación, con el encuadre puesto una vez para'
             + ' toda la carpeta; sin recuadro, cada una va en su pista y se acomoda toma por toma. '
@@ -133,6 +141,74 @@ function pintar() {
         + 'La palabra de al lado dice dónde está esa captura: «en todas» la deja puesta en todas las'
         + ' tomas de la clase, apagada donde no toca, y cambiar de plano es encenderla ahí mismo;'
         + ' «solo PV» la pone únicamente en las tomas de su vista y en las demás su pista queda vacía.';
+    pintarLinea();
+}
+
+/**
+ * La precortada de una clase, como la va a ver el editor en Premiere.
+ *
+ * Las pistas las decide el motor (`prproj-pistas`), con la misma regla con la
+ * que genera: así una vista sin tomas y «solo suya» no aparece acá ni allá.
+ * Se dibujan todas encendidas, de V1 abajo hacia arriba, cada una del color de
+ * su vista; la que entra solo en las tomas de su vista va en pedazos.
+ */
+async function pintarLinea() {
+    const pedido = ++pedidoDeLinea;
+    const usadas = vistas.filter(v => v.usada).map(v => v.nombre);
+    const r = await window.nt.prprojPistas(config, usadas);
+    if (pedido !== pedidoDeLinea) return;
+    const linea = $('#prproj-linea');
+    if (!r.ok || !r.pistas.length) {
+        linea.innerHTML = `<p class="pp-linea-vacia">${esc(r.ok
+            ? 'Todavía no hay ninguna toma: la precortada se arma con las tomas de cada clase.'
+            : r.error)}</p>`;
+        return;
+    }
+    const video = r.pistas.map((p, i) => ({ ...p, pista: `V${i + 1}` })).reverse().map(pistaDeVideo).join('');
+    const wav = ejemplo ? `${ejemplo.nombre}.wav` : 'el WAV de la clase';
+    linea.innerHTML = `
+      <div class="pp-regla"><span></span><div class="pp-marcas">${marcas()}</div></div>
+      ${video}
+      <div class="pp-pista es-audio es-separa">
+        <span class="pp-pista-nombre"><b>A1</b>Captura 1</span>
+        <div class="pp-pista-clips"><span class="pp-clip es-audio">Captura 1 <small>· su audio</small></span></div>
+      </div>
+      <div class="pp-pista es-audio">
+        <span class="pp-pista-nombre"><b>A2</b>Referencia</span>
+        <div class="pp-pista-clips"><span class="pp-clip es-referencia"
+             title="El audio que grabó Note Taker, para sincronizar. Va muteado.">Audio de la clase <small>· ${esc(wav)} · muteado</small></span></div>
+      </div>`;
+}
+
+function pistaDeVideo(p) {
+    const anidada = p.ids.length > 1;
+    const nombre = anidada ? esc(p.vista) : `Captura ${p.ids[0]}`;
+    const dice = anidada
+        ? `anidada: ${p.ids.slice().reverse().map(id => `Captura ${id}`).join(' sobre ')}`
+        : esc(p.vista);
+    const clase = `pp-clip${anidada ? ' es-anidada' : ''}`;
+    const titulo = p.siempre
+        ? `Puesta en todas las tomas de la clase; encendida en las de ${esc(p.vista)}.`
+        : `Solo en las tomas de ${esc(p.vista)}: en las demás, esta pista queda vacía.`;
+    const clip = `<span class="${clase}">${nombre} <small>· ${dice}</small></span>`;
+    // «solo suya»: unos pedazos en vez de un clip de punta a punta, que es lo
+    // que va a quedar en Premiere —un clip por cada toma de su vista—.
+    const clips = p.siempre ? clip : [0, 1, 2, 3].map(() => clip).join('');
+    return `
+      <div class="pp-pista" style="${estiloDeVista(vistas, p.vista)}" title="${titulo}">
+        <span class="pp-pista-nombre"><b>${p.pista}</b>${esc(p.vista)}</span>
+        <div class="pp-pista-clips ${p.siempre ? '' : 'es-solo'}">${clips}</div>
+      </div>`;
+}
+
+/** Cinco marcas en la regla, de 00:00 al largo de la clase de ejemplo. */
+function marcas() {
+    const total = ejemplo && ejemplo.segundos ? ejemplo.segundos : 0;
+    if (!total) return '';
+    return [0, 1, 2, 3, 4].map(i => {
+        const s = Math.round(total * i / 4);
+        return `<span>${String(Math.floor(s / 3600)).padStart(2, '0')}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}</span>`;
+    }).join('');
 }
 
 /**
@@ -152,7 +228,7 @@ function cajita(vista, suya, id, encendida) {
                 data-hace="elegir" data-vista="${esc(vista.nombre)}" data-captura="${id}"
                 aria-pressed="${encendida}"
                 title="${encendida ? 'Sacar' : 'Sumar'} la Captura ${id} ${encendida ? 'de' : 'a'} ${esc(vista.titulo)}${donde}"
-                >${id}</button>`;
+                >Captura ${id}</button>`;
     if (!encendida) return chip;
     // El número es el asa del arrastre y la cajita entera es el sitio donde se
     // suelta: así soltar sobre la palabra de al lado también cuenta.
@@ -386,7 +462,7 @@ async function generar() {
     }
     generando = false;
     boton.disabled = false;
-    boton.textContent = 'Generar';
+    boton.textContent = 'Generar proyecto';
     if (r.cancelado) return;
     if (!r.ok) {
         $('#prproj-resultado').innerHTML = `<div class="aviso" data-tono="error">${esc(r.error)}</div>`;

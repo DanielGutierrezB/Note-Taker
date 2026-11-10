@@ -17,7 +17,8 @@ const os = require('os');
 const path = require('path');
 
 const carpetaPrproj = require('../engine/prproj-carpeta');
-const { AIRE_SEG } = require('../engine/prproj-plan');
+const prprojPlan = require('../engine/prproj-plan');
+const { AIRE_SEG } = prprojPlan;
 const prproj = require('../engine/prproj');
 const paths = require('../engine/paths');
 const vivo = require('../engine/notas-vivo');
@@ -544,6 +545,25 @@ module.exports = async function (t) {
         const deLaPista = vista => plan.pistas.find(p => p.vista === vista).clave;
         t.eq(deLaPista('MG'), plan.grupos[0].clave, 'y la pista de MG usa la suya');
         t.eq(deLaPista('X2'), plan.grupos[1].clave, 'y la de X2, la suya');
+    });
+
+    t.test('las pistas que dibuja el menú son las mismas que se generan', () => {
+        const dir = carpeta();
+        const s = sesion(dir, { cero: T0, tomas: [toma(1, 10, 20, 'X2', T0), toma(2, 30, 40, 'PV', T0)] });
+        const config = carpetaPrproj.normalizar({
+            capturas: 2,
+            vistas: {
+                PV: { capturas: [1], unidas: false, siempre: [1] },
+                R: { capturas: [2, 1], unidas: true, siempre: [2, 1] },
+                S: { capturas: [2], unidas: false, siempre: [] },
+                X2: { capturas: [1, 2], unidas: false, siempre: [2] }
+            }
+        }, ['PV', 'X2']);
+        const plan = carpetaPrproj.planear([s], config);
+        const delMenu = prprojPlan.pistasDeLaPrecortada(config, ['PV', 'X2']);
+        t.deep(delMenu.map(p => [p.vista, p.ids, p.siempre]), plan.pistas.map(p => [p.vista, p.ids, p.siempre]));
+        t.ok(!delMenu.some(p => p.vista === 'S'), 'S, sin tomas y solo suya, no tiene pista');
+        t.deep(delMenu.find(p => p.vista === 'R').ids, [2, 1], 'R anidada es una sola pista, sin tomas pero en todas');
     });
 
     t.test('cada anidación lleva su color, y las vecinas no repiten', () => {
