@@ -118,7 +118,7 @@ function registrar({ ipcMain, app, send, anotar }) {
      */
     ipcMain.on('grabar-pcm', (event, chunk) => {
         try {
-            grabacion.pcm(chunk);
+            grabacion.pcm(chunk, 'ventana');
         } catch (err) {
             pcmRoto(err.message);
         }
@@ -142,7 +142,16 @@ function registrar({ ipcMain, app, send, anotar }) {
      * hasta allá para que lo devuelva sería hacerlo cruzar el puente dos veces
      * para llegar al mismo sitio.
      */
-    ipcMain.handle('audio-app-estado', () => audioApp.estado());
+    // Preguntarle al ayudante es un `spawnSync` de hasta 5 s, y mientras corre el
+    // proceso principal no escribe el WAV ni lee el audio de Zoom, que tiene un
+    // caño de 0,7 s. Con una clase grabando se contesta lo último que se supo:
+    // el menú de la barra y Ajustes lo piden cada vez que se abren.
+    let ultimoAudioApp = null;
+    ipcMain.handle('audio-app-estado', () => {
+        if (grabacion.enCurso() && ultimoAudioApp) return ultimoAudioApp;
+        ultimoAudioApp = audioApp.estado();
+        return ultimoAudioApp;
+    });
 
     ipcMain.handle('audio-app-abrir', async (event, como) => {
         const r = await audioApp.abrir({

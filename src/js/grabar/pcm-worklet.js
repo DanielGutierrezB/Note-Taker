@@ -32,6 +32,13 @@ class PcmProcessor extends AudioWorkletProcessor {
         super();
         this.buffer = new Int16Array(PEDAZO);
         this.escritas = 0;
+        // «vaciar»: tirar lo juntado hasta acá, que es de antes de Iniciar, y
+        // avisar que lo que venga después ya es de la clase.
+        this.port.onmessage = e => {
+            if (e.data !== 'vaciar') return;
+            this.escritas = 0;
+            this.port.postMessage('vaciado');
+        };
     }
 
     process(inputs) {

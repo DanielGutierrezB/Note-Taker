@@ -439,7 +439,14 @@ window.AudioContext = class {
  */
 let capturador = null;
 window.AudioWorkletNode = class {
-    constructor() { this.port = { onmessage: null }; capturador = this; }
+    constructor() {
+        // «vaciar» se contesta como el worklet de verdad (`pcm-worklet.js`).
+        const port = { onmessage: null, postMessage: m => {
+            if (m === 'vaciar') setTimeout(() => port.onmessage && port.onmessage({ data: 'vaciado' }), 0);
+        } };
+        this.port = port;
+        capturador = this;
+    }
     disconnect() { if (capturador === this) capturador = null; }
 };
 

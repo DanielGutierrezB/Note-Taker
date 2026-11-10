@@ -47,7 +47,9 @@ const estado = {
     alCaerse: () => {},
     // El audio solo se manda cuando la grabación está armada; escuchar arranca
     // antes, para que el medidor ya se mueva en Preparar.
-    mandando: false
+    mandando: false,
+    // Esperando que el worklet confirme que tiró lo de antes de Iniciar.
+    vaciando: false
 };
 
 /**
@@ -117,7 +119,13 @@ export async function abrir(deviceId, avisos) {
     // tasa de la salida del sistema en ese momento: con unos AirPods en modo
     // llamada, 16 o 24 kHz, y los pedazos de 4096 muestras pasaban a durar el
     // doble o el triple.
-    const contexto = new AudioContext({ sampleRate: 48000 });
+    const contexto = contextoSinSalida();
+    // Si el sistema lo suspende —una interrupción de Core Audio, la tapa que se
+    // cierra y vuelve—, se reanuda: suspendido no procesa, y lo que entra en ese
+    // rato no llega al WAV.
+    contexto.onstatechange = () => {
+        if (contexto.state !== 'running' && contexto.state !== 'closed') contexto.resume().catch(() => {});
+    };
     try {
         await contexto.audioWorklet.addModule('js/grabar/pcm-worklet.js');
     } catch (e) {
@@ -163,6 +171,25 @@ export async function abrir(deviceId, avisos) {
 }
 
 /**
+ * El contexto de audio, sin ninguna salida.
+ *
+ * Un contexto con salida procesa al ritmo del dispositivo de salida, aunque no
+ * suene nada por él: cambiar de auriculares, que se conecten unos AirPods o que
+ * unos Bluetooth pasen a modo llamada lo reinicia, y mientras se reinicia el
+ * micrófono sigue entrando y lo que no se alcanza a procesar se pierde. Sin
+ * salida (`sinkId: none`) el contexto lleva su propio reloj. Medido en esta Mac:
+ * 20,06 s de audio en 20,00 s de reloj, contra 2,4 % de diferencia atado a la
+ * salida.
+ */
+function contextoSinSalida() {
+    try {
+        return new AudioContext({ sampleRate: 48000, sinkId: { type: 'none' } });
+    } catch (e) {
+        return new AudioContext({ sampleRate: 48000 });
+    }
+}
+
+/**
  * Un pedazo de PCM: se manda y se mide el nivel.
  *
  * Se manda PRIMERO. Si medir tirara una excepción, el audio ya salió — y lo que
@@ -171,7 +198,10 @@ export async function abrir(deviceId, avisos) {
  * El nivel que se calcula acá es para el medidor y nada más.
  */
 function recibir(muestras) {
-    if (estado.mandando) window.nt.grabarPcm(muestras);
+    // La respuesta del worklet a «vaciar»: lo que llegue de acá en adelante se
+    // capturó después de apretar Iniciar.
+    if (muestras === 'vaciado') { estado.vaciando = false; return; }
+    if (estado.mandando && !estado.vaciando) window.nt.grabarPcm(muestras);
 
     let pico = 0;
     for (let i = 0; i < muestras.length; i++) {
@@ -181,8 +211,23 @@ function recibir(muestras) {
     estado.alNivel(pico);
 }
 
-/** Desde acá se manda el audio al motor. Antes solo se escuchaba. */
-export function empezarAMandar() { estado.mandando = true; }
+/**
+ * Desde acá se manda el audio al motor. Antes solo se escuchaba.
+ *
+ * El worklet tiene a medio llenar un pedazo de hasta 85 ms capturados ANTES de
+ * Iniciar, y puede haber otros en camino. Mandarlos ponía al principio del WAV
+ * audio de antes del cero, y la clase entera quedaba corrida esos milisegundos
+ * contra los marcadores. Se le pide que vacíe, y hasta que contesta no se manda
+ * nada: los mensajes del puerto llegan en orden, así que lo que viene antes de
+ * la respuesta es de antes.
+ */
+export function empezarAMandar() {
+    estado.mandando = true;
+    if (estado.nodo) {
+        estado.vaciando = true;
+        estado.nodo.port.postMessage('vaciar');
+    }
+}
 export function dejarDeMandar() { estado.mandando = false; }
 
 /** Con qué se está capturando, que es lo que el WAV tiene que declarar. */

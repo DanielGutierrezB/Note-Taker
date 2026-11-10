@@ -59,6 +59,7 @@ const cambiosToma = require('./cambios-toma');
 const sesionesGrabadas = require('./sesiones-grabadas');
 const ciclo = require('./ciclo-senales');
 const comprobarClase = require('./comprobar-clase');
+const alinearAudio = require('./alinear-audio');
 const disco = require('./disco');
 const { CICLO_MS, CONTEXTO_MS } = ciclo;
 
@@ -311,16 +312,50 @@ function abrirEscucha(params) {
             p.sinReloj && Number.isFinite(p.desdeMs) ? p.desdeMs : Date.now(),
             Number.isFinite(p.noAntesDe) ? p.noAntesDe : 0)
     });
-    sesion.captura = { ...info, segundos: 0 };
+    // La simulación lleva su tiempo a golpes de `pcm`, no con el reloj: ahí no
+    // hay nada que alinear.
+    sesion.captura = { ...info, segundos: 0, alinear: p.sinReloj ? null : alinearAudio.nuevo() };
     sesion.escuchadoHastaMs = info.desdeMs;
     return info;
 }
 
-/** El PCM que manda la ventana: se escribe, y lo oye el ciclo de señales. */
-function pcm(buffer) {
+/**
+ * El PCM que llega: se escribe, y lo oye el ciclo de señales.
+ *
+ * @param {string} [origen] 'ventana' para el micrófono. Ese es el que se
+ *   completa con silencio si se atrasa (`alinear-audio.js`); el de Zoom y el
+ *   del sistema ya lo hace su ayudante, y hacerlo dos veces sería poner el
+ *   mismo hueco dos veces.
+ */
+function pcm(buffer, origen) {
     if (!sesion || !sesion.captura) return null;
-    const r = captura.escribir(sesion.captura.id, buffer);
-    sesion.captura.segundos = r.segundos;
+    const cap = sesion.captura;
+    let r = captura.escribir(cap.id, buffer);
+    cap.segundos = r.segundos;
+    if (origen === 'ventana' && cap.alinear) {
+        const ahora = Date.now();
+        const faltaMs = alinearAudio.mirar(cap.alinear, (ahora - cap.desdeMs) - cap.segundos * 1000, ahora);
+        if (faltaMs > 0) r = rellenar(cap, faltaMs);
+    }
+    return r;
+}
+
+/** Escribe `ms` de silencio donde va el próximo pedazo, y lo deja dicho. */
+function rellenar(cap, ms) {
+    const canales = cap.canales || 1;
+    const muestras = Math.round(ms / 1000 * (cap.sampleRate || 48000));
+    const r = captura.escribir(cap.id, Buffer.alloc(muestras * canales * 2));
+    cap.segundos = r.segundos;
+    registro.anotar('main', 'grabacion.relleno', { ms, segundos: cap.segundos });
+    // Un tropiezo de un cuarto de segundo no amerita un cartel; uno de más de
+    // un segundo sí, que es audio de la clase que no está.
+    if (ms >= 1000) {
+        sesion.avisar({
+            tipo: 'error',
+            mensaje: `No llegó audio por ${(ms / 1000).toFixed(1).replace('.', ',')} s: se completó con silencio `
+                + 'para que los marcadores no se corran.'
+        });
+    }
     return r;
 }
 

@@ -108,12 +108,31 @@ export async function camaras() {
 }
 
 /**
+ * Los pedidos de la cámara, de a uno y en el orden en que llegaron.
+ *
+ * La clase la pide al arrancar sin esperar, y Ajustes la pide al abrirse: si
+ * Ajustes se abría mientras la de la clase todavía estaba abriendo, los dos
+ * veían que no había ninguna y los dos la abrían. Quedaba abierta dos veces,
+ * con dos relojes sacando fotogramas y la luz prendida al terminar.
+ */
+let turno = Promise.resolve();
+function enFila(hacer) {
+    const esta = turno.then(hacer, hacer);
+    turno = esta.catch(() => {});
+    return esta;
+}
+
+/**
  * Pide la cámara para `quien`, abriéndola si no estaba.
  *
  * @param {string} quien   «clase» o «ajustes»: solo para saber si queda alguien
  * @param {string} nombre  el de la cámara elegida en Ajustes
  */
-export async function tomar(quien, nombre, avisos) {
+export function tomar(quien, nombre, avisos) {
+    return enFila(() => tomarAhora(quien, nombre, avisos));
+}
+
+async function tomarAhora(quien, nombre, avisos) {
     if (!nombre) return { ok: false, error: 'No hay ninguna cámara elegida.' };
     estado.duenos.add(quien);
     if (avisos && avisos.alCaerse) estado.alCaerse = avisos.alCaerse;
@@ -185,9 +204,11 @@ export async function tomar(quien, nombre, avisos) {
 }
 
 /** Deja de usarla; cuando no queda nadie, se apaga. */
-export async function soltar(quien) {
-    estado.duenos.delete(quien);
-    if (!estado.duenos.size) await apagar();
+export function soltar(quien) {
+    return enFila(async () => {
+        estado.duenos.delete(quien);
+        if (!estado.duenos.size) await apagar();
+    });
 }
 
 export function abierto() {
