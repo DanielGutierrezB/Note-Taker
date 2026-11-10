@@ -492,7 +492,7 @@ async function alClic(e) {
     }
 }
 
-async function abrirEntrada(id) {
+async function abrirEntrada(id, opciones) {
     const entrada = entradas.find(d => d.id === id) || (id === fuente.ZOOM.id ? fuente.ZOOM : null);
     if (!entrada) {
         await fuente.cerrar();
@@ -517,7 +517,7 @@ async function abrirEntrada(id) {
     pintarSiSeVe();
     let r;
     try {
-        r = await abrirLaEntrada(entrada);
+        r = await abrirLaEntrada(entrada, opciones);
     } finally {
         audio.abriendo--;
     }
@@ -541,7 +541,7 @@ async function abrirEntrada(id) {
     return r;
 }
 
-function abrirLaEntrada(entrada) {
+function abrirLaEntrada(entrada, opciones) {
     return fuente.abrir(entrada, {
         alNivel: pico => {
             ultimoPico = Math.max(pico, ultimoPico * 0.85);
@@ -587,7 +587,7 @@ function abrirLaEntrada(entrada) {
             if (primera) avisar(`Se está perdiendo audio de la grabación: ${mensaje}`, 'error');
             pintar();
         }
-    });
+    }, opciones);
 }
 
 async function iniciar() {
@@ -704,11 +704,15 @@ export async function reengancharGrabando(estado) {
         return { ok: false, error: `No encontré ${estado.dispositivo || 'la entrada de la clase'}: `
             + 'elegí otra en el rótulo Audio para seguir grabando audio.' };
     }
-    if ((await abrirEntrada(cual.id) || {}).reemplazada) return { ok: true, estado: null };
+    // Con Zoom, la escucha siguió grabando en el motor: se engancha a esa en vez
+    // de reabrirla, y la clase sigue en el mismo WAV, sin hueco.
+    const r = await abrirEntrada(cual.id, { reusar: true }) || {};
+    if (r.reemplazada) return { ok: true, estado: null };
     if (!audio.abierto) {
         return { ok: false, error: `${audio.error || 'No se pudo abrir la entrada.'} `
             + 'Elegí otra en el rótulo Audio para seguir grabando audio.' };
     }
+    if (r.reusado) return { ok: true, estado: null };
     return mandarAlMotor();
 }
 

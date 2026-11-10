@@ -162,6 +162,16 @@ function registrar({ ipcMain, app, send, anotar }) {
     });
 
     ipcMain.handle('audio-app-abrir', async (event, como) => {
+        // La ventana se recargó con una clase grabando por Zoom: la escucha
+        // siguió acá, mandando al WAV, y volver a abrirla era tirar un ayudante
+        // que andaba —y si el nuevo no arrancaba, quedarse sin audio—. Se
+        // engancha la ventana a la que ya está.
+        const ya = audioApp.abiertoComo();
+        if (como && como.reusar && grabacion.activa() && audioApp.estaMandando()
+            && ya && ya.modo === (como.modo || 'app')) {
+            anotar('audio-app.reusada', { modo: ya.modo });
+            return { ok: true, sampleRate: ya.sampleRate, canales: 1, reusado: true };
+        }
         const r = await audioApp.abrir({
             modo: como && como.modo,
             alPcm: chunk => grabacion.pcm(chunk),

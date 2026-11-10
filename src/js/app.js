@@ -177,6 +177,17 @@ async function arrancar() {
  * entrada.
  */
 async function volverALaClase(enCurso) {
+    // La ventana se recargó con «Terminar» ya apretado: el audio está cerrado y
+    // el motor está releyendo las últimas tomas. No hay entrada que reabrir —el
+    // motor la rechazaba y la pantalla se quedaba en la clase sin salida—: se
+    // espera ese mismo cierre y se va a su resumen.
+    if (enCurso.terminando) {
+        avisar('Terminando la clase: se están releyendo las últimas tomas…');
+        await sesiones.ver();
+        const salida = await window.nt.grabarTerminar();
+        if (salida) app.irACierre(salida);
+        return;
+    }
     const r = await preparar.reengancharGrabando(enCurso);
     app.irAVivo(r.estado || enCurso, preparar.elAudio());
     if (r.ok) avisar('Volviste a la clase que se estaba grabando. Lo anotado sigue ahí.', 'ok');

@@ -529,6 +529,12 @@ function empezarAMandar() {
 function dejarDeMandar() { mandando = false; }
 function estaMandando() { return mandando; }
 
+/** Con qué está abierta la escucha ahora, o null: para no volver a abrirla igual. */
+function abiertoComo() {
+    if (!hijo || !tasa) return null;
+    return { modo: comoAbrio && comoAbrio[0] === '--sistema' ? 'sistema' : 'app', sampleRate: tasa };
+}
+
 function abierto() { return Boolean(hijo); }
 
 function cerrar() {
@@ -557,6 +563,7 @@ module.exports = {
     empezarAMandar,
     dejarDeMandar,
     estaMandando,
+    abiertoComo,
     abierto,
     cerrar,
     // Para las pruebas, que reemplazan el ayudante por uno de mentira y el reloj
@@ -570,6 +577,7 @@ module.exports = {
         tasa = p.tasa || 48000;
         if (p.reloj) reloj = p.reloj;
         volverAAbrir = p.relanzar || relanzar;
+        comoAbrio = argumentos({ modo: p.modo || 'app' });
         mandando = false;
         if (p.mandando) empezarAMandar();
         ultimoDatoMs = reloj();

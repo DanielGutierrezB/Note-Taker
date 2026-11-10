@@ -157,18 +157,20 @@ function enFila(hacer) {
  * Abre una entrada y empieza a medir. Todavía no graba: el audio se manda
  * recién con `empezarAMandar`, que es el botón de Iniciar.
  */
-export function abrir(entrada, losAvisos) {
-    return enFila(() => abrirAhora(entrada, losAvisos));
+export function abrir(entrada, losAvisos, opciones) {
+    return enFila(() => abrirAhora(entrada, losAvisos, opciones));
 }
 
-async function abrirAhora(entrada, losAvisos) {
-    const r = await abrirLaEntrada(entrada, losAvisos);
+async function abrirAhora(entrada, losAvisos, opciones) {
+    const r = await abrirLaEntrada(entrada, losAvisos, opciones);
     if (r.ok && quiereMandar) await mandar(true);
     return r;
 }
 
-async function abrirLaEntrada(entrada, losAvisos) {
-    await cerrarAhora();
+async function abrirLaEntrada(entrada, losAvisos, opciones) {
+    // Reusar la escucha de Zoom que sigue mandando es no cerrarla primero.
+    const reusar = Boolean(opciones && opciones.reusar && entrada && entrada.tipo === 'app');
+    if (!reusar) await cerrarAhora();
     avisos = {
         alNivel: () => {}, alCaerse: () => {}, alVolver: () => {}, alRomperse: () => {},
         ...(losAvisos || {})
@@ -176,12 +178,13 @@ async function abrirLaEntrada(entrada, losAvisos) {
 
     if (entrada && entrada.tipo === 'app') {
         engancharZoom();
-        const r = await window.nt.audioAppAbrir({ modo: entrada.modo || 'app' });
+        const r = await window.nt.audioAppAbrir({ modo: entrada.modo || 'app', reusar });
         if (!r.ok) return r;
         tipo = 'app';
         escuchandoZoom = true;
+        if (r.reusado) quiereMandar = true;
         info = { dispositivo: entrada.nombre, sampleRate: r.sampleRate, canales: r.canales || 1 };
-        return { ok: true, sampleRate: info.sampleRate, canales: info.canales };
+        return { ok: true, sampleRate: info.sampleRate, canales: info.canales, reusado: Boolean(r.reusado) };
     }
 
     const r = await oido.abrir(entrada && entrada.id, avisos);

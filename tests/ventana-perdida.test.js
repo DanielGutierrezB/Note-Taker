@@ -214,6 +214,28 @@ module.exports = function (t) {
         }
     });
 
+    t.test('recargada con Zoom grabando, la ventana se engancha a la escucha que sigue y no la reabre', async () => {
+        const audioApp = require('../engine/audio-app');
+        const canales = new Map();
+        puente.registrar({
+            ipcMain: { handle: (c, fn) => canales.set(c, fn), on: () => {} },
+            app: { on: () => {} }, send: () => {}, anotar: () => {}
+        });
+        grabando(3);
+        audioApp._fingirHijo(true);
+        audioApp._conectar({ mandando: true, tasa: 48000, relanzar: () => {} });
+        try {
+            const r = await canales.get('audio-app-abrir')(null, { modo: 'app', reusar: true });
+            t.ok(r.ok && r.reusado, 'reusada');
+            t.eq(r.sampleRate, 48000);
+            t.ok(audioApp.estaMandando(), 'y sigue mandando al mismo WAV');
+        } finally {
+            audioApp._fingirHijo(false);
+            audioApp.dejarDeMandar();
+            grabacion.apagar();
+        }
+    });
+
     t.test('el canal existe de punta a punta', () => {
         const canales = new Map();
         puente.registrar({
@@ -256,7 +278,10 @@ module.exports = function (t) {
             .test(arranque));
         const volver = app.slice(app.indexOf('async function volverALaClase(enCurso) {'));
         t.ok(/preparar\.reengancharGrabando\(enCurso\)/.test(volver), 'y vuelve a abrir el audio');
-        t.ok(/app\.irAVivo\(/.test(volver.slice(0, 400)), 'aunque no se pueda: las notas siguen');
+        const trasReenganchar = volver.slice(volver.indexOf('preparar.reengancharGrabando(enCurso)'));
+        t.ok(/app\.irAVivo\(/.test(trasReenganchar.slice(0, 200)), 'aunque no se pueda: las notas siguen');
+        t.ok(/if \(enCurso\.terminando\) \{[\s\S]{0,400}window\.nt\.grabarTerminar\(\)[\s\S]{0,80}app\.irACierre\(salida\)/.test(volver),
+            'y si ya se estaba terminando, espera ese cierre y va a su resumen');
         t.ok(/grabarEstado: async \(\) => null/.test(leer('tools', 'maqueta', 'doble.js')),
             'y la maqueta arranca sin ninguna');
     });
