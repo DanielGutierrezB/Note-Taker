@@ -96,6 +96,9 @@ export async function ver(opciones) {
 }
 
 async function entrar() {
+    // El modelo grande se empieza a cargar ya, para que el «3, 2, 1» del
+    // arranque lo oiga él (`grabacion.prepararOido`).
+    if (window.nt.grabarPrepararOido) window.nt.grabarPrepararOido(app.ajustes.idioma);
     doctor = await window.nt.doctor();
     disco = app.ajustes.carpeta ? await window.nt.grabarDisco(app.ajustes.carpeta) : null;
     // Al reanudar no se pregunta: esa clase ya tiene su número y su nombre, y
@@ -143,6 +146,7 @@ async function releerEntradas() {
 }
 
 export async function salir() {
+    if (window.nt.grabarSoltarOido) window.nt.grabarSoltarOido();
     await fuente.cerrar();
     Object.assign(audio, { abierto: false, caido: false, pico: 0, error: null, roto: null });
 }

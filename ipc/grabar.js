@@ -236,6 +236,9 @@ function registrar({ ipcMain, app, send, anotar }) {
      * El número se vuelve a resolver al arrancar: entre ver esto y apretar
      * Iniciar puede pasar media clase.
      */
+    ipcMain.handle('grabar-preparar-oido', (event, idioma) => grabacion.prepararOido(idioma));
+    ipcMain.handle('grabar-soltar-oido', () => grabacion.soltarOido());
+
     ipcMain.handle('grabar-nombre-siguiente', (event, dir, que) => {
         const q = que || {};
         const numero = q.numero != null && q.numero !== ''

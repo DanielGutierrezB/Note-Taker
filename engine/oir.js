@@ -80,10 +80,33 @@ function pisoDe(sesion) {
     return s;
 }
 
-async function delResidente(archivo, idioma) {
+/**
+ * Cada cuánto se mide el idioma en el vivo, con uno pedido.
+ *
+ * Medirlo vuelve a pasar la ventana por el codificador: medido con
+ * `tools/banco-pasada.js` sobre 40 ventanas de una clase de 141 minutos, la
+ * pasada bajó de 681 a 408 ms de mediana sin medirlo. Y medirlo en cada pasada
+ * tampoco daba más información: dos pasadas seguidas comparten cinco de sus
+ * seis segundos, así que «dos seguidas en inglés» (`PASADAS_PARA_CAMBIAR`) eran
+ * siete segundos de audio y no doce, y el rótulo saltaba de idioma con una cita.
+ * Cada cinco, dos mediciones seguidas son audio distinto.
+ */
+const MEDIR_IDIOMA_CADA_MS = 5000;
+const medido = new WeakMap();
+
+function tocaMedirIdioma(sesion, pedido) {
+    // Con `auto` el idioma sale gratis: es el que el modelo eligió para leer.
+    if (pedido === 'auto') return false;
+    const ahora = Date.now();
+    if (ahora - (medido.get(sesion) || 0) < MEDIR_IDIOMA_CADA_MS) return false;
+    medido.set(sesion, ahora);
+    return true;
+}
+
+async function delResidente(archivo, idioma, medirIdioma) {
     if (!residente.listo()) return null;
     try {
-        return await residente.transcribir(archivo, idioma);
+        return await residente.transcribir(archivo, idioma, { medirIdioma });
     } catch (e) {
         residente.fallo();
         return null;
@@ -156,7 +179,8 @@ async function escuchar(params) {
         opciones.tiempoMaxMs = p.liviano
             ? 20000
             : 60000 + 2 * Math.max(0, p.hastaMs - p.desdeMs);
-        let salida = (p.liviano && await delResidente(recortado.archivo, opciones.language))
+        let salida = (p.liviano
+            && await delResidente(recortado.archivo, opciones.language, tocaMedirIdioma(p.sesion, opciones.language)))
             || await transcribe.runWhisper(recortado.archivo, opciones);
 
         // Qué idioma se oyó, que no siempre es el que se pidió. El servidor lo
@@ -175,7 +199,7 @@ async function escuchar(params) {
             pesos: salida.pesos, oyendo: p.oyendo
         });
         if (releerCon) {
-            const otra = (p.liviano && await delResidente(recortado.archivo, releerCon))
+            const otra = (p.liviano && await delResidente(recortado.archivo, releerCon, false))
                 || await transcribe.runWhisper(recortado.archivo, { ...opciones, language: releerCon });
             if (otra) salida = otra;
         }
@@ -220,6 +244,7 @@ async function escuchar(params) {
 }
 
 module.exports = {
+    MEDIR_IDIOMA_CADA_MS,
     aHoraDelDia,
     escuchar
 };

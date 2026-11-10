@@ -206,7 +206,8 @@ function writeAtomic(filePath, contents, opciones) {
 const ANTERIOR = '.anterior';
 
 function writeJson(filePath, value, opciones) {
-    return writeAtomic(filePath, JSON.stringify(value, null, 2), opciones);
+    const sangria = opciones && opciones.compacto ? 0 : 2;
+    return writeAtomic(filePath, JSON.stringify(value, null, sangria), opciones);
 }
 
 function readJson(filePath) {

@@ -262,8 +262,7 @@ function laQueContiene(sesiones, paredMs) {
  */
 function recorte(params) {
     const p = params || {};
-    const ffmpeg = paths.ffmpeg();
-    if (!ffmpeg.path || !p.sesion) return null;
+    if (!p.sesion) return null;
 
     const margen = p.margenSec || 0;
     const desde = posicionDe(p.sesion, p.desdeMs);
@@ -274,6 +273,16 @@ function recorte(params) {
     const dur = (hasta - ini) + margen;
     const destino = path.join(
         fs.mkdtempSync(path.join(os.tmpdir(), 'notetaker-vivo-')), 'toma.wav');
+
+    // Las pasadas del vivo, acá; una toma entera para releer, con ffmpeg: diez
+    // minutos filtrados en JavaScript pararían el proceso más que lanzarlo.
+    const enLaApp = !p.conFfmpeg && dur <= RECORTE_EN_LA_APP_MAX_SEC;
+    if (enLaApp && recorteEnLaApp(p.sesion.archivo, ini, dur, destino)) return { archivo: destino, desdeSec: ini };
+    const ffmpeg = paths.ffmpeg();
+    if (!ffmpeg.path) {
+        tirar({ archivo: destino });
+        return null;
+    }
 
     const r = spawnSync(ffmpeg.path, [
         '-v', 'error', '-y',
@@ -306,6 +315,105 @@ function recorte(params) {
 
 let ultimoRecorteFallido = 0;
 
+/**
+ * El mismo recorte, hecho acá: 16 kHz mono, sin lanzar ffmpeg.
+ *
+ * El ciclo recorta una vez por segundo, y ffmpeg se lanzaba con `spawnSync`:
+ * 53 ms de mediana con el proceso principal parado —el mismo que escribe el
+ * audio— en cada pasada. Los WAV de la app son siempre los que escribe este
+ * archivo (PCM de 16 bits, uno o dos canales, cabecera de 44 bytes), y a 48 kHz
+ * bajar a 16 es quedarse con una muestra de cada tres después de un pasabajos.
+ * Lo que no tenga esa forma, o una tasa que no sea múltiplo de 16 kHz, vuelve
+ * a ffmpeg: contesta false y quien llama sigue por ahí.
+ *
+ * El filtro es un seno cardinal con ventana de Blackman, cortado en el 90 % de
+ * la mitad de 16 kHz. Comparado con ffmpeg (`tools/banco-pasada.js --recorte`,
+ * 40 ventanas de una clase de 141 min): la onda es la misma —correlación
+ * 0,9999, y la de ffmpeg corrida 17 muestras, un milisegundo—, tarda 9 ms en vez
+ * de 53, y Whisper lee lo mismo salvo puntuación y mayúsculas en 8 de 40.
+ */
+const SALIDA_HZ = 16000;
+const RECORTE_EN_LA_APP_MAX_SEC = 20;
+const filtros = new Map();
+
+function filtroPara(factor) {
+    if (filtros.has(factor)) return filtros.get(factor);
+    const n = 24 * factor + 1;
+    const medio = (n - 1) / 2;
+    const corte = 0.45 / factor;
+    const h = new Float64Array(n);
+    let suma = 0;
+    for (let i = 0; i < n; i++) {
+        const x = i - medio;
+        const sinc = x === 0 ? 2 * corte : Math.sin(2 * Math.PI * corte * x) / (Math.PI * x);
+        const ventana = 0.42 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1)) + 0.08 * Math.cos(4 * Math.PI * i / (n - 1));
+        h[i] = sinc * ventana;
+        suma += h[i];
+    }
+    for (let i = 0; i < n; i++) h[i] /= suma;
+    filtros.set(factor, h);
+    return h;
+}
+
+function formaDe(fd) {
+    const h = Buffer.alloc(44);
+    if (fs.readSync(fd, h, 0, 44, 0) < 44) return null;
+    if (h.toString('ascii', 0, 4) !== 'RIFF' || h.toString('ascii', 8, 12) !== 'WAVE') return null;
+    if (h.toString('ascii', 12, 16) !== 'fmt ' || h.toString('ascii', 36, 40) !== 'data') return null;
+    const formato = h.readUInt16LE(20);
+    const canales = h.readUInt16LE(22);
+    const tasa = h.readUInt32LE(24);
+    const bits = h.readUInt16LE(34);
+    if (formato !== 1 || bits !== 16 || canales < 1 || canales > 2) return null;
+    if (tasa % SALIDA_HZ !== 0 || tasa / SALIDA_HZ > 6) return null;
+    return { canales, tasa };
+}
+
+function recorteEnLaApp(archivo, iniSec, durSec, destino) {
+    let fd;
+    try {
+        fd = fs.openSync(archivo, 'r');
+        const forma = formaDe(fd);
+        if (!forma) return false;
+        const factor = forma.tasa / SALIDA_HZ;
+        const h = filtroPara(factor);
+        const medio = (h.length - 1) / 2;
+        const porCuadro = forma.canales * 2;
+        // Lo que hay escrito, por el tamaño y no por la cabecera: el archivo de
+        // la clase en curso crece mientras se lee.
+        const cuadros = Math.floor((fs.fstatSync(fd).size - 44) / porCuadro);
+        const salen = Math.max(0, Math.round(durSec * SALIDA_HZ));
+        const primero = Math.round(iniSec * forma.tasa) - medio;
+        const largo = salen * factor + 2 * medio;
+        const desde = Math.max(0, primero);
+        const hasta = Math.min(cuadros, primero + largo);
+        const crudo = Buffer.alloc(Math.max(0, hasta - desde) * porCuadro);
+        if (crudo.length) fs.readSync(fd, crudo, 0, crudo.length, 44 + desde * porCuadro);
+        // A mono y con ceros donde el archivo no llega, para que el filtro no
+        // tenga que preguntar en cada muestra.
+        const x = new Float64Array(largo);
+        for (let i = desde; i < hasta; i++) {
+            const o = (i - desde) * porCuadro;
+            x[i - primero] = forma.canales === 2
+                ? (crudo.readInt16LE(o) + crudo.readInt16LE(o + 2)) / 2
+                : crudo.readInt16LE(o);
+        }
+        const salida = Buffer.alloc(salen * 2);
+        for (let k = 0; k < salen; k++) {
+            const base = k * factor;
+            let y = 0;
+            for (let j = 0; j < h.length; j++) y += h[j] * x[base + j];
+            salida.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(y))), k * 2);
+        }
+        fs.writeFileSync(destino, Buffer.concat([cabecera(salida.length, SALIDA_HZ, 1), salida]));
+        return true;
+    } catch (e) {
+        return false;
+    } finally {
+        if (fd != null) fs.closeSync(fd);
+    }
+}
+
 function tirar(recortado) {
     if (!recortado || !recortado.archivo) return;
     try {
@@ -322,5 +430,6 @@ module.exports = {
     posicionDe,
     laQueContiene,
     recorte,
+    recorteEnLaApp,
     tirar
 };

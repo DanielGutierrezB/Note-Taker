@@ -33,6 +33,12 @@ module.exports = async function conClaseMuda(fn, o) {
         const oir = async (...palabras) => {
             falso.ventana = falso.ventana.concat(palabras);
             for (let i = 0; i < 3; i++) { grabacion.pcm(Buffer.alloc(48000 * 2)); await grabacion.buscarSenales(); }
+            // Con una relectura corriendo el vivo pasa cada dos segundos
+            // (`NUEVO_MIN_RELEYENDO_MS`) y la última se pudo saltear: se espera
+            // la relectura y se oye lo que faltaba. Si no faltaba nada, esta
+            // pasada no tiene audio nuevo y no hace nada.
+            if (s.rehaciendo) await s.rehaciendo;
+            await grabacion.buscarSenales();
         };
         for (let i = 0; i < 4; i++) grabacion.pcm(Buffer.alloc(48000 * 2));
         await fn({ st, s, w, oir, falso });

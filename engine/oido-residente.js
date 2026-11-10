@@ -291,16 +291,29 @@ function palabrasDe(respuesta) {
  * detectarlo cuesta 400 ms, que es lo que `oir.escuchar` aprovecha para que
  * «Automático» no sea más lento que tener el idioma puesto.
  *
+ * @param {object} [opciones] `medirIdioma` (sí, salvo `false`) y `reintentos`
+ *   (no, salvo `true`): los dos los compara `tools/banco-pasada.js`
  * @returns {Promise<{words:Array, model:string, oido:string|null, pesos:object}>}
  *   tira si el servidor no está o falla: quien llama cae al respaldo
  */
-async function transcribir(wavPath, idioma) {
+async function transcribir(wavPath, idioma, opciones) {
     if (!listo()) throw new Error('whisper-server no está listo');
+    const o = opciones || {};
+    const medir = o.medirIdioma !== false;
     const este = servidor;
     const form = new FormData();
     form.append('file', new Blob([fs.readFileSync(wavPath)], { type: 'audio/wav' }), 'pedazo.wav');
     form.append('response_format', 'verbose_json');
     form.append('temperature', '0');
+    // Sin reintentos a más temperatura: con el de fábrica (0,2) una ventana
+    // difícil se decodificaba hasta seis veces, y en vivo eso es una pasada que
+    // llega tarde. La relectura de la toma, que sí puede esperar, va por
+    // `whisper-cli` con los suyos.
+    if (!o.reintentos) form.append('temperature_inc', '0');
+    // Medir el idioma vuelve a pasar el audio por el codificador. Con `auto` no
+    // hace falta: el idioma con el que decodificó (`language`) ya es el
+    // detectado. Con uno pedido se mide cada tanto (`oir.js`).
+    if (!medir) form.append('no_language_probabilities', 'true');
     if (idioma) form.append('language', idioma);
     const r = await fetch(`http://127.0.0.1:${este.puerto}/inference`, {
         method: 'POST', body: form, signal: AbortSignal.timeout(PASADA_MAX_MS)
@@ -311,8 +324,11 @@ async function transcribir(wavPath, idioma) {
         words: palabrasDe(dicho),
         model: este.modelo.name,
         // El que DETECTÓ, no el que se usó: con el idioma forzado los dos
-        // difieren, y es justo ahí donde saberlo sirve.
-        oido: idiomas.normalizar(dicho.detected_language),
+        // difieren, y es justo ahí donde saberlo sirve. Sin medir, con `auto` el
+        // que se usó es el detectado; con uno pedido, no se sabe.
+        oido: medir
+            ? idiomas.normalizar(dicho.detected_language)
+            : (idioma === 'auto' ? idiomas.normalizar(dicho.language) : null),
         pesos: dicho.language_probabilities || null
     };
     fallas = 0;

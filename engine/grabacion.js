@@ -568,6 +568,27 @@ function cambiarFrases(frases) {
     return true;
 }
 
+/**
+ * Cargar el modelo grande desde Preparar, y no al apretar Iniciar.
+ *
+ * Cargarlo lleva unos segundos, y mientras tanto el ciclo oye con el respaldo
+ * (`whisper-cli` con el modelo chico): el «3, 2, 1» del arranque de cada clase,
+ * que es justo el que abre la primera toma, lo oía el peor de los dos. Desde
+ * Preparar, para cuando se aprieta Iniciar ya está cargado. `arrancar` no hace
+ * nada si ya hay uno.
+ */
+function prepararOido(idioma) {
+    residente.arrancar({ idioma: idioma || 'es' });
+    return true;
+}
+
+/** Y soltarlo al salir de Preparar sin grabar: son 1,6 GB que nadie usa. */
+function soltarOido() {
+    if (sesion) return false;
+    residente.apagar();
+    return true;
+}
+
 /* ─── El cierre ───────────────────────────────────────────────────────────*/
 
 /**
@@ -817,6 +838,8 @@ module.exports = {
     reabrirAudio,
     cambiarIdioma,
     cambiarFrases,
+    prepararOido,
+    soltarOido,
     editar,
     editarGrabada: (json, cambio) => sesionesGrabadas.editarGrabada(json, cambio, enCurso()),
     // Con la secuencia en curso, para que la que se está grabando no se abra por

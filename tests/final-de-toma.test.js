@@ -140,10 +140,30 @@ module.exports = function (t) {
         await reposo();
         t.deep(s.cola, [2], 'la 2 espera su orilla');
 
-        grabacion.editar({ tipo: 'borde', toma: 1, borde: 'out', paredMs: st.ceroMs + 3600 });
+        // Más allá de lo que se leyó: dentro, el reparto alcanza y no se relee
+        // (ver la prueba de abajo).
+        grabacion.editar({ tipo: 'borde', toma: 1, borde: 'out', paredMs: st.ceroMs + 22000 });
         await reposo();
         t.deep(falso.leidas, [1, 1], 'la 1 se releyó sin esperar a la 2');
         t.deep(s.cola, [2], 'y la 2 sigue esperando');
+    }));
+
+    t.test('un borde movido dentro de lo que ya se leyó no se relee: se reparte', conWhisperFalso(async falso => {
+        const { st } = await conUnaTomaAbierta(falso, 8);
+        const s = grabacion._sesion();
+        grabacion.cerrarToma(st.ceroMs + 3500);
+        for (let i = 0; i < 14; i++) grabacion.pcm(pedazo());
+        falso.ventana = [];
+        await grabacion.buscarSenales();
+        await reposo();
+        t.deep(falso.leidas, [1], 'leída una vez, con su orilla');
+        const toma = s.estado.tomas[0];
+        t.ok(toma.releida && toma.releida.orillaMs > 100, 'con orilla a la derecha');
+
+        grabacion.editar({ tipo: 'borde', toma: 1, borde: 'out', paredMs: st.ceroMs + 3600 });
+        await reposo();
+        t.deep(falso.leidas, [1], 'sin otra pasada por la GPU');
+        t.eq(toma.releida.outMs, toma.outMs, 'y la marca dice que está leída con los bordes de ahora');
     }));
 
     /* ─── Dos pasadas, y la corta primero ─────────────────────────────────────

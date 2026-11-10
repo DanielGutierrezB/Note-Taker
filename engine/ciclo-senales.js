@@ -50,6 +50,17 @@ const CONTEXTO_MS = 6000;
 const NUEVO_MIN_MS = 700;
 const COLA_MS = 500;
 
+/**
+ * Lo nuevo que hace falta para una pasada mientras se relee una toma.
+ *
+ * La relectura y el vivo comparten la GPU, y en la clase de tres horas un
+ * tercio de las pasadas lentas cayó en el minuto en que terminaba una
+ * relectura. Mientras corre, el vivo pasa cada dos segundos y no cada uno: la
+ * ventana sale un poco más larga —hasta su tope, `topeDeVentana`—, la señal
+ * llega un segundo más tarde, y la relectura termina antes.
+ */
+const NUEVO_MIN_RELEYENDO_MS = 2000;
+
 /** Un tramo de esta sesión, transcripto (`oir-toma.js` no sabe de sesiones). */
 function oirTramo(desdeMs, hastaMs, liviano, s) {
     return oirToma.tramo(espejo.archivosDeLaSesion(s), desdeMs, hastaMs, liviano,
@@ -126,7 +137,7 @@ async function buscarSenales(s) {
     if (!s || s.buscando || !s.captura || s.terminando) return;
     const vive = () => s.viva && !s.terminando;
     const hasta = espejo.grabadoHastaMs(s);
-    if (hasta - s.escuchadoHastaMs < NUEVO_MIN_MS) return;
+    if (hasta - s.escuchadoHastaMs < (s.rehaciendo ? NUEVO_MIN_RELEYENDO_MS : NUEVO_MIN_MS)) return;
     const desde = Math.max(s.captura.desdeMs, hasta - topeDeVentana(s),
         Math.min(s.escuchadoHastaMs - SOLAPE_MS, hasta - CONTEXTO_MS));
 

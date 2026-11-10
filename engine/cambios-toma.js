@@ -104,6 +104,7 @@ function editar(sesion, cambio) {
             // se ocupa el portero de más abajo, que ve que la toma no se movió.
             const estaba = c.borde === 'in' ? toma.inMs : toma.outMs;
             if (c.paredMs == null || Number(c.paredMs) === estaba) break;
+            const leido = tramoLeido(toma);
             // La toma abierta no se relee hasta cerrarse, así que su IN se
             // mueve pasando palabras entre ella y las sueltas (`moverInAbierta`)
             // en vez de pedirle el texto a Whisper.
@@ -124,7 +125,17 @@ function editar(sesion, cambio) {
                 vivo.tragarSueltas(sesion.estado, toma);
                 const guardadas = (toma.antes || []).concat(toma.palabras || [], toma.despues || []);
                 Object.assign(toma, vivo.repartir(guardadas, toma));
-                relecturas.encolar(sesion, toma.id);
+                // Dentro de lo que el modelo grande ya leyó, el reparto de
+                // recién ES el texto bueno: releer era cargar la GPU, peleándola
+                // con el vivo, para escribir las mismas palabras.
+                if (leido && toma.inMs >= leido.desdeMs && toma.outMs <= leido.hastaMs) {
+                    toma.releida = {
+                        inMs: toma.inMs, outMs: toma.outMs,
+                        orillaMs: Math.max(0, leido.hastaMs - toma.outMs)
+                    };
+                } else {
+                    relecturas.encolar(sesion, toma.id);
+                }
             }
             break;
         }
@@ -324,6 +335,25 @@ function partir(sesion, toma, ms, vista) {
 }
 
 const esVista = v => vivo.VISTAS.some(x => x.nombre === v);
+
+/**
+ * Qué tramo de la clase leyó ya el modelo grande para esta toma, o null.
+ *
+ * La relectura pide la toma con orillas a los dos lados y guarda lo de afuera
+ * en `antes` y `despues` (`oir-toma.leer`), así que tiene escrito más que la
+ * toma: desde la primera palabra de antes del IN hasta el OUT más la orilla
+ * derecha que alcanzó a oír. Solo si la lectura es de los bordes de ahora y
+ * salió con el modelo bueno: una degradada (`relectura`) se vuelve a leer.
+ */
+function tramoLeido(toma) {
+    const r = toma.releida;
+    if (!r || toma.relectura || r.inMs !== toma.inMs || r.outMs !== toma.outMs) return null;
+    const antes = (toma.antes || []).map(w => w.t);
+    return {
+        desdeMs: Math.min(r.inMs, ...antes),
+        hastaMs: r.outMs + (Number(r.orillaMs) || 0)
+    };
+}
 
 /**
  * Cambiar de plano con la toma abierta: desde ESTE instante, no desde el IN.

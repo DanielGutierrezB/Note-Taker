@@ -401,8 +401,10 @@ module.exports = function (t) {
 
     t.test('el servidor dice qué oyó, y eso es lo que se mira', () => {
         const fn = leer('engine', 'oido-residente.js');
-        t.ok(/oido: idiomas\.normalizar\(dicho\.detected_language\)/.test(fn),
+        t.ok(/\? idiomas\.normalizar\(dicho\.detected_language\)/.test(fn),
             'el DETECTADO, no el que se usó: con el idioma forzado los dos difieren');
+        t.ok(/: \(idioma === 'auto' \? idiomas\.normalizar\(dicho\.language\) : null\)/.test(fn),
+            'y sin medir, el que usó solo con auto: con uno pedido, no se sabe');
         t.ok(/pesos: dicho\.language_probabilities/.test(fn),
             'y cuánto se parece a cada uno, que es lo que resuelve un portugués detectado');
     });
