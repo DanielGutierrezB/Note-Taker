@@ -247,7 +247,20 @@ function posicionDe(sesion, paredMs) {
  * @returns {object|null}
  */
 function laQueContiene(sesiones, paredMs) {
-    return (sesiones || []).find(s => posicionDe(s, paredMs) != null) || null;
+    const lista = sesiones || [];
+    // **Primero la que lo tiene de verdad adentro, y de esas la más nueva.** Los
+    // medio segundo de gracia del final de cada una (`posicionDe`) se pisan con
+    // el principio de la siguiente cuando la entrada cambió: la segunda mitad
+    // de una toma partida en el cambio empieza a menos de medio segundo de donde
+    // terminó el WAV viejo, y buscando la primera que sirviera se leía del viejo
+    // —sin audio, o con la cola de otra cosa—. La gracia queda para lo que no
+    // cae adentro de ninguna.
+    const adentro = lista.filter(s => {
+        const seg = posicionDe(s, paredMs);
+        return seg != null && (s.segundos == null || seg <= s.segundos);
+    });
+    if (adentro.length) return adentro.reduce((a, b) => (b.desdeMs > a.desdeMs ? b : a));
+    return lista.find(s => posicionDe(s, paredMs) != null) || null;
 }
 
 /**

@@ -151,7 +151,7 @@ function sidecaresDe(donde, base) {
         if (!nombre.endsWith(SUFIJO_SIDECAR)) continue;
         const json = path.join(donde, nombre);
         try {
-            const leida = notasXml.estadoLeido(JSON.parse(fs.readFileSync(json, 'utf8')));
+            const leida = conLoQueMideHoy(notasXml.estadoLeido(JSON.parse(fs.readFileSync(json, 'utf8'))), json);
             if (!leida || !leida.secuencia) continue;
             const suyos = workspace.sesionDelSidecar(json);
             sesiones.push({
@@ -639,20 +639,43 @@ function paraReanudar(json, enCurso) {
  * desaparecida.
  */
 
+/**
+ * Una clase que no se terminó, con sus WAV medidos en el disco.
+ *
+ * El que estaba abierto cuando la app se murió dice en el archivo de notas los
+ * segundos del último guardado, que entre toma y toma puede ser de hace
+ * minutos; el disco tiene todo lo que llegó después. Leído como estaba, el XML
+ * rehecho, la relectura y el proyecto de Premiere cortaban ese final. Es lo que
+ * ya hacía `paraReanudar`, para todo lo que lee una clase. Una terminada se
+ * cerró con su tamaño real y no se mide.
+ */
+function conLoQueMideHoy(estado, json) {
+    if (!estado || estado.terminada || !Array.isArray(estado.sesiones) || !estado.sesiones.length) return estado;
+    const sitio = workspace.sesionDelSidecar(json);
+    return {
+        ...estado,
+        sesiones: estado.sesiones.map(w => {
+            if (!w || !w.archivo) return w;
+            const medidos = segundosEnElDisco(dondeQuedoElWav(sitio, w.archivo), w);
+            return medidos != null && medidos > (Number(w.segundos) || 0) ? { ...w, segundos: medidos } : w;
+        })
+    };
+}
+
 /** Lee el sidecar de una sesión, o dice que ese archivo no es una sesión. */
 function leerSidecar(json) {
     if (!String(json || '').endsWith(SUFIJO_SIDECAR)) {
         throw new Error('Eso no es el archivo de una sesión.');
     }
     try {
-        return notasXml.estadoLeido(JSON.parse(fs.readFileSync(json, 'utf8'))) || {};
+        return conLoQueMideHoy(notasXml.estadoLeido(JSON.parse(fs.readFileSync(json, 'utf8'))), json) || {};
     } catch (e) {
         // El de antes del último guardado, que se conserva justo para esto
         // (`workspace.writeAtomic`): se pierde a lo sumo el último cambio, y
         // no la clase.
         try {
-            const anterior = notasXml.estadoLeido(
-                JSON.parse(fs.readFileSync(`${json}${workspace.ANTERIOR}`, 'utf8'))) || {};
+            const anterior = conLoQueMideHoy(notasXml.estadoLeido(
+                JSON.parse(fs.readFileSync(`${json}${workspace.ANTERIOR}`, 'utf8'))), json) || {};
             registro.anotar('main', 'sesion.leida-la-anterior', { json, error: e.message });
             return anterior;
         } catch (e2) {

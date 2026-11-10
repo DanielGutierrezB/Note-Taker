@@ -64,6 +64,7 @@ const FILES = [
     'notas-de-antes.test.js',
     'audio-que-se-rompe.test.js',
     'alinear-audio.test.js',
+    'varios-wav.test.js',
     'nota-de-claqueta.test.js',
     'comentarios.test.js',
     'in-que-retrocede.test.js',
