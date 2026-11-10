@@ -158,6 +158,20 @@ module.exports = function (t) {
         t.ok(/`Plantilla-\$\{Number\(fps\)\}\.prproj`/.test(leer('engine', 'paths.js')), 'y el nombre que busca lleva el fps');
     });
 
+    t.group('premiere · un campo que no está, se dice');
+
+    t.test('poner un valor en una etiqueta que no está falla en vez de dejar la del molde', () => {
+        const { exigido } = require('../engine/prproj-secuencia');
+        t.eq('<Name>viejo</Name>'.replace(exigido(/<Name>[^<]*<\/Name>/), () => '<Name>$&</Name>'), '<Name>$&</Name>',
+            'y lo que pone va tal cual, con $& y todo');
+        let error = null;
+        try { '<Title>x</Title>'.replace(exigido(/<Name>[^<]*<\/Name>/), () => 'y'); } catch (e) { error = e.message; }
+        t.ok(error && /no está/.test(error), error);
+        const conG = exigido(/a/g);
+        t.eq('banana'.replace(conG, () => 'o'), 'bonono', 'con /g, todas');
+        t.eq('banana'.replace(conG, () => 'o'), 'bonono', 'y otra vez igual: el lastIndex no queda colgado');
+    });
+
     t.group('premiere · armar sin trabar el audio');
 
     t.test('entre clase y clase, el proceso principal suelta', () => {
