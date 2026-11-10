@@ -15,9 +15,9 @@ Zoom / interfaz ──► Note Taker ──► xml/clase.xml ──► Premiere
 ```
 
 Tuvo un segundo modo, **grabarse explicando lo que se hizo en la semana y salir
-con el vídeo ya cortado** (ver **El otro modo**). Ya no se puede elegir: esos
-vídeos pasaron a editarse en Claude, y la herramienta para eso es un proyecto
-aparte que parte de este código. Cómo construirlo está en
+con el vídeo ya cortado**. Salió de la app: esos vídeos pasaron a editarse en
+Claude, y la herramienta para eso es un proyecto aparte que parte del tag
+`base-video-para-claude`. Cómo construirlo está en
 [`docs/guia-video-para-claude.md`](docs/guia-video-para-claude.md).
 
 ---
@@ -120,250 +120,19 @@ renombró: el nombre de una clase ya grabada es con lo que el editor empareja lo
 archivos de cámara, y rebautizar diez clases porque alguien le corrigió una tilde
 a la carpeta rompería ese emparejamiento sin avisar.
 
-## El otro modo: un vídeo por semana
-
-> **Desactivado.** Ya no se elige en Ajustes (`MODOS` en `engine/ajustes.js`
-> solo deja `clase`). Lo de esta sección describe el código que sigue en el
-> repo como base del proyecto nuevo: [`docs/guia-video-para-claude.md`](docs/guia-video-para-claude.md).
-
-Era un segundo uso de la misma máquina, y se elegía en Ajustes
-(**Para qué usás Note Taker**). En vez de tomar notas de un rodaje para que
-otro lo corte, acá una persona **se graba explicando lo que hizo en la semana y
-sale con el vídeo cortado**. Sin editor, sin XML, sin Premiere.
-
-Es una sola pantalla con cuatro momentos: elegir cámara, micrófono y pantalla;
-grabar; elegir el corte; y el MP4 listo con su botón de **Mostrar en Finder**.
-Se graban las tres cosas a la vez —la cámara, la pantalla y la voz—, las tomas
-se abren diciendo **«3, 2, 1»** o **«three, two, one»** y se cierran con
-**«Pausa»** o **«Pause»** igual que en una clase. Mientras se graba, las tomas
-que van quedando **caen abajo como fichas**, con su texto, para leerlas,
-corregirles el IN y el OUT o descartarlas sin esperar al final. Al apretar
-**Terminar** se cae directo en el editor.
-
-### Una grabación, una carpeta
-
-En la carpeta que se elige no cae nada suelto: cada grabación se lleva **su
-propia carpeta `Grabación-<fecha>_<hora>`** con todo adentro —el MP4, los dos
-vídeos crudos, el WAV y el XML—. Así mandar o borrar una grabación es mandar o
-borrar una carpeta, en vez de reconocer cuáles de los veinte archivos que hay
-eran los del martes. El nombre sale del **mismo instante** que nombra los
-archivos (`nombre-de-sesion.sello`), así que la carpeta y lo que tiene adentro
-dicen la misma hora. Reanudar una grabación **no** abre otra carpeta: sigue en
-la suya.
-
-La clase sigue como estaba, con todo en la carpeta del curso: ahí lo normal es
-grabar muchas clases del mismo curso al mismo sitio, y el `.prproj` y la
-plantilla de Premiere esperan encontrarlas juntas.
-
-Y lo grabado se puede **volver a abrir**: la pantalla de inicio del modo
-semanal ofrece arriba **lo último que se grabó** con su fecha y cuántas tomas
-tiene, y abre el editor donde se dejó. Al abrir la app lo normal no es grabar
-otro vídeo sino terminar el de ayer, y antes eso no tenía puerta: lo único que
-quedaba era el Finder, que es donde no sirve, porque ahí hay archivos y no un
-proyecto. Volver a cortar **no pisa** el vídeo que ya se sacó: escribe otro al
-lado. Las dos entradas al editor —terminar de grabar y abrir la de ayer— son
-**la misma función**: una grabación recién cerrada y una de anteayer no se
-distinguen en nada una vez escritas, y tenerlo dos veces quería decir que la de
-ayer se iba a abrir un poco distinto que la de hace un minuto.
-
-Leer el disco busca **las dos formas**, la carpeta propia y lo que estaba
-suelto de antes, así que las grabaciones hechas con la versión anterior no
-desaparecen. Y cualquier subcarpeta cuenta: una carpeta renombrada a mano sigue
-siendo una grabación, porque lo que la hace una es el sidecar que tiene adentro
-y no cómo se llama.
-
-### El editor del corte final
-
-No es un reproductor de lo exportado: es un **montaje en vivo** del corte que
-todavía se está eligiendo. Arriba van los dos vídeos crudos —uno a pantalla
-completa y el otro, si toca, en el recuadro de la esquina— y abajo una **línea
-de tomas** donde cada toma es un botón del ancho de lo que dura. Lo que suena
-es el corte final: las tomas desactivadas **se saltan**. Clicar una
-desactivada la reproduce sola, para poder oírla antes de decidir.
-
-Debajo de la línea está **solo la toma donde se está parado**: su texto con lo
-de antes y lo de después, para alargar un IN o un OUT sobre las palabras; los
-dos botones de vista (**Mi pantalla** / **Yo**), que cambian lo de arriba al
-instante; y el botón de dejarla fuera. **«Ocultar desactivadas»** esconde las
-que se van sacando, así se ve el corte limpio mientras se arma.
-
-Lo que hace que el montaje sea de fiar es que **llama al mismo `repartir` que
-el export**. No hay una segunda tabla que decida fondo, recuadro y encuadre: el
-motor contesta, por toma, en qué segundo de qué archivo cae y cuál de los dos
-se ve entero, incluidos los repuestos —una toma que pidió la cámara y no la
-tiene sale con la pantalla—. El navegador solo busca ese segundo y pone los
-dos `<video>` donde el motor dijo. Así lo que se mira es lo que va a salir.
-
-**Las dos opciones y el botón de exportar van a la derecha del reproductor**,
-no debajo. Estaban debajo del todo —después del montaje, de la línea de tomas
-y de la ficha de la toma— y en una ventana normal eso dejaba fuera de la
-pantalla el botón que termina el trabajo, sin nada que diera a entender que
-había algo más abajo. El montaje es 16:9 con el alto por techo, así que a
-partir de cierto ancho le sobra el espacio de los costados y ahí no le quita
-sitio a nada. Cuando la ventana se estrecha y ya no caben los dos, la columna
-se va debajo sola: es flex envolviendo, no un punto de corte escrito a mano.
-
-Las tres son **el mismo botón** —mismo alto, mismo ancho, texto centrado—, y
-lo único que las distingue es el color. Exportar va en acento lleno: es la
-acción de la pantalla, y de esas hay una sola. Las otras dos cuentan si están
-puestas con **el acento rebajado** —fondo teñido, borde y letra en acento— y
-apagadas se van a **gris opaco sobre nada**, que es lo que hace que de un
-vistazo se vea cuál está encendida sin tener que leerlas. No llevan cajita de
-check: lo que dice el estado es el color, y para quien no lo ve, el
-`aria-pressed` del botón. Lo que hacen está en el `title`, al pasar por
-encima; estaba escrito debajo de cada una y eran cuatro renglones de letra
-chica para dos opciones que casi nunca se tocan.
-
-El reproductor queda **centrado en la tarjeta**: a la izquierda hay un hueco
-del ancho de la columna de la derecha, que no es nada y solo está para
-equilibrarla. Por debajo de 920 px ese hueco desaparece (`@container`) porque
-ahí el sitio vale más que la simetría.
-
-**La línea de tomas de abajo es también la barra de búsqueda.** Apretar en
-cualquier punto reproduce desde ahí —no desde el principio de esa toma— y sin
-soltar se puede arrastrar a lo largo de todo el vídeo, cruzando tomas, con el
-montaje siguiendo al dedo. Mientras se arrastra, la pantalla **no se
-repinta**: la línea se rehacía debajo del puntero cada vez que se cambiaba de
-toma y el arrastre terminaba en la toma equivocada.
-
-### «Quitar silencios»
-
-Una de las dos opciones de la revisión, **encendida de fábrica**. Saca los
-huecos de más de **0,7 s**
-de dentro de cada toma, para que el vídeo tenga mejor ritmo
-(`engine/quitar-silencios.js`). Se apaga y se vuelve a cortar; el MP4 de
-antes no se pisa.
-
-Dos decisiones que hay que saber. La primera: **el hueco no se borra, se
-acorta a 0,3 s**. Pegar dos frases una contra la otra suena a corte, y la idea
-es ritmo, no tartamudeo. La segunda: **mide sobre la onda, no sobre las
-palabras de Whisper**, porque el final de la última palabra lo estira justo el
-silencio que estamos buscando. Es la misma maquinaria de `ajustar-corte.js`,
-con su umbral local en vez de uno fijo.
-
-Al cortar, una toma con silencios sale en **varios pedazos**, y eso se dice
-aparte: lo que la pantalla cuenta son las **tomas** —las veces que la persona
-dijo «3, 2, 1»—, que es lo que reconoce. El aviso dice cuántos segundos menos
-de vídeo quedaron, y los dice en el **reloj de pared**: los huecos se miden en
-el reloj del audio, que es donde viven los bordes, pero el número que se le
-muestra tiene que ser el que va a ver en el reproductor.
-
-### «Mejorar audio»
-
-La otra opción, también **encendida de fábrica**
-(`engine/mejorar-audio.js`). Deja el vídeo al volumen de cualquier otro vídeo
-de internet, empareja las tomas entre sí y le quita el ruido de fondo de la
-sala. Como la otra, se aplica **al cortar** y solo al MP4 final: las capturas
-originales no se tocan nunca.
-
-Hacía falta. Medidos los tres vídeos semanales que había grabados:
-
-| | sonoridad | dinámica | pico real |
-|---|---|---|---|
-| 05/10 | −30,8 LUFS | LRA 5,0 | −0,4 dBFS |
-| 06/10 | −26,0 LUFS | LRA 5,2 | −7,8 dBFS |
-| 07/10 | −27,0 LUFS | LRA 4,5 | −5,5 dBFS |
-
-El vídeo en línea se escucha a **−16 LUFS**. Estos salían entre 10 y 15 dB por
-debajo de todo lo demás, y además **4,8 dB de diferencia entre ellos**, así que
-el vídeo de una semana no sonaba como el de la otra. Cómo quedaron, medido con
-`tools/medir-audio.js`:
-
-| | sonoridad | dinámica | voz | ruido | desfase |
-|---|---|---|---|---|---|
-| 05/10 | −16,2 LUFS | 5,0 → 4,0 | −0,5 dB | −1,9 dB | −0,3 ms |
-| 06/10 | −16,1 LUFS | 5,2 → 4,6 | −0,3 dB | −3,8 dB | −0,2 ms |
-| 07/10 | −16,1 LUFS | 4,5 → 4,1 | −0,3 dB | −5,1 dB | −0,3 ms |
-
-Los 4,8 dB de diferencia quedaron en 0,1.
-
-**Una ganancia fija y no `loudnorm`.** `loudnorm` es lo que todo el mundo usa y
-fue lo primero que se probó: llega a −16, pero con este material se le acaba el
-sitio y cae a su modo dinámico, que es un compresor, y baja el LRA de 5,0 a
-3,3. Una ganancia fija medida llega al mismo sitio conservando un decibelio
-largo más de dinámica, que es lo que se pidió: que se nivele, no que se
-aplaste. De `loudnorm` sí se copian las **dos pasadas** —medir, corregir y
-comprobar— porque lo que el limitador recorta también baja la sonoridad, y
-cuánto no se puede calcular: hay que oírlo.
-
-**Subir 15 dB una señal cuyo pico está en −0,4 dBFS** parece imposible y lo
-sería si ese pico fuera voz. No lo es: en la grabación del 05/10, de 33
-segundos, lo que pasa de −12 dBFS dura **2 milisegundos**. Es un clic. El
-limitador se lo lleva y deja pasar el resto; contado sobre ventanas de habla,
-a −16 LUFS trabaja en menos del 5 %, y a −14 se dispara al 10 %. Por eso el
-destino es −16 y no el −14 al que YouTube normaliza.
-
-**El denoiser se afina al ruido de esa sala, no a un número fijo**, por lo
-mismo que `engine/sonido.js`: de las tres grabaciones, una tiene el piso en
-−60 dB y otra en −40. Decirle −40 a la callada le hace quitar 10 dB más de los
-que hay, y ahí es donde aparece el burbujeo.
-
-**Y hay que devolverle los 30 ms que se lleva.** `afftdn` trabaja por ventanas
-de FFT y devuelve la señal 25 ms tarde; el limitador suma 5 ms más. Sin
-compensarlo, el exporte saldría 30 ms detrás del montaje que la persona acaba
-de aprobar —justo la desincronía que se arregló dos versiones antes—. Se
-compensa cortando el principio y rellenando el final, y lo que queda medido
-son 0,3 ms.
-
-Lo que hace que esto sea barato es que **casi todo ya estaba**: el micrófono va
-por el mismo camino que en una clase, así que el «3, 2, 1», la «Pausa», el
-cierre de toma y el ajuste de los bordes al silencio son el mismo código y el
-mismo `ajustar-corte.js`. Lo nuevo son tres piezas: grabar los dos vídeos
-(`engine/video-crudo.js`), cortarlos (`engine/exportar-video.js`) y la pantalla
-(`src/js/pantalla-semanal.js`). Del modo de clase no se tocó nada.
-
-**Tres relojes que hay que cruzar bien.** El audio, la cámara y la pantalla
-empiezan en instantes distintos y cada archivo guarda su hora de arranque. Dos
-medidas, hechas en el Electron de esta app con un vídeo sintético que cambia de
-color cada segundo:
-
-- la hora buena es la de llamar a `start()`, no la del aviso `onstart`: el
-  primer fotograma del archivo cae a 43 ms de `start()`, mientras que `onstart`
-  llega 294 ms tarde en un grabador y 339 ms en el otro —y con 45 ms de
-  diferencia entre los dos, que es desfase puro;
-- los bordes de las tomas viven en el **reloj del audio** y los vídeos en el
-  **reloj de pared**, así que si el dispositivo entrega más o menos muestras de
-  las que declara, el corte se desliza. Se corrige con la deriva medida del
-  propio WAV (`derivaDe` en `engine/exportar-video.js`). Con un micrófono normal
-  da 1,00x y no hace nada; lo encontró la corrida de punta a punta con el
-  micrófono falso de Chromium, que escribe audio a 1,88x y dejaba la segunda
-  toma fuera del vídeo.
-
-**Los labios cuadran por construcción.** La cámara se graba con la pista del
-micrófono adentro, así que la voz y la imagen las muxea Chromium (medido: unos
-70 ms de desfase dentro del archivo) y el vídeo exportado usa ese audio. Si la
-cámara no tiene audio, se cae al WAV.
-
-El MP4 sale en la raíz de la carpeta del modo, con el nombre de la sesión, y
-**nunca pisa uno que ya exista** —puede ser el que la persona ya mandó—. Los
-brutos sin cortar se quedan en `xml/Video/` y `xml/Audio/` por si hay que
-rehacerlo. En `xml/` queda además el XML de siempre, que acá nadie va a abrir:
-es el motor haciendo lo que hace, y sale gratis dejarlo —si alguna vez un corte
-automático no alcanza, ese archivo abre las mismas tomas en Premiere.
-
-```bash
-npx electron . --use-fake-device-for-media-stream \
-    --guion=tools/semanal-de-punta-a-punta.js
-```
-
-Eso graba, corta y exporta sin tocar nada, y después mide lo único que
-importa: que el vídeo dure lo que duran las tomas. En la última corrida, 6,36 s
-esperados y 6,37 s obtenidos.
-
 ## Lo que se dice y lo que pasa
 
 | se dice | qué pasa |
 |---|---|
 | **"3, 2, 1"** (o "tres, dos, uno", o **"three, two, one"**) | se abre una toma, en la palabra que sigue |
-| **"Retomamos"** (o **"We're back"**) | lo mismo |
+| **"Retomamos"** | lo mismo |
 | **"Pausa"** o **"Pause"** + un segundo de silencio | se cierra, en la última palabra dicha |
 
 Las palabras valen en los dos idiomas siempre, sin tener que decirle en cuál se
-va a hablar: quien se graba la semana puede empezar en español y seguir en
-inglés y las dos cuentas abren toma. Lo que sí se elige es **qué idioma
-transcribe Whisper**, en Ajustes: **Automático**, **Español** o **Inglés**. De
-fábrica va automático en el modo semanal —ahí se mezcla— y español en la clase,
-donde forzarlo da mejor texto que dejarlo adivinar frase por frase.
+va a hablar: una clase puede empezar en español y seguir en inglés y las dos
+cuentas abren toma. Lo que sí se elige es **qué idioma transcribe Whisper**, en
+Ajustes: **Automático**, **Español**, **Inglés** o **Portugués**. De fábrica va
+automático.
 
 **Esas palabras se ven marcadas en el transcript**, que es la única manera de
 saber si la app oyó: un "3, 2, 1" que Whisper escribió "3, 2, uña" no abre nada,
@@ -546,8 +315,7 @@ deja cerrado lo de hasta ahí y sigue grabando en la mitad nueva.
 
 Se ofrece en la clase —en vivo y abriendo una clase vieja— y donde se podría
 poner el IN sobre una toma que existe: las dos cosas dicen «acá empieza algo», y
-lo que cambia es qué pasa con lo de antes. En el vídeo de la semana no, que usa
-el mismo menú y no sabe partir tomas.
+lo que cambia es qué pasa con lo de antes.
 
 Qué se lleva cada mitad: la **vista** las dos, que es para lo que se parte; el
 **OUT y su foto** son del final y van a la segunda; las **notas sobre el texto**
@@ -1469,7 +1237,7 @@ node tools/maqueta/abrir.js    # la interfaz de verdad, con datos falsos
 ```
 
 Los criterios de aceptación están escritos como números en `tools/auditar.js`, y
-lo que no los cumple sale con código 1. **Sobre los 43 escenarios** a 900, 1180
+lo que no los cumple sale con código 1. **Sobre los 28 escenarios** a 900, 1180
 y 1440 px, que es todo lo que una persona puede llegar a ver: también los
 vacíos y los de error, que son los que se escriben con menos cuidado y los que
 más se leen cuando algo salió mal. La lista salía a mano en cada herramienta y
@@ -1503,7 +1271,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 836 pruebas, sin red y sin abrir nada
+npm test           # 864 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```
@@ -1546,112 +1314,6 @@ velocidad porque los tiempos no salen de `Date.now()` sino de la posición en el
 audio: seis minutos de clase se pasan en dos minutos de reloj y los timecodes
 que salen son los que habrían salido en vivo.
 
-**El modo semanal se prueba grabando de verdad.** Las pruebas de `tests/`
-cubren el reparto y el grafo de ffmpeg, que es lo que se puede comprobar sin
-medios —incluida una que corta un vídeo de verdad y mira el píxel de la esquina
-para saber si la cámara cayó donde tenía que caer—. Lo que no se puede
-comprobar así es que lo que graba la ventana sea lo que ffmpeg puede abrir, y
-para eso está la corrida entera:
-
-```bash
-npx electron . --use-fake-device-for-media-stream \
-    --guion=tools/semanal-de-punta-a-punta.js [--segundos=12]
-```
-
-Graba con la cámara falsa de Chromium, abre y cierra tres tomas con huecos en
-medio, abre una ficha mientras graba y le corre el IN sobre una palabra, cae en
-el editor, y mide lo único que lo dice todo: que el vídeo dure lo que duran las
-tomas —cruzando antes los dos relojes, porque el micrófono falso escribe audio
-a 0,51x—. De ahí salió la corrección de deriva, y no es un número fijo: en dos
-corridas seguidas el micrófono falso escribió a 0,51x y a 1,01x, y las dos
-cayeron donde se pidió —127 ms y 3 ms de diferencia— porque la deriva se mide
-en cada corrida en vez de darse por sabida.
-
-**Escribe los ajustes en un archivo aparte**, que `dev-shot.js` le estrena en
-`/tmp` con cada corrida (`NT_AJUSTES`). Antes los leía al empezar y los
-devolvía en un `finally`, que es lo que uno escribe y que funciona exactamente
-cuando no hace falta: la ventana no se cerraba sola al terminar, hubo que
-matarla, el `finally` no corrió, y los ajustes de verdad quedaron con
-`Fake Default Audio Input` de micrófono. Pasó. Ahora la ventana sale sola al
-terminar el guion, con el código que haya quedado, y aun así los ajustes no
-dependen de eso: un archivo que no se toca no se puede romper.
-
-Del editor comprueba lo que la maqueta no puede contestar: que los dos
-`<video>` apunten a los archivos que se acaban de grabar y **carguen desde
-`file:` con la CSP de la app puesta** (1920x1080 y 3840x2160, 33,3 s), que cada
-toma busque su propio segundo dentro de lo que dura el archivo (2,67 · 12,94 ·
-23,21) y no más allá, que una toma en vista «Yo» muestre solo la cámara y las
-de «Mi pantalla» la pantalla con el recuadro, que el reloj del montaje se mueva
-al apretar Reproducir, y que dejar una fuera se vea en la línea de tomas.
-Después exporta dos veces, la segunda con «Quitar silencios», y mira que el
-segundo MP4 dure menos y que el primero siga en su sitio: 15 huecos quitados,
-11,28 s contra 15,40 s. Cuando el micrófono falso no deja silencios que quitar
-—a 1,01x el pitido es continuo— lo dice y no lo cuenta como comprobado: lo que
-sostiene esa parte es `tests/quitar-silencios.test.js`, que no depende de la
-suerte que haya tenido la corrida.
-
-Y que **se oiga donde se ve**, que es lo único del editor que no se puede mirar
-en una captura ni contar en una prueba sin medios:
-
-```bash
-npx electron . --guion=tools/medir-sincronia.js --sesion=/ruta/a/una/copia
-```
-
-Carga el montaje de verdad con una grabación de verdad, aprieta Reproducir y
-anota cada 100 ms en qué segundo va cada uno de los dos `<video>`. La vara son
-números de norma y no gusto: la EBU R37 pide el sonido entre 60 ms detrás y
-20 ms delante de la imagen, y la ITU-R BT.1359 mide que se nota a los 45 ms si
-va delante y a los 125 ms si va detrás.
-
-De ahí salió un desfase que llevaba puesto desde el principio. El montaje
-admitía 0,25 s de separación —el doble de lo que se oye— y como los dos
-`<video>` arrancan con dos `play()` sueltos y el de la cámara tarda más en dar
-el primer fotograma, la distancia que se abría al arrancar se quedaba ahí toda
-la reproducción: **108 ms de media, sin una sola corrección en 10 s**. Y cuando
-corregía, corregía el vídeo que trae el sonido en vez del mudo, que es lo
-contrario de lo que decía su propia cabecera. Ahora son 11 ms de media y 22 de
-pico ya en marcha; al arrancar llega a 100 ms y el lazo los junta en 0,8 s, lo
-que la herramienta mide aparte para que no crezca sin que nadie mire.
-
-Y que **suene como se dice que suena**, que es el mismo problema por el otro
-lado:
-
-```bash
-node tools/medir-audio.js /ruta/a/un/exporte.mp4
-```
-
-Coge audio de verdad, le pasa la cadena de verdad y mide cuatro cosas contra lo
-prometido: que llegue a −16 LUFS ±1, que el LRA no caiga más de 1,5 LU —la
-diferencia entre nivelar y comprimir—, que la limpieza deje la voz donde
-estaba ±1 dB, y que el desfase que queda no pase de 5 ms. Sale con error si
-algo se sale de la vara, así que es una prueba aunque haya que correrla a mano.
-
-La voz se mide con la **limpieza sola**, sin la ganancia ni el limitador.
-Pasada por la cadena entera la pregunta no tiene respuesta: el limitador
-también mueve la voz, y moverla es su trabajo, así que un número que los sume
-no dice de quién es el movimiento. Eso es lo que primero hizo parecer que el
-denoiser se comía voz en la grabación del 05/10.
-
-La herramienta se ganó el sitio en la primera corrida: cazó que el tope de
-ganancia —puesto para no amplificar una toma rota— estaba también frenando el
-camino al destino, y dejaba la grabación del 05/10 en −19,5 LUFS, o sea sin
-arreglar. Son dos cosas distintas y ahora llevan dos topes distintos: 12 dB
-para emparejar una toma con sus hermanas, 24 para subir el vídeo entero.
-
-Los umbrales y la cuenta viven en `semanal/corte.js` y no en el reproductor: con
-un número entran y con dos salen, así que `tests/corte-del-editor.test.js` los
-prueba sin navegador. Es ahí donde se ve que el signo importa — y la prueba de
-cuánto tarda en juntarlos desmintió el comentario que yo mismo había escrito.
-
-El editor por dentro —que clicar una ficha no rebobine el montaje, que las
-desactivadas se salten, que «Ocultar desactivadas» esconda, que la barra
-espaciadora reproduzca— se prueba más rápido sobre la maqueta, con
-`node tools/probar-editor.js`, que además cuenta los errores de JavaScript de
-la pasada y **sale con error si alguna comprobación falla**: imprimir el fallo y
-salir con cero no es una red, es un informe que nadie lee. Lo que SÍ se puede
-probar sin navegador se prueba sin navegador: `semanal/corte.js` y
-`semanal/tarjetas.js` no tocan el DOM, así que `tests/corte-del-editor.test.js`
-los importa, los llama y comprueba lo que devuelven.
 Y `node tools/probar-vistas.js` comprueba sobre qué toma caen las vistas de la
 barra en los tres casos —grabando, con una fila desplegada y entre dos tomas—,
 incluida la parte que no se ve en una captura: que apretar una vista entre dos
@@ -1664,11 +1326,6 @@ renglón. Un detalle del arnés, porque costó: los comentarios están abajo del
 todo, `boundingBox` da la posición tal cual —fuera de la ventana— así que hay
 que traer el renglón a la pantalla antes de medirlo o el clic cae en cualquier
 otra cosa.
-
-Los tres MP4 que la maqueta sirve son sintéticos y se rehacen con
-`node tools/maqueta/hacer-videos.js`: dos «crudos» de 40 s, de distinto tamaño
-y color y con una barra que viaja como reloj, y uno corto que hace de
-exportado.
 
 **La cámara de referencia se prueba con la cámara falsa de Chrome.** Lo que
 `src/js/grabar/ojo.js` hace —abrir una cámara, guardar un fotograma cada medio
@@ -1686,7 +1343,6 @@ toma, fuera del XML, la ruta comprobada antes de abrirla— están en
 main.js · preload.js     Electron (el motor corre en el proceso principal)
 ipc/grabar.js            el puente de la grabación
 ipc/referencias.js       el de las fotos del OUT
-ipc/semanal.js           el del modo semanal: los dos vídeos, el montaje y el corte
 engine/
   grabacion.js           la sesión: los relojes y el ciclo de señales
   espejo.js              lo que se ve de la sesión: el disco y la pantalla
@@ -1695,9 +1351,6 @@ engine/
   ajustar-corte.js       correr el IN y el OUT al silencio de al lado
   fcp-xml.js             el formato FCP7, con marcadores de secuencia y de clip
   captura.js             el WAV que se escribe mientras entra
-  video-crudo.js         los dos vídeos del modo semanal, mientras entran
-  exportar-video.js      el MP4 cortado, y el montaje que el editor mira
-  quitar-silencios.js    partir las tomas por los huecos de más de 0,7 s
   oir.js · transcribe.js Whisper local, por pedazos
   sonido.js              si algo sonó de verdad, para no creerle a Whisper
   oir-toma.js            volver a oír un tramo, con o sin sesión
@@ -1710,20 +1363,13 @@ engine/
   paths.js               dónde están ffmpeg y whisper en esta máquina
 src/js/
   app.js                 el cableado: qué pantalla sigue a cuál
-  pantalla-*.js          Sesiones · Preparar · En vivo · Cierre · Semanal
+  pantalla-*.js          Sesiones · Preparar · En vivo · Cierre
   estados.js             el vocabulario de estados, en un solo sitio
   formato.js             el timecode, que tiene que dar lo mismo que el XML
   iconos.js              SVG de trazo, un dibujo por concepto
   grabar/oido.js         getUserMedia y el worklet que manda el PCM
   grabar/ojo.js          la cámara de referencia y el anillo de fotogramas
-  grabar/filmar.js       grabar la cámara y la pantalla (modo semanal)
-  grabar/lista-tomas.js  las fichas de abajo, compartidas por las dos pantallas
-  semanal/tarjetas.js    lo que SE VE en el modo semanal: estado → HTML, sin DOM
-  semanal/corte.js       las decisiones del editor: qué toma sigue, cuánto mide,
-                         y cuánto se corrige para que se oiga donde se ve
-  semanal/montaje.js     los dos <video> del editor, puestos donde dice el motor
-                         y mantenidos juntos: el que suena manda, al mudo se lo
-                         acomoda estirándolo
+  grabar/lista-tomas.js  las fichas de la lista de tomas
   fotos.js               cuándo se guarda la foto de una toma
 tools/                   maqueta, auditoría, simulación, build
 tests/                   corredor propio: node tests/run.js
