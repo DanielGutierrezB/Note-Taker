@@ -394,8 +394,8 @@ function conectarAjustes() {
     frases.conectar(guardar);
     glosario.conectar();
     ajustesEntrada.conectar(app);
-    // El tema se elige en Ajustes y se ve en la clase: cambiarlo la repinta.
-    tema.conectar(() => vivo.repintar());
+    // Cambiar el tema repinta lo que tiene colores de vista y está a la vista.
+    tema.conectar(() => { vivo.repintar(); cierre.repintar(); });
     $('#aj-camara-buscar').innerHTML = icono('regenerar');
     $('#aj-camara-buscar').addEventListener('click', () => pintarCamaras(true));
     // Una sección abierta a la vez lo hace el `name` de los <details>; esto

@@ -625,8 +625,14 @@ function pintar() {
  * En los dos casos el elemento se saca del DOM viejo y se vuelve a poner en el
  * hueco nuevo, con sus escuchas y todo.
  */
+let rehacerTextos = false;
+
 function textosQueSeQuedan() {
     const intactos = new Set();
+    if (rehacerTextos) {
+        rehacerTextos = false;
+        return { previos: new Map(), intactos };
+    }
     const agarrado = texto.arrastrado();
     if (agarrado && agarrado.parentElement) intactos.add(claveDe(agarrado.parentElement));
     if (enVuelo && Date.now() < enVuelo.hasta) intactos.add(enVuelo.clave);
@@ -1073,7 +1079,10 @@ function abrirLaPrimera() {
  */
 function pintarAtajos() {
     const cajaVistas = $('#atajo-vistas');
-    if (!cajaVistas.children.length && (estado.vistas || []).length) {
+    // Se rehacen solo si cambian las vistas o el tema, que cambia sus colores.
+    const deQue = `${tema.esNuevo()}:${(estado.vistas || []).map(v => v.nombre).join(',')}`;
+    if (cajaVistas.dataset.deQue !== deQue && (estado.vistas || []).length) {
+        cajaVistas.dataset.deQue = deQue;
         // Con el nombre de la vista y no con su sigla: «R R» y «S S» —la tecla
         // y la sigla, que son la misma letra— no dicen nada, y acá la gracia es
         // justamente que no haya que aprenderse las siglas para usar el mouse.
@@ -1969,9 +1978,15 @@ async function terminar() {
 }
 
 /** El nivel lo sigue midiendo la fuente (`grabar/fuente.js`), y la barra lo dibuja acá. */
-/** Repintar con lo que haya: lo pide Ajustes al cambiar el tema. */
+/**
+ * Repintar con lo que haya: lo pide el cambio de tema. Los textos se rehacen
+ * de cero, porque los ya dibujados llevan puestos los colores de vista del
+ * tema de antes.
+ */
 export function repintar() {
-    if (estado) pintar();
+    if (!estado) return;
+    rehacerTextos = true;
+    pintar();
 }
 
 export function alNivel(pico) {

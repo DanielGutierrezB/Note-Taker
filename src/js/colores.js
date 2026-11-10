@@ -78,6 +78,28 @@ export function estiloDeVista(vistas, nombre) {
 export function coloresDeVista(vistas, nombre) {
     const v = (vistas || []).find(x => x.nombre === nombre) || (vistas || [])[0];
     if (!v) return null;
-    const hex = hexDeMarcador(v.colorDeMarcador);
+    const hex = (temaNuevo() && EN_EL_TEMA_NUEVO[v.nombre]) || hexDeMarcador(v.colorDeMarcador);
     return { color: hex, tinta: tintaSobre(hex) };
+}
+
+/**
+ * Los colores que el tema nuevo cambia, y solo en la pantalla.
+ *
+ * El rojo de «Profesor» es la vista de casi todas las tomas, y una lista entera
+ * de bloques rojos se lee densa y como si avisara algo. En el tema nuevo va
+ * cerúleo, que es la etiqueta de Premiere con la que la cámara del profesor ya
+ * llega al proyecto (`ETIQUETA_DE_VISTA` en `engine/prproj-plan.js`). El
+ * marcador del XML sigue rojo: esto no sale de la ventana.
+ */
+const EN_EL_TEMA_NUEVO = {
+    PV: '#2fbfde'
+};
+
+/**
+ * Se mira la clase del documento y no `tema.js`: este archivo también se
+ * evalúa fuera de la ventana (`tools/contrastes.js`, los tests), donde no hay
+ * ni documento ni preferencias, y ahí vale el color de siempre.
+ */
+function temaNuevo() {
+    return typeof document !== 'undefined' && Boolean(document.body) && document.body.classList.contains('tema-nuevo');
 }

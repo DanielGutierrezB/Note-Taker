@@ -38,6 +38,11 @@ export function ver(laSalida) {
     pintar();
 }
 
+/** Repintar con lo que haya, si está a la vista: lo pide el cambio de tema. */
+export function repintar() {
+    if ($('#vista-cierre').classList.contains('es-activa')) pintar();
+}
+
 function pintar() {
     if (!salida) {
         $('#cierre-resumen').innerHTML =
