@@ -6,7 +6,36 @@
  * `tools/medir-vivo.js`.
  */
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawn } = require('child_process');
+
 const residente = require('../engine/oido-residente');
+
+/** Un proceso de mentira que se llama `nombre`: una copia de `sleep`. */
+function procesoLlamado(dir, nombre) {
+    const bin = path.join(dir, nombre);
+    fs.copyFileSync('/bin/sleep', bin);
+    fs.chmodSync(bin, 0o755);
+    return spawn(bin, ['30'], { stdio: 'ignore' });
+}
+
+const vive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return false; } };
+const espera = ms => new Promise(r => setTimeout(r, ms));
+
+/** `fn` con el pid del servidor anotado en un archivo de prueba. */
+async function conPidAparte(fn) {
+    const antes = process.env.NT_RESIDENTE_PID;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-residente-'));
+    process.env.NT_RESIDENTE_PID = path.join(dir, 'whisper-server.pid');
+    try {
+        await fn(dir, process.env.NT_RESIDENTE_PID);
+    } finally {
+        if (antes === undefined) delete process.env.NT_RESIDENTE_PID;
+        else process.env.NT_RESIDENTE_PID = antes;
+    }
+}
 
 module.exports = function (t) {
     t.group('oído residente · las piezas');
@@ -57,6 +86,57 @@ module.exports = function (t) {
         const ok = await residente.arrancar({ bin: null, modelo: { path: null } });
         t.eq(ok, false);
         t.eq(residente.listo(), false);
+    });
+
+    t.group('oído residente · que no quede vivo');
+
+    t.test('uno que no contesta a tiempo se apaga, en vez de quedar colgado', async () => {
+        await conPidAparte(async (dir, archivo) => {
+            // Uno que arranca y no contesta nunca, como un modelo que no carga.
+            const bin = path.join(dir, 'trabado');
+            fs.writeFileSync(bin, '#!/bin/sh\nsleep 30\n');
+            fs.chmodSync(bin, 0o755);
+            const arranque = residente.arrancar({ bin, modelo: { path: '/x', name: 'x' }, arranqueMaxMs: 600 });
+            await espera(200);
+            const pid = Number(fs.readFileSync(archivo, 'utf8'));
+            t.ok(vive(pid), 'mientras carga está vivo, y anotado');
+            t.eq(await arranque, false, 'no arrancó');
+            await espera(200);
+            t.ok(!vive(pid), 'y después del plazo ya no está');
+            t.ok(!fs.existsSync(archivo), 'ni su pid');
+            t.eq(residente.listo(), false);
+            residente.apagar();
+        });
+    });
+
+    t.test('el que dejó una app caída se apaga al arrancar la siguiente', async () => {
+        await conPidAparte(async (dir, archivo) => {
+            const huerfano = procesoLlamado(dir, 'whisper-server');
+            try {
+                await espera(100);
+                fs.writeFileSync(archivo, String(huerfano.pid));
+                t.eq(residente.limpiarHuerfano(), huerfano.pid, 'lo encontró');
+                await espera(200);
+                t.ok(!vive(huerfano.pid), 'y ya no está');
+                t.ok(!fs.existsSync(archivo), 'y el archivo se fue con él');
+            } finally {
+                try { huerfano.kill('SIGKILL'); } catch (e) { /* ya se fue */ }
+            }
+        });
+    });
+
+    t.test('y un pid que ahora es de otro proceso no se toca', async () => {
+        await conPidAparte(async (dir, archivo) => {
+            const otro = procesoLlamado(dir, 'otro-proceso');
+            try {
+                await espera(100);
+                fs.writeFileSync(archivo, String(otro.pid));
+                t.eq(residente.limpiarHuerfano(), null);
+                t.ok(vive(otro.pid), 'sigue vivo');
+            } finally {
+                try { otro.kill('SIGKILL'); } catch (e) { /* ya se fue */ }
+            }
+        });
     });
 
     t.test('transcribir sin servidor tira, para que quien llama use el respaldo', async () => {

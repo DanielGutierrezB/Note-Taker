@@ -122,13 +122,18 @@ function registrar({ ipcMain, app, send, anotar }) {
             modo: como && como.modo,
             alPcm: chunk => grabacion.pcm(chunk),
             avisar: aviso => {
-                // Lo que le pasa a la escucha en medio de la clase va al
+                // Un pedazo que no se pudo escribir es el mismo agujero que el
+                // del micrófono, y va por el mismo freno: contado, y dicho el
+                // primero y después uno cada dos segundos. Sin el freno eran
+                // doce renglones por segundo en el diario.
+                if (aviso && aviso.tipo === 'error') {
+                    pcmRoto(aviso.mensaje);
+                    return;
+                }
+                // Lo demás que le pasa a la escucha en medio de la clase va al
                 // registro siempre: es lo que explica un WAV con silencios
-                // puestos, una tasa que cambió o una escucha que se rearmó. Y
-                // `error` más que ninguno: es un pedazo de audio que no se
-                // escribió, y al día siguiente es lo único que explica por qué
-                // el WAV es más corto que la clase.
-                if (aviso && ['ayudante', 'relleno', 'rearmada', 'relanzando', 'caido', 'vuelve', 'error'].includes(aviso.tipo)) {
+                // puestos, una tasa que cambió o una escucha que se rearmó.
+                if (aviso && ['ayudante', 'relleno', 'rearmada', 'relanzando', 'caido', 'vuelve'].includes(aviso.tipo)) {
                     anotar(`audio-app.${aviso.tipo}`, aviso);
                 }
                 send('audio-app', aviso);

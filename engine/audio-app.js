@@ -79,6 +79,30 @@ const RELANZAR_CADA_MS = 60000;
 const HUECO_MIN_MS = 1000;
 const ATRASO_NORMAL_MS = 250;
 
+/**
+ * Lo más que se rellena de una vez.
+ *
+ * Una vuelta de `revisar` rellena lo que falta contra el reloj, y en una pausa
+ * de verdad eso es un segundo por vez. Una cuenta de varios segundos de golpe
+ * es otra cosa —el reloj saltó, la Mac durmió— y escribir ese silencio es
+ * escribir minutos que no pasaron.
+ */
+const RELLENO_MAX_MS = 2000;
+
+/** Cada cuánto mira `revisar` si sigue llegando audio. */
+const REVISAR_CADA_MS = 250;
+
+/**
+ * Cuánto se deja sin rellenar después de que ESTE proceso estuvo frenado.
+ *
+ * Si `revisar` llega tarde, o llegan datos sin que `revisar` haya corrido en
+ * ese tiempo, el que se frenó fue el proceso principal y no el ayudante: el
+ * audio de ese rato está esperando en el pipe y va a llegar de golpe. Rellenar
+ * ahí era poner silencio y después tirar el audio de verdad para compensar.
+ * Pasó el 4 de noviembre: 6,5 s de una clase en tres ráfagas.
+ */
+const GRACIA_TRAS_FRENO_MS = 1000;
+
 /** Sin un «listo» en este tiempo, el ayudante no va a arrancar. */
 const ARRANQUE_MAX_MS = 10000;
 
@@ -112,6 +136,9 @@ let trabado = false;
 let hubo = false;
 /** Cuándo se relanzó por última vez, para no hacerlo en bucle. */
 let ultimoRelanzado = -Infinity;
+/** La última vuelta de `revisar`, y hasta cuándo no se rellena tras un freno. */
+let ultimaRevision = 0;
+let frenadoHasta = 0;
 let vigilante = null;
 let reloj = () => Number(process.hrtime.bigint() / 1000000n);
 
@@ -310,6 +337,13 @@ function lanzar(ruta, rearme) {
             // que decirlo: la pantalla se pone en rojo igual que cuando se
             // desenchufa un micrófono, y lo escrito queda en el disco.
             avisar({ tipo: 'caido', codigo, senal: senal || null });
+            // Y grabando se vuelve a abrir, con el mismo freno que un ayudante
+            // trabado: uno por minuto.
+            const ahora = reloj();
+            if (mandando && ahora - ultimoRelanzado > RELANZAR_CADA_MS) {
+                ultimoRelanzado = ahora;
+                volverAAbrir();
+            }
         });
     });
 }
@@ -323,6 +357,7 @@ function lanzar(ruta, rearme) {
 function recibir(datos) {
     const antes = ultimoDatoMs;
     ultimoDatoMs = reloj();
+    anotarFreno(ultimoDatoMs);
     hubo = true;
     const trasHueco = ultimoDatoMs - antes > ATRASO_NORMAL_MS * 2;
     if (trabado) {
@@ -344,7 +379,7 @@ function recibir(datos) {
     // rellena de a pedazos mientras no llega nada, y el último pedazo del hueco
     // quedaba sin poner. Si lo que vuelve es el atraso del pipe y sigue
     // llegando, se descuenta de este relleno arriba, en la vuelta siguiente.
-    if (trasHueco && mandando && tasa) {
+    if (trasHueco && mandando && tasa && ultimoDatoMs >= frenadoHasta) {
         const falta = esperadas() - mandadas - resto.length / 2 - tasa * ATRASO_NORMAL_MS / 1000;
         if (falta > tasa * 0.1) {
             const poner = Math.floor(falta);
@@ -383,6 +418,13 @@ function empaquetar(datos) {
     }
 }
 
+/** Si el proceso estuvo frenado hasta recién: `revisar` no corrió cuando tocaba. */
+function anotarFreno(ahora) {
+    if (ultimaRevision && ahora - ultimaRevision > REVISAR_CADA_MS * 2) {
+        frenadoHasta = Math.max(frenadoHasta, ahora + GRACIA_TRAS_FRENO_MS);
+    }
+}
+
 /** Cuántas muestras tendría que haber mandado a esta altura, por el reloj. */
 function esperadas() {
     return (reloj() - desdeMs) / 1000 * tasa;
@@ -396,6 +438,11 @@ function esperadas() {
 function revisar() {
     if (!hijo || !tasa) return;
     const ahora = reloj();
+    anotarFreno(ahora);
+    ultimaRevision = ahora;
+    // Recién frenado, lo que no llegó está en el pipe: ni se da por caído ni se
+    // rellena hasta que pase la gracia.
+    if (ahora < frenadoHasta) return;
     const callado = ahora - ultimoDatoMs;
     // Antes de la PRIMERA muestra, que no llegue nada no es una caída. El tap
     // arranca cuando algo suena, y en Preparar lo normal es que todavía no
@@ -418,7 +465,9 @@ function revisar() {
     if (!mandando || callado < ATRASO_NORMAL_MS * 2) return;
     const falta = esperadas() - mandadas - resto.length / 2;
     if (falta < tasa * HUECO_MIN_MS / 1000) return;
-    const poner = Math.floor(falta - tasa * ATRASO_NORMAL_MS / 1000);
+    const poner = Math.min(
+        Math.floor(falta - tasa * ATRASO_NORMAL_MS / 1000),
+        Math.floor(tasa * RELLENO_MAX_MS / 1000));
     if (poner <= 0) return;
     relleno += poner;
     avisar({ tipo: 'relleno', segundos: Math.round(poner / tasa * 10) / 10 });
@@ -461,7 +510,7 @@ let volverAAbrir = relanzar;
 function vigilar() {
     ultimoDatoMs = reloj();
     if (vigilante) return;
-    vigilante = setInterval(revisar, 250);
+    vigilante = setInterval(revisar, REVISAR_CADA_MS);
     if (vigilante.unref) vigilante.unref();
 }
 
@@ -483,6 +532,8 @@ function cerrar() {
     trabado = false;
     hubo = false;
     ultimoRelanzado = -Infinity;
+    ultimaRevision = 0;
+    frenadoHasta = 0;
     tasa = 0;
     if (!hijo) return;
     hijo.cerrando = true;
@@ -519,6 +570,8 @@ module.exports = {
         trabado = false;
         hubo = Boolean(p.hubo);
         ultimoRelanzado = -Infinity;
+        ultimaRevision = 0;
+        frenadoHasta = 0;
     },
     _revisar: revisar,
     _mandadas: () => mandadas,

@@ -71,26 +71,20 @@ function engancharZoom() {
             avisar(`No llegó audio de Zoom por ${aviso.segundos} s: se completó con silencio ` +
                 'para que el WAV no se atrase contra la cámara.', 'error');
         }
-        // Y este no lo resuelve nadie. El pedazo que reventó al procesarse NO
-        // se escribió: al WAV le falta ese trozo y todo lo que viene detrás
-        // queda corrido contra la cámara. Es lo peor que puede pasar en medio
-        // de una clase y hasta ahora no se veía en ninguna parte — el ayudante
-        // seguía vivo, el medidor seguía moviéndose y el editor se enteraba al
-        // abrir el XML. No va a una tostada y nada más: va al estado del audio,
-        // que es lo que se queda a la vista (ver `alRomperse` en
-        // `pantalla-preparar.js` y `deSesion` en `estados.js`).
-        if (aviso.tipo === 'error') avisos.alRomperse(aviso.mensaje);
+        // El pedazo que reventó al procesarse no llega por acá: el puente lo
+        // cuenta y lo manda por `grabar-aviso`, igual que el del micrófono
+        // (`seRompio`, abajo).
     });
 }
 
 /**
- * El motor avisa que un pedazo del PCM del MICRÓFONO reventó al procesarse.
+ * El motor avisa que un pedazo de PCM reventó al procesarse, venga del
+ * micrófono o del audio de Zoom o del sistema.
  *
- * Es el mismo agujero que el `error` de Zoom de acá arriba —lo que reventó no
- * llegó al WAV y todo lo de atrás queda corrido contra la cámara— y por eso va
- * a la misma pastilla. Lo que cambia es de dónde viene: el de Zoom lo grita el
- * motor por su canal y este viaja por `grabar-aviso`, que lo atiende la
- * pantalla En vivo, así que entra por acá en vez de por el enganche.
+ * Lo que reventó no llegó al WAV y todo lo de atrás queda corrido contra la
+ * cámara, así que va al estado del audio, que es lo que se queda a la vista
+ * (`alRomperse` en `pantalla-preparar.js` y `deSesion` en `estados.js`). Viaja
+ * por `grabar-aviso`, que lo atiende la pantalla En vivo.
  *
  * La cuenta viene hecha del otro lado: allá los pedazos revientan de a doce
  * por segundo y el puente los junta antes de cruzar (ver `ipc/grabar.js`).

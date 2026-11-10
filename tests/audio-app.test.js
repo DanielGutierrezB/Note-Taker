@@ -166,6 +166,81 @@ module.exports = async function (t) {
         t.eq(r.relanzados.length, 2, `dos minutos, dos intentos (${r.relanzados.length})`);
     });
 
+    /**
+     * El proceso principal frenado `frenoMs`: en ese rato no corre nada, ni
+     * `revisar` ni la lectura del pipe, y el audio se junta en el pipe. Al
+     * soltarse, `primeroRevisar` dice qué corre antes —en Node, según en qué
+     * fase del bucle se trabó—, y después llega todo lo juntado de golpe.
+     */
+    function conFreno(frenoMs, primeroRevisar) {
+        const avisos = [];
+        let ahora = 1000;
+        let recibidas = 0;
+        audioApp._fingirHijo(true);
+        audioApp._conectar({
+            alPcm: () => {}, avisar: a => avisos.push(a), mandando: true,
+            tasa: 48000, reloj: () => ahora, relanzar: () => {}
+        });
+        const normal = segundos => {
+            for (let ms = 0; ms < segundos * 1000; ms += 10) {
+                ahora += 10;
+                audioApp.recibir(Buffer.alloc(480 * 2));
+                recibidas += 480;
+                if (ms % 250 === 0) audioApp._revisar();
+            }
+        };
+        normal(5);
+        ahora += frenoMs;
+        const juntado = Math.round(frenoMs / 10);
+        if (primeroRevisar) audioApp._revisar();
+        for (let i = 0; i < juntado; i++) { audioApp.recibir(Buffer.alloc(480 * 2)); recibidas += 480; }
+        if (!primeroRevisar) audioApp._revisar();
+        normal(5);
+        audioApp._fingirHijo(false);
+        return { avisos, recibidas };
+    }
+
+    t.test('si el que se frenó fue este proceso, no se rellena ni se tira audio', () => {
+        // Lo del 4 de noviembre: el proceso principal se trabó un segundo, la
+        // vuelta de `revisar` llegó tarde y rellenó con silencio, y el audio de
+        // verdad, que estaba en el pipe, se descartó para compensar.
+        for (const primeroRevisar of [true, false]) {
+            const r = conFreno(1200, primeroRevisar);
+            const cual = primeroRevisar ? 'revisar primero' : 'el pipe primero';
+            t.ok(!r.avisos.some(a => a.tipo === 'relleno'), `${cual}: no rellenó`);
+            const aWav = audioApp._mandadas();
+            t.near(aWav, Math.floor(r.recibidas / 4096) * 4096, 4096, `${cual}: todo lo recibido fue al WAV`);
+        }
+    });
+
+    t.test('y un freno largo tampoco da la escucha por caída', () => {
+        const r = conFreno(3000, true);
+        t.ok(!r.avisos.some(a => a.tipo === 'caido'), 'el ayudante no se cayó: el que se frenó fue el proceso');
+    });
+
+    t.test('ningún relleno pasa de dos segundos de una vez', () => {
+        // Una cuenta de muchos segundos de golpe es que el reloj saltó, no una
+        // pausa: escribir ese silencio de una vez es escribir lo que no pasó.
+        const avisos = [];
+        let ahora = 1000;
+        audioApp._fingirHijo(true);
+        audioApp._conectar({
+            alPcm: () => {}, avisar: a => avisos.push(a), mandando: true,
+            tasa: 48000, reloj: () => ahora, relanzar: () => {}
+        });
+        for (let ms = 0; ms < 2000; ms += 10) {
+            ahora += 10;
+            audioApp.recibir(Buffer.alloc(480 * 2));
+            if (ms % 250 === 0) audioApp._revisar();
+        }
+        ahora += 30000;
+        for (let i = 0; i < 8; i++) { audioApp._revisar(); ahora += 250; }
+        audioApp._fingirHijo(false);
+        const rellenos = avisos.filter(a => a.tipo === 'relleno').map(a => a.segundos);
+        t.ok(rellenos.length > 0, 'rellena, porque el WAV tiene que seguir al reloj');
+        t.ok(rellenos.every(x => x <= 2), `pero de a poco: ${rellenos.join(', ')}`);
+    });
+
     t.group('audio-app · el ayudante');
 
     t.test('abre, dice la tasa y manda el audio cuando se le pide', conFalso('ok', async () => {
@@ -213,6 +288,20 @@ module.exports = async function (t) {
         t.ok(r.ok);
         await espera(400);
         t.ok(avisos.some(a => a.tipo === 'caido'), 'hay un aviso de caída');
+    }));
+
+    t.test('y si se va solo grabando, se vuelve a abrir', conFalso('muere', async () => {
+        // Avisar y nada más dejaba la clase sin audio hasta que alguien
+        // eligiera la entrada otra vez.
+        const avisos = [];
+        // Con el relanzar de verdad: las pruebas de arriba dejan puesto uno de
+        // mentira, y acá el ayudante que se relanza es el falso.
+        audioApp._conectar({});
+        const r = await audioApp.abrir({ avisar: a => avisos.push(a), alPcm: () => {} });
+        t.ok(r.ok);
+        audioApp.empezarAMandar();
+        await espera(600);
+        t.ok(avisos.some(a => a.tipo === 'relanzando'), 'se reabrió');
     }));
 
     t.test('cerrarlo a propósito NO es una caída', conFalso('ok', async () => {

@@ -23,6 +23,7 @@ const updates = require('./engine/updates');
 const registro = require('./engine/registro');
 const dependencias = require('./engine/dependencias');
 const grabacion = require('./engine/grabacion');
+const residente = require('./engine/oido-residente');
 const ipcGrabar = require('./ipc/grabar');
 const ipcPrproj = require('./ipc/prproj');
 const ipcReferencias = require('./ipc/referencias');
@@ -209,6 +210,9 @@ if (!app.requestSingleInstanceLock()) {
             arch: process.arch,
             diario: diario.ok ? `guardando (${diario.teniamos} línea(s) de antes)` : `sin guardar: ${diario.error}`
         });
+        // El whisper-server que dejó una app que se cayó, con el modelo cargado.
+        const huerfano = residente.limpiarHuerfano();
+        if (huerfano) anotar('residente.huerfano-apagado', { pid: huerfano });
         ponerElMenu();
         createWindow();
         app.on('activate', traerLaVentana);

@@ -23,12 +23,15 @@
  * da los tiempos por palabra del XML.
  */
 
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const net = require('net');
+const os = require('os');
+const path = require('path');
 
 const idiomas = require('./idiomas');
 const paths = require('./paths');
+const registro = require('./registro');
 const transcribe = require('./transcribe');
 
 /** Cuánto se espera a que el modelo termine de cargar antes de darlo por perdido. */
@@ -50,6 +53,75 @@ const ENTRE_ARRANQUES_MS = 20000;
 let fallas = 0;
 let ultimoArranque = 0;
 let ultimasOpciones = null;
+
+/**
+ * Cuántos arranques seguidos pueden vencer el plazo antes de dejar de
+ * intentar en esta sesión. Un modelo que no carga en un minuto no va a cargar
+ * en el siguiente, y cada intento es otro gigabyte y medio a la GPU mientras
+ * se graba. El ciclo sigue con `whisper-cli`, como sin servidor.
+ */
+const ARRANQUES_FALLIDOS_MAX = 2;
+let arranquesFallidos = 0;
+
+/**
+ * Dónde se anota el pid del servidor vivo.
+ *
+ * Si la app se cae —no se cierra: se cae—, nadie corre `apagar` ni el `exit`
+ * del proceso, y el servidor queda huérfano con el modelo cargado. Con el pid
+ * anotado, la app que arranca después lo encuentra y lo apaga
+ * (`limpiarHuerfano`). `NT_RESIDENTE_PID` lo desvía, para las pruebas.
+ */
+function archivoDelPid() {
+    return process.env.NT_RESIDENTE_PID
+        || path.join(os.homedir(), 'Library', 'Application Support', 'Note Taker', 'whisper-server.pid');
+}
+
+function anotarPid(pid) {
+    try {
+        fs.mkdirSync(path.dirname(archivoDelPid()), { recursive: true });
+        fs.writeFileSync(archivoDelPid(), String(pid));
+    } catch (e) { /* sin el archivo, solo se pierde la limpieza de después de una caída */ }
+}
+
+function borrarPid(pid) {
+    try {
+        if (fs.readFileSync(archivoDelPid(), 'utf8').trim() === String(pid)) fs.rmSync(archivoDelPid());
+    } catch (e) { /* no estaba */ }
+}
+
+/**
+ * Apaga el servidor que dejó una app que se cayó, si sigue vivo.
+ *
+ * Se mira que el proceso sea de verdad un `whisper-server` antes de tocarlo:
+ * un pid viejo puede haber quedado en manos de cualquier otro proceso.
+ *
+ * @returns {number|null} el pid que se apagó, o null
+ */
+function limpiarHuerfano() {
+    let pid;
+    try {
+        pid = Number(fs.readFileSync(archivoDelPid(), 'utf8').trim());
+        fs.rmSync(archivoDelPid());
+    } catch (e) {
+        return null;
+    }
+    if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) return null;
+    const r = spawnSync('ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf8' });
+    const comm = String(r.stdout || '').trim();
+    if (!comm || path.basename(comm) !== 'whisper-server') return null;
+    try {
+        process.kill(pid, 'SIGTERM');
+        return pid;
+    } catch (e) {
+        return null;
+    }
+}
+
+/** Los servidores vivos de este proceso, para apagarlos si la app sale sin `apagar`. */
+const vivos = new Set();
+process.once('exit', () => {
+    for (const hijo of vivos) { try { hijo.kill('SIGTERM'); } catch (e) { /* ya se fue */ } }
+});
 
 function puertoLibre() {
     return new Promise((resolve, reject) => {
@@ -109,20 +181,30 @@ function arrancar(opciones) {
                 ...dtw(modelo)
             ], { stdio: ['ignore', 'ignore', 'pipe'] });
             este.hijo.stderr.on('data', () => {});
-            // Que no quede vivo con el gigabyte y medio del modelo si la app se
-            // va sin pasar por `apagar`.
-            process.once('exit', () => { try { este.hijo.kill('SIGTERM'); } catch (e) { /* ya se fue */ } });
-            este.hijo.on('exit', () => {
+            const hijo = este.hijo;
+            vivos.add(hijo);
+            if (hijo.pid) anotarPid(hijo.pid);
+            hijo.on('exit', () => {
+                vivos.delete(hijo);
+                if (hijo.pid) borrarPid(hijo.pid);
                 este.listo = false;
                 if (servidor === este) servidor = null;
             });
-            const hasta = Date.now() + ARRANQUE_MAX_MS;
+            const hasta = Date.now() + (o.arranqueMaxMs || ARRANQUE_MAX_MS);
             while (Date.now() < hasta && servidor === este) {
                 try {
                     const r = await fetch(`http://127.0.0.1:${este.puerto}/`, { signal: AbortSignal.timeout(1000) });
-                    if (r.ok) { este.listo = true; return true; }
+                    if (r.ok) { este.listo = true; arranquesFallidos = 0; return true; }
                 } catch (e) { /* todavía cargando */ }
                 await espera(250);
+            }
+            // No contestó a tiempo: se tira, en vez de dejarlo vivo y colgado
+            // con el modelo a medio cargar, que además impedía volver a intentar.
+            if (servidor === este) {
+                arranquesFallidos++;
+                registro.anotar('main', 'residente.no-arranco', { veces: arranquesFallidos, modelo: modelo.name || null });
+                apagarServidor();
+                if (arranquesFallidos >= ARRANQUES_FALLIDOS_MAX) ultimasOpciones = null;
             }
             return false;
         } catch (e) {
@@ -244,6 +326,7 @@ function fallo() {
 /** Al terminar la sesión: se apaga y no se vuelve a levantar solo. */
 function apagar() {
     ultimasOpciones = null;
+    arranquesFallidos = 0;
     apagarServidor();
 }
 
@@ -255,4 +338,4 @@ function apagarServidor() {
     }
 }
 
-module.exports = { arrancar, asegurar, listo, modelo, transcribir, fallo, apagar, palabrasDe };
+module.exports = { arrancar, asegurar, listo, modelo, transcribir, fallo, apagar, palabrasDe, limpiarHuerfano };

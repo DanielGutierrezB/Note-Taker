@@ -50,23 +50,27 @@ module.exports = async t => {
         audioApp.cerrar();
     });
 
-    t.test('y va al registro, que es lo que al día siguiente lo explica', () => {
+    t.test('y va al registro por el mismo freno que el del micrófono', () => {
+        // Sin el freno eran doce renglones por segundo en el diario: el motivo
+        // que revienta un pedazo —el disco lleno— revienta todos los que siguen.
         const puente = leer('ipc', 'grabar.js');
-        const lista = puente.match(/\[('[a-z]+',? ?)+\]\.includes\(aviso\.tipo\)/);
-        t.ok(lista, 'la lista de lo que se anota existe');
-        t.ok(/'error'/.test(lista[0]),
-            'y el pedazo que no se escribió está en ella: sin esto, un WAV más corto que la ' +
-            'clase no tiene explicación en ninguna parte');
+        t.ok(/if \(aviso && aviso\.tipo === 'error'\) \{\s*pcmRoto\(aviso\.mensaje\);\s*return;/.test(puente),
+            'el pedazo que no se escribió se cuenta como el del micrófono');
+        const fn = puente.slice(puente.indexOf('function pcmRoto(mensaje) {'));
+        t.ok(/AVISO_DE_PCM_MS\) return;/.test(fn.slice(0, 400)), 'y se dice uno cada dos segundos');
+        t.ok(/anotar\('grabar\.pcm-falla'/.test(fn.slice(0, 400)), 'en el diario, que es lo que al día siguiente lo explica');
     });
 
     t.group('audio roto · la ventana se entera');
 
-    t.test('`fuente.js` por fin atiende el aviso', () => {
+    t.test('llega a la pantalla con la cuenta hecha, venga de donde venga', () => {
         const js = leer('src', 'js', 'grabar', 'fuente.js');
-        t.ok(/aviso\.tipo === 'error'/.test(js), 'lo reconoce');
-        t.ok(/avisos\.alRomperse\(aviso\.mensaje\)/.test(js), 'y lo pasa con su motivo');
+        t.ok(/export function seRompio\(mensaje, veces\) \{\s*avisos\.alRomperse\(mensaje, veces\);/.test(js),
+            'la fuente lo pasa con su motivo y su cuenta');
         t.ok(/alRomperse: \(\) => \{\}/.test(js),
             'con un vacío por defecto, como los otros tres avisos');
+        t.ok(/aviso\.tipo === 'audio-roto'[\s\S]{0,80}fuente\.seRompio\(aviso\.mensaje, aviso\.veces\)/
+            .test(leer('src', 'js', 'pantalla-vivo.js')), 'y En vivo se lo manda');
     });
 
     t.test('la pantalla que abre la entrada lo guarda y lo dice una sola vez', () => {
