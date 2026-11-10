@@ -1,8 +1,10 @@
 /* ──────────────────────────────────────────────────────────────────────────
    15. TEMA NUEVO de la pantalla de la clase
 
-   Todo va debajo de `.tema-nuevo` (lo pone `tema.js` en el body), así que con
-   el clásico no cambia nada. Es la misma pantalla con:
+   Va debajo de `.tema-nuevo` (lo pone `tema.js` en el body), así que con el
+   clásico no cambia nada. Lo de afuera es la barra del tema, lo que solo existe
+   en el nuevo, y los `display: contents` que dejan al clásico como estaba con
+   el HTML que el nuevo necesita. Es la misma pantalla con:
 
      · el texto grande y centrado, con su tamaño a mano (A− / A+, --letra-vivo);
      · cada toma del color de su vista, el bloque entero y no una rayita;
@@ -15,10 +17,13 @@
 
 .solo-tema-nuevo { display: none !important; }
 .tema-nuevo .solo-tema-nuevo { display: inline-flex !important; }
-.tema-nuevo kbd.solo-tema-nuevo { display: inline-block !important; }
+.tema-nuevo .solo-tema-clasico { display: none !important; }
 
-.alternar.alternar-grande { display: inline-flex; width: auto; align-self: flex-start; }
-.alternar-grande button { padding: 6px var(--sp-4); font-size: 12px; }
+/* Lo buscado y lo comentado, del mismo amarillo. */
+.tema-nuevo {
+  --resaltado: #f5c54a;
+  --resaltado-suave: rgba(245, 197, 74, 0.38);
+}
 
 /* ── El texto: grande, centrado y a lo ancho ───────────────────────────── */
 .tema-nuevo #ahora .transcript {
@@ -45,7 +50,7 @@
 .tema-nuevo .cuerpo-toma .pista { text-align: center; }
 
 .tema-nuevo .transcript .palabra.es-comentada {
-  text-decoration-color: #f5c54a;
+  text-decoration-color: var(--resaltado);
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
 }
@@ -65,13 +70,13 @@
 /* Comentar un pedazo: la caja se ve como lo que es, una nota sobre ese pedazo. */
 .tema-nuevo .comentar {
   padding: var(--sp-2) var(--sp-3);
-  background: color-mix(in srgb, #f5c54a 10%, var(--bg-surface));
-  border: 1px solid color-mix(in srgb, #f5c54a 45%, var(--hairline));
+  background: color-mix(in srgb, var(--resaltado) 10%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--resaltado) 45%, var(--hairline));
   border-radius: var(--radius-sm);
 }
 
 .tema-nuevo .comentarios .comentario q { color: var(--text-primary); }
-.tema-nuevo .comentarios .comentario .hp-ico { color: #f5c54a; }
+.tema-nuevo .comentarios .comentario .hp-ico { color: var(--resaltado); }
 
 /* ── Abrir y cerrar: un solo botón, en la punta derecha de «Ahora» ────────
    La tarjeta ya no lo repite, así que se ve como el botón que es. */
@@ -129,7 +134,7 @@
 .tema-nuevo .con-vista > .fila:hover { background: color-mix(in srgb, var(--vista) 34%, var(--bg-inset)); }
 .tema-nuevo .con-vista > .cuerpo-toma { background: color-mix(in srgb, var(--vista) 12%, var(--bg-inset)); }
 
-.tema-nuevo .fila-nota mark { color: var(--text-primary); background: rgba(245, 197, 74, 0.38); border-radius: 2px; }
+.tema-nuevo .fila-nota mark { color: var(--text-primary); background: var(--resaltado-suave); border-radius: 2px; }
 
 /* La vista en la fila: la puesta siempre, las otras al pasar o con la fila elegida. */
 .mini-vistas { display: inline-flex; gap: 2px; flex: 0 0 auto; }
@@ -174,7 +179,7 @@
   border: 1px solid var(--hairline);
   border-radius: 4px;
 }
-.buscar-tomas input { width: 320px; min-height: 28px; padding: 4px var(--sp-3); font-size: 12px; }
+.buscar-tomas input { min-height: 28px; padding: 4px var(--sp-3); font-size: 12px; }
 
 /* ── Horizontal: las tomas a la izquierda, lo que se dice a la derecha ──── */
 .tema-nuevo.es-horizontal #vista-vivo .scroll {
@@ -200,14 +205,15 @@
 .tema-nuevo.es-horizontal.es-texto-izquierda #vista-vivo .scroll > .seccion:last-child { order: 2; }
 .tema-nuevo.es-horizontal .seccion + .seccion { margin-top: 0; }
 .tema-nuevo.es-horizontal #ahora .transcript.es-abierta { max-height: calc(100vh - 360px); }
-.tema-nuevo.es-horizontal .buscar-tomas input { width: 200px; }
 .tema-nuevo.es-horizontal .buscar-tomas kbd,
 .tema-nuevo.es-horizontal #vivo-cuantas { display: none; }
 .tema-nuevo.es-horizontal #lista-vivo .fila-dato.tc { display: none; }
 
 /* El nombre de la toma no se corta: se achica la frase. */
-.tema-nuevo #lista-vivo .fila-nombre { flex: none; white-space: nowrap; }
-.tema-nuevo #lista-vivo .fila-nota { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tema-nuevo #lista-vivo .fila > * { flex-shrink: 0; }
+.tema-nuevo #lista-vivo .fila-nombre { white-space: nowrap; }
+.tema-nuevo #lista-vivo .fila > .fila-nota { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tema-nuevo #lista-vivo .fila > .crece { flex: 0 0 0; }
 
 /* El tema y la distribución, en la barra de arriba al lado de la versión. */
 .tema-barra { display: inline-flex; align-items: center; gap: var(--sp-2); -webkit-app-region: no-drag; }
@@ -289,14 +295,12 @@
 }
 
 /* Horizontal: la columna es angosta. Las vistas de los atajos van con su letra
-   y su color —el nombre está en el hover— y la cabeza de las tomas puede
-   partirse en dos renglones. */
+   y su color —el nombre está en el hover—. */
 .tema-nuevo.es-horizontal .atajo-vistas .atajo span { display: none; }
-.tema-nuevo.es-horizontal .seccion-titulo { flex-wrap: wrap; row-gap: var(--sp-2); }
 
 /* Lo buscado, marcado en el texto: todas las veces, y la que se está mirando más fuerte. */
-.tema-nuevo .transcript .palabra.es-hallada { background: rgba(245, 197, 74, 0.38); color: var(--text-primary); border-radius: 2px; }
-.tema-nuevo .transcript .palabra.es-hallada-actual { background: #f5c54a; color: #1a1300; box-shadow: 0 0 0 2px #f5c54a; }
+.tema-nuevo .transcript .palabra.es-hallada { background: var(--resaltado-suave); color: var(--text-primary); border-radius: 2px; }
+.tema-nuevo .transcript .palabra.es-hallada-actual { background: var(--resaltado); color: #1a1300; box-shadow: 0 0 0 2px var(--resaltado); }
 .buscar-pasos { gap: 2px; }
 .buscar-pasos .btn { min-width: 26px; min-height: 26px; font-size: 10px; }
 
@@ -309,9 +313,6 @@
 .tema-nuevo .seccion-titulo > * { white-space: nowrap; }
 .tema-nuevo .buscar-tomas { flex: 1 1 220px; min-width: 180px; max-width: 360px; }
 .tema-nuevo .buscar-tomas input { width: 100%; min-width: 0; }
-.tema-nuevo #lista-vivo .fila > * { flex-shrink: 0; }
-.tema-nuevo #lista-vivo .fila > .fila-nota { flex: 1 1 auto; min-width: 0; }
-.tema-nuevo #lista-vivo .fila > .crece { flex: 0 0 0; }
 
 /* La vista de la toma abierta se elige en los atajos, al centro de «Ahora»: el
    encabezado de la toma no la repite. */

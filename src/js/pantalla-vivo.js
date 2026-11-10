@@ -44,6 +44,7 @@ import * as alrededor from './grabar/alrededor-de-la-toma.js';
 import * as fotos from './fotos.js';
 import * as panelFoto from './panel-foto.js';
 import * as tema from './tema.js';
+import * as buscar from './grabar/buscar-tomas.js';
 
 let app = null;
 let estado = null;
@@ -116,6 +117,12 @@ const vista = {
 /** Descarta las respuestas que llegan tarde (`turnos.js`). */
 const turno = mostrador();
 
+/**
+ * El tema cambió y los textos ya dibujados traen sus colores de vista: el
+ * próximo repintado los rehace de cero en vez de reusarlos (`textosQueSeQuedan`).
+ */
+let rehacerTextos = false;
+
 export function conectar(contexto) {
     app = contexto;
 
@@ -187,6 +194,7 @@ export function conectar(contexto) {
 
     document.addEventListener('keydown', alTeclado);
     window.nt.onGrabarAviso(alAviso);
+    acomodarAtajos();
 
     // Soltar sin cambiar nada no trae estado nuevo: el texto se repinta ya.
     // Con un cambio, lo repinta la respuesta del motor (`enVuelo`).
@@ -464,7 +472,7 @@ function pintarRotulos() {
     ]);
     // Tema nuevo: el medidor va debajo del rótulo del audio, de su mismo ancho.
     const delAudio = caja.firstElementChild;
-    if (delAudio) $('#vivo-nivel').style.setProperty('--ancho-audio', `${delAudio.offsetWidth}px`);
+    if (delAudio && tema.esNuevo()) $('#vivo-nivel').style.setProperty('--ancho-audio', `${delAudio.offsetWidth}px`);
 }
 
 /** Lo que dice el rótulo angosto de cada clase de entrada (`estados.claseDeEntrada`). */
@@ -540,7 +548,6 @@ function pintar() {
     }
     pendiente = false;
     const fps = estado.fps;
-    acomodarAtajos();
     pintarBarra();
     pintarAtajos();
 
@@ -625,8 +632,6 @@ function pintar() {
  * En los dos casos el elemento se saca del DOM viejo y se vuelve a poner en el
  * hueco nuevo, con sus escuchas y todo.
  */
-let rehacerTextos = false;
-
 function textosQueSeQuedan() {
     const intactos = new Set();
     if (rehacerTextos) {
@@ -712,10 +717,10 @@ function ahora(fps) {
             <span class="pastilla" data-estado="escuchando">escuchando</span>
             <span class="crece"></span>
             ${botonesDeLetra()}
-            ${tema.esNuevo() ? '' : `<button class="btn btn-primario" type="button" data-hace="abrir"
+            <button class="btn btn-primario solo-tema-clasico" type="button" data-hace="abrir"
                     title="Abre una toma acá. Si el profesor ya venía hablando, el IN
 retrocede solo hasta donde empezó la frase. Tecla: Enter">
-              ${icono('abrirToma')} Abrir toma</button>`}
+              ${icono('abrirToma')} Abrir toma</button>
           </div>
           <div class="tarjeta-cuerpo">
             <div data-texto="espera"></div>
@@ -736,9 +741,9 @@ retrocede solo hasta donde empezó la frase. Tecla: Enter">
         <span class="crece"></span>
         ${vistas(abierta)}
         ${botonesDeLetra()}
-        ${tema.esNuevo() ? '' : `<button class="btn btn-primario" type="button" data-hace="cerrar"
+        <button class="btn btn-primario solo-tema-clasico" type="button" data-hace="cerrar"
                 title="Cierra la toma en la última palabra dicha. Tecla: Enter">
-          ${icono('cerrarToma')} Cerrar toma</button>`}
+          ${icono('cerrarToma')} Cerrar toma</button>
       </div>
       <div class="tarjeta-cuerpo">
         <input type="text" data-campo="nota" data-toma="${abierta.id}"
@@ -822,7 +827,7 @@ function filaToma(t, fps) {
         // Tema nuevo: la vista se cambia desde la fila, sin desplegarla, y lo
         // que se busca se marca en la frase de la fila.
         miniVistas: tema.esNuevo() && !t.descartada,
-        resaltar: tema.esNuevo() ? vista.busqueda : ''
+        resaltar: laConsulta()
     });
 }
 
@@ -951,59 +956,21 @@ function comentariosDe(t) {
 
 /** Las tomas de la lista, la más nueva arriba. */
 function laLista() {
+    const q = laConsulta();
     return estado.tomas
         .filter(t => !(vista.sinDesactivadas && t.descartada))
-        .filter(t => !tema.esNuevo() || coincide(t, vista.busqueda))
+        .filter(t => buscar.coincide(t, q))
         .sort((a, b) => b.inMs - a.inMs);
 }
 
-/** Si la toma dice lo que se busca: en su texto, en su nota o en sus comentarios. */
-function coincide(t, busqueda) {
-    const q = sinTildes(busqueda).trim();
-    if (q.length < 2) return true;
-    if (String(t.id) === q) return true;
-    const dicho = (t.palabras || []).map(w => w.texto).join(' ');
-    return [dicho, t.comentario || '', ...(t.comentarios || []).map(c => `${c.texto} ${c.comentario}`)]
-        .some(x => sinTildes(x).includes(q));
-}
-
-function sinTildes(x) {
-    return String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-/** Lo buscado, en palabras comparables: sin tildes, mayúsculas ni signos. */
-function palabrasDe(x) {
-    return sinTildes(x).split(/\s+/).map(w => w.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean);
-}
-
-/**
- * Si desde la palabra `i` se dice lo buscado. Una palabra sola vale adentro de
- * otra («idioma» en «idiomas»); una frase, palabra por palabra, con la última
- * pudiendo estar a medio escribir.
- */
-function dichoDesde(ws, i, q) {
-    for (let k = 0; k < q.length; k++) {
-        const w = ws[i + k];
-        if (!w) return false;
-        const n = palabrasDe(w.texto)[0] || '';
-        const ok = q.length === 1 ? n.includes(q[0]) : (k === q.length - 1 ? n.startsWith(q[k]) : n === q[k]);
-        if (!ok) return false;
-    }
-    return true;
+/** Lo que se está buscando, listo para comparar; solo el tema nuevo busca. */
+function laConsulta() {
+    return tema.esNuevo() ? buscar.consulta(vista.busqueda) : null;
 }
 
 /** Cada vez que aparece lo buscado en el texto de las tomas, en el orden de la lista. */
 function ocurrencias(lista) {
-    const q = palabrasDe(vista.busqueda);
-    if (!tema.esNuevo() || !q.length || vista.busqueda.trim().length < 2) return [];
-    const salida = [];
-    for (const t of lista || laLista()) {
-        const ws = t.palabras || [];
-        for (let i = 0; i < ws.length; i++) {
-            if (dichoDesde(ws, i, q)) salida.push({ toma: t.id, ts: ws.slice(i, i + q.length).map(w => String(w.t)) });
-        }
-    }
-    return salida;
+    return buscar.ocurrencias(lista || laLista(), laConsulta());
 }
 
 /**
@@ -1018,7 +985,7 @@ function marcarHallados(tomas) {
     if (vista.ocurrencia != null && vista.ocurrencia >= lista.length) vista.ocurrencia = null;
     $('#buscar-anterior').disabled = !lista.length;
     $('#buscar-siguiente').disabled = !lista.length;
-    if (!tema.esNuevo() || vista.busqueda.trim().length < 2) { cuantas.textContent = ''; return; }
+    if (!laConsulta()) { cuantas.textContent = ''; return; }
     const enTomas = new Set(lista.map(o => o.toma)).size;
     cuantas.textContent = lista.length
         ? `${vista.ocurrencia != null ? `${vista.ocurrencia + 1} de ` : ''}${lista.length} ${lista.length === 1 ? 'vez' : 'veces'} · ${enTomas} toma${enTomas === 1 ? '' : 's'}`
@@ -1984,6 +1951,7 @@ async function terminar() {
  * tema de antes.
  */
 export function repintar() {
+    acomodarAtajos();
     if (!estado) return;
     rehacerTextos = true;
     pintar();

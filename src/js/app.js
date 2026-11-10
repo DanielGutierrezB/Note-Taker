@@ -115,6 +115,8 @@ const app = {
 async function arrancar() {
     // Lo primero: desde acá cada gesto queda en el diario (`acciones.js`).
     anotarLosGestos(window.nt.anotar);
+    // Y el tema, antes de dibujar nada: si no, se ve un instante el otro.
+    tema.aplicar();
     app.ajustes = await window.nt.ajustesLeer();
     if (app.ajustes.aviso) avisar(app.ajustes.aviso, 'error');
     frases.pintar(app.ajustes.frases);
@@ -125,6 +127,9 @@ async function arrancar() {
     $('#btn-reporte').innerHTML = `${icono('reporte')}<span>Report</span>`;
     $('#btn-volver').innerHTML = `${icono('volver')}<span>Sesiones</span>`;
     $('#btn-volver').addEventListener('click', () => app.irASesiones());
+    // Cambiar el tema repinta lo que tiene colores de vista y está a la vista.
+    // Los paneles no: tapan la barra del tema, y se pintan al abrirse.
+    tema.conectar(() => { vivo.repintar(); cierre.repintar(); });
 
     $('#btn-ajustes').addEventListener('click', () => app.verAjustes());
     $('#btn-diagnostico').addEventListener('click', () => app.verDiagnostico());
@@ -394,9 +399,6 @@ function conectarAjustes() {
     frases.conectar(guardar);
     glosario.conectar();
     ajustesEntrada.conectar(app);
-    // Cambiar el tema repinta lo que tiene colores de vista y está a la vista.
-    // Los paneles no: tapan la barra del tema, y se pintan al abrirse.
-    tema.conectar(() => { vivo.repintar(); cierre.repintar(); });
     $('#aj-camara-buscar').innerHTML = icono('regenerar');
     $('#aj-camara-buscar').addEventListener('click', () => pintarCamaras(true));
     // Una sección abierta a la vez lo hace el `name` de los <details>; esto

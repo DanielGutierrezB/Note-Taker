@@ -12,6 +12,7 @@ import { icono } from '../iconos.js';
 import * as fmt from '../formato.js';
 import * as estados from '../estados.js';
 import { estiloDeVista } from '../colores.js';
+import { fraseConLoBuscado } from './buscar-tomas.js';
 
 /**
  * Una toma como ficha: la fila plegada y, si está abierta, su cuerpo.
@@ -27,7 +28,8 @@ import { estiloDeVista } from '../colores.js';
  *   alAbrir    qué se va a ver al abrirla, para el hover de la fila
  *   miniVistas si la fila lleva su selector de vista (tema nuevo): la vista se
  *              cambia sin desplegar
- *   resaltar   lo que se está buscando, para marcarlo en la frase de la fila
+ *   resaltar   lo que se está buscando (`buscar-tomas.consulta`), para marcarlo
+ *              en la frase de la fila
  */
 export function ficha(t, o) {
     const est = estados.deToma(t, o.sesion);
@@ -83,20 +85,8 @@ function miniVistas(t, vistas) {
 
 /** La frase de la fila con lo buscado marcado: el pedazo del texto donde aparece. */
 function conLoBuscado(t, q) {
-    const nota = t.comentario || '';
-    const dicho = (t.palabras || []).map(w => w.texto).join(' ');
-    const base = q && sinTildes(nota).includes(sinTildes(q)) ? nota : dicho;
-    const donde = sinTildes(base).indexOf(sinTildes(q).trim());
-    const trozo = donde > 40 ? `…${base.slice(donde - 30, donde + 140)}` : base.slice(0, 170);
-    const marcado = esc(trozo);
-    const qq = esc(q.trim());
-    if (qq.length < 2) return marcado;
-    const re = new RegExp(qq.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig');
-    return marcado.replace(re, m => `<mark>${m}</mark>`);
-}
-
-function sinTildes(x) {
-    return String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const { partes, cortada } = fraseConLoBuscado(t, q);
+    return (cortada ? '…' : '') + partes.map(p => (p.marca ? `<mark>${esc(p.texto)}</mark>` : esc(p.texto))).join('');
 }
 
 /** Lo que la toma empieza diciendo, que es con lo que se la reconoce. */
