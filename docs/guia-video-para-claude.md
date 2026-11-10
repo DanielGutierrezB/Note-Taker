@@ -6,10 +6,11 @@ voz) y lo convierte en otra cosa: una herramienta que **no edita**, sino que
 deja todo listo para que **Claude** haga la edición.
 
 En Note Taker el modo semanal quedó desactivado: `MODOS` en `engine/ajustes.js`
-ya solo acepta `clase`. Su código sigue en este repo, entero, porque es la base
-de lo que viene. **`v0.6.1`** (en GitHub; `git fetch --tags`) es la última
-versión publicada con el modo funcionando de punta a punta: sirve para comparar
-cuando algo del proyecto nuevo no se comporta igual.
+ya solo acepta `clase`, y después su código sale del repo. Lo que queda para
+partir es el tag **`base-video-para-claude`** (en GitHub; `git fetch --tags`):
+el código del modo entero, sin las claquetas. **`v0.6.1`** es la última versión
+publicada con el modo funcionando de punta a punta: sirve para comparar cuando
+algo del proyecto nuevo no se comporta igual.
 
 ---
 
@@ -155,10 +156,17 @@ botones: **Copiar el prompt** y **Mostrar la carpeta**.
 
 ## 3. Qué copiar de Note Taker
 
-Conviene partir de **este repo como quedó**, y no de `v0.6.1`. Después de esa
-versión pasaron dos cosas: se quitaron las claquetas, que el proyecto nuevo
-tampoco quiere, y se desactivó el modo semanal en Ajustes. Su código no se tocó.
+Conviene partir del tag **`base-video-para-claude`**, y no de `v0.6.1` ni de
+`main`. Después de `v0.6.1` se quitaron las claquetas, que el proyecto nuevo
+tampoco quiere, y se desactivó el modo semanal en Ajustes sin tocar su código:
+ese estado es el tag. En `main`, más adelante, el código del modo se borra.
 `v0.6.1` queda para comparar.
+
+```
+git clone https://github.com/DanielGutierrezB/Note-Taker.git video-para-claude
+cd video-para-claude
+git switch -c proyecto-nuevo base-video-para-claude
+```
 
 ### Se copia casi tal cual
 
