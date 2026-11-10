@@ -138,7 +138,8 @@ module.exports = function (t) {
     t.test('el motor del XML no sabe que las fotos existen', () => {
         // Ni el XML, ni el sidecar, ni el proyecto de Premiere: el único que
         // toca las fotos es quien mueve y borra clases.
-        for (const archivo of ['notas-xml.js', 'notas-vivo.js', 'espejo.js', 'prproj.js', 'prproj-carpeta.js']) {
+        const vivo = fs.readdirSync(path.join(__dirname, '..', 'engine', 'vivo')).map(f => path.join('vivo', f));
+        for (const archivo of ['notas-xml.js', 'notas-vivo.js', 'espejo.js', 'prproj.js', 'prproj-carpeta.js', ...vivo]) {
             const codigo = leer('engine', archivo);
             t.eq(/require\('\.\/referencias'\)/.test(codigo), false, `engine/${archivo}`);
             t.eq(/\.jpg/.test(codigo), false, `engine/${archivo} · ni una imagen`);

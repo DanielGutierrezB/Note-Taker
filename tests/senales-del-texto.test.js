@@ -175,7 +175,7 @@ module.exports = async t => {
     t.group('señales · la ventana y el motor dicen lo mismo');
 
     t.test('las expresiones y los números son los del motor, letra por letra', () => {
-        const motor = leer('engine', 'notas-vivo.js');
+        const motor = leer('engine', 'vivo', 'senales.js');
         const ventana = leer('src', 'js', 'grabar', 'senales.js');
         const literal = (codigo, nombre) => {
             const m = codigo.match(new RegExp(`^(?:export )?const ${nombre} = (.+);$`, 'm'));
@@ -190,7 +190,7 @@ module.exports = async t => {
     });
 
     t.test('las frases se buscan igual: la misma función, y las mismas de fábrica y vistas', () => {
-        const motor = leer('engine', 'notas-vivo.js');
+        const motor = leer('engine', 'vivo', 'senales.js');
         const ventana = leer('src', 'js', 'grabar', 'senales.js');
         const cuerpo = (codigo, nombre) => {
             const desde = codigo.indexOf(`function ${nombre}(`);
