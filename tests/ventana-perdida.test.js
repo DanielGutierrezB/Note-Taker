@@ -16,6 +16,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+const captura = require('../engine/captura');
 const grabacion = require('../engine/grabacion');
 const puente = require('../ipc/grabar');
 
@@ -164,6 +165,27 @@ module.exports = function (t) {
             t.eq(avisos.filter(a => /no se está guardando/.test(a.mensaje)).length, 1, 'un aviso, no uno por pedazo');
             grabacion._reintentarAudio();
             t.ok(grabacion._sesion().captura, 'y volvió a haber dónde escribir');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('un WAV que falla seguido se suelta, y se vuelve a abrir otro', () => {
+        grabando(5);
+        try {
+            const s = grabacion._sesion();
+            const antes = s.captura.archivo;
+            const escribir = captura.escribir;
+            captura.escribir = () => { throw new Error('EIO: el disco no está'); };
+            try {
+                for (let i = 0; i < 30; i++) { try { grabacion.pcm(pedazo()); } catch (e) { /* lo dice el puente */ } }
+            } finally {
+                captura.escribir = escribir;
+            }
+            t.eq(grabacion._sesion().captura, null, 'el WAV muerto se soltó');
+            grabacion._sesion().reintentoMs = 0;
+            grabacion._reintentarAudio();
+            t.ok(grabacion._sesion().captura && grabacion._sesion().captura.archivo !== antes, 'y hay otro');
         } finally {
             grabacion.apagar();
         }

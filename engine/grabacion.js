@@ -381,7 +381,14 @@ function pcm(buffer, origen) {
         return null;
     }
     const cap = sesion.captura;
-    let r = captura.escribir(cap.id, buffer);
+    let r;
+    try {
+        r = captura.escribir(cap.id, buffer);
+        cap.erroresSeguidos = 0;
+    } catch (err) {
+        soltarSiMurio(cap);
+        throw err;
+    }
     cap.segundos = r.segundos;
     // Hasta cuándo llegó audio a este WAV: es su final, no la hora en que se
     // cierra, que puede ser segundos después —una entrada nueva que tarda en
@@ -440,6 +447,28 @@ function reintentarAudio() {
         registro.anotar('main', 'grabacion.audio-volvio', { tirados: sesion.tiradosSinWav || 0 });
         sesion.avisar({ tipo: 'error', mensaje: 'El audio se vuelve a guardar, en un WAV nuevo desde ahora.' });
     }
+}
+
+/**
+ * Un WAV que falla dos segundos seguidos se da por muerto: el disco externo se
+ * desenchufó o el Drive se trabó, y ese archivo abierto no vuelve a servir
+ * aunque el disco vuelva. Se cierra y queda sin WAV, y `reintentarAudio` abre
+ * otro cada cinco segundos hasta que se pueda. Antes cada pedazo seguía
+ * fallando contra el mismo archivo hasta el final de la clase.
+ */
+const ERRORES_PARA_SOLTAR = 24;
+function soltarSiMurio(cap) {
+    cap.erroresSeguidos = (cap.erroresSeguidos || 0) + 1;
+    if (cap.erroresSeguidos < ERRORES_PARA_SOLTAR || sesion.captura !== cap) return;
+    const cerrada = captura.cerrar(cap.id, cap.ultimoPcmMs || Date.now());
+    if (cerrada) {
+        const { error, ...wav } = cerrada;
+        if (error) registro.anotar('main', 'captura.no-cerro', { archivo: wav.archivo, error });
+        sesion.estado.sesiones.push(wav);
+    }
+    sesion.captura = null;
+    sesion.reintentoMs = Date.now();
+    registro.anotar('main', 'grabacion.wav-muerto', { archivo: cap.archivo });
 }
 
 /** La Mac se va a dormir: lo que llegue hasta despertar no es de la clase. */
