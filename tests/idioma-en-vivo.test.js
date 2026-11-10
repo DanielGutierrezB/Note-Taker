@@ -488,7 +488,6 @@ module.exports = function (t) {
 
     t.test('una clase nueva arranca en automático', () => {
         t.eq(ajustes.DEFAULTS.idioma, 'auto');
-        t.eq(ajustes.DEFAULTS.semanal.idioma, 'auto');
     });
 
     t.test('el porqué está escrito, con lo que se midió', () => {
@@ -541,42 +540,15 @@ module.exports = function (t) {
             'y contestando distinto según lo que se pidió, que es lo que se va a mirar');
     });
 
-    t.test('las dos pantallas cambian el idioma y lo muestran con las mismas piezas', () => {
-        // La clase y el vídeo semanal tenían cada una su `cambiarIdioma` y su
-        // rótulo, casi iguales, y ya habían empezado a decir cosas distintas.
-        // Ahora preguntar, avisar y cómo se ve el rótulo son de `idiomas.js`; a
-        // cada pantalla le queda dónde lo guarda y cómo repinta.
-        for (const cual of ['pantalla-vivo.js', 'pantalla-semanal.js']) {
-            const fn = leer('src', 'js', cual);
-            const cuerpo = fn.slice(fn.indexOf('async function cambiarIdioma(cual) {'));
-            t.ok(/await idiomas\.cambiar\(cual, /.test(cuerpo), `${cual} cambia por idiomas.cambiar`);
-            t.ok(!/grabarIdioma/.test(fn), `${cual} no le habla al motor por su cuenta`);
-            t.ok(/idiomas\.rotulo\(/.test(fn), `${cual} usa el rótulo compartido`);
-            t.ok(/rotuloBarra\.pintar\(/.test(fn), `${cual} lo pone sin rehacerlo en cada vuelta`);
-        }
-    });
-
-    t.test('en el vídeo semanal el rótulo vive fuera de la tarjeta', () => {
-        // La tarjeta se rehace entera con cada estado, una vez por segundo
-        // grabando: un rótulo adentro se cambiaba por otro en medio del clic.
-        // Va en la fila del título, que no se rehace, al lado del reloj: el
-        // mismo sitio que tiene en la clase, al lado del timecode.
-        const titulo = leer('src', 'index.html').match(/<div class="seccion-titulo">[\s\S]*?id="semanal-reloj"/);
-        t.ok(titulo && /id="semanal-rotulos"/.test(titulo[0]), 'su caja es fija, en el HTML');
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
-        t.ok(/\$\('#vista-semanal'\)\.addEventListener\('click', alClic\)/.test(semanal),
-            'y el clic se escucha en la sección entera, o el rótulo quedaría sordo fuera del cuerpo');
-        // La tarjeta se repinta solo cuando cambian las tomas (`repintarReloj`
-        // y su huella). Lo que oye cambia sin que cambie ninguna, así que el
-        // rótulo se pone al día con el reloj, cada segundo: atado a la tarjeta,
-        // el «Auto · EN» y el ámbar no aparecían hasta la toma siguiente.
-        const reloj = semanal.slice(semanal.indexOf('async function repintarReloj() {'));
-        t.ok(/\$\('#semanal-reloj'\)\.textContent = [^\n]*\n\s*pintarRotulo\(\);/.test(reloj),
-            'el rótulo se pone al día con el reloj, no con la tarjeta');
-        t.ok(/app\.guardarAjustes\(\{ semanal: \{ idioma: cual \} \}\)/.test(semanal),
-            'y el idioma se guarda por la misma puerta que Ajustes, o el vídeo siguiente arranca en el viejo');
-        t.ok(!/rotulos-barra|rotuloBarra|idiomas\./.test(leer('src', 'js', 'semanal', 'tarjetas.js')),
-            'y la tarjeta no dibuja ninguno');
+    t.test('la clase cambia el idioma y lo muestra con las piezas de idiomas.js', () => {
+        // Preguntar, avisar y cómo se ve el rótulo son de `idiomas.js`; a la
+        // pantalla le queda dónde lo guarda y cómo repinta.
+        const fn = leer('src', 'js', 'pantalla-vivo.js');
+        const cuerpo = fn.slice(fn.indexOf('async function cambiarIdioma(cual) {'));
+        t.ok(/await idiomas\.cambiar\(cual, /.test(cuerpo), 'cambia por idiomas.cambiar');
+        t.ok(!/grabarIdioma/.test(fn), 'no le habla al motor por su cuenta');
+        t.ok(/idiomas\.rotulo\(/.test(fn), 'usa el rótulo compartido');
+        t.ok(/rotuloBarra\.pintar\(/.test(fn), 'lo pone sin rehacerlo en cada vuelta');
     });
 
     /* ─── Ajustes, más corto ─────────────────────────────────────────────

@@ -48,8 +48,6 @@ function sesion(p) {
 
 module.exports = async t => {
     const estados = await import(pathToFileURL(path.join(RAIZ, 'src', 'js', 'estados.js')).href);
-    const tarjetas = await import(
-        pathToFileURL(path.join(RAIZ, 'src', 'js', 'semanal', 'tarjetas.js')).href);
 
     t.group('ciclo atrasado · la ventana deja de ensancharse');
 
@@ -197,50 +195,5 @@ module.exports = async t => {
             { abierta: 3, atrasoSec: 31, salteadoSec: 19 },
             { roto: { veces: 1, mensaje: 'ENOSPC' } });
         t.eq(e.palabra, 'audio perdido', 'un WAV con agujeros es peor que un texto con agujeros');
-    });
-
-    t.group('ciclo atrasado · la tarjeta del vídeo de la semana');
-
-    t.test('la pastilla de la semana: el atraso manda sobre la toma abierta', () => {
-        // Es con una toma abierta cuando un transcript atrasado le pone mal
-        // los bordes, así que ahí es donde no se puede tapar.
-        const abierta = [{ id: 1, outMs: null }];
-        t.eq(estados.deSemanal({ tomas: abierta, atrasoSec: 31, salteadoSec: 0 }).clave, 'releyendo');
-        t.eq(estados.deSemanal({ tomas: abierta, atrasoSec: 0, salteadoSec: 0 }).clave, 'grabando');
-        t.eq(estados.deSemanal({ tomas: [], atrasoSec: 0, salteadoSec: 0 }).palabra, 'esperando el «3, 2, 1»');
-        t.eq(estados.deSemanal(null).clave, 'listo', 'y antes de que llegue la sesión no se cae');
-    });
-
-    t.test('la tarjeta de grabar lo dice en la pastilla y en un renglón', () => {
-        // Es la pantalla donde pasó, y la única que no usa la pastilla de clase.
-        const html = tarjetas.tarjetaGrabando({
-            sesion: { tomas: [{ id: 1, inMs: T0, outMs: null }], atrasoSec: 31, salteadoSec: 0 },
-            vista: 'PV', avisos: []
-        });
-        t.ok(/id="semanal-pastilla"/.test(html), 'la pastilla tiene nombre para poder refrescarla');
-        t.ok(/atrás/.test(html), 'y dice el atraso en vez de «toma abierta»');
-        t.ok(/id="semanal-atraso"/.test(html), 'con su renglón, porque la palabra sola no alcanza');
-        t.ok(/role="status"/.test(html), 'y anunciado, que es lo que lo hace llegar sin mirar');
-    });
-
-    t.test('sin atraso la tarjeta dice lo de siempre', () => {
-        const html = tarjetas.tarjetaGrabando({
-            sesion: { tomas: [{ id: 1, inMs: T0, outMs: null }], atrasoSec: 0.5, salteadoSec: 0 },
-            vista: 'PV', avisos: []
-        });
-        t.ok(/toma abierta/.test(html));
-        t.ok(!/id="semanal-atraso"/.test(html), 'sin el renglón, que si no es ruido permanente');
-    });
-
-    t.test('los segundos se refrescan sin repintar la tarjeta', () => {
-        // Repintar cada segundo borraría el `<video>` de la vista previa, que es
-        // justo lo que la huella de `repintarReloj` evita. Así que el número va
-        // a mano, como el reloj, y en la huella entra solo que el aviso esté.
-        const js = leer('src', 'js', 'pantalla-semanal.js');
-        t.ok(/estados\.atrasado\(resumen\)/.test(js), 'el atraso se calcula en cada vuelta');
-        t.ok(/#semanal-pastilla/.test(js) && /#semanal-atraso/.test(js),
-            'y los dos sitios se refrescan a mano');
-        t.ok(/\.concat\(\[atras \? atras\.clave : ''\]\)/.test(js),
-            'en la huella va la clave y no los segundos: los segundos repintarían siempre');
     });
 };

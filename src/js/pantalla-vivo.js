@@ -747,7 +747,7 @@ function cuerpoToma(t) {
  * una sesión que se relee del archivo en cada gesto.
  */
 function estadosDe(t) {
-    return estadosToma.estadosDe(t, { donde: 'al XML', sePuedeDeshacer: !esDeMirar() });
+    return estadosToma.estadosDe(t, { sePuedeDeshacer: !esDeMirar() });
 }
 
 /** Reabrir solo la última, y solo si no hay otra abierta: es lo único que el motor honra. */

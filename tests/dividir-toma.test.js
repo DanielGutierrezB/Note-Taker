@@ -532,39 +532,12 @@ module.exports = function (t) {
 
     t.group('dividir · dónde se ofrece');
 
-    t.test('en la pantalla de clase y en el vídeo de la semana', () => {
+    t.test('en la pantalla de clase', () => {
         const menu = leer('src', 'js', 'grabar', 'menu-de-palabra.js');
         t.ok(/puedeDividir: p\.puedeDividir === true/.test(menu), 'lo declara la pantalla');
         t.ok(/dueño\.puedeDividir && cual !== 'espera' && texto\.sePuedePartirEn\(donde, w\)/.test(menu),
             'y solo dentro de una toma que existe, no sobre lo gris de sus costados');
         t.ok(/puedeDividir: true/.test(leer('src', 'js', 'pantalla-vivo.js')), 'la clase lo pide');
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
-        t.ok(/puedeDividir: true/.test(semanal), 'y la semanal también, que ahora lo sabe hacer');
-        t.ok(/case 'dividir': return dividir\(tomaId, ms\);/.test(semanal),
-            'y lo atiende: sin esto el menú ofrecía un botón que no hacía nada');
-    });
-
-    t.test('en el vídeo de la semana, por la misma puerta que los demás cambios', () => {
-        // `cambiarFicha` elige la puerta: grabando, el motor en memoria;
-        // terminada, el sidecar. Y vuelve a armar el montaje después.
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
-        const fn = semanal.slice(semanal.indexOf('async function dividir(tomaId, ms) {'));
-        t.ok(/await cambiarFicha\(tomaId, \{ tipo: 'dividir', paredMs: ms \}\)/.test(fn));
-        t.ok(/lasTomas\(\)\.find\(t => t\.inMs === ms\)/.test(fn) && /if \(segunda\) pararEn\(segunda\.id\);/.test(fn),
-            'y se para en la segunda mitad, la que empieza donde se partió: si no se partió, ninguna');
-        t.ok(/if \(hace === 'dividir-aca'\) return dividirEnLaAguja\(\);/.test(semanal),
-            'el botón de la aguja llega');
-    });
-
-    t.test('cambiar de vista grabando pasa por el gesto que parte', () => {
-        // La mirilla, los botones de la tarjeta y las teclas llaman todos a
-        // `cambiarVista`, así que la regla es una sola.
-        const semanal = leer('src', 'js', 'pantalla-semanal.js');
-        const fn = semanal.slice(semanal.indexOf('async function cambiarVista(nombre) {'));
-        t.ok(/tipo: 'vista-desde-ahora', toma: abierta\.id, vista: nombre/.test(fn.slice(0, 600)));
-        t.ok(/g\.hace === 'vista' && puedeVista\(\)\) cambiarVista\(g\.vista\)/.test(semanal), 'la mirilla');
-        t.ok(/if \(hace === 'vista'\) return cambiarVista\(boton\.dataset\.vista\)/.test(semanal), 'los botones');
-        t.ok(/return cambiarVista\(v\.nombre\)/.test(semanal), 'y las teclas');
     });
 
     t.test('el gesto entra por la misma puerta que los bordes', () => {

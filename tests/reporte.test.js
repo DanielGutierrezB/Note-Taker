@@ -68,11 +68,11 @@ module.exports = async function (t) {
         const handlers = {};
         const anotado = [];
         const ipc = conDiario({ handle: (c, fn) => { handlers[c] = fn; } }, (e, d) => anotado.push([e, d]));
-        ipc.handle('semanal-exportar', async () => { throw new Error('ffmpeg salió con 1'); });
+        ipc.handle('prproj-generar', async () => { throw new Error('ffmpeg salió con 1'); });
         let llego = null;
-        try { await handlers['semanal-exportar']({}, '/x.json'); } catch (e) { llego = e.message; }
+        try { await handlers['prproj-generar']({}, '/x.json'); } catch (e) { llego = e.message; }
         t.eq(llego, 'ffmpeg salió con 1', 'el error sigue llegando a quien pidió');
-        t.eq(anotado[0][0], 'ipc.semanal-exportar.error');
+        t.eq(anotado[0][0], 'ipc.prproj-generar.error');
         t.eq(anotado[0][1].error, 'ffmpeg salió con 1');
     });
 
