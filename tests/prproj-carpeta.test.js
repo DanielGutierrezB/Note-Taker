@@ -17,11 +17,11 @@ const os = require('os');
 const path = require('path');
 
 const carpetaPrproj = require('../engine/prproj-carpeta');
+const { AIRE_SEG } = require('../engine/prproj-plan');
 const prproj = require('../engine/prproj');
 const paths = require('../engine/paths');
 const vivo = require('../engine/notas-vivo');
 const notasXml = require('../engine/notas-xml');
-const nidos = require('../engine/prproj-nidos');
 const moldes = require('../engine/prproj-moldes');
 const workspace = require('../engine/workspace');
 const ipcPrproj = require('../ipc/prproj');
@@ -293,8 +293,8 @@ module.exports = async function (t) {
         const b = sesion(dir, { cero: T0 + UNA_HORA, segundos: 900 });
         const plan = carpetaPrproj.planear([a, b], carpetaPrproj.normalizar(null, []));
         t.eq(plan.clases[0].franja.desdeSeg, 0);
-        t.eq(plan.clases[1].franja.desdeSeg, 600 + nidos.AIRE_SEG);
-        t.eq(plan.largoSeg, 600 + nidos.AIRE_SEG + 900, 'sin aire después de la última');
+        t.eq(plan.clases[1].franja.desdeSeg, 600 + AIRE_SEG);
+        t.eq(plan.largoSeg, 600 + AIRE_SEG + 900, 'sin aire después de la última');
     });
 
     t.test('una sesión reanudada pone cada WAV en su sitio, hueco incluido', () => {
@@ -334,7 +334,7 @@ module.exports = async function (t) {
         t.eq(cortes[0].hastaSeg, 30);
         t.eq(cortes[1].desdeSeg, 30, 'pegada a la anterior');
         t.eq(cortes[1].hastaSeg, 90);
-        const franja = 600 + nidos.AIRE_SEG;
+        const franja = 600 + AIRE_SEG;
         t.eq(cortes[0].entradaSeg, franja + 100, 'su franja más su segundo en la clase');
         t.eq(cortes[1].entradaSeg, franja + 200);
         t.deep(cortes[0].fuentes, ['1']);
@@ -866,7 +866,7 @@ module.exports = async function (t) {
             ]
         });
         const plan = carpetaPrproj.planear([a, b], carpetaPrproj.normalizar(null, []));
-        const franja = 600 + nidos.AIRE_SEG;
+        const franja = 600 + AIRE_SEG;
         const claquetas = plan.marcadoresDeCaptura.filter(m => m.nombre.startsWith('Claqueta'));
         t.deep(claquetas.map(m => m.desdeSeg), [franja + 30, franja + 90]);
         t.ok(claquetas[0].comentario.startsWith(`${b.secuencia} · Claqueta 1`), claquetas[0].comentario);

@@ -57,23 +57,6 @@ const FRONTERA_DEL_ANIDADO = FRONTERA_DEL_CORTE.concat([
     'VideoSequenceSource', 'AudioSequenceSource'
 ]);
 
-/** Cómo se llama en el formato el efecto de movimiento que trae todo clip. */
-const MOVIMIENTO = 'AE.ADBE Motion';
-
-/**
- * Cómo numera Premiere los componentes ADENTRO de una cadena.
- *
- * No son `ObjectID` sino un contador local a cada cadena, y Premiere empieza
- * siempre igual: la opacidad es el 1 y el movimiento el 2. Los efectos que se
- * apilen después siguen contando desde ahí, así que el mismo movimiento puede
- * ser el 2 en un clip y el 6 en otro, según cuántos efectos tenga al lado.
- *
- * Por eso estos dos números se escriben y no se copian: heredarlos de un clip
- * ajeno deja la cadena hablando de componentes que en este clip no existen.
- */
-const ID_DE_OPACIDAD = 1;
-const ID_DE_MOVIMIENTO = 2;
-
 /**
  * Donde para el clonado de un medio.
  *
@@ -247,7 +230,6 @@ function detectarMoldes(proyecto) {
     return {
         secuencia,
         itemDeSecuencia,
-        efectoDeMovimiento: buscarMovimiento(p),
         corteVideo: corteVideo ? corteVideo.k : null,
         corteMono: corteMono ? corteMono.k : null,
         corteEstereo: corteEstereo ? corteEstereo.k : null,
@@ -288,70 +270,6 @@ function loQueFalta(moldes) {
     return Object.keys(imprescindibles)
         .filter(n => !moldes[n])
         .map(n => imprescindibles[n]);
-}
-
-
-/**
- * El componente de movimiento de algún clip, para copiarle el recuadro.
- *
- * **Se busca el COMPONENTE y no la cadena que lo contiene, y eso costó un
- * proyecto que Premiere no abría.** La cadena parecía la unidad correcta porque
- * lleva además `DefaultOpacity` y `DefaultOpacityComponentID`, que Premiere
- * escribe junto con el efecto. Pero esos números, y el `<ID>` de cada
- * componente, son **locales a la cadena**: Premiere numera desde 1 —opacidad 1,
- * movimiento 2— y sigue contando por cada efecto que se apile encima. La cadena
- * que se encontró de molde venía de un clip con tres efectos, así que traía el
- * movimiento en el 6 y la opacidad en el 7. Trasplantada a un clip nuestro, que
- * no tiene ningún otro efecto, quedaban unos identificadores que no se
- * corresponden con nada, y Premiere daba el proyecto entero por dañado.
- *
- * Copiando solo el componente, la numeración la pone `ponerEncuadre` con la que
- * usa Premiere, y no la hereda de un clip ajeno.
- *
- * **Un clip sin efectos no sirve de molde, y eso no es evidente.** La tentación
- * es pensar que todo clip tiene Movimiento porque el panel de Premiere siempre lo
- * muestra: es un efecto «intrínseco», está en la interfaz aunque nadie lo haya
- * tocado. Pero en el archivo no está — se midió, y en un proyecto sin efectos las
- * siete cadenas de video están vacías. Recién cuando alguien mueve la escala o la
- * posición, Premiere escribe el componente con sus once parámetros.
- *
- * Por eso esto puede volver `null` sin que sea un error: la mayoría de las
- * plantillas no tienen ninguno. Quien lo necesita avisa (ver `armarLosNidos`).
- */
-/**
- * Si el filtro trae de verdad los datos privados que dice traer.
- *
- * `PremiereFilterPrivateData` es un bloque en base64 con el estado interno del
- * efecto, y viene con la huella de ese contenido en el atributo `BinaryHash`.
- * Los dos van juntos: un proyecto del editor tenía la huella escrita y el bloque
- * VACÍO, y cualquier proyecto que copiara ese componente Premiere lo daba por
- * dañado —sin abrirlo, sin decir cuál era el objeto y sin nombrar el efecto—.
- *
- * De diez proyectos suyos fue el único así, y no se sabe qué se lo hizo. No hace
- * falta saberlo: un molde al que le falta el contenido no sirve de molde, y es
- * mejor quedarse sin recuadro y avisarlo que entregar un archivo que no abre.
- */
-function traeSusDatosPrivados(texto) {
-    const declara = /<PremiereFilterPrivateData[^>]*BinaryHash=/.test(texto);
-    if (!declara) return true;
-    return /<PremiereFilterPrivateData[^>]*[^/]>\s*\S/.test(texto);
-}
-
-function buscarMovimiento(proyecto) {
-    const p = proyecto;
-    for (const cadena of p.porClase('VideoComponentChain')) {
-        if (!/ObjectRef/.test(p.contenido(cadena))) continue;
-        const piezas = p.cierre([cadena], {});
-        const componente = piezas.find(k => p.clase(k) === 'VideoFilterComponent'
-            && p.contenido(k).includes(`<MatchName>${MOVIMIENTO}</MatchName>`));
-        if (!componente) continue;
-        // Los once parámetros: posición, escala, rotación, anclaje, los cuatro
-        // recortes. Uno con menos es de otra versión y le faltaría justo el que
-        // se va a escribir, sin que nada se queje.
-        const cuantos = (p.contenido(componente).match(/<Param Index="\d+"/g) || []).length;
-        if (cuantos >= 11 && traeSusDatosPrivados(p.contenido(componente))) return componente;
-    }
-    return null;
 }
 
 function elegir(medios, cumple) {
@@ -395,9 +313,6 @@ module.exports = {
     CLASE_MARKERS,
     CLASE_MARKER,
     TIPO_AUDIO,
-    MOVIMIENTO,
-    ID_DE_OPACIDAD,
-    ID_DE_MOVIMIENTO,
     FRONTERA_DEL_CORTE,
     FRONTERA_DEL_ANIDADO,
     FRONTERA_DEL_MEDIO,

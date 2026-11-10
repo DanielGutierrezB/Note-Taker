@@ -28,9 +28,6 @@
  */
 
 const prproj = require('./prproj');
-// Solo por la geometría del recuadro: es la misma que escribe el XML, dicha en
-// las unidades de este formato. Ver `aUnidadesDePremiere`.
-const fcp = require('./fcp-xml');
 
 /**
  * Los GUID que nombran a los tres tipos de pista. Son constantes del formato:
@@ -46,9 +43,6 @@ const {
     FRONTERA_DEL_MEDIO,
     ETIQUETAS,
     COLOR_DE,
-    MOVIMIENTO,
-    ID_DE_OPACIDAD,
-    ID_DE_MOVIMIENTO,
     FRONTERA_DEL_ANIDADO,
     detectarMoldes,
     loQueFalta,
@@ -745,110 +739,6 @@ class Taller {
             'asl.clip.label.name': `BE.Prefs.LabelColors.${color.indice}`,
             'asl.clip.label.color': color.entero
         });
-        return true;
-    }
-
-    /**
-     * Le pone a un corte de video el recuadro del profesor: escala, posición y
-     * recorte, con la misma geometría que el XML escribe en Basic Motion.
-     *
-     * **Se le cuelga el componente a la cadena que el corte ya tiene, y no se
-     * reemplaza la cadena entera.** Antes se clonaba la cadena del molde con
-     * todo adentro, con el argumento de que así se copiaba algo que su Premiere
-     * ya había guardado. Copiaba de más: la cadena lleva `DefaultOpacity`, el
-     * `ActiveComponentID` y el `<ID>` de cada componente, y esos números son
-     * locales a la cadena de la que salieron —ver `ID_DE_MOVIMIENTO`—. Una
-     * cadena traída de un clip con tres efectos llegaba hablando del componente
-     * 6 y del 7 a un corte que no tiene ninguno de los dos, y Premiere daba el
-     * proyecto entero por dañado, sin abrirlo y sin decir dónde.
-     *
-     * La cadena que trae el corte viene vacía, así que hay que escribirle la
-     * forma completa. Es la que Premiere escribe cuando uno mueve la escala de
-     * un clip que no tenía nada: la opacidad queda como componente por defecto
-     * y el movimiento entra como el único de la lista.
-     *
-     * Contesta `false` cuando el molde no tiene de dónde copiar, que es el caso
-     * normal: el efecto solo aparece en el archivo si alguien movió la escala o
-     * la posición, así que la mayoría de las plantillas no lo tienen. Quien llama
-     * decide si eso merece un aviso.
-     *
-     * @param {string} item la clave del `VideoClipTrackItem`
-     * @param {object} encuadre lo que devuelve `fcp.encuadreDelRecuadro`
-     */
-    ponerEncuadre(item, encuadre) {
-        const p = this.proyecto;
-        if (!this.moldes.efectoDeMovimiento || !encuadre) return false;
-
-        const cadena = p.refsDe(item).find(k => p.clase(k) === 'VideoComponentChain');
-        if (!cadena) return false;
-
-        const { clonados } = this._clonar([this.moldes.efectoDeMovimiento], {});
-        const componente = this._deClase(clonados, 'VideoFilterComponent')
-            .find(k => p.contenido(k).includes(`<MatchName>${MOVIMIENTO}</MatchName>`));
-        if (!componente) return false;
-
-        // El número que trae el molde es el que tenía en SU cadena, donde había
-        // otros efectos apilados. Acá el movimiento es el único, así que le toca
-        // el que Premiere le da siempre en ese caso.
-        p.escribir(componente, p.contenido(componente)
-            .replace(/<ID>\d+<\/ID>/, `<ID>${ID_DE_MOVIMIENTO}</ID>`));
-
-        const posicion = fcp.aUnidadesDePremiere(encuadre.centro);
-        const anclaje = fcp.aUnidadesDePremiere(encuadre.anclaje);
-        const porNombre = {
-            Position: `${posicion.x}:${posicion.y}`,
-            'Anchor Point': `${anclaje.x}:${anclaje.y}`,
-            Scale: encuadre.escala,
-            'Scale Width': encuadre.escala,
-            'Crop Left': encuadre.recorte.izq,
-            'Crop Right': encuadre.recorte.der,
-            'Crop Top': encuadre.recorte.arriba,
-            'Crop Bottom': encuadre.recorte.abajo
-        };
-        for (const k of p.cierre([componente], {})) {
-            const texto = p.contenido(k);
-            const nombre = (/<Name>([^<]*)<\/Name>/.exec(texto) || [])[1];
-            if (!(nombre in porNombre)) continue;
-            this.valorDelParametro(k, porNombre[nombre]);
-        }
-
-        this._encenderLaCadena(cadena, componente);
-        return true;
-    }
-
-    /**
-     * Le escribe a una cadena vacía la forma que Premiere le da al encenderla.
-     *
-     * Se reescribe entera en vez de irle agregando pedazos porque la cadena que
-     * trae el corte puede venir de cualquier molde: vacía del todo, o con un
-     * `DefaultMotion` que dice que el movimiento todavía es el implícito. Ese
-     * campo hay que sacarlo justamente ahora —el movimiento deja de ser
-     * implícito en cuanto se escribe el componente— y es más corto escribir la
-     * forma final que enumerar los pedazos que habría que borrar.
-     */
-    _encenderLaCadena(cadena, componente) {
-        const p = this.proyecto;
-        const texto = p.contenido(cadena);
-        const abre = /^(\t*)<VideoComponentChain[^>]*>/m.exec(texto);
-        if (!abre) return false;
-        const [tipo, valor] = prproj.parte(componente);
-        const s = abre[1];
-        p.escribir(cadena, [
-            abre[0],
-            `${s}\t<DefaultOpacity>true</DefaultOpacity>`,
-            `${s}\t<DefaultOpacityComponentID>${ID_DE_OPACIDAD}</DefaultOpacityComponentID>`,
-            `${s}\t<ComponentChain Version="3">`,
-            `${s}\t\t<Node Version="1">`,
-            `${s}\t\t\t<Properties Version="1">`,
-            `${s}\t\t\t\t<MZ.ComponentChain.ActiveComponentID>${ID_DE_OPACIDAD}</MZ.ComponentChain.ActiveComponentID>`,
-            `${s}\t\t\t\t<MZ.ComponentChain.ActiveComponentParamIndex>4294967295</MZ.ComponentChain.ActiveComponentParamIndex>`,
-            `${s}\t\t\t</Properties>`,
-            `${s}\t\t</Node>`,
-            armarLista('Components', 'Component',
-                [`${tipo === 'UID' ? 'ObjectURef' : 'ObjectRef'}="${valor}"`], `${s}\t\t`),
-            `${s}\t</ComponentChain>`,
-            `${s}</VideoComponentChain>`
-        ].join('\n'));
         return true;
     }
 

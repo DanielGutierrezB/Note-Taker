@@ -59,7 +59,6 @@ const FILES = [
     'maqueta.test.js',
     'prproj.test.js',
     'prproj-panel.test.js',
-    'prproj-nidos.test.js',
     'prproj-carpeta.test.js',
     'reporte.test.js'
 ];

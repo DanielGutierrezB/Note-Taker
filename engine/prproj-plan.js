@@ -15,13 +15,21 @@
 
 const fs = require('fs');
 const path = require('path');
-const nidos = require('./prproj-nidos');
 const vivo = require('./notas-vivo');
 const notasXml = require('./notas-xml');
 const ajustar = require('./ajustar-corte');
 const sesionesGrabadas = require('./sesiones-grabadas');
 const workspace = require('./workspace');
 const { porOrdenDeVistas, vistaDe, gruposDe } = require('./prproj-carpeta-config');
+
+/**
+ * Cuánto aire va entre una clase y la siguiente adentro de una anidación.
+ *
+ * Lo pidió el editor, y el número es suyo. Sirve para dos cosas: separar a
+ * simple vista dónde termina una clase, y dejar lugar para estirar un clip sin
+ * comerse el material de la de al lado.
+ */
+const AIRE_SEG = 5 * 60;
 
 /**
  * Y adentro de las precortadas, la clase SIN cortar.
@@ -236,9 +244,9 @@ function planear(sesiones, config, fps) {
             franja: { desdeSeg: reloj, largoSeg },
             marcas
         });
-        reloj = cuadrosEnteros(reloj + largoSeg + nidos.AIRE_SEG);
+        reloj = cuadrosEnteros(reloj + largoSeg + AIRE_SEG);
     }
-    const largoSeg = clases.length ? cuadrosEnteros(Math.max(0, reloj - nidos.AIRE_SEG)) : 0;
+    const largoSeg = clases.length ? cuadrosEnteros(Math.max(0, reloj - AIRE_SEG)) : 0;
 
     // Dónde cae un instante de una clase adentro de las anidaciones.
     const enNido = (clase, ms) => clase.franja.desdeSeg + notasXml.aSegundos(ms, clase.sesion.ceroMs);
@@ -517,6 +525,7 @@ function vistaDeLaPre(clase, pistas) {
 }
 
 module.exports = {
+    AIRE_SEG,
     BIN_PRE,
     COLORES_DE_CAPTURA,
     ETIQUETA_DE_VISTA,

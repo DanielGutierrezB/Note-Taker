@@ -19,10 +19,8 @@
  *
  * **Por qué precortar SOBRE anidaciones.** Las capturas se sueltan y se
  * sincronizan una vez, adentro de su anidación, y todos los cortes de todas las
- * clases son ventanas a esa misma línea de tiempo. Es la misma idea que los
- * nidos de Class Cut (`prproj-nidos.js`), con la diferencia de que acá las
- * anidaciones se entregan vacías de vídeo: Note Taker no tiene las cámaras,
- * tiene el audio y los cortes.
+ * clases son ventanas a esa misma línea de tiempo. Las anidaciones se entregan
+ * vacías de vídeo: Note Taker no tiene las cámaras, tiene el audio y los cortes.
  *
  * Está partido en dos mitades a propósito. `planear`, en `prproj-plan.js`, es
  * pura: decide franjas, qué fuente le toca a cada toma y dónde cae cada corte y
@@ -36,9 +34,8 @@ const path = require('path');
 const prproj = require('./prproj');
 const { Taller, loQueFalta } = require('./prproj-secuencia');
 const {
-    BIN_PRE, COLORES_DE_CAPTURA, ETIQUETA_DE_VISTA, COLOR_DE_CLAQUETA, COLOR_DE_NOTA, nombreDeCaptura, planear
+    AIRE_SEG, BIN_PRE, COLORES_DE_CAPTURA, ETIQUETA_DE_VISTA, COLOR_DE_CLAQUETA, COLOR_DE_NOTA, nombreDeCaptura, planear
 } = require('./prproj-plan');
-const nidos = require('./prproj-nidos');
 const notasXml = require('./notas-xml');
 const sesionesGrabadas = require('./sesiones-grabadas');
 const workspace = require('./workspace');
@@ -471,7 +468,7 @@ async function generar(opciones) {
             cuenta: [
                 `${total} clase(s) en ${config.capturas} captura(s)`
                     + (plan.grupos.length ? ` y ${plan.grupos.length} grupo(s)` : '')
-                    + `, de ${Math.round(plan.largoSeg / 60)} minutos con ${nidos.AIRE_SEG / 60} de aire entre clases.`,
+                    + `, de ${Math.round(plan.largoSeg / 60)} minutos con ${AIRE_SEG / 60} de aire entre clases.`,
                 // Las dos primeras líneas son las que el panel enseña
                 // (`slice(0, 2)` en `panel-prproj.js`), así que la PRE va en
                 // esta y no en una tercera: es un sitio nuevo del proyecto y
