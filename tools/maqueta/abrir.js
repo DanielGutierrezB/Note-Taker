@@ -13,7 +13,7 @@
  * (`window.nt`) y el micrófono.
  *
  * Existe porque las pantallas que más importan solo se pueden ver con una clase
- * grabándose: En vivo con seis tomas y tres claquetas, o el Cierre con tomas
+ * grabándose: En vivo con seis tomas, o el Cierre con tomas
  * sin releer. Sin esto, mirar el diseño de esa pantalla pide un Zoom abierto,
  * un modelo de un giga y medio y alguien contando «3, 2, 1» en voz alta.
  *
@@ -26,7 +26,7 @@
  *   preparar         la lista de verificación, con todo en verde
  *   preparar-sin-audio  la misma, con la entrada sin elegir
  *   sin-whisper      la misma, sin modelo: el botón de Iniciar apagado
- *   en-vivo          la clase corriendo, con seis tomas y tres claquetas
+ *   en-vivo          la clase corriendo, con seis tomas
  *   toma-abierta     la misma, con una toma abierta y su texto entrando
  *   releyendo        la misma, con dos tomas en la cola de relectura
  *   sin-audio        la misma, con el dispositivo caído
@@ -186,11 +186,11 @@ const ESCENARIOS = [
     'preparar', 'preparar-clase-repetida', 'preparar-sin-audio', 'preparar-microfono',
     'preparar-zoom-falso',
     'sin-whisper', 'sin-zoom', 'faltan-modelos', 'update',
-    // `desplegada` y `claqueta-abierta` no son pantallas: son cómo queda la de
-    // en vivo con algo abierto, así que van con ella.
-    'en-vivo', 'en-vivo,desplegada', 'en-vivo,claqueta-abierta',
+    // `desplegada` no es una pantalla: es cómo queda la de en vivo con una toma
+    // abierta, así que va con ella.
+    'en-vivo', 'en-vivo,desplegada',
     'toma-abierta', 'releyendo', 'sin-audio', 'terminada', 'notas-de-antes',
-    'foto', 'foto-cien', 'palmada', 'palmada-vencida',
+    'foto', 'foto-cien',
     'prproj', 'prproj-lleno', 'prproj-listo',
     'ajustes', 'ajustes-semanal', 'diagnostico',
     // El modo semanal, momento por momento, más los tres que se salen del

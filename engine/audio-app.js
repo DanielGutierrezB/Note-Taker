@@ -11,8 +11,7 @@
  * **Lo que sale de acá es idéntico a lo que manda la ventana**: PCM mono Int16
  * en pedazos de 4096 muestras. El tamaño se mantiene para que las dos fuentes
  * entren por el mismo camino y el medidor de la ventana se mueva igual con las
- * dos; la palmada de la claqueta ya no depende de él, porque `aplausos.js`
- * remide todo en marcos de 5 ms venga como venga.
+ * dos.
  *
  * Sin estado de la sesión: recibe a quién pasarle cada pedazo (`alPcm`) y a
  * quién avisarle (`avisar`), y el puente (`ipc/grabar.js`) los conecta con la

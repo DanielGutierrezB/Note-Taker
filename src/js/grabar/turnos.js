@@ -23,7 +23,7 @@
  * pantalla y sin motor, que es lo único que se puede probar de una carrera:
  * hacerla fallar de verdad pide demorar una respuesta a mano (ver
  * `tools/probar-repintado.js`). Dos, que la regla vale para TODOS los caminos que
- * guardan estado —el cambio, cerrar la toma, la claqueta, deshacer— y no solo
+ * guardan estado —el cambio, cerrar la toma, deshacer— y no solo
  * para el primero al que se le vio el problema.
  *
  * Un contador y no la comparación de las fotos: mirar si el estado que llegó es

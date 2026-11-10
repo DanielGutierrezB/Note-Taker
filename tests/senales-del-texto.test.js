@@ -100,21 +100,12 @@ module.exports = async t => {
         t.deep(marcas(palabras('y listo Pausa.')), [null, null, 'pausa-corta']);
     });
 
-    t.group('señales · la claqueta, como Whisper la escriba');
+    t.group('señales · la claqueta ya no es una señal');
 
-    t.test('las cinco escrituras que salieron en clases de verdad', () => {
+    t.test('ninguna de las escrituras con que Whisper la escribía se marca', () => {
         for (const como of ['Claqueta', 'Claquetados', 'Cacleta', 'Klaqueta', 'Laqueta', 'TLAQUETA']) {
-            t.deep(marcas(palabras(`${como} clase 2`))[0], 'claqueta', `${como} se marca`);
+            t.deep(marcas(palabras(`${como} clase 2`)), [null, null, null], como);
         }
-    });
-
-    t.test('una claqueta nunca se lee además como otra cosa', () => {
-        // En el motor la claqueta corta el recorrido (`continue`), y acá igual:
-        // una palabra tiene una marca y no dos.
-        const m = senales.senalesEn(palabras('Laqueta pausa', 300));
-        t.eq(m.length, 2);
-        t.eq(m[0].tipo, 'claqueta');
-        t.eq(m[1].tipo, 'pausa-corta');
     });
 
     t.group('señales · sobre la tirada que se dibuja');
@@ -145,7 +136,7 @@ module.exports = async t => {
     });
 
     t.test('cada tipo de señal dice qué hace, para la pista de la palabra', () => {
-        for (const tipo of ['abre', 'cierra', 'claqueta', 'pausa-corta']) {
+        for (const tipo of ['abre', 'cierra', 'pausa-corta']) {
             t.ok(senales.QUE_HACE[tipo], `${tipo} tiene pista`);
             t.ok(senales.pistaDe({ tipo }).startsWith(senales.QUE_HACE[tipo]), `${tipo} la usa`);
         }
@@ -190,11 +181,8 @@ module.exports = async t => {
             const m = codigo.match(new RegExp(`^(?:export )?const ${nombre} = (.+);$`, 'm'));
             return m ? m[1].trim() : null;
         };
-        // PALABRA_Y_APLAUSO_MS está acá porque de ella cuelga el aviso de la
-        // palmada: es lo que el motor tarda como MÍNIMO en poder confirmar, y si
-        // el motor la cambiara, la pantalla diría «sin confirmar» antes de tiempo.
-        for (const nombre of ['CUENTA', 'RETOMAR', 'PAUSA', 'OK', 'CLAQUETA',
-            'MINIMO_DE_CUENTA', 'VALOR', 'SILENCIO_TRAS_PAUSA_SEC', 'PALABRA_Y_APLAUSO_MS']) {
+        for (const nombre of ['CUENTA', 'RETOMAR', 'PAUSA', 'OK',
+            'MINIMO_DE_CUENTA', 'VALOR', 'SILENCIO_TRAS_PAUSA_SEC']) {
             const delMotor = literal(motor, nombre);
             t.ok(delMotor, `${nombre} se encontró en el motor`);
             t.eq(literal(ventana, nombre), delMotor, `${nombre} es la misma en la ventana`);

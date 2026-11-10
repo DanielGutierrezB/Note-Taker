@@ -149,29 +149,6 @@ function registrar({ ipcMain, app, send, anotar }) {
     ipcMain.handle('audio-app-cerrar', () => { audioApp.cerrar(); return true; });
 
     /**
-     * "Claqueta ahora": la puso el editor, así que queda confirmada.
-     *
-     * No lleva la hora: la pone el motor con el reloj del audio
-     * (`espejo.grabadoHastaMs`). Mandarla desde la ventana sería mandar
-     * `Date.now()`, que va uno o dos pedazos por delante de lo que se grabó, y
-     * en una clase larga eso son marcas que no coinciden con la onda.
-     *
-     * Lo único que sí viaja es `palmadaMs`, y no es una hora sino una
-     * referencia: el `ms` con el que el motor avisó «oí una palmada», de vuelta
-     * para decirle en cuál anotar (ver `grabacion.claqueta`). El motor lo busca
-     * en su propia lista antes de usarlo.
-     */
-    ipcMain.handle('grabar-claqueta', (event, palmadaMs) => {
-        anotar('grabar.claqueta', { aMano: true, palmadaMs: palmadaMs == null ? null : palmadaMs });
-        return grabacion.claqueta(palmadaMs);
-    });
-
-    ipcMain.handle('grabar-quitar-claqueta', (event, n) => {
-        anotar('grabar.quitar-claqueta', { n });
-        return grabacion.quitarClaqueta(n);
-    });
-
-    /**
      * El idioma de la clase que está grabando, cambiado a mitad.
      *
      * No lo anota acá: lo anota el motor, que es el que sabe cuántas tomas
@@ -181,19 +158,14 @@ function registrar({ ipcMain, app, send, anotar }) {
         grabacion.cambiarIdioma(cual, opciones));
 
     ipcMain.handle('grabar-editar', (event, cambio) => {
-        // `n` es de los cambios que no son de ninguna toma —la nota de una
-        // claqueta—, donde `toma` viene vacío y el registro no diría sobre qué.
-        anotar('grabar.editar', {
-            toma: cambio && cambio.toma, claqueta: cambio && cambio.n, tipo: cambio && cambio.tipo
-        });
+        anotar('grabar.editar', { toma: cambio && cambio.toma, tipo: cambio && cambio.tipo });
         return grabacion.editar(cambio);
     });
 
     /**
      * Abrir y cerrar una toma a mano, para cuando el conteo no se dijo.
      *
-     * No llevan la hora, igual que la claqueta: la pone el motor con el reloj
-     * del audio. Y `grabar-abrir-toma` devuelve además cuánto retrocedió el
+     * No llevan la hora: la pone el motor con el reloj del audio. Y `grabar-abrir-toma` devuelve además cuánto retrocedió el
      * IN, que es lo único que la ventana no puede saber sola y lo que le deja
      * decir «abierta 4 s atrás, desde donde arrancó la frase».
      */
@@ -274,8 +246,7 @@ function registrar({ ipcMain, app, send, anotar }) {
         const salida = await grabacion.terminar();
         anotar('grabar.termina', {
             secuencia: salida && salida.secuencia,
-            tomas: salida ? salida.tomas.length : 0,
-            claquetas: salida ? salida.claquetas.length : 0
+            tomas: salida ? salida.tomas.length : 0
         });
         return salida;
     });
@@ -301,10 +272,7 @@ function registrar({ ipcMain, app, send, anotar }) {
     // Cambiar una sesión que ya terminó. Reescribe su XML en el acto, así que
     // la respuesta dice si se pudo: la ventana avisa con eso.
     ipcMain.handle('grabar-editar-grabada', (event, json, cambio) => {
-        anotar('grabar.editar-grabada', {
-            json, toma: cambio && cambio.toma, claqueta: cambio && cambio.n,
-            tipo: cambio && cambio.tipo
-        });
+        anotar('grabar.editar-grabada', { json, toma: cambio && cambio.toma, tipo: cambio && cambio.tipo });
         try {
             return { ok: true, ...grabacion.editarGrabada(json, cambio) };
         } catch (err) {

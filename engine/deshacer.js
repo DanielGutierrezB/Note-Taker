@@ -23,21 +23,20 @@
  *
  * ─── Dos clases de paso en una sola pila ──────────────────────────────────
  *
- * Hay dos gestos del editor que no son de ninguna toma: poner la claqueta a mano
- * y pegar el temario del CD. También reescriben el XML y el sidecar en el acto,
- * así que también tienen que poder volver — si no, el Cmd-Z que se da después de
- * uno de los dos se lleva puesto el cambio ANTERIOR, que es el mismo defecto que
+ * Hay gestos del editor que no son de ninguna toma, como pegar el temario del
+ * CD. También reescriben el XML y el sidecar en el acto, así que también tienen
+ * que poder volver — si no, el Cmd-Z que se da después de uno de ellos se lleva
+ * puesto el cambio ANTERIOR, que es el mismo defecto que
  * un paso fantasma pero al revés y peor: el editor ve moverse algo que no había
  * pedido tocar.
  *
  * **Y eso no rompe la regla de arriba, porque la regla no era "no fotografiar la
  * sesión": era no fotografiar nada que se llene solo.** Lo único que crece sin
  * que nadie lo toque es la lista de tomas —el ciclo de señales le agrega una cada
- * vez que el profesor cuenta hasta uno—, y eso es exactamente lo que estos dos
- * pasos NO tienen en la mano. `estado.claqueta` es un campo que solo cambia
- * cuando alguien aprieta el botón o cuando se confirma un golpe; `estado.temario`
- * es la lista pegada con su última medición, y también. Reponer cualquiera de los
- * dos cinco minutos después deja las tomas donde estén, porque no las toca.
+ * vez que el profesor cuenta hasta uno—, y eso es exactamente lo que estos
+ * pasos NO tienen en la mano. `estado.temario` es la lista pegada con su última
+ * medición. Reponerla cinco minutos después deja las tomas donde estén, porque
+ * no las toca.
  *
  * Por eso el paso lleva `id` —de qué toma es— o `campo` —de qué campo de la
  * sesión—, y nunca los dos. Van en la MISMA pila y no en una segunda, que es lo
@@ -82,11 +81,11 @@ function foto(toma) {
 }
 
 /**
- * La copia de un campo de la sesión —la claqueta, el temario— que se guarda.
+ * La copia de un campo de la sesión —el temario— que se guarda.
  *
  * Es `foto` para lo que no es una toma, y con el mismo criterio: se copia el
  * objeto y sus listas, y lo que hay dentro de las listas no. Hace falta copiar y
- * no guardar la referencia porque estos dos campos SÍ se escriben en su sitio
+ * no guardar la referencia porque estos campos SÍ se escriben en su sitio
  * mientras la foto espera: la medición de cobertura le deja el resultado encima
  * al mismo objeto de temario (`atender` en `temario-sesion.js`), así que una foto
  * por referencia cambiaría sola y deshacer no devolvería nada.
@@ -94,14 +93,10 @@ function foto(toma) {
  * Y por eso mismo la foto de un temario es lo que hace falta y nada más: la lista
  * pegada, y lo que ya se midió CONTRA esa lista. No hay nada de las tomas ahí
  * adentro.
- */
-/**
- * **Una LISTA se copia hasta el fondo, y un objeto no.** La diferencia no es
- * un detalle: el campo que se fotografía hoy es `claquetas`, que es una lista
- * de objetos que se modifican EN SU SITIO —`anotarClaqueta` funde dos con un
- * `Object.assign` y `renumerar` les reescribe el `n` a todas—. Una copia
- * superficial de la lista tendría los mismos objetos adentro, así que la foto
- * cambiaría sola y deshacer devolvería exactamente lo que ya está.
+ *
+ * **Una LISTA se copia hasta el fondo, y un objeto no**: una lista de objetos
+ * que se modifican en su sitio, copiada por arriba, tendría los mismos objetos
+ * adentro, y la foto cambiaría sola.
  */
 function fotoDeCampo(valor) {
     if (!valor) return null;
@@ -146,10 +141,9 @@ function mismaFoto(a, b) {
             return Array.isArray(x) && Array.isArray(y) &&
                 x.length === y.length && x.every((cosa, i) => cosa === y[i]);
         }
-        // Los objetos sueltos se comparan por dentro y no por referencia, que
-        // es lo que hace falta desde que una foto de campo puede ser una lista
-        // de objetos copiados (ver `fotoDeCampo`): comparándolos por referencia,
-        // dos fotos idénticas de la misma lista de claquetas nunca serían
+        // Los objetos sueltos se comparan por dentro y no por referencia: una
+        // foto de campo puede ser una lista de objetos copiados (ver
+        // `fotoDeCampo`), y por referencia dos fotos idénticas nunca serían
         // iguales y cada gesto dejaría un paso fantasma.
         if (x && y && typeof x === 'object' && typeof y === 'object') return mismaFoto(x, y);
         return x === y;
@@ -161,8 +155,8 @@ function mismaFoto(a, b) {
  *
  * **El portero está acá y no en quien edita**, y esa es toda la diferencia: así
  * no hay forma de que un gesto nuevo se olvide de preguntar. Cuando la pregunta
- * estaba del otro lado, el borde la hacía y reabrir no; el día que entraron la
- * claqueta y el temario habrían sido dos sitios más donde acordarse.
+ * estaba del otro lado, el borde la hacía y reabrir no; el día que entró el
+ * temario habría sido un sitio más donde acordarse.
  *
  * Lo que no entra es un paso que al deshacerse no se ve: hace apretar de nuevo
  * pensando que el botón no funciona, y encima se come el Cmd-Z que iba para el
@@ -175,12 +169,11 @@ function mismaFoto(a, b) {
  */
 function anotar(historia, paso) {
     if (mismaFoto(paso.antes, paso.despues)) return;
-    // Qué campos cambió el gesto, para reponer esos y nada más (ver `poner` y
-    // `ponerEnLista`). Vale igual para una toma y para un elemento de una lista
-    // de la sesión: los dos son objetos que siguen vivos mientras la foto
-    // espera, y los dos se rompen igual si se los repone enteros. `ponerCampo`
-    // —el temario— no lo mira, porque ahí la foto ES el campo.
-    if (paso.antes && paso.despues && (paso.id != null || paso.campo === 'claquetas')) {
+    // Qué campos cambió el gesto, para reponer esos y nada más (ver `poner`):
+    // la toma sigue viva mientras la foto espera, y se rompe si se la repone
+    // entera. `ponerCampo` —el temario— no lo mira, porque ahí la foto ES el
+    // campo.
+    if (paso.antes && paso.despues && paso.id != null) {
         paso.campos = camposQueCambian(paso.antes, paso.despues);
     }
     historia.atras.push(paso);
@@ -254,54 +247,11 @@ function poner(tomas, id, cual, campos) {
 }
 
 /**
- * Un paso de una lista de la sesión (las claquetas): saca un elemento y pone
- * otro, identificados por su `ms`.
- *
- * Antes la foto era de la lista entera, y la lista NO cambia solo a mano: los
- * aplausos y la voz le agregan claquetas mientras tanto. Deshacer una claqueta
- * puesta a mano se llevaba todas las que se habían detectado después.
- *
- * **Y con `opciones.campos`, de un elemento tampoco se repone todo**, que es el
- * mismo defecto una escala más abajo y por el mismo motivo que en `poner`: la
- * claqueta que está en la lista sigue cambiando mientras la foto espera. El
- * editor le escribe la nota, unos segundos después la relectura oye "claqueta
- * 4, clase 4" y `fundir` le deja la frase y el origen `golpe,voz`; un Cmd-Z
- * que repusiera el elemento entero volvería la nota Y borraría la frase, que
- * nadie pidió deshacer. Reponiendo solo `comentario`, la frase se queda.
- *
- * **Y `opciones.esLaMisma` es cómo se busca, porque el `ms` tampoco es fijo.**
- * Esa misma fusión le corre el `ms` a la claqueta —se queda con el del golpe,
- * que es el que sirve para sincronizar—, así que buscarla por igualdad exacta
- * no la encontraba: el paso terminaba empujando una copia y la clase quedaba
- * con dos claquetas donde hubo una. Quien llama sabe cuándo dos entradas son
- * la misma cosa (`vivo.mismaClaqueta`), y acá no se puede saber.
- *
- * @param {{campos?:string[], esLaMisma?:function}} [opciones]
- */
-function ponerEnLista(lista, quitar, poner, opciones) {
-    const o = opciones || {};
-    const esLaMisma = o.esLaMisma || ((a, b) => a.ms === b.ms);
-    const i = quitar ? lista.findIndex(x => esLaMisma(x, quitar)) : -1;
-    if (Array.isArray(o.campos) && quitar && poner) {
-        // Un paso de campos es sobre un elemento que ya estaba: si no está, no
-        // hay a quién reponerle nada, y empujar la foto lo haría resucitar.
-        if (i < 0) return;
-        for (const clave of o.campos) {
-            if (!(clave in poner)) delete lista[i][clave];
-            else lista[i][clave] = Array.isArray(poner[clave]) ? poner[clave].slice() : poner[clave];
-        }
-        return;
-    }
-    if (i >= 0) lista.splice(i, 1);
-    if (poner) lista.push({ ...poner });
-}
-
-/**
  * Deja un campo de la sesión como dice la foto. `poner` para lo que no es toma.
  *
  * **Toca el campo y nada más**, que es lo que hace que estos pasos convivan con
  * una clase que se sigue grabando: la lista de tomas ni se nombra acá, así que
- * deshacer una claqueta de hace cinco minutos no puede llevarse por delante las
+ * deshacer un gesto de hace cinco minutos no puede llevarse por delante las
  * tomas que entraron mientras tanto.
  *
  * Se copia al salir por lo mismo que se copió al entrar: quien reciba el objeto
@@ -416,7 +366,6 @@ module.exports = {
     anotar,
     poner,
     ponerCampo,
-    ponerEnLista,
     camposQueCambian,
     dondeEntra,
     dejariaDosAbiertas,

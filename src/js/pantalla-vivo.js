@@ -39,7 +39,6 @@ import * as idiomas from './idiomas.js';
 import * as fichas from './grabar/lista-tomas.js';
 import * as estadosToma from './grabar/estados-toma.js';
 import * as historia from './grabar/historia.js';
-import { PALABRA_Y_APLAUSO_MS } from './grabar/senales.js';
 import { estiloDeVista } from './colores.js';
 import * as alrededor from './grabar/alrededor-de-la-toma.js';
 import * as fotos from './fotos.js';
@@ -128,9 +127,6 @@ export function conectar(contexto) {
     $('#btn-rehacer').addEventListener('click', () => volver('rehacer'));
     $('#btn-deshacer').innerHTML = icono('deshacer');
     $('#btn-rehacer').innerHTML = icono('rehacer');
-    // La palabra se va con la ventana angosta y queda el icono: la fila va al
-    // límite a 900 px, y «Claqueta» está escrito debajo en su atajo, con la K.
-    $('#btn-claqueta').innerHTML = `${icono('claqueta')}<span class="rotulo-ancho">Claqueta</span>`;
 
     $('#ahora').addEventListener('click', alClic);
     $('#lista-vivo').addEventListener('click', alClic);
@@ -232,9 +228,6 @@ export function ver(primerEstado, elAudio) {
     vista.abierta = null;
     vista.elegida = null;
     vista.comentando = null;
-    // Una palmada de la sesión anterior no dice nada de esta.
-    palmada = null;
-    pintarPalmada();
     ultimoAvisoMs = Date.now();
     verVista('vista-vivo');
     pintar();
@@ -296,19 +289,11 @@ function alAviso(aviso) {
         fotos.alEstado(estado);
         return;
     }
-    if (aviso.tipo === 'claqueta') {
-        // Cualquier claqueta anotada resuelve la palmada que estaba esperando:
-        // la manual también, porque el motor funde las dos cuando caen juntas.
-        palmada = null;
-        pintarPalmada();
-        avisar(`Claqueta ${aviso.claqueta} anotada (${aviso.por === 'golpe' ? 'aplauso' : 'voz'}).`);
-        return;
-    }
     // El reloj del audio, que llega cada segundo y por su cuenta: el estado
     // entero sale una vez por pasada del ciclo y esa pasada espera a Whisper, así
     // que colgar el timecode de él lo dejaba quieto mientras alguien no hablaba.
-    // Solo toca los segundos, que es lo único que este aviso sabe; las tomas y
-    // las claquetas siguen llegando con el estado.
+    // Solo toca los segundos, que es lo único que este aviso sabe; las tomas
+    // siguen llegando con el estado.
     if (aviso.tipo === 'reloj') {
         if (!estado) return;
         // **Solo cuenta como señal de vida si el reloj AVANZÓ.** El aviso llega
@@ -323,11 +308,6 @@ function alAviso(aviso) {
         if ($('#vista-vivo').classList.contains('es-activa')) pintarBarra();
         return;
     }
-    if (aviso.tipo === 'golpe') {
-        palmada = { ms: aviso.ms, sinConfirmar: false, dicho: false };
-        pintarPalmada();
-        return;
-    }
     // Un pedazo del PCM del micrófono reventó al procesarse y NO llegó al WAV.
     // Va a la misma pastilla que el mismo agujero por el lado de Zoom, y no a
     // una tostada y nada más, porque el agujero se queda hecho: lo que hay que
@@ -340,130 +320,6 @@ function alAviso(aviso) {
     if (aviso.tipo === 'error') avisar(aviso.mensaje, 'error');
 }
 
-/* ─── La palmada que se oyó y todavía no es una claqueta ────────────────── */
-
-/**
- * La última palmada sin resolver, o null.
- *
- * Es una sola y la nueva reemplaza a la vieja: dos palmadas seguidas son la
- * misma claqueta para el motor (`MISMA_CLAQUETA_MS`), y una lista de palmadas
- * en la barra sería ruido justo cuando hay que mirar al profesor.
- */
-let palmada = null;
-
-/**
- * Cuánto se le da al motor para contestar, después de tener el audio.
- *
- * El motor no puede confirmar antes de `PALABRA_Y_APLAUSO_MS`: le hace falta
- * ese audio de DESPUÉS del aplauso para leer si se dijo la palabra. Recién
- * cuando lo tiene empieza a leer, y eso es una pasada de Whisper sobre doce
- * segundos. Estos seis son para esa pasada, y se cuentan en tiempo de audio
- * grabado y no de reloj: si el audio se atrasa —Zoom que tartamudea, la máquina
- * ocupada— el aviso espera lo que haga falta en vez de acusar al motor de algo
- * que todavía no pudo hacer.
- */
-const LECTURA_DE_PALMADA_MS = 6000;
-
-/**
- * Cuánto se le da al editor para reaccionar a la pastilla roja.
- *
- * Ocho segundos, que con los doce de antes son veinte desde la palmada. Es el
- * número que hace honesta a la pastilla: el motor no puede decir «sin
- * confirmar» antes de los doce, y si la K dejara de enganchar ahí mismo, el
- * aviso llegaría justo tarde para lo único que pide hacer.
- *
- * Por arriba no hay riesgo de enganchar de más. El peligro sería que el editor
- * ponga a mano una claqueta NUEVA —una cuyo aplauso Zoom se comió, que es para
- * lo que la K existe— con una pastilla vieja todavía en pantalla, y que la
- * marca se fuera veinte segundos atrás. Pero dos claquetas de verdad nunca
- * están tan cerca: entre una y la siguiente hay una toma, o por lo menos el
- * tiempo de reacomodar una cámara (`MISMA_CLAQUETA_MS` en `notas-vivo.js`, que
- * da cinco segundos por el mismo motivo). Y si la palmada sí se oye, el aviso
- * nuevo reemplaza al viejo y la cuenta arranca de cero.
- */
-const REACCION_MS = 8000;
-
-/** Cuánto audio grabado lleva el motor, que es el reloj con el que él decide. */
-function grabadoHastaMs() {
-    return estado.ceroMs + (estado.segundos || 0) * 1000;
-}
-
-/**
- * ¿Ya se le puede decir al editor que esa palmada no se confirmó?
- *
- * Se mide con el audio que el motor tiene grabado, que es el mismo reloj con el
- * que él decide cuándo leer (`grabadoHastaMs` en `engine/grabacion.js`).
- */
-function palmadaVencida() {
-    if (!palmada || palmada.sinConfirmar || !estado) return false;
-    return grabadoHastaMs() >= palmada.ms + PALABRA_Y_APLAUSO_MS + LECTURA_DE_PALMADA_MS;
-}
-
-/**
- * ¿La claqueta a mano todavía se engancha a esta palmada?
- *
- * Con el mismo reloj que el vencimiento, y por lo mismo: con el audio atrasado
- * el motor tampoco leyó, así que la pastilla todavía no dijo nada y el editor
- * no pudo reaccionar a nada.
- */
-function palmadaEnganchable() {
-    if (!palmada || !estado) return false;
-    return grabadoHastaMs() <=
-        palmada.ms + PALABRA_Y_APLAUSO_MS + LECTURA_DE_PALMADA_MS + REACCION_MS;
-}
-
-/**
- * La palmada en la que tiene que caer la claqueta a mano, o null para «acá».
- *
- * Es el `ms` que mandó el motor en su aviso `golpe`, de vuelta tal cual: él lo
- * busca en su lista antes de usarlo (`aplausoOido` en `notas-vivo.js`), así que
- * mandarlo de más no puede mover una marca a un sitio inventado.
- */
-function palmadaParaEnganchar() {
-    return palmadaEnganchable() ? palmada.ms : null;
-}
-
-/**
- * La pastilla de la palmada, en sus dos estados.
- *
- * Está en la fila de los atajos —la de la K, que es lo que hay que apretar si no
- * se confirma— y no en la de arriba, que a 900 px no tiene un pixel libre. Su
- * sitio exacto dentro de la fila está explicado en el HTML: aparecer no le puede
- * mover el suyo a ningún atajo.
- *
- * **No se puede apretar.** Sería una tercera puerta para lo mismo, y la K y el
- * botón de Claqueta ya están los dos a la vista.
- *
- * Que no se confirme NO se borra solo. Es la verdad de ese momento —«la última
- * palmada que oí no llegó a ser claqueta»— y es exactamente el diagnóstico que
- * le faltaba al editor cuando dijo «aún no está reconociendo la claqueta». Se
- * va cuando se anota una claqueta o cuando llega otra palmada.
- */
-function pintarPalmada() {
-    const chapa = $('#vivo-palmada');
-    if (palmadaVencida()) {
-        palmada.sinConfirmar = true;
-        // Dicho una vez y en rojo, además de la pastilla: es el espejo exacto de
-        // «se dijo claqueta pero no se oyó el aplauso», y las dos mitades del
-        // mismo problema tienen que avisar igual.
-        if (!palmada.dicho) {
-            palmada.dicho = true;
-            avisar('Se oyó una palmada y no se leyó «claqueta» alrededor: no se anotó ninguna. ' +
-                'Si fue una claqueta, apretá K y queda en la palmada.', 'error');
-        }
-    }
-    // Lo que la pastilla promete depende de si la K todavía engancha, así que
-    // se resuelve acá y viaja con la palmada: `estados.js` dice las palabras,
-    // no mira relojes.
-    if (palmada) palmada.enganchable = palmadaEnganchable();
-    const est = estados.dePalmada(palmada);
-    chapa.hidden = !est;
-    if (!est) return;
-    chapa.dataset.estado = est.clave;
-    chapa.textContent = est.palabra;
-    chapa.title = est.porque;
-}
-
 /** Lo que pasó solo se dice; lo que el editor hizo ya lo vio hacer. */
 function contar(ev) {
     if (ev.tipo === 'abierta') {
@@ -473,12 +329,6 @@ function contar(ev) {
         vista.elegida = ev.toma;
     }
     if (ev.tipo === 'cerrada') avisar(`Toma ${ev.toma} cerrada.`);
-    if (ev.tipo === 'claqueta') avisar(`Claqueta ${ev.claqueta} anotada: se dijo y se oyó el aplauso.`);
-    // Una claqueta es la palabra Y el aplauso. La palabra sola no se anota, pero
-    // se dice: por Zoom el aplauso puede no llegar, y ahí la pone quien mira.
-    if (ev.tipo === 'claqueta-sin-aplauso') {
-        avisar('Se dijo «claqueta» pero no se oyó el aplauso. Si lo hubo, apretá K.', 'error');
-    }
 }
 
 /* ─── Dibujar ─────────────────────────────────────────────────────────── */
@@ -545,10 +395,6 @@ function pintarBarra() {
         barra.firstElementChild.style.width = `${Math.min(100, (audio.pico || 0) * 140)}%`;
         barra.dataset.pico = audio.pico > 0.95 ? 'clip' : (audio.pico > 0.7 ? 'alto' : '');
     }
-    // Acá y no en `pintar`, por dos razones: esto corre igual mientras se
-    // arrastra un borde o se escribe una nota, y sobre todo el vencimiento de la
-    // palmada pasa SIN que el motor avise nada —es justamente que no avisó—.
-    pintarPalmada();
     pintarRotulos();
 }
 
@@ -610,7 +456,6 @@ function pintar() {
 
     const vivas = estado.tomas.filter(t => !t.descartada);
     $('#vivo-tomas').textContent = vivas.length;
-    $('#vivo-claquetas').textContent = estado.claquetas.length;
     const desactivadas = estado.tomas.filter(t => t.descartada).length;
     $('#vivo-cuantas').textContent = estado.tomas.length
         ? `${vivas.length} van al XML${desactivadas ? ` · ${desactivadas} desactivada${desactivadas === 1 ? '' : 's'}` : ''}`
@@ -629,7 +474,6 @@ function pintar() {
     // si se está grabando.
     $('#vivo-titulo-ahora').textContent = mirando ? 'Esta clase' : 'Ahora';
     $('#btn-terminar').hidden = mirando;
-    $('#btn-claqueta').hidden = mirando;
     $('#vivo-nivel').hidden = mirando;
     $('#vivo-atajos').hidden = mirando;
     $('#btn-deshacer').hidden = mirando;
@@ -649,14 +493,12 @@ function pintar() {
     const arriba = lienzo ? lienzo.scrollTop : 0;
 
     $('#ahora').innerHTML = ahora(fps);
-    const items = laLista();
-    $('#lista-vivo').innerHTML = items.length
-        ? items.map(it => (it.toma ? filaToma(it.toma, fps) : filaClaqueta(it.claqueta, fps))).join('')
+    const tomas = laLista();
+    $('#lista-vivo').innerHTML = tomas.length
+        ? tomas.map(t => filaToma(t, fps)).join('')
         : `<div class="vacio">${icono('toma')}
              <span class="vacio-titulo">Todavía no hay ninguna toma</span>
-             <span class="v3">La primera se abre sola cuando alguien diga «3, 2, 1». Las
-               claquetas aparecen acá también, en su lugar: con el aplauso, diciendo
-               «claqueta» o con la tecla K.</span></div>`;
+             <span class="v3">La primera se abre sola cuando alguien diga «3, 2, 1».</span></div>`;
 
     montarTextos(quedan);
     devolverRollos(rollos, quedan);
@@ -959,20 +801,11 @@ function comentariosDe(t) {
     return lista || campo ? `<div class="comentarios">${lista}</div>${campo}` : '';
 }
 
-/**
- * Tomas y claquetas en una sola lista, la más nueva arriba.
- *
- * Juntas y en su orden porque es como se leen: «la claqueta 2 vino entre la
- * toma 3 y la 4» es lo que el editor necesita para saber en qué archivo de
- * Premiere cae cada toma. En un costado aparte había que cruzar la pantalla y
- * comparar timecodes para saberlo.
- */
+/** Las tomas de la lista, la más nueva arriba. */
 function laLista() {
-    const tomas = estado.tomas
+    return estado.tomas
         .filter(t => !(vista.sinDesactivadas && t.descartada))
-        .map(t => ({ ms: t.inMs, toma: t }));
-    const claquetas = (estado.claquetas || []).map(c => ({ ms: c.ms, claqueta: c }));
-    return tomas.concat(claquetas).sort((a, b) => b.ms - a.ms);
+        .sort((a, b) => b.inMs - a.inMs);
 }
 
 /**
@@ -1252,8 +1085,6 @@ function recordarFoco() {
     return {
         campo: a.dataset.campo,
         toma: a.dataset.toma,
-        // De una claqueta, por `ms`: su número se corre solo (ver `filaClaqueta`).
-        ms: a.dataset.ms,
         enAhora: !!a.closest('#ahora'),
         valor: a.value,
         desde: a.selectionStart,
@@ -1264,13 +1095,8 @@ function recordarFoco() {
 function devolverFoco(f) {
     if (!f) return;
     const donde = f.enAhora ? '#ahora' : '#lista-vivo';
-    // El de una claqueta, con la misma tolerancia con que se la despliega: el
-    // `ms` pudo correrse con una fusión desde el repintado anterior.
-    const campo = f.ms
-        ? [...document.querySelectorAll(`#vista-vivo [data-campo="${f.campo}"][data-ms]`)]
-            .find(el => mismaClaqueta(el.dataset.ms, f.ms))
-        : document.querySelector(`${donde} [data-campo="${f.campo}"][data-toma="${f.toma}"]`)
-            || document.querySelector(`#vista-vivo [data-campo="${f.campo}"][data-toma="${f.toma}"]`);
+    const campo = document.querySelector(`${donde} [data-campo="${f.campo}"][data-toma="${f.toma}"]`)
+        || document.querySelector(`#vista-vivo [data-campo="${f.campo}"][data-toma="${f.toma}"]`);
     if (!campo) {
         // El campo se fue: pasa con la nota de la toma abierta cuando «Pausa»
         // la cierra mientras se escribe. La toma sigue en la lista, así que se
@@ -1290,110 +1116,6 @@ function devolverFoco(f) {
     campo.setSelectionRange(f.desde, f.hasta);
 }
 
-/**
- * Una claqueta, en la lista con las tomas.
- *
- * Un renglón de 32 px como una toma, pero sin fondo de color: no es una toma y
- * no tiene vista. Lo que la identifica va a la izquierda —el chevron, el icono,
- * el número, el timecode, la nota o la frase con la que se dijo— y lo que se
- * confirma a la derecha: si es la referencia, cómo está y quitarla.
- *
- * **Se despliega como una toma porque ahora tiene algo adentro: su nota.** El
- * renglón no la tenía y por eso no tenía chevron; ahora el gesto es el mismo
- * que el de una toma —clic para abrir, un campo de una línea, se guarda al
- * salir— para que no haya dos maneras de escribir lo mismo en la misma lista.
- *
- * Lo que NO es igual es quién es el botón. En una toma lo es el renglón entero
- * (`role="button"`); acá no puede serlo, porque adentro está el botón de
- * quitarla, y un botón dentro de otro no es nada que un lector de pantalla
- * pueda anunciar. Así que el que abre es el chevron, que sí es un botón de
- * verdad —teclado incluido, sin ayuda de `alTeclado`— y el renglón entero
- * sigue abriendo al clic, que es lo que hace la mano.
- *
- * **Y se identifica por `ms` y no por `n`**, tanto acá como en `vista.abierta`.
- * El número no es estable: una claqueta que se lee tarde y cayó ANTES que esta
- * corre los de todas las de atrás (`renumerar`), y con la fila abierta y una
- * nota a medio escribir eso significaba seguir escribiendo en la claqueta
- * equivocada.
- *
- * **Pero no por el `ms` exacto**, porque tampoco es fijo: al fundirse con la
- * que llega del aplauso, la claqueta se queda con el `ms` del golpe (`fundir`).
- * Pasa cuando la K se aprieta antes de que el aplauso termine de oírse, que es
- * justo cuando alguien le escribe una nota a la claqueta recién puesta; con el
- * `ms` exacto, el repintado siguiente plegaba la fila a mitad de la nota y lo
- * que seguía tecleándose caía como atajos. Se reconoce con la misma ventana
- * con que el motor decide que dos entradas son la misma (`mismaClaqueta`), y
- * `vista.abierta` se corre al `ms` nuevo para seguirla.
- */
-function filaClaqueta(c, fps) {
-    const est = estados.deClaqueta(c);
-    const abierta = esLaAbierta(c);
-    if (abierta) vista.abierta = `c${c.ms}`;
-    // La nota tapa la frase, igual que en una toma la nota tapa las primeras
-    // palabras: lo que escribió una persona vale más que lo que se oyó.
-    const nota = loQueSeLee(c);
-    return `<div class="bloque-claqueta ${abierta ? 'es-abierta' : ''}">
-      <div class="fila fila-claqueta guarda" data-estado="${est.clave}"
-           data-hace="plegar-claqueta" data-claqueta="${c.n}" data-ms="${c.ms}"
-           ${est.porque ? `title="${esc(est.porque)}"` : ''}>
-        <button class="btn btn-tenue btn-ico chevron" type="button" data-hace="plegar-claqueta"
-                data-claqueta="${c.n}" data-ms="${c.ms}" aria-expanded="${abierta}"
-                title="Su nota, la que va en el marcador del XML">${icono('chevron')}</button>
-        <span class="hp-ico">${icono('claqueta')}</span>
-        <span class="fila-nombre">Claqueta ${c.n}</span>
-        <time class="fila-dato tc">${fmt.timecodeDe(c.ms, estado.ceroMs, fps)}</time>
-        ${nota ? `<span class="fila-nota">${esc(nota)}</span>` : ''}
-        <span class="crece"></span>
-        ${c.n === 1 ? '<span class="pastilla" data-estado="listo" title="Es contra esta que el editor correlaciona los archivos en Premiere">referencia</span>' : ''}
-        <span class="pastilla" data-estado="${est.clave}">${esc(est.palabra)}</span>
-        <button class="btn btn-tenue btn-ico" type="button" data-hace="quitar-claqueta"
-                data-claqueta="${c.n}" title="Quitarla: no era una claqueta">${icono('cerrar')}</button>
-      </div>
-      ${abierta ? cuerpoClaqueta(c) : ''}
-    </div>`;
-}
-
-/**
- * Dos entradas a menos de esto son la misma claqueta. Es `MISMA_CLAQUETA_MS` de
- * `engine/notas-vivo.js`, que la ventana no puede importar; una prueba compara
- * los dos números (`tests/nota-de-claqueta.test.js`).
- */
-const MISMA_CLAQUETA_MS = 5000;
-
-function mismaClaqueta(msA, msB) {
-    return Math.abs(Number(msA) - Number(msB)) < MISMA_CLAQUETA_MS;
-}
-
-/** ¿Es esta la claqueta desplegada, aunque la fusión le haya corrido el `ms`? */
-function esLaAbierta(c) {
-    const a = vista.abierta;
-    return typeof a === 'string' && a[0] === 'c' && mismaClaqueta(a.slice(1), c.ms);
-}
-
-/** Lo que se lee en el renglón plegado: la nota si la hay, y si no lo que se oyó. */
-function loQueSeLee(c) {
-    if (c.comentario) return c.comentario;
-    return c.frase ? `«${c.frase}»` : '';
-}
-
-/**
- * Lo que hay dentro de una claqueta abierta: su nota, y lo que se oyó.
- *
- * Es `cuerpo-toma` a propósito —la misma caja, el mismo campo de una línea, el
- * mismo sitio— porque es el mismo gesto: escribir algo que va a salir en el
- * marcador del XML. La frase se repite acá abajo porque arriba la tapa la nota
- * en cuanto hay una, y es lo que deja comprobar que la claqueta es la que se
- * cree («claqueta 4, clase 4») mientras se escribe sobre ella.
- */
-function cuerpoClaqueta(c) {
-    return `<div class="cuerpo-toma">
-        <input type="text" data-campo="nota-claqueta" data-claqueta="${c.n}" data-ms="${c.ms}"
-               value="${esc(c.comentario || '')}"
-               placeholder="Nota de la claqueta — va en el marcador del XML">
-        ${c.frase ? `<p class="v3 pista">Se oyó: <q>${esc(c.frase)}</q></p>` : ''}
-    </div>`;
-}
-
 /* ─── Los gestos ──────────────────────────────────────────────────────── */
 
 async function alClic(e) {
@@ -1410,14 +1132,6 @@ async function alClic(e) {
             vista.elegida = toma;
             pintar();
             break;
-        case 'plegar-claqueta': {
-            // Por `ms` y no por número, que se corre al renumerar (ver `filaClaqueta`).
-            const cual = `c${boton.dataset.ms}`;
-            vista.abierta = vista.abierta === cual ? null : cual;
-            pintar();
-            break;
-        }
-        case 'claqueta': await pedir(() => window.nt.grabarClaqueta(palmadaParaEnganchar())); break;
         case 'idioma':
             rotuloBarra.abrir(boton.id, idiomas.opciones(estado.idioma), cual => cambiarIdioma(cual));
             break;
@@ -1470,15 +1184,6 @@ async function alClic(e) {
         case 'borrar-comentario':
             await editar({ tipo: 'borrar-comentario', toma, indice: Number(boton.dataset.indice) });
             break;
-        case 'quitar-claqueta': {
-            const n = Number(boton.dataset.claqueta);
-            // Dos puertas, porque quitar una claqueta no es un cambio de toma: en
-            // vivo tiene la suya en el motor, y en una clase grabada entra por
-            // `editarGrabada` como los demás.
-            if (esDeMirar()) await editar({ tipo: 'quitar-claqueta', n });
-            else await pedir(() => window.nt.grabarQuitarClaqueta(n));
-            break;
-        }
     }
 }
 
@@ -1599,19 +1304,6 @@ async function guardarComentario() {
 }
 
 async function alCambiar(e) {
-    const claqueta = e.target.closest('[data-campo="nota-claqueta"]');
-    if (claqueta) {
-        // Con el `ms` además del `n`, y el motor busca por el `ms`: este `change`
-        // también sale cuando el repintado SACA el campo con texto sin guardar,
-        // y ahí el `n` del renglón viejo puede ser de antes de una renumeración.
-        await editar({
-            tipo: 'nota-claqueta',
-            n: Number(claqueta.dataset.claqueta),
-            ms: Number(claqueta.dataset.ms),
-            texto: claqueta.value
-        });
-        return;
-    }
     const campo = e.target.closest('[data-campo="nota"]');
     if (!campo) return;
     await editar({ tipo: 'nota', toma: Number(campo.dataset.toma), texto: campo.value });
@@ -1688,7 +1380,7 @@ async function bordeDeToma() {
 }
 
 /**
- * Un cambio de toma o de claqueta, por la puerta que corresponda.
+ * Un cambio de toma, por la puerta que corresponda.
  *
  * Es el único sitio que sabe que hay dos puertas, y por eso todo lo que cambia
  * algo pasa por acá: los botones de vista, las notas, descartar, los
@@ -1825,8 +1517,8 @@ async function alTeclado(e) {
         return;
     }
 
-    // Tecla mantenida apretada: una sola vez. Mantener la K ponía cinco
-    // claquetas, y mantener Enter abría y cerraba tomas.
+    // Tecla mantenida apretada: una sola vez. Mantener Enter abría y cerraba
+    // tomas.
     if (e.repeat || e.isComposing) return;
     // El campo que se estaba escribiendo desapareció al repintar (`devolverFoco`):
     // lo que se siga escribiendo es esa nota y no atajos, y se estira mientras
@@ -1856,14 +1548,10 @@ async function alTeclado(e) {
     }
 
     const tecla = e.key.toLowerCase();
-    // Mirando una clase grabada, K y Enter no van: poner una claqueta o abrir una
-    // toma necesitan el audio que está entrando. Las letras de las vistas sí van,
-    // que es parte de «ajustar una nota desde ahí».
+    // Mirando una clase grabada, Enter no va: abrir una toma necesita el audio
+    // que está entrando. Las letras de las vistas sí van, que es parte de
+    // «ajustar una nota desde ahí».
     if (!esDeMirar()) {
-        if (tecla === 'k') {
-            e.preventDefault();
-            return pedir(() => window.nt.grabarClaqueta(palmadaParaEnganchar()));
-        }
         if (e.key === 'Enter') {
             e.preventDefault();
             return bordeDeToma();

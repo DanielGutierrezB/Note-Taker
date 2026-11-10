@@ -162,7 +162,7 @@ function pintar() {
             listo: w.listo,
             titulo: 'Whisper',
             estado: w,
-            dice: 'Es lo que oye el «3, 2, 1», el «Pausa» y la palabra «claqueta», y lo ' +
+            dice: 'Es lo que oye el «3, 2, 1» y el «Pausa», y lo ' +
                 'que le escribe el texto a cada toma cuando cierra.',
             arreglo: `<button class="btn" type="button" data-hace="diagnostico"
                         title="Abrir el Diagnóstico: dice qué modelos encontró la app, dónde los buscó y qué falta bajar">

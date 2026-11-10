@@ -13,7 +13,7 @@
  *   · contraste REAL de cada texto visible contra el fondo que tiene detrás,
  *     con la cadena de `opacity` compuesta — que es lo que el ojo ve y lo que
  *     WCAG mide, no el color declarado en el CSS.
- *   · alto de las filas que se repiten (tomas, claquetas, sesiones).
+ *   · alto de las filas que se repiten (tomas, sesiones).
  *   · el presupuesto vertical: cuánto de la ventana se va en cromo fijo antes
  *     de que empiece el contenido.
  *   · blancos de clic por debajo de 24×24 CSS px (WCAG 2.2 SC 2.5.8).
@@ -66,17 +66,14 @@ const VARA = {
      * `kbd` que se quedó en 10 px. La lista es el sistema: 13/12/11 son las
      * tres voces; 32 es el ÚNICO elemento grande de la app —el timecode, lo que
      * se lee sin acercarse mientras el profesor habla— y 18 el escalón de los
-     * números que se consultan: el estado de la sesión, cuántas tomas, cuántas
-     * claquetas, cuánto dura la clase cortada (NN/g: «Limit how many elements
+     * números que se consultan: el estado de la sesión, cuántas tomas, cuánto
+     * dura la clase cortada (NN/g: «Limit how many elements
      * are big to a maximum of 2»).
      */
     tamanos: [32, 18, 13, 12, 11],
     chicos: 0,
-    // La fila que se repite veinte veces en una clase. La de claqueta va en la
-    // misma lista y mide lo mismo: tiene su propio renglón en el informe para
-    // que se vea cuál de las dos se pasó.
+    // La fila que se repite veinte veces en una clase.
     filaAlta: 32.9,
-    filaClaquetaAlta: 32.9,
     cromo: 0.20
 };
 
@@ -211,10 +208,7 @@ async function medir(pagina) {
 
         /* ── Las filas que se repiten ──────────────────────────────────── */
         const altoDe = el => Math.round(el.getBoundingClientRect().height * 10) / 10;
-        const filas = [...document.querySelectorAll('.fila:not(.fila-claqueta)')]
-            .filter(visible).map(altoDe);
-        const claquetas = [...document.querySelectorAll('.fila-claqueta')]
-            .filter(visible).map(altoDe);
+        const filas = [...document.querySelectorAll('.fila')].filter(visible).map(altoDe);
 
         /* ── El presupuesto vertical ───────────────────────────────────── */
         const alto = window.innerHeight;
@@ -235,8 +229,6 @@ async function medir(pagina) {
             clicables,
             chicos,
             filas: filas.length ? { cuantas: filas.length, alta: Math.max(...filas) } : null,
-            claquetas: claquetas.length
-                ? { cuantas: claquetas.length, alta: Math.max(...claquetas) } : null,
             cromo: Math.round(fijo),
             cromoPorciento: Math.round((fijo / alto) * 1000) / 10
         };
@@ -276,9 +268,6 @@ async function main() {
                 if (sobran.length) mal.push(`tamaños fuera del sistema: ${sobran.join('/')} px`);
                 if (m.chicos.length > VARA.chicos) mal.push(`${m.chicos.length} controles chicos`);
                 if (m.filas && m.filas.alta > VARA.filaAlta) mal.push(`fila de ${m.filas.alta} px`);
-                if (m.claquetas && m.claquetas.alta > VARA.filaClaquetaAlta) {
-                    mal.push(`claqueta de ${m.claquetas.alta} px`);
-                }
                 if (m.cromoPorciento / 100 > VARA.cromo) mal.push(`cromo ${m.cromoPorciento} %`);
 
                 console.log(`\n${mal.length ? '✗' : '✓'} ${escenario} @ ${ancho}×${ALTO}`);
@@ -288,7 +277,6 @@ async function main() {
                     + (m.apagados.length ? ` (+${m.apagados.length} en controles apagados, exentos)` : ''));
                 console.log(`   clicables ${m.clicables} · bajo 24×24 ${m.chicos.length}`);
                 if (m.filas) console.log(`   filas ${m.filas.cuantas} · la más alta ${m.filas.alta} px`);
-                if (m.claquetas) console.log(`   claquetas ${m.claquetas.cuantas} · la más alta ${m.claquetas.alta} px`);
                 console.log(`   cromo fijo ${m.cromo} px (${m.cromoPorciento} %)`);
 
                 for (const x of m.bajoAA.slice(0, 6)) {

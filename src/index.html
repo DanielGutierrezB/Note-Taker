@@ -137,10 +137,6 @@
             <span id="vivo-tomas" class="contador-num">0</span>
             <span class="rotulo">tomas</span>
           </div>
-          <div class="contador">
-            <span id="vivo-claquetas" class="contador-num">0</span>
-            <span class="rotulo">claquetas</span>
-          </div>
         </div>
         <span class="crece"></span>
         <!-- Lo que estaba enterrado en Ajustes y se mira mientras se graba: en
@@ -148,11 +144,6 @@
              cambian acá mismo, y los llena `pantalla-vivo.js`. -->
         <span class="rotulos-barra" id="vivo-rotulos"></span>
         <div class="nivel" id="vivo-nivel"><div class="nivel-barra"></div></div>
-        <!-- La claqueta es global y vive acá, con los controles, y no en la fila
-             de la toma: al lado de «Cerrar toma» se apretaba por error. Lejos
-             de «Terminar» también a propósito, con los dos iconos en medio. -->
-        <button id="btn-claqueta" class="btn" type="button" data-hace="claqueta"
-                title="Anotar una claqueta: en la palmada que se oyó, si la pastilla la está señalando, y si no acá. Tecla: K"></button>
         <button id="btn-deshacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
         <button id="btn-rehacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
         <button id="btn-terminar" class="btn" type="button"
@@ -164,10 +155,6 @@
            hace con la tecla o con el mouse. La vista y el borde se pintan
            según cómo esté la toma (`pintarAtajos`). -->
       <div class="atajos" id="vivo-atajos">
-        <button class="atajo" type="button" data-hace="claqueta"
-                title="Anotar una claqueta: en la palmada que se oyó, si la pastilla la está señalando, y si no acá. Tecla: K">
-          <kbd>K</kbd><span>claqueta</span>
-        </button>
         <button class="atajo" type="button" data-hace="borde" id="atajo-borde">
           <kbd>Enter</kbd><span id="atajo-borde-dice">abrir toma</span>
         </button>
@@ -180,22 +167,11 @@
         <button class="atajo" type="button" data-hace="deshacer" id="atajo-deshacer">
           <kbd>⌘Z</kbd><span>deshacer</span>
         </button>
-        <!-- La palmada que se oyó y todavía no es una claqueta.
-             Va en esta fila, que es la de la K —lo que hay que apretar si no se
-             confirma—, y AL FINAL de los atajos y no al lado de la K por una
-             razón medida: puesta antes, aparecer corría 136 px a la derecha a
-             todos los atajos siguientes, y al desaparecer un clic apuntado a
-             «abrir toma» caía en el de las vistas. Acá lo único que cede es el
-             hueco elástico y la ruta, que ya se recorta sola. -->
-        <span class="pastilla" id="vivo-palmada" hidden></span>
         <span class="crece"></span>
         <span id="vivo-donde"></span>
       </div>
     </div>
 
-    <!-- Una sola columna: las claquetas van en la lista, en su orden, como una
-         fila más. En un costado aparte había que cruzar la pantalla para saber
-         qué toma venía después de cuál claqueta. -->
     <div class="scroll">
       <div class="seccion">
         <div class="seccion-titulo"><span id="vivo-titulo-ahora">Ahora</span></div>
@@ -203,7 +179,7 @@
       </div>
       <div class="seccion">
         <div class="seccion-titulo">
-          <span>Tomas y claquetas</span>
+          <span>Tomas</span>
           <span id="vivo-cuantas" class="v3"></span>
           <span class="crece"></span>
           <button id="btn-desactivadas" class="btn btn-tenue btn-interruptor" type="button"
@@ -400,7 +376,7 @@
         <span class="rotulo">Capturas</span>
         <div class="prproj-capturas" id="prproj-capturas"></div>
         <p class="v3">Cada captura es una anidación vacía: ahí sueltas el vídeo de esa cámara o
-          pantalla y lo sincronizas con el audio de referencia y las claquetas que ya trae.</p>
+          pantalla y lo sincronizas con el audio de referencia que ya trae.</p>
       </div>
       <div class="campo">
         <span class="rotulo">Qué capturas componen cada vista</span>

@@ -2,9 +2,8 @@
 /**
  * ciclo-senales.js — El ciclo que escucha lo último y abre o cierra tomas.
  *
- * Cada segundo oye los últimos seis de audio buscando «3, 2, 1», «Pausa» y
- * «claqueta», y lee qué se dijo alrededor de cada palmada pendiente. Su texto
- * es descartable: de lo que oye solo se le cree la hora (ver la cabecera de
+ * Cada segundo oye los últimos seis de audio buscando «3, 2, 1» y «Pausa». Su
+ * texto es descartable: de lo que oye solo se le cree la hora (ver la cabecera de
  * `grabacion.js`, «Dos ciclos»).
  *
  * Va aparte de la sesión porque es lo único de ella que corre solo y espera a
@@ -49,32 +48,6 @@ const SOLAPE_MS = 1200;
 const CONTEXTO_MS = 6000;
 const NUEVO_MIN_MS = 700;
 const COLA_MS = 500;
-
-/**
- * Cuánto se le da a Whisper alrededor de una palmada para leer la frase.
- *
- * Los mismos seis segundos que `notas-vivo.PALABRA_Y_APLAUSO_MS`, que es la
- * otra mitad de la misma regla. Estaba en cuatro, y con cuatro se perdía la
- * claqueta del 30/09 a los 75,86 s: el profesor dijo «clase 2, claqueta» y
- * aplaudió 4,3 s después, así que la palabra caía justo afuera de la ventana y
- * la palmada quedaba sin confirmar. Con una palmada de verdad al lado, abrirla
- * no agrega falsos: lo que decide sigue siendo que se haya dicho la palabra.
- */
-const MARGEN_CLAQUETA_MS = vivo.PALABRA_Y_APLAUSO_MS;
-
-/**
- * Lo que se busca alrededor del aplauso para creerle.
- *
- * El director dice "Claqueta 7, clase 7" y aplaude, pero Whisper no conoce la
- * palabra: en trece clases reales la escribió "Claqueta", "Claquetados",
- * "Cacleta", "Klaqueta" y hasta "clasedos" pegando "clase dos". De ahí que se
- * busque el pedazo del medio y no la palabra entera.
- *
- * "Clase" a secas NO alcanza y por eso lleva un número detrás: es la palabra más
- * dicha de una clase —"en esta clase vas a entender…"— y con ella cualquier
- * portazo cerca de alguien hablando quedaba confirmado.
- */
-const DICE_CLAQUETA = vivo.CLAQUETA;
 
 /** Un tramo de esta sesión, transcripto (`oir-toma.js` no sabe de sesiones). */
 function oirTramo(desdeMs, hastaMs, liviano, s) {
@@ -161,11 +134,6 @@ async function buscarSenales(s) {
     s.pasada = new Promise(r => { listo = r; });
     const empezoLaPasada = Date.now();
     try {
-        // Primero los golpes que quedaron por leer: una claqueta es lo que ancla
-        // la sincronía en post y una toma puede esperar tres segundos más.
-        await leerCandidatas(s, vive);
-        if (!vive()) return;
-
         residente.asegurar({ idioma: s.estado.idioma || 'es' });
         const oido = await oirTramo(desde, hasta, true, s);
         if (!vive()) return;
@@ -291,73 +259,6 @@ function anotarSiSeAtraso(s, tardo, ventanaMs) {
     });
 }
 
-/**
- * Lee qué se dijo alrededor de cada golpe pendiente y decide si es una claqueta.
- *
- * El pico solo no alcanza —una puerta o un golpe en la mesa miden igual— así que
- * se transcribe alrededor y se busca "claqueta".
- *
- * **Se lee después, no cuando el golpe suena.** En ese momento el audio que viene
- * DETRÁS todavía no existe —se está grabando— y ahí está la mitad de la frase:
- * pedir un tramo que no está escrito devuelve nada. Lo llama el ciclo de
- * señales, que corre cada tres segundos: para cuando le toca, el margen ya está
- * en el disco.
- *
- * Las candidatas son una cola y no un solo lugar porque dos golpes pueden venir
- * más cerca de lo que tarda en leerse el primero.
- *
- * **Un golpe sin la palabra no se anota.** Una claqueta es la palabra Y el
- * aplauso. Anotar los golpes solos «por confirmar» llenaba la lista de
- * claquetas que nadie hizo: cualquier golpe en la mesa o ruido de la llamada.
- * Si el aplauso no se oyó (Zoom lo puede apagar), la palabra sola se avisa en
- * pantalla y la claqueta se pone con la tecla K.
- */
-async function leerCandidatas(s, vive) {
-    while (vive() && s.candidatas.length) {
-        const ms = s.candidatas[0];
-        // Todavía no hay audio detrás de este golpe; los que siguen son
-        // posteriores, así que tampoco.
-        if (espejo.grabadoHastaMs(s) < ms + MARGEN_CLAQUETA_MS) return;
-        s.candidatas.shift();
-
-        const leida = await leerClaqueta(ms, s);
-        if (!vive()) return;
-        // Sin la palabra alrededor, no es una claqueta: un golpe en la mesa, una
-        // puerta, un ruido de la llamada. Antes se anotaba «por confirmar».
-        if (!leida.confirmada) continue;
-        const anotada = vivo.anotarClaqueta(s.estado, leida);
-        if (anotada.nueva) {
-            s.avisar({ tipo: 'claqueta', claqueta: anotada.claqueta.n, por: 'golpe' });
-        }
-        espejo.fijar(s);
-    }
-}
-
-async function leerClaqueta(ms, s) {
-    let frase = '';
-    try {
-        const oido = await oirTramo(ms - MARGEN_CLAQUETA_MS, ms + MARGEN_CLAQUETA_MS, false, s);
-        frase = (oido ? oido.palabras : []).map(w => w.texto).join(' ').trim();
-    } catch (err) {
-        // El golpe se oyó igual: queda anotado sin frase, y se avisa. A ESTA
-        // sesión: si terminó mientras se esperaba, avisarle a la del módulo
-        // le mandaba a la grabación siguiente el error de la anterior.
-        if (s.viva && !s.terminando) s.avisar({ tipo: 'error', mensaje: err.message });
-    }
-    return {
-        ms,
-        // La hora de pared de verdad, para poder emparejar la claqueta con la
-        // fecha de creación de un archivo de cámara. No se usa para nada del
-        // XML: los cuadros salen de `ms`, que es el reloj del audio.
-        paredMs: Date.now(),
-        frase,
-        // La palabra y nada más. «Clase 4» solo confirmaba cualquier ruido
-        // cerca de alguien diciendo «en la clase 2 vimos…».
-        confirmada: DICE_CLAQUETA.test(frase),
-        origen: 'golpe,voz'
-    };
-}
-
 module.exports = {
     CICLO_MS,
     SOLAPE_MS,
@@ -365,7 +266,6 @@ module.exports = {
     NUEVO_MIN_MS,
     COLA_MS,
     VENTANA_MAX_MS,
-    MARGEN_CLAQUETA_MS,
     topeDeVentana,
     buscarSenales
 };

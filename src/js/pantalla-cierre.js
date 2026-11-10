@@ -50,8 +50,6 @@ function pintar() {
         <div class="tarjeta-cuerpo">
           <div class="contadores" style="margin-bottom:16px">
             ${contador(vivas.length, `toma${vivas.length === 1 ? '' : 's'}`)}
-            ${contador(salida.claquetas.length,
-                `claqueta${salida.claquetas.length === 1 ? '' : 's'}`)}
             ${contador(fmt.duracion(salida.segundos), 'de audio')}
             ${contador(fmt.relojCorto(cortados()), 'la clase cortada')}
           </div>
@@ -64,12 +62,7 @@ function pintar() {
             Adentro va el audio en A1, y los mismos marcadores van tres veces: en la
             secuencia, en el clip de A1 y en el clip maestro del WAV. Los del maestro
             son los que acompañan al audio si lo arrastrás a otra secuencia o lo metés
-            en un multicámara.
-            ${salida.claquetas.length
-                ? `La claqueta 1 está en <strong>${fmt.timecodeDe(salida.claquetas[0].ms,
-                    salida.ceroMs, salida.fps)}</strong>, que es contra la que conviene
-                   correlacionar los archivos.`
-                : 'No quedó ninguna claqueta anotada, así que la sincronía va por forma de onda.'}
+            en un multicámara. La sincronía con las cámaras va por forma de onda.
           </p>
 
           <div class="campo-fila" style="margin-top:16px">

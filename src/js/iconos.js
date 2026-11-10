@@ -21,9 +21,9 @@
 const DIBUJOS = {
     /* ── Lo propio de esta app ────────────────────────────────────── */
 
-    // La claqueta: la pizarra con su brazo levantado. Es el icono más usado de
-    // la app —está en la tecla, en el botón, en cada fila de la lista— así que
-    // tiene que leerse a 16 px: el brazo va separado del cuerpo y en diagonal,
+    // La claqueta: la pizarra con su brazo levantado. Es el icono de la app
+    // —la marca de arriba, el vacío de la lista de clases— así que tiene que
+    // leerse a 16 px: el brazo va separado del cuerpo y en diagonal,
     // que es lo único que la distingue de una tarjeta a ese tamaño.
     claqueta:
         '<path d="M3.4 9.8h17.2v9.1a1.8 1.8 0 0 1-1.8 1.8H5.2a1.8 1.8 0 0 1-1.8-1.8z"/>' +

@@ -56,10 +56,6 @@ const PARA_PARTIR_MS = 2000;
  *
  *   vista-proxima     { vista }                       la de la que todavía no empezó
  *
- * Y uno que no es de ninguna toma, porque la fila de al lado tampoco lo es:
- *
- *   nota-claqueta     { n, texto }                    la nota de la claqueta n
- *
  * Todo pasa por acá y todo escribe el XML: la pantalla no guarda nada por su
  * cuenta, así que lo que se ve y lo que está en el archivo son lo mismo siempre.
  *
@@ -70,7 +66,6 @@ const PARA_PARTIR_MS = 2000;
 function editar(sesion, cambio) {
     if (!sesion) return null;
     const c = cambio || {};
-    if (c.tipo === 'nota-claqueta') return notaDeClaqueta(sesion, c);
     // La vista de la toma que todavía no empezó. No es de ninguna toma, así que
     // no pasa por el portero del historial ni escribe el XML: no hay nada
     // escrito que cambiar. Es una elección pendiente, y deshacer tiene que
@@ -202,37 +197,6 @@ function editar(sesion, cambio) {
 }
 
 /**
- * La nota de una claqueta: lo mismo que la nota de una toma, en la otra fila.
- *
- * Sale por su propia puerta porque una claqueta no está en `estado.tomas` y su
- * paso de historial es de lista, no de toma (`campo: 'claquetas'`). De ahí en
- * adelante es idéntico: el portero de `historial.anotar` decide si hubo cambio,
- * la foto es de la claqueta sola, y `volver` repone `comentario` y nada más
- * porque el paso dice qué campos tocó (ver `ponerEnLista`).
- *
- * Se busca por `ms` cuando viene, y el número queda de respaldo: la ventana
- * manda también el cambio que sale cuando el repintado saca el campo, y el `n`
- * de ese renglón puede ser de antes de una renumeración. `mismaClaqueta` y no
- * igualdad, porque una fusión le corre el `ms` a la claqueta.
- *
- * Una claqueta que ya no está —la quitaron mientras el campo estaba abierto—
- * deja el gesto sin efecto y sin paso, igual que una toma que no se encuentra.
- */
-function notaDeClaqueta(sesion, c) {
-    const lista = sesion.estado.claquetas || [];
-    const claqueta = c.ms != null && Number.isFinite(Number(c.ms))
-        ? lista.find(x => vivo.mismaClaqueta(x, { ms: Number(c.ms) }))
-        : lista.find(x => x.n === Number(c.n));
-    if (!claqueta) return espejo.resumen(sesion);
-    const antes = { ...claqueta };
-    vivo.aplicarAClaqueta(claqueta, c);
-    // El número de la que se encontró, que es el que dice «deshacer» (`comoSeLlama`).
-    anotarDeLaSesion(sesion, 'claquetas', antes, { ...c, n: claqueta.n }, { ...claqueta });
-    espejo.escribir(sesion);
-    return espejo.resumen(sesion);
-}
-
-/**
  * Cómo se llama lo que se acaba de hacer, para poder decirlo al deshacerlo.
  *
  * Se dice QUÉ se deshizo y no solo que algo pasó, igual que en la revisión de
@@ -254,50 +218,10 @@ function comoSeLlama(c) {
         case 'eliminar': return `descartar ${cual}`;
         case 'abrir': return `abrir ${cual}`;
         case 'cerrar': return `cerrar ${cual}`;
-        // Las que no son de ninguna toma, así que no la nombran. Están acá y
-        // no donde se hacen por lo mismo que los otros: si cada gesto redactara
-        // su rótulo, el botón de deshacer diría las cosas de nueve maneras.
-        //
-        // La claqueta lleva su número porque en una clase en vivo hay varias:
-        // «deshacer la claqueta» con siete anotadas no dice cuál se va.
-        case 'claquetas': return c.n ? `poner la claqueta ${c.n}` : 'quitar una claqueta';
-        case 'nota-claqueta': return `la nota de la claqueta ${c.n}`;
         default: return `el cambio en ${cual}`;
     }
 }
 
-/**
- * El paso de un campo de la sesión: hoy, la lista de claquetas.
- *
- * Está acá, con los de las tomas, porque son el mismo historial y la misma pila
- * —el orden de deshacer tiene que ser el orden de los gestos— y porque el rótulo
- * sale del mismo sitio. Lo que los distingue es qué se repone: un campo del
- * estado en vez de una toma, y por eso el paso lleva `campo` en lugar de `id`
- * (ver `engine/deshacer.js`).
- *
- * La foto es de LA CLAQUETA que se tocó y no de la lista, por lo mismo que la
- * de una toma no es de la sesión: la lista se llena sola mientras la foto
- * espera —el aplauso y la voz anotan claquetas— y reponerla entera se llevaba
- * puestas las que habían entrado después. Los números no se corren porque
- * `volver` renumera al terminar, que es lo que hace el gesto original.
- *
- * Quien los llama es `grabacion.js`, que es el único que sabe cuál es la sesión.
- * La foto de antes la toma él, antes de tocar nada; la de después se saca acá,
- * que es lo que garantiza que las dos se saquen igual.
- *
- * @param {'claquetas'} campo qué campo de `sesion.estado` se tocó
- * @param {object|null} antes de `historial.fotoDeCampo`, sacada antes del cambio
- */
-function anotarDeLaSesion(sesion, campo, antes, cambio, despues) {
-    if (!sesion) return;
-    historial.anotar(sesion.historia, {
-        que: comoSeLlama(cambio || {}),
-        tipo: (cambio || {}).tipo,
-        campo,
-        antes,
-        despues: despues !== undefined ? despues : historial.fotoDeCampo(sesion.estado[campo])
-    });
-}
 
 /**
  * Descartar una toma: sacarla de la sesión.
@@ -635,15 +559,7 @@ function volver(sesion, hacia) {
     // devuelve, es porque esa palabra pasa a estar fuera de toda toma otra vez.
     const tenia = paso.campo ? null
         : ((sesion.estado.tomas.find(t => t.id === paso.id) || {}).palabras || []).slice();
-    if (paso.campo === 'claquetas') {
-        historial.ponerEnLista(sesion.estado.claquetas || (sesion.estado.claquetas = []),
-            dado.quitar, dado.foto, { campos: dado.campos, esLaMisma: vivo.mismaClaqueta });
-        // Una claqueta que vuelve deja de estar entre las quitadas a mano, y una
-        // que se va a mano entra: las mismas reglas que el gesto original.
-        vivo.olvidarQuitada(sesion.estado, dado.foto);
-        if (dado.quitar && !dado.foto) vivo.recordarQuitada(sesion.estado, dado.quitar);
-        vivo.renumerar(sesion.estado);
-    } else if (paso.campo) {
+    if (paso.campo) {
         historial.ponerCampo(sesion.estado, paso.campo, foto);
     } else {
         historial.poner(sesion.estado.tomas, paso.id, foto, dado.campos);
@@ -785,4 +701,4 @@ function cerrarToma(sesion, opciones) {
     return espejo.resumen(sesion);
 }
 
-module.exports = { editar, comoSeLlama, anotarDeLaSesion, volver, abrirToma, cerrarToma };
+module.exports = { editar, comoSeLlama, volver, abrirToma, cerrarToma };

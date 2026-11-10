@@ -94,37 +94,24 @@ const TOMAS = [
     }
 ];
 
-// La 2 lleva nota y la 1 no: así se ven los dos renglones, el que muestra lo
-// que se oyó y el que muestra lo que alguien escribió encima.
-const CLAQUETAS = [
-    { n: 1, ms: seg(12), paredMs: seg(12), frase: 'Claqueta 1, clase 1', comentario: '', confirmada: true, origen: 'golpe,voz' },
-    { n: 2, ms: seg(415), paredMs: seg(415), frase: '', comentario: 'Se cambió la tarjeta de la cámara 2', confirmada: false, origen: 'golpe' },
-    { n: 3, ms: seg(712), paredMs: seg(712), frase: '', comentario: '', confirmada: true, origen: 'editor' }
-];
-
 /**
  * Lo que se oyó después de la última toma, sin ninguna abierta: el texto del
  * campo de espera. Empieza apenas después del OUT de la 6 (1010 s).
  *
- * Llevan adentro las dos señales que se ven en un campo de espera de verdad, y
- * son las que hacen falta para mirar cómo quedan marcadas:
- *
- *   «pausa»   dicha hablando de otra cosa, con la clase siguiendo detrás: es la
- *             que el motor anota como `pausa-corta` y NO cierra nada.
- *   «Laqueta» como Whisper escribió una claqueta el 30/09. Sin claqueta en la
- *             lista a esa altura, que es el caso de verdad: se dijo, no se oyó
- *             el aplauso y la app lo avisa para poner la K.
+ * Lleva adentro una «pausa» dicha hablando de otra cosa, con la clase
+ * siguiendo detrás: es la que el motor anota como `pausa-corta` y NO cierra
+ * nada, y hace falta para mirar cómo queda marcada.
  */
 const SUELTAS = palabras(
     'bueno ahora vamos con lo siguiente acá hacemos una pausa en el flujo y ' +
     'conectamos el disparador con la condición de salida fíjense que cuando ' +
-    'cambia el valor se vuelve a evaluar todo desde el principio Laqueta clase dos', 1015);
+    'cambia el valor se vuelve a evaluar todo desde el principio', 1015);
 
 /**
  * Las tomas de un vídeo de la semana, que no son las de una clase.
  *
  * Están aparte porque el modo semanal muestra otra cosa: solo dos vistas —la
- * pantalla y la cámara—, ninguna nota escrita a mano y ninguna claqueta. Con
+ * pantalla y la cámara— y ninguna nota escrita a mano. Con
  * las de la clase, la maqueta enseñaba tomas en «Slides» y en «Motion Graphics» y
  * renglones que decían «Los tres pilares», que ahí no existen: la captura
  * mentía sobre la pantalla que estaba enseñando.
@@ -175,7 +162,6 @@ const SUELTAS_SEMANA = palabras(
 export function estadoSemanal(extra) {
     return estadoEnVivo(Object.assign({
         secuencia: 'semana_2026-10-03_09-12-40',
-        claquetas: [],
         segundos: 300,
         // Con un paso atrás: la toma 2 de esta lista está desactivada, así que
         // alguien la desactivó, y los dos botones se miran en la captura con
@@ -197,7 +183,6 @@ export function estadoEnVivo(extra) {
         // maqueta enseña el rótulo «Auto · ES» que se ve en una clase de verdad.
         idioma: 'auto',
         idiomaOido: 'es',
-        claquetas: CLAQUETAS,
         vistas: VISTAS,
         dir: '/Volumes/Rodaje/Curso de automatizaciones',
         archivos: {
@@ -240,7 +225,7 @@ export const SEMANALES = [
             xml: '/Users/vos/Vídeos/Grabación-2026-10-04_19-29-01/xml/semana.xml',
             json: '/Users/vos/Vídeos/Grabación-2026-10-04_19-29-01/xml/Datos/semana_notas-en-vivo.json'
         },
-        resumen: { tomas: 3, descartadas: 1, claquetas: 0, segundos: 162, sinReleer: 0, estado: 'terminada' }
+        resumen: { tomas: 3, descartadas: 1, segundos: 162, sinReleer: 0, estado: 'terminada' }
     },
     // La de la semana anterior. Está para que «Elegir carpeta…» tenga más de
     // una cosa que mostrar: con una sola entra directo y el caso de elegir no
@@ -254,7 +239,7 @@ export const SEMANALES = [
             xml: '/Volumes/Rodaje/Grabación-2026-09-27_18-40-12/xml/semana.xml',
             json: '/Volumes/Rodaje/Grabación-2026-09-27_18-40-12/xml/Datos/semana_notas-en-vivo.json'
         },
-        resumen: { tomas: 5, descartadas: 0, claquetas: 0, segundos: 304, sinReleer: 0, estado: 'terminada' }
+        resumen: { tomas: 5, descartadas: 0, segundos: 304, sinReleer: 0, estado: 'terminada' }
     }
 ];
 
@@ -266,7 +251,7 @@ export const SESIONES = [
         vez: 1,
         ceroMs: new Date('2026-09-28T09:02:11').getTime(),
         archivos: { xml: '/x/a.xml', json: '/x/a_notas-en-vivo.json' },
-        resumen: { tomas: 14, descartadas: 2, claquetas: 4, segundos: 9820, sinReleer: 0, estado: 'terminada' }
+        resumen: { tomas: 14, descartadas: 2, segundos: 9820, sinReleer: 0, estado: 'terminada' }
     },
     {
         secuencia: '02_V2_curso-de-automatizaciones_2026-09-27_14-30-00',
@@ -275,7 +260,7 @@ export const SESIONES = [
         vez: 2,
         ceroMs: new Date('2026-09-27T14:30:00').getTime(),
         archivos: { xml: '/x/b.xml', json: '/x/b_notas-en-vivo.json' },
-        resumen: { tomas: 9, descartadas: 0, claquetas: 2, segundos: 5410, sinReleer: 3, estado: 'sin releer' }
+        resumen: { tomas: 9, descartadas: 0, segundos: 5410, sinReleer: 3, estado: 'sin releer' }
     },
     {
         secuencia: '02_curso-de-automatizaciones_2026-09-26_10-00-00',
@@ -284,7 +269,7 @@ export const SESIONES = [
         vez: 1,
         ceroMs: new Date('2026-09-26T10:00:00').getTime(),
         archivos: { xml: '/x/c.xml', json: '/x/c_notas-en-vivo.json' },
-        resumen: { tomas: 6, descartadas: 1, claquetas: 1, segundos: 2140, sinReleer: 0, estado: 'abierta' }
+        resumen: { tomas: 6, descartadas: 1, segundos: 2140, sinReleer: 0, estado: 'abierta' }
     }
 ];
 

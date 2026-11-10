@@ -235,8 +235,6 @@ async function unaClase(semilla, conBasura, seCae) {
             ['idioma', async () => {
                 grabacion.cambiarIdioma(r.de(['auto', 'es', 'en', 'pt']), { releer: r.si(0.5) });
             }],
-            ['claqueta', async () => { grabacion.claqueta(); }],
-            ['quitar-claqueta', async () => { const c = s.estado.claquetas || []; if (c.length) grabacion.quitarClaqueta(r.de(c).n); }],
             ['deshacer', async () => { grabacion.deshacer(); }],
             ['rehacer', async () => { grabacion.rehacer(); }],
             ['relectura', async () => { await new Promise(res => setTimeout(res, 5)); }]

@@ -476,8 +476,10 @@ async function generar(opciones) {
                 // (`slice(0, 2)` en `panel-prproj.js`), así que la PRE va en
                 // esta y no en una tercera: es un sitio nuevo del proyecto y
                 // hay que saber que está.
-                `${precortadas} precortada(s) con ${tomas} toma(s) y ${claquetas} claqueta(s) marcada(s)`
-                    + ' en las capturas'
+                // Las claquetas solo las traen las clases de antes de que la app
+                // dejara de anotarlas: en una carpeta nueva no se nombran.
+                `${precortadas} precortada(s) con ${tomas} toma(s)`
+                    + (claquetas ? ` y ${claquetas} claqueta(s) marcada(s) en las capturas` : '')
                     + (pres ? `, y ${pres} clase(s) enteras sin cortar en «${BIN_PRECORTADAS} › ${BIN_PRE}».` : '.'),
                 `Se quitaron ${descolgados} objeto(s) de la plantilla (${podados} borrado(s)).`
             ],

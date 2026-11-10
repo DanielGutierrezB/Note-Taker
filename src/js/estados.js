@@ -1,8 +1,8 @@
 /**
  * estados.js — El vocabulario de estados, en un solo sitio.
  *
- * Cada cosa que puede estar de varias maneras —una toma, una claqueta, la
- * sesión, el audio, Whisper— dice su estado con UNA PALABRA, y esa palabra la
+ * Cada cosa que puede estar de varias maneras —una toma, la sesión, el
+ * audio, Whisper— dice su estado con UNA PALABRA, y esa palabra la
  * decide este archivo.
  *
  * Está junto y no repartido por las pantallas por dos motivos. El primero es
@@ -51,64 +51,6 @@ export function deToma(toma, estado) {
     }
     if (toma.cerradaSola) return { clave: 'lista', palabra: 'cerrada a mano' };
     return { clave: 'lista', palabra: 'lista' };
-}
-
-/** Cómo está una claqueta. */
-export function deClaqueta(claqueta) {
-    if (!claqueta) return { clave: 'por confirmar', palabra: 'por confirmar' };
-    if (claqueta.origen === 'editor') {
-        return { clave: 'confirmada', palabra: 'a mano' };
-    }
-    if (claqueta.confirmada) return { clave: 'confirmada', palabra: 'confirmada' };
-    return {
-        clave: 'por confirmar',
-        palabra: 'por confirmar',
-        porque: 'Se oyó un golpe pero no se dijo «claqueta» ni «clase N» alrededor: ' +
-            'puede ser una puerta. Si era una claqueta, dejala; si no, quitala.'
-    };
-}
-
-/**
- * La palmada que se oyó y todavía no es una claqueta.
- *
- * Es el único estado de la app que el motor no guarda en la sesión: el aviso de
- * `golpe` pasa y no queda en ninguna parte. Y es el que le faltaba a la
- * pantalla: el aplauso no daba ninguna señal hasta que la confirmación volvía
- * de Whisper, seis segundos después, así que aplaudir y no ver nada se leía
- * como «la app no lo oyó» — que es exactamente lo que el editor reportó.
- *
- * Son las dos mitades de la misma idea que las palabras marcadas del transcript:
- * lo que la app OYÓ no es lo que la app HIZO, y las dos cosas se dicen aparte.
- */
-export function dePalmada(palmada) {
-    if (!palmada) return null;
-    if (palmada.sinConfirmar) {
-        return {
-            clave: 'sin confirmar',
-            palabra: 'palmada sin confirmar',
-            porque: 'Se oyó la palmada pero no se leyó «claqueta» alrededor, así que no se ' +
-                'anotó ninguna. Pasa cuando Whisper escribe la palabra de otra manera: el ' +
-                '30/09 salió «La quinta» y «Tlajeta clase 4». Si fue una claqueta, ponela ' +
-                'con K o con el botón de Claqueta: ' +
-                (palmada.enganchable
-                    // Lo que el aviso existe para que se pueda hacer. El motor
-                    // recibe el momento de ESTA palmada y anota ahí, no donde
-                    // esté el dedo doce segundos después.
-                    ? 'la marca cae en la palmada misma, no donde apretás.'
-                    // Y cuando ya no, se dice. Un aviso que promete algo que no
-                    // hace es peor que no tenerlo.
-                    : 'pasaron más de veinte segundos, así que esta va a caer en el ' +
-                      'momento en que apretás y no en la palmada, que ya quedó atrás.')
-        };
-    }
-    return {
-        clave: 'por confirmar',
-        palabra: 'palmada oída',
-        porque: 'Se oyó una palmada. La app está leyendo lo que se dijo alrededor para ver si ' +
-            'es una claqueta, y tarda unos segundos porque necesita el audio de después. Si ' +
-            'ya sabés que fue una claqueta, apretá K: la marca cae en la palmada misma y las ' +
-            'dos se funden en una.'
-    };
 }
 
 /**

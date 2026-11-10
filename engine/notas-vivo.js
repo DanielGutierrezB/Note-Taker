@@ -2,18 +2,17 @@
 /**
  * notas-vivo.js — Las notas de rodaje, mientras la clase se está grabando.
  *
- * El profesor dice "3, 2, 1" y la toma se abre, dice "Pausa" y se cierra, y dice
- * "claqueta" (o aplaude) y queda una marca de sincronía. De eso sale el XML que
- * el editor importa en Premiere (`notas-xml.js`).
+ * El profesor dice "3, 2, 1" y la toma se abre, y dice "Pausa" y se cierra. De
+ * eso sale el XML que el editor importa en Premiere (`notas-xml.js`).
  *
  * **Una sesión es una clase entera, grabada de corrido.** No hay "parar y
  * seguir": la clase dura lo que dure y de ella sale UN XML, con todas las tomas
- * y todas las claquetas adentro. Eso es lo que hace que los tiempos cierren en
- * el total, que es lo único que el editor no puede arreglar después.
+ * adentro. Eso es lo que hace que los tiempos cierren en el total, que es lo
+ * único que el editor no puede arreglar después.
  *
  * **Todo va con la HORA DEL DÍA en milisegundos.** Es lo que permite que el
- * reloj de la app y el del audio sean el mismo: las palabras y los golpes se
- * estampan por su posición en el WAV (`oir.aHoraDelDia`, `grabacion.pcm`), no
+ * reloj de la app y el del audio sean el mismo: las palabras se estampan por
+ * su posición en el WAV (`oir.aHoraDelDia`, `grabacion.pcm`), no
  * por cuándo la app se enteró. Pasarlo a los cuadros que entiende Premiere es
  * trabajo de `notas-xml.js`, que es lo único que conoce el formato.
  *
@@ -171,12 +170,9 @@ function estadoNuevo(params) {
         idiomaOido: null,
         dispositivo: p.dispositivo || null,
         /**
-         * Las claquetas, en orden y todas.
-         *
-         * Son una lista y no un campo porque en una clase en vivo se claquetea
-         * varias veces: el editor sincroniza a mano y correlaciona la primera
-         * para saber si hay uno o varios archivos en Premiere, y las demás le
-         * sirven de control cada vez que una cámara se cortó y volvió.
+         * Las claquetas de las clases grabadas antes de que la app dejara de
+         * anotarlas. Una clase nueva no tiene ninguna —se sincroniza por forma
+         * de onda—, pero las viejas las siguen llevando a su XML.
          *
          * Cada una: `{ n, ms, paredMs, frase, confirmada, origen }`. `n` es su
          * número, que es con el que se la nombra en el XML y en la pantalla;
@@ -264,31 +260,6 @@ const PAUSA = /^paus[ae][.,…!?]*$/i;
  */
 const OK = /^ok(?:ay)?[.,…!?]*$/i;
 
-/**
- * La claqueta, dicha.
- *
- * Es la tercera puerta por la que entra una claqueta, y existe porque el
- * aplauso puede no llegar: el audio de una reunión de Zoom pasa por compresión,
- * cancelación de eco y control automático de ganancia, y las tres cosas
- * aplastan justo lo que `aplausos.js` busca —un chasquido corto y muy por
- * encima del piso—. Con la clase en vivo entrando por un dispositivo virtual,
- * confiar solo en el pico es confiar en que el procesamiento de otro programa
- * deje pasar un transitorio.
- *
- * El pedazo del medio y no la palabra entera, con el mismo motivo que en la
- * confirmación de la palmada: Whisper no conoce la palabra y la escribió
- * "Claqueta", "Claquetados", "Cacleta", "Klaqueta" y, el 30/09, "Laqueta" y
- * "TLAQUETA CLASE 2". "laque" cubre a las cuatro que empiezan distinto y
- * "cacle" a la que le baila la ele; son cinco letras, que es lo bastante largo
- * para que no lo dispare cualquier sílaba suelta.
- *
- * Lo que NO cubre, y se sabe: "Tlajeta clase 4" y "La quinta", que fue como
- * escribió otras dos palmadas del mismo día. Ahí la claqueta se avisa sin
- * confirmar y se pone con la tecla K; inventar una regla para "quinta" sería
- * peor que la enfermedad.
- */
-const CLAQUETA = /laque|cacle/i;
-
 /** Cuántos números seguidos hacen una cuenta. Uno solo es habla. */
 const MINIMO_DE_CUENTA = 2;
 
@@ -341,7 +312,7 @@ function palabra(w) {
  * (`speech-edges.trimChatter`), y por las mismas razones.
  *
  * @param {Array} palabras [{t, texto}] con `t` en hora del día (ms)
- * @returns {Array} [{tipo:'abre'|'cierra'|'claqueta', desde:number, hasta:number}]
+ * @returns {Array} [{tipo:'abre'|'cierra'|'pausa-corta', desde:number, hasta:number}]
  */
 function senales(palabras, finMs) {
     const lista = palabras || [];
@@ -349,15 +320,6 @@ function senales(palabras, finMs) {
 
     for (let i = 0; i < lista.length; i++) {
         const p = palabra(lista[i]);
-
-        // La claqueta dicha. No abre ni cierra nada —una claqueta no es una
-        // toma— así que no corta el recorrido: la misma palabra puede además
-        // ser parte de otra cosa, y las palabras de alrededor siguen entrando
-        // a la toma que esté abierta si la hay.
-        if (CLAQUETA.test(p)) {
-            salida.push({ tipo: 'claqueta', desde: i, hasta: i, por: 'voz' });
-            continue;
-        }
 
         if (RETOMAR.test(p)) {
             salida.push({ tipo: 'abre', desde: i, hasta: i, por: 'retomamos' });
@@ -1113,22 +1075,20 @@ function cerrarProvisional(toma, ms) {
 
 /* ─── Las claquetas ──────────────────────────────────────────────────────
  *
- * En una clase en vivo se claquetea varias veces, así que acá no se elige UNA:
- * se mantiene la lista. Lo único que hay que resolver es que la misma claqueta
- * no entre dos veces, y eso pasa seguido porque llega por tres puertas a la vez:
- * el aplauso que oye `golpe.js` en el PCM, la palabra "claqueta" que oye el
- * ciclo de señales, y el editor que aprieta la tecla.
+ * La app ya no las anota: cada clase se sincroniza por forma de onda, el WAV de
+ * las notas contra el audio de las cámaras. Lo que queda acá es la lista que
+ * traen las clases grabadas antes, que siguen llevando sus marcadores al XML.
+ * Entonces llegaban por tres puertas —el aplauso en el PCM, la palabra
+ * «claqueta» y la tecla K— y de ahí sale la fusión: la misma claqueta oída dos
+ * veces queda una sola.
  */
 
 /**
  * Cuánto tienen que separarse dos claquetas para ser dos y no la misma.
  *
- * Cinco segundos. Por abajo, las tres puertas llegan dentro de ese margen: el
- * editor aprieta la tecla mientras la escucha, el aplauso suena mientras se dice
- * "claqueta 3", y el ciclo de señales confirma el golpe leyendo cuatro segundos
- * a cada lado (`MARGEN_CLAQUETA_MS` en `grabacion.js`). Por arriba, dos
- * claquetas de verdad nunca están tan cerca: entre una y la siguiente hay una
- * toma, o por lo menos el tiempo de reacomodar una cámara.
+ * Cinco segundos: las tres puertas llegaban dentro de ese margen, y dos
+ * claquetas de verdad nunca están tan cerca, porque entre una y la siguiente
+ * hay una toma, o por lo menos el tiempo de reacomodar una cámara.
  */
 const MISMA_CLAQUETA_MS = 5000;
 
@@ -1191,8 +1151,7 @@ function fundir(vieja, nueva) {
 /**
  * Anota una claqueta, fundiéndola con la que ya esté a menos de cinco segundos.
  *
- * Devuelve la que quedó en la lista y si fue nueva, que es lo que quien llama
- * necesita para no avisar dos veces de la misma (`grabacion.js`).
+ * Devuelve la que quedó en la lista y si fue nueva.
  *
  * La lista se mantiene ORDENADA por `ms` y se renumera después de cada cambio:
  * `n` es el número con el que la claqueta se nombra en el XML y en la pantalla,
@@ -1206,20 +1165,10 @@ function fundir(vieja, nueva) {
  */
 function anotarClaqueta(estado, claqueta) {
     const lista = estado.claquetas || (estado.claquetas = []);
-    // Una que el editor quitó a mano no vuelve sola: la relectura la volvía a
-    // encontrar doce segundos después (`releerOrillas`) y renumeraba las de
-    // atrás. Solo la puede volver a poner él (o su Cmd-Z).
-    if ((claqueta.origen || 'editor') !== 'editor' &&
-        (estado.claquetasQuitadas || []).some(ms => Math.abs(ms - Number(claqueta.ms)) < MISMA_CLAQUETA_MS)) {
-        return { claqueta: null, nueva: false, quitada: true };
-    }
     const entra = {
         ms: Number(claqueta.ms),
         paredMs: claqueta.paredMs != null ? Number(claqueta.paredMs) : null,
         frase: limpio(claqueta.frase),
-        // Vacía salvo que la reponga el historial: las claquetas las anota el
-        // aplauso, la voz o la K, y ninguno de los tres escribe nada. La nota
-        // la pone el editor después, sobre una que ya está en la lista.
         comentario: limpio(claqueta.comentario),
         confirmada: Boolean(claqueta.confirmada),
         origen: claqueta.origen || 'editor'
@@ -1241,13 +1190,7 @@ function anotarClaqueta(estado, claqueta) {
 /**
  * Si dos entradas son la misma claqueta: a menos de cinco segundos una de otra.
  *
- * Es la definición de la app y está acá, en una función, porque hacen falta dos
- * respuestas distintas con la misma regla: `anotarClaqueta` la usa para fundir
- * lo que llega con lo que ya está, y el historial para volver a encontrar una
- * claqueta que puede haber cambiado de `ms` justamente por esa fusión (ver
- * `ponerEnLista` en `deshacer.js`). Dos claquetas de verdad nunca caen tan
- * cerca —la de acá las habría fundido—, así que la ventana no puede confundir
- * una con otra.
+ * Es la regla con que `anotarClaqueta` funde lo que llega con lo que ya está.
  */
 function mismaClaqueta(a, b) {
     return Boolean(a) && Boolean(b) && Math.abs(Number(a.ms) - Number(b.ms)) < MISMA_CLAQUETA_MS;
@@ -1272,107 +1215,6 @@ function renumerar(estado) {
  */
 function claquetaDeReferencia(estado) {
     return (estado.claquetas || [])[0] || null;
-}
-
-function quitarClaqueta(estado, n) {
-    const quitada = (estado.claquetas || []).find(c => c.n === n);
-    if (quitada) recordarQuitada(estado, quitada);
-    estado.claquetas = (estado.claquetas || []).filter(c => c.n !== n);
-    renumerar(estado);
-    return estado.claquetas;
-}
-
-function recordarQuitada(estado, c) {
-    if (!c) return;
-    estado.claquetasQuitadas = (estado.claquetasQuitadas || []).concat([c.ms]);
-}
-
-function olvidarQuitada(estado, c) {
-    if (!c || !estado.claquetasQuitadas) return;
-    estado.claquetasQuitadas = estado.claquetasQuitadas.filter(ms => Math.abs(ms - c.ms) >= MISMA_CLAQUETA_MS);
-}
-
-/**
- * Cuánto pueden separarse la palabra «claqueta» y el aplauso para ser la misma
- * claqueta. El director dice «Claqueta 4, clase 4» y aplaude: el aplauso llega
- * uno a tres segundos después de la palabra, y a veces antes si la dice
- * aplaudiendo.
- */
-const PALABRA_Y_APLAUSO_MS = 6000;
-
-/** Los aplausos oídos que se recuerdan para emparejar con la palabra. */
-const APLAUSOS_RECORDADOS = 200;
-
-/** Una palmada que oyó `aplausos.js`. Sola, no es una claqueta: espera su palabra. */
-function recordarAplauso(estado, ms) {
-    estado.aplausos = (estado.aplausos || []).concat([ms]).slice(-APLAUSOS_RECORDADOS);
-}
-
-/**
- * La palmada más cercana a `ms` dentro de la ventana de la regla, o null.
- *
- * Es el punto de sincronía de verdad: un pico medido sobre la onda. Lo usan las
- * dos puertas que llegan con una hora peor —la palabra, que empieza antes o
- * después del aplauso, y el botón, que llega al tiempo de reacción de una
- * persona— para estampar la claqueta donde SUENA y no donde se enteraron.
- */
-function aplausoCerca(estado, ms) {
-    const cerca = (estado.aplausos || [])
-        .filter(a => Math.abs(a - ms) <= PALABRA_Y_APLAUSO_MS)
-        .sort((a, b) => Math.abs(a - ms) - Math.abs(b - ms))[0];
-    return cerca == null ? null : cerca;
-}
-
-/**
- * La palmada que se oyó EXACTAMENTE en `ms`, o null.
- *
- * Es la vuelta del aviso `golpe`: el motor le manda a la ventana el `ms` del
- * pico, la ventana lo enseña en la pastilla, y cuando el editor aprieta K lo
- * devuelve para decir «anotá ESA». Existe porque por cercanía no alcanza: la
- * pastilla roja no puede aparecer hasta doce segundos después de la palmada
- * —seis de audio que al motor le faltan y seis de la pasada de Whisper—, y para
- * entonces `aplausoCerca` ya no la encuentra. Justo cuando el editor se entera
- * de que la claqueta no se anotó, apretar K dejaba de caer en la palmada.
- *
- * **Se busca de verdad en vez de creerle.** Por igualdad y no por cercanía,
- * porque el número que vuelve es el mismo que salió de acá y no una
- * aproximación; y contra la lista de palmadas oídas, porque así la ventana
- * puede señalar una palmada vieja pero no puede inventar una hora.
- */
-function aplausoOido(estado, ms) {
-    const n = Number(ms);
-    if (!Number.isFinite(n)) return null;
-    return (estado.aplausos || []).includes(n) ? n : null;
-}
-
-/**
- * La palabra «claqueta» dicha a la hora `ms`: si hubo un aplauso cerca, ESA es
- * la claqueta, y va en el aplauso —que es el punto de sincronía, el cuadro que
- * el editor busca en la onda—. Sin aplauso cerca, no es una claqueta.
- *
- * **Una claqueta es la palabra Y el aplauso.** Antes bastaba cualquiera de los
- * dos: un golpe en la mesa, una puerta o un ruido de Zoom se anotaban «por
- * confirmar», y la palabra sola (o algo que Whisper escribió parecido, o «clase
- * 2» cerca de un ruido) se anotaba confirmada. En las pruebas aparecían
- * claquetas donde nadie había claqueteado.
- *
- * @returns {{claqueta:object|null, nueva:boolean, sinAplauso?:boolean}}
- */
-function claquetaDicha(estado, ms, frase) {
-    const cerca = aplausoCerca(estado, ms);
-    if (cerca == null) return { claqueta: null, nueva: false, sinAplauso: true };
-    return anotarClaqueta(estado, {
-        ms: cerca,
-        paredMs: Date.now(),
-        frase,
-        confirmada: true,
-        origen: 'golpe,voz'
-    });
-}
-
-/** La claqueta con la que se fundiría una nueva en `ms`, si hay. */
-function claquetaCerca(estado, ms) {
-    return (estado.claquetas || []).find(c => Math.abs(c.ms - ms) < MISMA_CLAQUETA_MS) || null;
 }
 
 /** Cuántas de las últimas palabras oídas se recuerdan para encontrarlas en la pasada siguiente. */
@@ -1592,11 +1434,8 @@ function aplicarSenales(estado, palabras, opciones) {
     // de una lista cerrada, y media sílaba de más no convierte un «1» en otra
     // cosa. Para las palabras de la clase no alcanzaría —«funcion» a mitad de
     // «funcionando» empieza a tiempo y se guardaría cortada—, así que ahí sigue
-    // valiendo el final (ver `cuantasFirmes`). La claqueta va con las palabras:
-    // lo que se le busca es el número de al lado, y ese sí puede venir cortado.
-    const empezoATiempo = m => (m.tipo === 'claqueta'
-        ? m.hasta < cuantasFirmes
-        : nuevas[m.hasta].t <= firme);
+    // valiendo el final (ver `cuantasFirmes`).
+    const empezoATiempo = m => nuevas[m.hasta].t <= firme;
     const marcas = senales(nuevas, finMs).filter(m => empezoATiempo(m) && !yaVista(m));
     // Dónde empieza lo que no se había oído: por el TEXTO y no por la hora (ver
     // `dondeSigue`).
@@ -1639,27 +1478,6 @@ function aplicarSenales(estado, palabras, opciones) {
         // que no se reconoce.
         if (marca.tipo === 'pausa-corta') {
             eventos.push({ tipo: 'pausa-corta', ms: nuevas[marca.desde].t, huecoSec: marca.huecoSec });
-            continue;
-        }
-
-        if (marca.tipo === 'claqueta') {
-            // Las palabras de la claqueta se guardan como cualquier otra: si hay
-            // una toma abierta, "claqueta 4" se dijo adentro de ella y sacarlo
-            // del transcript sería mentir sobre lo que se oye en el audio. La
-            // relectura con el modelo grande lo vuelve a escribir igual.
-            guardar(marca.hasta + 1);
-            // La frase entera de alrededor y no la palabra sola: es de donde
-            // sale el número ("claqueta 4, clase 4"), que es lo que el editor
-            // busca para emparejarla con la pizarra.
-            // Solo con un aplauso cerca (`claquetaDicha`). La palabra sola se
-            // cuenta, para que quien mira pueda poner la K si sí hubo aplauso.
-            const anotada = claquetaDicha(estado, nuevas[marca.desde].t,
-                textoDe(nuevas, Math.max(0, marca.desde - 2), marca.hasta + 3));
-            if (anotada.nueva) {
-                eventos.push({ tipo: 'claqueta', claqueta: anotada.claqueta.n, por: 'golpe,voz' });
-            } else if (anotada.sinAplauso) {
-                eventos.push({ tipo: 'claqueta-sin-aplauso', ms: nuevas[marca.desde].t });
-            }
             continue;
         }
 
@@ -2200,29 +2018,6 @@ function aplicar(toma, cambio, tomas) {
     }
 }
 
-/**
- * Lo mismo, pero sobre una claqueta: hoy, su nota.
- *
- * Es una función aparte y no un caso más de `aplicar` porque una claqueta no es
- * una toma —no tiene bordes, ni texto, ni vista— y mezclarlas obligaría a cada
- * caso de allá a preguntarse cuál de las dos cosas le están pasando. Lo que sí
- * comparte es el motivo de existir: está en el motor y es una sola, así que
- * comentar una claqueta de la clase de ayer y una de la que se está grabando
- * escriben el mismo XML (ver `aplicar` y `editarGrabada`).
- *
- * @throws si el cambio no es de los que una claqueta entiende
- */
-function aplicarAClaqueta(claqueta, cambio) {
-    const c = cambio || {};
-    switch (c.tipo) {
-        case 'nota-claqueta':
-            claqueta.comentario = limpio(c.texto);
-            return;
-        default:
-            throw new Error(`Cambio de claqueta sin definir: ${c.tipo}`);
-    }
-}
-
 module.exports = {
     CAMARA,
     PANTALLA,
@@ -2231,7 +2026,6 @@ module.exports = {
     MAPA_DE_VISTAS,
     vistaLeida,
     aplicar,
-    aplicarAClaqueta,
     estadoNuevo,
     senales,
     aplicarSenales,
@@ -2253,24 +2047,14 @@ module.exports = {
     anotarClaqueta,
     mismaClaqueta,
     renumerar,
-    quitarClaqueta,
     claquetaDeReferencia,
     fundir,
     MISMA_CLAQUETA_MS,
-    CLAQUETA,
     SILENCIO_TRAS_PAUSA_SEC,
     vistaHeredada,
     vistaDeLaProxima,
     repartir,
     cerrarProvisional,
-    recordarQuitada,
-    olvidarQuitada,
-    claquetaCerca,
-    claquetaDicha,
-    recordarAplauso,
-    aplausoCerca,
-    aplausoOido,
-    PALABRA_Y_APLAUSO_MS,
     moverBorde,
     dividir,
     correrNumeros,

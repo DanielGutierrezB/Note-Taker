@@ -29,8 +29,8 @@ const workspace = require('./workspace');
  * **Este es el reloj de la app, y no `Date.now()`.** No se puede preguntar hasta
  * "ahora": el audio de ahora todavía no está en el archivo. Se pregunta hasta
  * donde el archivo llega, que es lo que `captura` sabe, y con eso todo —las
- * palabras, los golpes, la claqueta que el editor marca a mano y el OUT del
- * botón— queda estampado contra la misma regla. Es lo único que hace que los
+ * palabras y los bordes que el editor pone con el botón— queda estampado
+ * contra la misma regla. Es lo único que hace que los
  * tiempos cierren en el total de una clase de tres horas: dos relojes que
  * arrancan juntos se separan, uno solo no.
  */
@@ -170,9 +170,6 @@ function resumen(sesion) {
         // porque es el que relee; la ventana lo pregunta con este número y no
         // con una cuenta suya, que se podía separar de la de acá.
         porReleer: vivo.tomasQueQuedan(e).length,
-        // Todas, en orden y con su número. La primera es la de referencia: es
-        // contra ella que el editor correlaciona los archivos de Premiere.
-        claquetas: e.claquetas || [],
         vistas: vivo.VISTAS,
         dir: sesion.dir,
         // Dónde van a caer los dos archivos. La pantalla lo muestra para que el

@@ -41,8 +41,8 @@ let tostadaTimer = null;
 /**
  * Un aviso que aparece y se va.
  *
- * Para lo que se confirma y no se decide: «XML guardado», «claqueta 4
- * anotada». Lo que hay que decidir no va acá — va en la pantalla, donde se
+ * Para lo que se confirma y no se decide: «XML guardado», «toma 4
+ * cerrada». Lo que hay que decidir no va acá — va en la pantalla, donde se
  * pueda leer sin apuro.
  */
 export function avisar(texto, tono) {

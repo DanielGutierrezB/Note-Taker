@@ -4,9 +4,9 @@ App local de macOS (Apple Silicon) que toma las notas de rodaje **mientras la
 clase se está grabando en vivo**, y devuelve un XML listo para importar en
 **Premiere Pro** con el audio adentro.
 
-El profesor dice "3, 2, 1" y la toma se abre; dice "Pausa" y se cierra; dice
-"claqueta" o aplaude y queda una marca de sincronía. Al final hay **un solo
-XML** con todas las tomas, todas las claquetas y el WAV de la clase en A1.
+El profesor dice "3, 2, 1" y la toma se abre; dice "Pausa" y se cierra. Al
+final hay **un solo XML** con todas las tomas y el WAV de la clase en A1, que se
+sincroniza con el audio de las cámaras por forma de onda.
 
 ```
 Zoom / interfaz ──► Note Taker ──► xml/clase.xml ──► Premiere
@@ -357,8 +357,6 @@ esperados y 6,37 s obtenidos.
 | **"3, 2, 1"** (o "tres, dos, uno", o **"three, two, one"**) | se abre una toma, en la palabra que sigue |
 | **"Retomamos"** (o **"We're back"**) | lo mismo |
 | **"Pausa"** o **"Pause"** + un segundo de silencio | se cierra, en la última palabra dicha |
-| **"Claqueta"** | se anota una claqueta |
-| un **aplauso** | lo mismo, y se confirma leyendo lo que se dijo alrededor |
 
 Las palabras valen en los dos idiomas siempre, sin tener que decirle en cuál se
 va a hablar: quien se graba la semana puede empezar en español y seguir en
@@ -383,11 +381,10 @@ Y lo que se hace a mano, para cuando nada de eso se dijo:
 | tecla | qué pasa |
 |---|---|
 | **Enter** | abre la toma si no hay ninguna abierta, y la cierra si la hay |
-| **K** | una claqueta acá |
 | **P R S M X** | la vista de la toma |
 | **⌘Z** · **⇧⌘Z** | deshacer · rehacer |
 
-Los cinco están escritos debajo del timecode y **son botones**: lo mismo se hace
+Están escritos debajo del timecode y **son botones**: lo mismo se hace
 con la tecla o con el mouse, sin tener que acordarse de cuál era. El de Enter
 dice qué va a hacer —«abrir toma» o «cerrar toma»— en vez de las dos cosas, y el
 de vista muestra encendida la de la toma sobre la que caen las teclas.
@@ -409,10 +406,7 @@ se acababa de cerrar** —una que ya está hecha y que nadie estaba mirando—
 cuando lo que uno estaba diciendo era «la que viene va así».
 
 El botón primario de la pantalla es siempre el borde que toca: **Abrir toma**
-cuando no hay ninguna, **Cerrar toma** cuando la hay. Y es el único de la fila
-de la toma: **Claqueta** está arriba, en la barra, junto a los controles de la
-sesión. Ahí es global —se aprieta con toma abierta o sin ella— y deja de estar
-pegado a «Cerrar toma», que es cómo se anotaban claquetas sin querer.
+cuando no hay ninguna, **Cerrar toma** cuando la hay.
 
 **Cada toma nueva arranca con la vista de la anterior**, salvo que se haya
 elegido una para ella. Una clase se graba por tramos con la misma vista
@@ -663,19 +657,6 @@ debajo mientras uno está corrigiendo, el índice guardado apunta a otro. La
 pantalla lo corta por lo sano —si el campo ya no está, no guarda nada— y el
 motor ignora un índice que no existe en vez de reventar.
 
-Las **claquetas** van en la misma lista, en su lugar entre las tomas, con su
-número, timecode, la frase con la que se dijeron, si es la referencia y cómo
-quitarlas. En un costado aparte había que cruzar la pantalla y comparar
-timecodes para saber qué toma venía después de qué claqueta.
-
-**Y se despliegan como una toma, para escribirles una nota.** Es el mismo
-gesto: clic o Enter sobre el renglón, un campo de una línea, se guarda al salir
-y vuelve con ⌘Z. La nota sale en el marcador de la claqueta en el XML, que es
-donde el montajista la lee cuando llega a ese punto de la línea de tiempo:
-«se cambió la tarjeta de la cámara 2», «desde acá el audio es del lavalier».
-Con la nota puesta, el renglón plegado la muestra en lugar de la frase que se
-oyó, igual que en una toma la nota tapa las primeras palabras.
-
 Un detalle que costó descubrir: **el umbral de "todavía está hablando" no puede
 ser el mismo que el hueco entre dos palabras.** Lo que la app tiene oído va
 siempre atrasado, y se sabe cuánto —el ciclo corre cada segundo, oye con medio
@@ -690,14 +671,13 @@ Todo se estampa con la **posición en el audio grabado**, no con `Date.now()`.
 
 Las palabras ya venían así: el tiempo de cada una sale de dónde cae en el WAV
 (`oir.aHoraDelDia`). Lo que se agregó acá es que **también los gestos del
-editor** —la claqueta con la tecla K, cerrar una toma con el botón— se estampan
-contra el audio escrito (`espejo.grabadoHastaMs`). El reloj de pared se guarda
-igual, en el sidecar, para poder depurar.
+editor** —abrir o cerrar una toma con el botón— se estampan contra el audio
+escrito (`espejo.grabadoHastaMs`).
 
 El motivo es concreto: el audio que se está escribiendo va uno o dos pedazos por
-detrás del reloj de pared. Con `Date.now()`, la marca de la claqueta caía
-adelante de donde suena. En una clase de tres horas eso son marcas que no
-coinciden con la onda, y el editor sincroniza mirando exactamente eso.
+detrás del reloj de pared. Con `Date.now()`, el borde caía adelante de donde
+suena. En una clase de tres horas eso son marcas que no coinciden con la onda, y
+el editor sincroniza mirando exactamente eso.
 
 **La latencia no perjudica la precisión**, y es lo que hace que todo esto
 funcione. Cuando el profesor dice "Pausa", el OUT no se pone donde la
@@ -705,105 +685,23 @@ herramienta se dio cuenta: se pone en el timecode de esa palabra, que Whisper
 devuelve junto con el texto. Un segundo de demora en enterarse no mueve el corte
 ni un cuadro.
 
-### El cero es el botón, no la claqueta
+### El cero es el botón
 
-El cuadro 0 del XML es el momento de **Iniciar grabación**. Podría ser la
-primera claqueta —es la referencia física— y sería peor: el número que el editor
-tendría que compensar sería "cuánto tardaron en claquetear", que es cualquier
-cosa entre siete segundos y dos minutos. Con el cero en el botón, el XML empieza
-donde se apretó grabar y la primera claqueta queda adentro, con su timecode,
-que es justo lo que hace falta para correlacionar.
+El cuadro 0 del XML es el momento de **Iniciar grabación**, que es donde empieza
+el WAV de la clase. Desde ahí se sincroniza contra las cámaras por forma de onda.
 
-## Las claquetas
+## Las claquetas, ya no
 
-En una clase en vivo se claquetea varias veces, así que la app las lleva
-**todas**, numeradas por orden de reloj. Entran por tres puertas:
+La app ya no anota claquetas: ni la palabra «claqueta», ni el aplauso, ni la
+tecla K. Cada clase se sincroniza por forma de onda —el WAV de las notas contra
+el audio de las cámaras— y todo queda en su momento sin una marca física.
 
-- **La palmada**, que `aplausos.js` encuentra en el PCM y se confirma leyendo
-  seis segundos a cada lado buscando "claqueta". No alcanza con que suene
-  fuerte: tiene que despegarse 48 dB del piso de ESA sala, subir en menos de
-  15 ms, apagarse en menos de 250 y tener el centro de su energía arriba de
-  2,5 kHz. Con menos que eso entraba cualquier sílaba acentuada, y en una clase
-  del 29/09 se contaron 1822 "aplausos" en dos horas y media. El corte está
-  medido en el medio del hueco: sobre las cinco grabaciones que hay, las diez
-  palmadas de verdad van de 52,4 a 64,8 dB sobre el piso y lo primero que no lo
-  es llega a 45,0, así que entre 45 y 52,4 no hay nada y 48 deja aire de los dos
-  lados. Estaba en 50, y con alguien hablando seguido el piso que se persigue
-  trepa hasta −56 dBFS y dos palmadas de verdad del 30/09 pasaron raspando.
-- **La palabra dicha**, que oye el ciclo de señales. Existe porque el aplauso
-  puede no llegar: el audio de un Zoom pasa por compresión, cancelación de eco y
-  control automático de ganancia, y las tres aplastan justo lo que el detector
-  busca —un pico corto y muy por encima del fondo—.
-- **La tecla K**, que la afirma una persona que estaba mirando.
-
-**Dos que caen a menos de cinco segundos son la misma**, y se funden tomando de
-cada una lo que sabe: el `ms` lo pone el aplauso (es un pico en la onda, cae
-exactamente donde suena), la frase la pone la voz (el aplauso no sabe qué se
-dijo, y el número —"claqueta 4, clase 4"— solo aparece en el texto), y
-`confirmada` es un o-lógico.
-
-**Una claqueta es la palabra Y el aplauso.** Un golpe sin la frase alrededor no
-se anota: antes se anotaba «por confirmar» y la lista se llenaba de puertas,
-golpes en la mesa y ruidos de la llamada. Cuando el aplauso se oyó y la palabra
-no se leyó, la pantalla lo dice —es la pastilla de acá abajo— y la claqueta la
-pone quien está mirando.
-
-**Y el buscador tiene que recibir lo que la ventana manda.** En la 0.1.2 pedía
-un `Buffer` de Node y la ventana manda un `Int16Array` —lo arma el worklet y lo
-transfiere por el puente—, así que en la app de verdad tiraba TODOS los pedazos
-en silencio: la clase del 30/09 a las 09:08 tiene tres palmadas de manual y no
-encontró ninguna. El WAV salía completo porque `captura.escribir` sí convertía,
-y por eso el error no se veía en ninguna parte. En la simulación tampoco: como
-lee el WAV con `fs`, le pasaba justo el `Buffer` que el código pedía. Ahora
-`aplausos.js` acepta las dos formas, y `tools/simular-grabacion.js` manda lo
-mismo que manda la ventana — una simulación que manda otra cosa prueba otra app.
-
-### Aplaudir se ve en el momento
-
-![La barra con la pastilla ámbar «palmada oída» en la fila de los atajos](docs/capturas/palmada-barra-esperando.png)
-
-En cuanto el detector oye una palmada, la fila de atajos dice **`palmada oída`**
-en ámbar. Antes no decía nada, y eso costó una tarde de desconfianza: la
-confirmación no puede llegar hasta que la app tenga los seis segundos de audio
-de DESPUÉS del aplauso, así que aplaudir y mirar la pantalla daba exactamente lo
-mismo que aplaudir con la app apagada. El 30/09 el editor reportó «aún no está
-reconociendo la claqueta» y parte de eso era este silencio.
-
-Mientras la pastilla esté en pantalla, **apretar K deja la claqueta en la
-palmada misma** y no donde esté el dedo: el aviso lleva el `ms` del pico y la
-ventana lo devuelve con la petición, así que el motor anota en ESA palmada. La
-manual y la automática se funden, y de la fusión el `ms` lo pone siempre el
-aplauso, que es el único de los tres que mide sobre la onda.
-
-![La misma barra con la pastilla roja «palmada sin confirmar»](docs/capturas/palmada-barra-sin-confirmar.png)
-
-**Y el ciclo se cierra.** Si nadie confirmó nada, la pastilla pasa a
-**`palmada sin confirmar`** en rojo y el aviso lo dice una vez: se oyó la
-palmada, no se leyó «claqueta» alrededor, no se anotó ninguna. Es el caso real
-del 30/09, donde Whisper escribió «La quinta» y «Tlajeta clase 4» y dos
-claquetas de verdad se quedaron afuera sin que nada lo contara. La pastilla no
-se borra sola: mientras esté ahí, lo que dice es «la última palmada que oí no
-llegó a ser claqueta», que es justamente el diagnóstico que faltaba. Se va
-cuando se anota una claqueta o cuando llega otra palmada.
-
-La cuenta para declararla sin confirmar **no es de reloj de pared sino de audio
-grabado**, y son los seis segundos que al motor le faltan más otros seis para la
-pasada de Whisper. Medirla con el reloj la habría puesto en rojo cada vez que el
-audio se atrasa —un Zoom que tartamudea, la máquina ocupada—, acusando al motor
-de algo que todavía no pudo hacer, y un aviso que se equivoca se deja de mirar.
-
-**Y el enganche de la K dura más que esa cuenta**, que es lo que hace honesto al
-aviso. El motor estampaba en el aplauso solo si había uno a menos de seis
-segundos, y la pastilla roja no puede aparecer antes de los doce: justo cuando
-el editor se entera de que la palmada no llegó a ser claqueta, apretar K ya no
-caía en la palmada. Se resolvió por identidad y no por tiempo —el aviso lleva el
-`ms` del pico y vuelve con la petición, y el motor lo busca en su lista de
-palmadas antes de usarlo, así que la ventana puede señalar una vieja pero no
-inventar una hora—, con ocho segundos de reacción encima de los doce. Veinte en
-total, que es mucho menos de lo que hay entre dos claquetas de verdad: entre una
-y la siguiente hay una toma, o por lo menos el tiempo de reacomodar una cámara.
-Pasados los veinte, la pastilla sigue roja —el diagnóstico no cambió— y lo que
-cambia es lo que promete: ahí dice que la marca va a caer donde se apriete.
+Antes las anotaba por tres puertas a la vez, y de eso quedan dos cosas: el
+detector de palmadas ya no corre sobre el audio que entra, así que un golpe en la
+mesa ya no lanza una transcripción de doce segundos alrededor; y **las clases
+grabadas entonces conservan sus claquetas**, que siguen saliendo como marcadores
+blancos en su XML y en las anidaciones del proyecto de Premiere. Solo no se ven
+en la pantalla ni se editan desde la app.
 
 ## La foto del OUT
 
@@ -936,8 +834,9 @@ el parser al volver a entrar el XML; un marcador llamado solo `PV`, como los
 escribían las versiones anteriores y como los escribe Class Cut, se sigue
 leyendo igual.
 
-Cada claqueta lleva su número, su hora del día y la frase que se oyó, y la
-primera dice que es **la referencia de sincronía**. Todo eso va en el
+Las claquetas de las clases grabadas cuando la app todavía las anotaba llevan
+su número, su hora del día y la frase que se oyó, y la primera dice que es **la
+referencia de sincronía**. Todo eso va en el
 COMENTARIO del marcador; el nombre es `Claqueta N` y nada más. La nota que se
 le haya escrito va también en el comentario, en segundo lugar:
 
@@ -1081,9 +980,6 @@ Eso lo hace un ayudante nativo chico (`nativo/escuchar-app.swift`, compilado por
 `tools/bundle-binaries.sh`) que Node lanza y lee. Lo que entrega es exactamente lo
 mismo que manda la ventana cuando graba un micrófono —PCM mono de 16 bits en
 pedazos de 4096 muestras—, así que el resto del motor no distingue de dónde vino.
-El tamaño del pedazo no cambia lo que se oye: `aplausos.js` corta lo que le
-llegue en marcos de 5 ms y mide sobre esos, así que la misma palmada mide igual
-venga en pedazos de 4096 muestras o de los que quiera entregar Core Audio.
 
 **La tasa es la del dispositivo, no la del tap.** El primer ayudante declaraba
 los 48 kHz del formato del tap, pero las muestras llegan al ritmo del
@@ -1191,20 +1087,17 @@ BlackHole en Note Taker.
 Si la fuente es una interfaz o una grabadora, se elige su línea y listo. La app
 abre la entrada **sin** cancelación de eco, sin supresión de ruido y sin control
 automático de ganancia: las tres están hechas para una llamada y acá arruinan lo
-que importa —el automático sube el fondo en los silencios, que es cuando la
-claqueta tiene que destacar, y el supresor se come los transitorios, que es lo
-que la claqueta ES—.
+que importa —el automático sube el fondo en los silencios, que es lo que
+confirma un «Pausa», y las tres cambian la onda del WAV, que es la que se
+sincroniza contra las cámaras—.
 
 ## El flujo del editor en Premiere
 
 1. Importar el XML. Entra un bin con el WAV y una secuencia con el audio en A1.
 2. Poner los archivos de cámara en la misma secuencia.
-3. **Sincronizar contra la claqueta 1.** El marcador dice su timecode y su hora
-   del día: la hora sirve para emparejar con la fecha de creación de cada
-   archivo cuando hay varios y no se sabe cuál es cuál.
-4. Si hay más claquetas, sirven de control: cada una tiene que seguir cayendo
-   donde suena. Una que se corrió dice que una cámara se cortó y volvió.
-5. Cortar siguiendo los marcadores. Se salta de uno a otro con la navegación de
+3. **Sincronizar por forma de onda**, el WAV de A1 contra el audio de cada
+   cámara.
+4. Cortar siguiendo los marcadores. Se salta de uno a otro con la navegación de
    marcadores de Premiere; el comentario de cada IN trae la nota y lo primero
    que se dijo.
 
@@ -1214,8 +1107,8 @@ Para ver cómo queda sin grabar nada:
 node tools/ver-marcadores.js --fps 29.97
 ```
 
-Escribe un XML de prueba en `/tmp` con las cinco vistas, tres claquetas y una
-toma desactivada que no tiene que aparecer.
+Escribe un XML de prueba en `/tmp` con las cinco vistas, tres claquetas como las
+de una clase vieja y una toma desactivada que no tiene que aparecer.
 
 ## El proyecto de Premiere de la carpeta
 
@@ -1233,8 +1126,9 @@ abre un menú para decir qué capturas hay y qué capturas componen cada vista.
     contra su onda;
   - en las capturas 2 en adelante, además la Captura 1 anidada en A1, para
     sincronizar cualquier captura contra la primera;
-  - un marcador por cada claqueta, y ninguno más: acá adentro lo único que se
-    hace es alinear contra la palmada, y la onda tiene que estar a la vista.
+  - en las clases grabadas cuando la app todavía las anotaba, un marcador por
+    cada claqueta, y ninguno más: acá adentro lo único que se hace es alinear, y
+    la onda tiene que estar a la vista.
 - **Una vista puede llevar varias capturas.** En el menú, cada vista es una fila
   de cajitas: las encendidas son las que la componen y el orden es el apilado,
   **de abajo hacia arriba como las pistas de Premiere, así que la de más a la
@@ -1301,7 +1195,7 @@ abre un menú para decir qué capturas hay y qué capturas componen cada vista.
     momento en que se dijeron. Son marcadores de clip, o sea del archivo: están
     en el monitor de origen y viajan con el WAV adonde se lo ponga, también
     adentro de las anidaciones y en A2 de la precortada;
-  - **las anidaciones**, solo las claquetas;
+  - **las anidaciones**, solo las claquetas de las clases que las traen;
   - **la precortada**, los marcadores cortados y estirados sobre el bloque de
     cada toma, que es lo que se lee al editar.
 - **Y en la precortada, solo donde hay algo que leer.** El plano ya se ve —la
@@ -1522,8 +1416,8 @@ su lugar.
 
 Es lo que protege el único invariante que importa: que de una clase salga UN XML
 con los tiempos cerrados de punta a punta. Con dos XML, el editor tendría que
-sincronizar dos veces y correlacionar dos primeras claquetas, que es justo el
-trabajo que esta app existe para ahorrarle.
+sincronizar dos veces, que es justo el trabajo que esta app existe para
+ahorrarle.
 
 Una sesión ya cerrada **no** se reanuda: su XML está completo y el editor pudo
 haber sincronizado contra él.
@@ -1794,9 +1688,9 @@ ipc/grabar.js            el puente de la grabación
 ipc/referencias.js       el de las fotos del OUT
 ipc/semanal.js           el del modo semanal: los dos vídeos, el montaje y el corte
 engine/
-  grabacion.js           la sesión: los relojes, el ciclo de señales, las claquetas
+  grabacion.js           la sesión: los relojes y el ciclo de señales
   espejo.js              lo que se ve de la sesión: el disco y la pantalla
-  notas-vivo.js          qué es una toma y qué es una claqueta
+  notas-vivo.js          qué es una toma
   notas-xml.js           cómo se escribe todo eso para Premiere
   ajustar-corte.js       correr el IN y el OUT al silencio de al lado
   fcp-xml.js             el formato FCP7, con marcadores de secuencia y de clip
@@ -1804,8 +1698,6 @@ engine/
   video-crudo.js         los dos vídeos del modo semanal, mientras entran
   exportar-video.js      el MP4 cortado, y el montaje que el editor mira
   quitar-silencios.js    partir las tomas por los huecos de más de 0,7 s
-  aplausos.js            la palmada de la claqueta, en el PCM
-  golpe.js               un pico corto y fuerte (lo que usaba antes)
   oir.js · transcribe.js Whisper local, por pedazos
   sonido.js              si algo sonó de verdad, para no creerle a Whisper
   oir-toma.js            volver a oír un tramo, con o sin sesión
@@ -1896,17 +1788,9 @@ Privacidad y seguridad.
 ## Estado
 
 El motor está probado de punta a punta contra audio real: sobre seis minutos de
-una clase grabada, abre las siete tomas que se dijeron, encuentra tres claquetas
-—la primera confirmada por el texto, que Whisper escribió "Claquetados,
-clasedos"— y el bloque de referencia que el director había marcado a mano cae
-dentro del segundo (IN +0,6 s, OUT +0,9 s).
-
-Y contra la clase del 30/09 a las 09:08, que es la que destapó el error del
-`Int16Array`: pasada de nuevo mandando el PCM como lo manda la ventana, salen
-las tres palmadas de la clase —317,38 · 326,97 · 338,46 s— y las tres llegan a
-claqueta confirmada por el texto, que Whisper escribió "TLAQUETA CLASE 1",
-"Claqueta clase 1" y "Claqueta clase 2". Con el buscador recibiendo un pedazo
-vacío daban cero.
+una clase grabada, abre las siete tomas que se dijeron y el bloque de referencia
+que el director había marcado a mano cae dentro del segundo (IN +0,6 s,
+OUT +0,9 s).
 
 Lo que falta es la vuelta que solo la da el uso: una clase entera de verdad, con
 el XML importado en Premiere y el corte hecho encima.

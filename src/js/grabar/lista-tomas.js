@@ -12,7 +12,7 @@
  * peor.
  *
  * Lo que NO entra acá es lo que de verdad cambia entre las dos: la clase tiene
- * claquetas, notas y comentarios al XML, y la semanal no tiene nada de eso
+ * notas y comentarios al XML, y la semanal no tiene nada de eso
  * porque la persona que graba su vídeo de la semana no edita en Premiere. Por
  * eso el cuerpo de la ficha lo arma cada pantalla y este módulo solo pone la
  * caja: lo compartido es lo que se ve igual, no lo que hace cada una.

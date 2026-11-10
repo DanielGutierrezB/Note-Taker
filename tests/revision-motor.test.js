@@ -62,34 +62,6 @@ module.exports = function (t) {
         t.deep(toma.palabras.map(x => x.texto), ['TEXTO-BUENO'], 'con el texto de la relectura');
     }));
 
-    t.test('deshacer una claqueta a mano no se lleva las que se oyeron después', conWhisperFalso(async falso => {
-        const st = grabacion.iniciar({ dir: carpeta(), curso: 'r', fps: 30, sinReloj: true, sampleRate: 48000 });
-        for (let i = 0; i < 14; i++) grabacion.pcm(pedazo());
-        grabacion.claqueta();
-        for (let i = 0; i < 20; i++) grabacion.pcm(pedazo());
-        const w = (dt, texto) => ({ t: st.ceroMs + dt, texto, hasta: st.ceroMs + dt + 300 });
-        // Una claqueta de verdad: la palabra y el aplauso.
-        vivo.recordarAplauso(grabacion._sesion().estado, st.ceroMs + 27500);
-        falso.ventana = [w(26000, 'claqueta'), w(26400, 'cuatro')];
-        await grabacion.buscarSenales();
-        t.eq(grabacion.resumen().claquetas.length, 2);
-        const r = grabacion.deshacer();
-        t.deep(r.estado.claquetas.map(c => c.origen), ['golpe,voz'], 'se fue la del editor y nada más');
-        const re = grabacion.rehacer();
-        t.eq(re.estado.claquetas.length, 2, 'y se rehace');
-    }));
-
-    t.test('una claqueta quitada a mano no vuelve con la relectura', () => {
-        const e = vivo.estadoNuevo({});
-        vivo.anotarClaqueta(e, { ms: 10000, origen: 'voz', confirmada: true });
-        vivo.quitarClaqueta(e, 1);
-        const otra = vivo.anotarClaqueta(e, { ms: 10300, origen: 'voz', confirmada: true });
-        t.eq(otra.nueva, false);
-        t.eq(e.claquetas.length, 0);
-        vivo.anotarClaqueta(e, { ms: 10300, origen: 'editor', confirmada: true });
-        t.eq(e.claquetas.length, 1, 'el editor sí la puede volver a poner');
-    });
-
     t.group('revisión · el ciclo');
 
     t.test('una sesión reanudada vuelve a abrir tomas', conWhisperFalso(async falso => {

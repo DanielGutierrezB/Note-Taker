@@ -7,11 +7,6 @@
  * elegida y manda el PCM al motor. De paso mide el nivel, que es lo único que
  * dice "está entrando audio" antes de que alguien hable.
  *
- * Encontrar el aplauso de una claqueta NO es de acá aunque las muestras pasen
- * por este archivo: la regla vive en `engine/golpe.js`, del lado que escribe el
- * WAV. Ahí se la puede probar pasándole el audio de una clase de verdad, y de
- * este lado solo se podría probar aplaudiendo delante del micrófono.
- *
  * **Se abre la entrada apenas se elige, en la pantalla de Preparar**, no al
  * apretar "Iniciar grabación", y el medidor se mueve desde ese momento. Es
  * para poder ver que el audio del Zoom está llegando ANTES de comprometerse:
@@ -36,7 +31,7 @@ const estado = {
     alNivel: () => {},
     alCaerse: () => {},
     // El audio solo se manda cuando la grabación está armada; escuchar arranca
-    // antes, para no perderse la claqueta.
+    // antes, para que el medidor ya se mueva en Preparar.
     mandando: false
 };
 
@@ -65,9 +60,9 @@ export async function entradas() {
  *
  * Sin procesado de ninguna clase: el cancelador de eco, el control automático de
  * ganancia y el supresor de ruido están hechos para una llamada, y acá arruinan
- * las dos cosas que importan. El automático de ganancia sube el fondo en los
- * silencios, que es justo cuando la claqueta tiene que destacar; el supresor se
- * come los transitorios, que es lo que la claqueta ES.
+ * lo que importa. El automático de ganancia sube el fondo en los silencios, que
+ * es lo que confirma un «Pausa»; y los tres cambian la onda del WAV, que es la
+ * que se sincroniza contra el audio de las cámaras.
  */
 export async function abrir(deviceId, avisos) {
     await cerrar();
@@ -91,7 +86,7 @@ export async function abrir(deviceId, avisos) {
     // A 48 kHz fijos, como el audio de Zoom. Sin decirlo, el contexto toma la
     // tasa de la salida del sistema en ese momento: con unos AirPods en modo
     // llamada, 16 o 24 kHz, y los pedazos de 4096 muestras pasaban a durar el
-    // doble o el triple, que es con lo que `golpe.js` mide si hubo un aplauso.
+    // doble o el triple.
     const contexto = new AudioContext({ sampleRate: 48000 });
     try {
         await contexto.audioWorklet.addModule('js/grabar/pcm-worklet.js');
@@ -143,11 +138,7 @@ export async function abrir(deviceId, avisos) {
  * Se manda PRIMERO. Si medir tirara una excepción, el audio ya salió — y lo que
  * se está grabando no se puede repetir.
  *
- * El nivel que se calcula acá es para el medidor y nada más. Quién decide si un
- * pedazo fue el aplauso de la claqueta es el motor (`engine/golpe.js`), que ve
- * este mismo audio al escribirlo: teniendo la regla de un solo lado se la puede
- * probar contra el Live-Mix de una clase de verdad, y de este lado solo se podía
- * probar aplaudiendo delante del micrófono.
+ * El nivel que se calcula acá es para el medidor y nada más.
  */
 function recibir(muestras) {
     if (estado.mandando) window.nt.grabarPcm(muestras);

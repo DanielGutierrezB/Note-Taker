@@ -20,8 +20,7 @@
  * Cuántas muestras se juntan antes de mandar.
  *
  * A 48 kHz son unos 85 ms. Más chico llena el puente de mensajes; más grande
- * hace que el medidor y la claqueta lleguen tarde, y la claqueta es un golpe de
- * milisegundos.
+ * hace que el medidor llegue tarde.
  */
 const PEDAZO = 4096;
 

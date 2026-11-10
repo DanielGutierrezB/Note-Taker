@@ -4,7 +4,7 @@
  * Es el modo simple, y simple quiere decir que no hay nada que decidir: se
  * aprieta Grabar, se habla abriendo cada toma con «3, 2, 1» y cerrándola con
  * «Pausa», se aprieta Terminar, y sale un MP4 con la pantalla de fondo y la
- * cámara en la esquina. Ni vistas, ni claquetas, ni XML, ni una lista de clases
+ * cámara en la esquina. Ni vistas, ni XML, ni una lista de clases
  * que alguien tenga que entender.
  *
  * **Una pantalla con seis momentos y no seis pantallas.** Preparar, grabar,

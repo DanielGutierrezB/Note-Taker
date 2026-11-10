@@ -58,7 +58,7 @@ export async function pintar() {
     sesiones = carpeta ? await window.nt.grabarListar([carpeta]) : [];
     $('#sesiones-cuantas').textContent = sesiones.length
         ? `${sesiones.length} en esta carpeta` : '';
-    // Sin clases no hay nada que precortar ni ninguna claqueta que marcar.
+    // Sin clases no hay nada que precortar.
     $('#btn-prproj').hidden = !sesiones.length;
     if (renombrando && !sesiones.some(s => s.archivos.json === renombrando)) renombrando = null;
     $('#lista-sesiones').innerHTML = sesiones.length ? sesiones.map(fila).join('') : vacio(carpeta);
@@ -120,7 +120,6 @@ function fila(s) {
       <span class="fila-dato ses-dato">${esc(cuando(s.ceroMs))}</span>
       <span class="fila-dato ses-dato">${esc(duracion(r.segundos))}</span>
       <span class="fila-dato ses-dato">${r.tomas || 0} toma${r.tomas === 1 ? '' : 's'}</span>
-      <span class="fila-dato ses-dato">${r.claquetas || 0} claqueta${r.claquetas === 1 ? '' : 's'}</span>
       <span class="pastilla" data-estado="${est.clave}">${esc(est.palabra)}</span>
       <span class="crece"></span>
       ${puedeReanudar
@@ -265,8 +264,7 @@ async function rehacerXml(json, boton) {
     const r = await window.nt.grabarRehacerXml(json);
     boton.disabled = false;
     if (!r.ok) { avisar(r.error, 'error'); return; }
-    avisar(`XML rehecho: ${r.tomas} toma${r.tomas === 1 ? '' : 's'} y ` +
-        `${r.claquetas} claqueta${r.claquetas === 1 ? '' : 's'}.`, 'ok');
+    avisar(`XML rehecho: ${r.tomas} toma${r.tomas === 1 ? '' : 's'}.`, 'ok');
 }
 
 async function regenerar(json, boton) {

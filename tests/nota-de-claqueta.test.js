@@ -1,36 +1,18 @@
 'use strict';
 /**
- * La nota de una claqueta: el mismo gesto que la de una toma, en la otra fila.
- *
- * Lo que se cuida acá no es que el campo exista —eso es una línea— sino las
- * tres maneras en que una claqueta cambia debajo de la nota mientras nadie
- * mira: se funde con otra, la renumeran, o viene de un sidecar escrito antes
- * de que esto existiera. En las tres, la nota tiene que quedarse donde está.
+ * La nota de una claqueta, en las clases grabadas cuando la app todavía las
+ * anotaba. Ya no se escribe desde la app, pero la que trae un sidecar viejo
+ * tiene que seguir llegando a su marcador y sobrevivir a la fusión.
  */
 
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-
 const vivo = require('../engine/notas-vivo');
-const historial = require('../engine/deshacer');
 const notasXml = require('../engine/notas-xml');
 const rodecaster = require('../engine/rodecaster-xml');
-const sesiones = require('../engine/sesiones-grabadas');
-const grabacion = require('../engine/grabacion');
-const workspace = require('../engine/workspace');
-
-const RAIZ = path.join(__dirname, '..');
-const leer = (...partes) => fs.readFileSync(path.join(RAIZ, ...partes), 'utf8');
 
 const T0 = Date.parse('2026-09-30T12:04:00');
 
 function nuevo() {
     return vivo.estadoNuevo({ secuencia: 'x', ceroMs: T0, fps: 30 });
-}
-
-function carpeta() {
-    return fs.mkdtempSync(path.join(os.tmpdir(), 'nt-nota-claqueta-'));
 }
 
 /** El marcador de la claqueta `n` dentro de los que salen al XML. */
@@ -49,35 +31,16 @@ module.exports = function (t) {
         t.eq(e.claquetas[1].comentario, '');
     });
 
-    t.test('`aplicarAClaqueta` la escribe y la limpia', () => {
-        const e = nuevo();
-        const { claqueta } = vivo.anotarClaqueta(e, { ms: T0 + 10000, origen: 'golpe' });
-        vivo.aplicarAClaqueta(claqueta, { tipo: 'nota-claqueta', texto: '  Cámara 2 arrancó tarde  ' });
-        t.eq(claqueta.comentario, 'Cámara 2 arrancó tarde');
-    });
-
-    t.test('un cambio que una claqueta no entiende es un error y no un silencio', () => {
-        const e = nuevo();
-        const { claqueta } = vivo.anotarClaqueta(e, { ms: T0 + 10000, origen: 'golpe' });
-        let dijo = '';
-        try {
-            vivo.aplicarAClaqueta(claqueta, { tipo: 'reabrir' });
-        } catch (err) {
-            dijo = err.message;
-        }
-        t.ok(/reabrir/.test(dijo), `lo dice y nombra el tipo: ${dijo}`);
-    });
-
     t.group('nota de claqueta · sobrevive a la fusión');
 
     t.test('el aplauso llega después y le pone origen y hora: la nota se queda', () => {
-        // El caso real: la K anota la claqueta, el editor le escribe la nota, y
-        // doce segundos más tarde Whisper confirma la palabra dicha.
+        // Como pasaba en vivo: la K anotaba la claqueta, el editor le escribía
+        // la nota, y doce segundos más tarde Whisper confirmaba la palabra dicha.
         const e = nuevo();
         const puesta = vivo.anotarClaqueta(e, {
             ms: T0 + 10000, paredMs: T0 + 10000, confirmada: true, origen: 'editor'
         }).claqueta;
-        vivo.aplicarAClaqueta(puesta, { tipo: 'nota-claqueta', texto: 'Se cortó la cámara 2' });
+        puesta.comentario = 'Se cortó la cámara 2';
 
         vivo.anotarClaqueta(e, {
             ms: T0 + 11200, paredMs: T0 + 11200, frase: 'Claqueta 1, clase 1',
@@ -108,7 +71,7 @@ module.exports = function (t) {
             ms: T0 + 10000, paredMs: T0 + 10000, frase: 'Claqueta 1, clase 1',
             confirmada: true, origen: 'golpe,voz'
         });
-        vivo.aplicarAClaqueta(claqueta, { tipo: 'nota-claqueta', texto: 'Cámara 2 arrancó tarde' });
+        claqueta.comentario = 'Cámara 2 arrancó tarde';
         const m = marcadorDe(e, 1);
         t.eq(m.name, 'Claqueta 1', 'el nombre no lo toca: es por lo que se la reconoce');
         t.ok(m.comment.startsWith('Claqueta 1 · Cámara 2 arrancó tarde · '),
@@ -134,271 +97,9 @@ module.exports = function (t) {
         const { claqueta } = vivo.anotarClaqueta(e, {
             ms: T0 + 10000, paredMs: T0 + 10000, confirmada: true, origen: 'golpe'
         });
-        vivo.aplicarAClaqueta(claqueta, { tipo: 'nota-claqueta', texto: 'Sin la palabra que lo delata' });
+        claqueta.comentario = 'Sin la palabra que lo delata';
         const leido = rodecaster.parseXml(notasXml.xmlDeNotas(e));
         t.ok(leido.clap, 'la encontró');
         t.ok(leido.clap.comment.includes('Sin la palabra que lo delata'), 'y con la nota puesta');
-    });
-
-    t.group('nota de claqueta · deshacer repone el campo y nada más');
-
-    t.test('un paso de lista con los dos lados anota qué campos tocó', () => {
-        const h = historial.nueva();
-        historial.anotar(h, {
-            que: 'la nota de la claqueta 1', tipo: 'nota-claqueta', campo: 'claquetas',
-            antes: { n: 1, ms: T0, frase: '', comentario: '' },
-            despues: { n: 1, ms: T0, frase: '', comentario: 'algo' }
-        });
-        t.deep(historial.proximo(h, 'atras').campos, ['comentario']);
-    });
-
-    t.test('reponer solo ese campo deja lo que cambió después', () => {
-        const lista = [{ n: 1, ms: T0, frase: 'Claqueta 1, clase 1', comentario: 'lo escrito' }];
-        historial.ponerEnLista(lista, { ...lista[0] }, { n: 1, ms: T0, frase: '', comentario: '' },
-            { campos: ['comentario'] });
-        t.eq(lista.length, 1, 'no se reemplazó la entrada');
-        t.eq(lista[0].comentario, '');
-        t.eq(lista[0].frase, 'Claqueta 1, clase 1', 'la frase que llegó después se queda');
-    });
-
-    t.test('la encuentra aunque la fusión le haya corrido el `ms`', () => {
-        // Buscándola por igualdad exacta el paso empujaba una copia y la clase
-        // terminaba con dos claquetas donde hubo una.
-        const lista = [{ n: 1, ms: T0 + 1500, frase: 'Claqueta 1, clase 1', comentario: 'lo escrito' }];
-        historial.ponerEnLista(lista, { n: 1, ms: T0, comentario: 'lo escrito' },
-            { n: 1, ms: T0, comentario: '' },
-            { campos: ['comentario'], esLaMisma: vivo.mismaClaqueta });
-        t.eq(lista.length, 1);
-        t.eq(lista[0].comentario, '');
-        t.eq(lista[0].ms, T0 + 1500, 'y el `ms` que dejó la fusión no se toca');
-    });
-
-    t.test('un paso de campos sobre una claqueta que ya no está no la resucita', () => {
-        const lista = [{ n: 1, ms: T0 + 60000, comentario: '' }];
-        historial.ponerEnLista(lista, { n: 2, ms: T0, comentario: 'lo escrito' },
-            { n: 2, ms: T0, comentario: '' },
-            { campos: ['comentario'], esLaMisma: vivo.mismaClaqueta });
-        t.eq(lista.length, 1, 'no empujó una copia de la que se fue');
-        t.eq(lista[0].ms, T0 + 60000);
-    });
-
-    t.test('sin campos sigue siendo saca-y-pone, que es lo que quitar necesita', () => {
-        const lista = [{ n: 1, ms: T0, comentario: 'x' }];
-        historial.ponerEnLista(lista, { ...lista[0] }, null);
-        t.eq(lista.length, 0);
-    });
-
-    t.group('nota de claqueta · en una sesión que se está grabando');
-
-    t.test('escribirla, fundirla y deshacerla sin perder nada', async () => {
-        const dir = carpeta();
-        let estado;
-        try {
-            estado = grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
-            for (let i = 0; i < 60; i++) grabacion.pcm(Buffer.alloc(8192));
-            grabacion.claqueta();
-            const s = grabacion._sesion();
-            const ms = s.estado.claquetas[0].ms;
-
-            grabacion.editar({ tipo: 'nota-claqueta', n: 1, texto: 'Cámara 2 arrancó tarde' });
-            t.eq(s.estado.claquetas[0].comentario, 'Cámara 2 arrancó tarde');
-
-            // Whisper confirma la palabra dicha unos segundos más tarde.
-            vivo.anotarClaqueta(s.estado, {
-                ms: ms + 1500, frase: 'Claqueta 1, clase 1', confirmada: true, origen: 'golpe,voz'
-            });
-
-            const r = grabacion.deshacer();
-            t.ok(r.ok, 'se pudo deshacer');
-            t.eq(r.que, 'la nota de la claqueta 1', 'y dice qué deshizo');
-            t.eq(s.estado.claquetas.length, 1);
-            t.eq(s.estado.claquetas[0].comentario, '', 'volvió la nota');
-            t.eq(s.estado.claquetas[0].frase, 'Claqueta 1, clase 1',
-                'y lo que pasó después no se lo llevó puesto');
-
-            grabacion.rehacer();
-            t.eq(s.estado.claquetas[0].comentario, 'Cámara 2 arrancó tarde');
-            t.eq(s.estado.claquetas[0].frase, 'Claqueta 1, clase 1');
-        } finally {
-            grabacion.apagar();
-        }
-        const xml = fs.readFileSync(estado.archivos.xml, 'utf8');
-        t.ok(xml.includes('Cámara 2 arrancó tarde'), 'y el XML del disco la tiene');
-    });
-
-    t.test('con el `ms`, la nota cae en su claqueta aunque la hayan renumerado', () => {
-        // El `change` que sale cuando el repintado SACA el campo trae el `n` del
-        // renglón viejo. Si entretanto entró una claqueta anterior, ese `n` ya
-        // es de otra, y por número la nota se escribía en la equivocada.
-        const dir = carpeta();
-        try {
-            grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
-            for (let i = 0; i < 60; i++) grabacion.pcm(Buffer.alloc(8192));
-            const s = grabacion._sesion();
-            const cero = s.estado.ceroMs;
-            const tarde = vivo.anotarClaqueta(s.estado, { ms: cero + 90000, confirmada: true, origen: 'golpe' }).claqueta;
-            t.eq(tarde.n, 1);
-            // Se lee tarde una claqueta que sonó antes, y corre los números.
-            vivo.anotarClaqueta(s.estado, { ms: cero + 30000, confirmada: true, origen: 'golpe,voz' });
-            t.eq(tarde.n, 2, 'la de la nota pasó a ser la 2');
-
-            grabacion.editar({ tipo: 'nota-claqueta', n: 1, ms: cero + 90000, texto: 'la de la nota' });
-            t.eq(tarde.comentario, 'la de la nota', 'fue a la que tiene ese ms');
-            t.eq(s.estado.claquetas.find(c => c.n === 1).comentario, '', 'y no a la que ahora es la 1');
-            t.eq(grabacion.deshacer().que, 'la nota de la claqueta 2', 'deshacer nombra la de verdad');
-        } finally {
-            grabacion.apagar();
-        }
-    });
-
-    t.test('y la encuentra aunque la fusión le haya corrido el `ms` desde que se abrió', () => {
-        const dir = carpeta();
-        try {
-            grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
-            for (let i = 0; i < 60; i++) grabacion.pcm(Buffer.alloc(8192));
-            const s = grabacion._sesion();
-            const cero = s.estado.ceroMs;
-            const puesta = vivo.anotarClaqueta(s.estado, { ms: cero + 40000, confirmada: true, origen: 'editor' }).claqueta;
-            vivo.anotarClaqueta(s.estado, { ms: cero + 39600, confirmada: true, origen: 'golpe,voz' });
-            t.eq(puesta.ms, cero + 39600, 'la fusión la corrió al golpe');
-            grabacion.editar({ tipo: 'nota-claqueta', n: 1, ms: cero + 40000, texto: 'con el ms de antes' });
-            t.eq(puesta.comentario, 'con el ms de antes');
-        } finally {
-            grabacion.apagar();
-        }
-    });
-
-    t.test('la nota de una claqueta que ya no está no rompe nada', () => {
-        const dir = carpeta();
-        try {
-            grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true });
-            for (let i = 0; i < 60; i++) grabacion.pcm(Buffer.alloc(8192));
-            const r = grabacion.editar({ tipo: 'nota-claqueta', n: 7, texto: 'tarde' });
-            t.ok(r, 'contesta el estado igual');
-            t.eq(grabacion.deshacer().ok, false, 'y no dejó ningún paso fantasma');
-        } finally {
-            grabacion.apagar();
-        }
-    });
-
-    t.group('nota de claqueta · en una sesión ya grabada');
-
-    t.test('un sidecar sin el campo se comenta y se rehace sin migrar nada', () => {
-        const dir = carpeta();
-        const secuencia = 'curso_2026-09-30_12-04-00';
-        const wav = path.join(workspace.audioDir(dir), `${secuencia}-1.wav`);
-        workspace.ensureDir(path.dirname(wav));
-        fs.writeFileSync(wav, Buffer.alloc(1024));
-
-        const estado = vivo.estadoNuevo({ secuencia, curso: 'curso', ceroMs: T0, fps: 30 });
-        estado.sesiones = [{ archivo: wav, desdeMs: T0, segundos: 600, sampleRate: 48000, canales: 1 }];
-        estado.tomas = [{
-            id: 1, vista: 'PV', comentario: 'Una', cuenta: '3, 2, 1.',
-            inMs: T0 + 20000, outMs: T0 + 80000, descartada: false,
-            palabras: [{ t: T0 + 20000, texto: 'Hola' }], comentarios: []
-        }];
-        vivo.anotarClaqueta(estado, {
-            ms: T0 + 12000, paredMs: T0 + 12000, frase: 'Claqueta 1, clase 1',
-            confirmada: true, origen: 'golpe,voz'
-        });
-        estado.terminada = T0 + 600000;
-
-        const archivos = workspace.archivosDeSesion(dir, secuencia);
-        const viejo = notasXml.sidecar(estado);
-        // Un sidecar de 0.1.3: las claquetas no tenían `comentario`.
-        for (const c of viejo.claquetas) delete c.comentario;
-        workspace.writeAtomic(archivos.xml, notasXml.xmlDeNotas(estado));
-        workspace.writeJson(archivos.json, viejo);
-
-        const antes = sesiones.rehacerXml(archivos.json, null);
-        t.eq(antes.claquetas, 1, 'rehacer el XML del sidecar viejo sigue andando');
-
-        sesiones.editarGrabada(archivos.json, {
-            tipo: 'nota-claqueta', n: 1, texto: 'Acá se cambió la tarjeta'
-        });
-        const guardado = JSON.parse(fs.readFileSync(archivos.json, 'utf8'));
-        t.eq(guardado.claquetas[0].comentario, 'Acá se cambió la tarjeta');
-        t.eq(guardado.claquetas[0].frase, 'Claqueta 1, clase 1', 'sin perder lo que ya tenía');
-        t.eq(guardado.tomas[0].comentario, 'Una', 'ni la nota de la toma');
-        t.ok(fs.readFileSync(archivos.xml, 'utf8').includes('Acá se cambió la tarjeta'));
-
-        // Y rehacer el XML después la conserva: es el botón que se aprieta al
-        // final, y perder ahí lo escrito sería perderlo sin que nada lo diga.
-        sesiones.rehacerXml(archivos.json, null);
-        t.ok(fs.readFileSync(archivos.xml, 'utf8').includes('Acá se cambió la tarjeta'));
-    });
-
-    t.test('una claqueta que no existe se dice, no se traga', () => {
-        const dir = carpeta();
-        const secuencia = 'curso_2026-09-30_12-04-00';
-        const estado = vivo.estadoNuevo({ secuencia, curso: 'curso', ceroMs: T0, fps: 30 });
-        estado.terminada = T0 + 600000;
-        const archivos = workspace.archivosDeSesion(dir, secuencia);
-        workspace.writeAtomic(archivos.xml, notasXml.xmlDeNotas(estado));
-        workspace.writeJson(archivos.json, notasXml.sidecar(estado));
-        let dijo = '';
-        try {
-            sesiones.editarGrabada(archivos.json, { tipo: 'nota-claqueta', n: 3, texto: 'x' });
-        } catch (err) {
-            dijo = err.message;
-        }
-        t.ok(/claqueta 3/.test(dijo), `lo dice y la nombra: ${dijo}`);
-    });
-
-    t.group('nota de claqueta · la fila');
-
-    t.test('la fila se despliega y adentro está el campo', () => {
-        const js = leer('src', 'js', 'pantalla-vivo.js');
-        t.ok(/data-hace="plegar-claqueta"/.test(js), 'el renglón abre');
-        t.ok(/data-campo="nota-claqueta"/.test(js), 'y tiene su campo');
-        t.ok(/class="cuerpo-toma"[\s\S]{0,400}data-campo="nota-claqueta"/.test(js),
-            'en la misma caja que la nota de una toma: el mismo aspecto');
-        t.ok(/va en el marcador del XML/.test(js), 'y dice adónde va lo que se escribe');
-    });
-
-    t.test('la fila y su campo se identifican por `ms`, con la tolerancia de la fusión', () => {
-        // Por `ms` exacto, la fusión con el aplauso le corría el `ms` a la
-        // claqueta abierta y el repintado siguiente plegaba la fila a mitad de
-        // la nota: lo que seguía tecleándose caía como atajos.
-        const js = leer('src', 'js', 'pantalla-vivo.js');
-        t.ok(/const abierta = esLaAbierta\(c\);/.test(js), 'lo abierto se reconoce con tolerancia');
-        t.ok(/if \(abierta\) vista\.abierta = `c\$\{c\.ms\}`;/.test(js), 'y se corre al ms nuevo para seguirla');
-        t.ok(/function esLaAbierta[\s\S]{0,200}mismaClaqueta\(a\.slice\(1\), c\.ms\)/.test(js));
-        t.ok(/data-campo="nota-claqueta" data-claqueta="\$\{c\.n\}" data-ms="\$\{c\.ms\}"/.test(js),
-            'el campo lleva los dos: el ms para encontrarlo y el n de respaldo');
-        t.ok(/\.find\(el => mismaClaqueta\(el\.dataset\.ms, f\.ms\)\)/.test(js),
-            'y al repintar se vuelve a él con la misma tolerancia');
-    });
-
-    t.test('la ventana usa la misma ventana que el motor para decir «la misma claqueta»', () => {
-        const js = leer('src', 'js', 'pantalla-vivo.js');
-        const m = /const MISMA_CLAQUETA_MS = (\d+);/.exec(js);
-        t.ok(m, 'la ventana tiene su copia del número');
-        t.eq(Number(m[1]), vivo.MISMA_CLAQUETA_MS, 'y es el mismo que el del motor');
-    });
-
-    t.test('el cambio que sale de la fila es el que el motor entiende', () => {
-        const js = leer('src', 'js', 'pantalla-vivo.js');
-        t.ok(/tipo: 'nota-claqueta',\s*n: Number\(claqueta\.dataset\.claqueta\),\s*ms: Number\(claqueta\.dataset\.ms\)/.test(js),
-            'con el n y el ms');
-        const motor = leer('engine', 'cambios-toma.js');
-        t.ok(/c\.tipo === 'nota-claqueta'/.test(motor), 'y el motor lo desvía antes de buscar la toma');
-    });
-
-    t.test('la abre un botón de verdad, y no el renglón', () => {
-        // El renglón de una toma es `role="button"` entero; el de una claqueta
-        // no puede serlo, porque adentro tiene el botón de quitarla y un botón
-        // dentro de otro no hay lector de pantalla que lo anuncie. Así que el
-        // chevron es el botón, con su teclado puesto sin ayuda de nadie.
-        const js = leer('src', 'js', 'pantalla-vivo.js');
-        const desde = js.indexOf('function filaClaqueta(');
-        const fila = js.slice(desde, js.indexOf('\n}', desde));
-        t.ok(!/role="button"/.test(fila), 'el renglón no se declara botón');
-        t.ok(/<button class="btn btn-tenue btn-ico chevron"[\s\S]*?data-hace="plegar-claqueta"/.test(fila),
-            'el chevron sí');
-        t.ok(/aria-expanded="\$\{abierta\}"/.test(fila), 'y dice si está abierto');
-        t.ok(!/\[data-hace="plegar-claqueta"\]/.test(js.slice(js.indexOf('async function alTeclado'))),
-            'sin el parche de teclado de las tomas: un botón de verdad no lo necesita, ' +
-            'y con él el Enter abriría y cerraría de una');
     });
 };

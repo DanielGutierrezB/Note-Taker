@@ -39,7 +39,7 @@ module.exports = function (t) {
     t.test('están todos los que el preload declara', () => {
         const { canales, escuchas } = armar();
         const esperados = [
-            'grabar-iniciar', 'grabar-reanudar', 'grabar-claqueta', 'grabar-quitar-claqueta',
+            'grabar-iniciar', 'grabar-reanudar',
             'grabar-editar', 'grabar-editar-grabada',
             'grabar-abrir-toma', 'grabar-cerrar-toma',
             'grabar-deshacer', 'grabar-rehacer', 'grabar-estado', 'grabar-vistas',

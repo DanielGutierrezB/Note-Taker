@@ -15,8 +15,8 @@
  * lee las expresiones del motor DEL ARCHIVO y las compara con las de acá: si
  * alguien toca una en el motor, la prueba falla hasta que se toque acá también.
  *
- * Lo que sale de acá es para MIRAR y nada más. Quien abre tomas, las cierra y
- * anota claquetas es el motor; esto no decide nada.
+ * Lo que sale de acá es para MIRAR y nada más. Quien abre tomas y las cierra
+ * es el motor; esto no decide nada.
  */
 
 /* ─── Las expresiones, copiadas del motor tal cual ────────────────────── */
@@ -25,21 +25,10 @@ const CUENTA = /^(?:3|2|1|tres|dos|uno|three|two|one)[.,…!?]*$/i;
 const RETOMAR = /^retomamos[.,…!?]*$/i;
 const PAUSA = /^paus[ae][.,…!?]*$/i;
 const OK = /^ok(?:ay)?[.,…!?]*$/i;
-const CLAQUETA = /laque|cacle/i;
 
 const MINIMO_DE_CUENTA = 2;
 const VALOR = { 3: 3, tres: 3, three: 3, 2: 2, dos: 2, two: 2, 1: 1, uno: 1, one: 1 };
 export const SILENCIO_TRAS_PAUSA_SEC = 1;
-
-/**
- * Cuánto se separan la palabra y el aplauso de la misma claqueta.
- *
- * Copiada del motor por lo mismo que las de arriba, y la usa el aviso de la
- * palmada: son los segundos de audio que el motor necesita DETRÁS del aplauso
- * para leer lo que se dijo, así que hasta que no pasen no puede haber
- * confirmación y la pantalla no tiene nada que reprocharle.
- */
-export const PALABRA_Y_APLAUSO_MS = 6000;
 
 function limpio(texto) {
     return String(texto == null ? '' : texto).trim();
@@ -65,7 +54,7 @@ function valorDeCuenta(texto) {
  * cerrada, y la marca se corrige sola.
  *
  * @param {Array} lista [{t, texto, hasta}] en orden
- * @returns {Array} [{tipo:'abre'|'cierra'|'claqueta'|'pausa-corta', desde, hasta, huecoSec?}]
+ * @returns {Array} [{tipo:'abre'|'cierra'|'pausa-corta', desde, hasta, huecoSec?}]
  */
 export function senalesEn(lista) {
     const ws = lista || [];
@@ -73,11 +62,6 @@ export function senalesEn(lista) {
 
     for (let i = 0; i < ws.length; i++) {
         const p = palabraDe(ws[i]);
-
-        if (CLAQUETA.test(p)) {
-            salida.push({ tipo: 'claqueta', desde: i, hasta: i });
-            continue;
-        }
 
         if (RETOMAR.test(p)) {
             salida.push({ tipo: 'abre', desde: i, hasta: i });
@@ -137,7 +121,6 @@ export function porPalabra(lista) {
 export const QUE_HACE = {
     abre: 'Con esto la app abre una toma',
     cierra: 'Con esto la app cierra la toma',
-    claqueta: 'Acá la app anota una claqueta',
     'pausa-corta': '«Pausa» sin el segundo de silencio detrás: la app no cerró la toma'
 };
 

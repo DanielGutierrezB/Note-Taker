@@ -3,16 +3,16 @@
  * grabacion.js — La sesión de toma de notas, de principio a fin.
  *
  * Junta las tres piezas: `captura` escribe el audio que manda la ventana, `oir`
- * lo transcribe por pedazos, y `notas-vivo` decide qué es una toma y qué es una
- * claqueta. Acá está lo que ninguna de las tres puede tener: el estado de la
- * sesión y los relojes que la mueven.
+ * lo transcribe por pedazos, y `notas-vivo` decide qué es una toma. Acá está lo
+ * que ninguna de las tres puede tener: el estado de la sesión y los relojes que
+ * la mueven.
  *
  * **Una sesión es una clase entera, de corrido.** No hay "parar y seguir": se
  * aprieta Iniciar al empezar la clase y Terminar al final, y de eso sale UN XML
- * con todas las tomas y todas las claquetas. Es lo que pide el escenario: el
- * editor sincroniza los archivos a mano contra la primera claqueta y después
- * sigue los IN y los OUT de este XML para cortar, así que los tiempos tienen que
- * cerrar en el total y no por tramos.
+ * con todas las tomas. Es lo que pide el escenario: el editor sincroniza el WAV
+ * de la clase con el audio de las cámaras por forma de onda y después sigue los
+ * IN y los OUT de este XML para cortar, así que los tiempos tienen que cerrar en
+ * el total y no por tramos.
  *
  * **Vive en el proceso principal y no en la ventana**, aunque la ventana sea la
  * que dibuja. El motivo es que hay una sola verdad: si el estado viviera allá,
@@ -22,7 +22,7 @@
  *
  * **Dos ciclos, y la separación es lo que protege el transcript.** El de señales
  * corre acá, seguido, y su texto es descartable: solo sirve para saber si alguien
- * dijo "3, 2, 1", "Pausa" o "claqueta", y de eso solo se le cree la hora. El de
+ * dijo "3, 2, 1" o "Pausa", y de eso solo se le cree la hora. El de
  * toma corre en `relecturas.js`, una vez por toma, y ESE texto es el que queda.
  * Así el transcript nunca se arma pegando pedazos, que es de donde salen las
  * palabras cortadas y los tiempos que no cierran. Los dos le preguntan al modelo
@@ -31,7 +31,7 @@
  * chico quedó de respaldo para cuando el servidor no está listo.
  *
  * **Qué queda acá y qué se fue.** Este archivo tiene la sesión: arrancarla, el
- * PCM que llega, el ciclo de señales, las claquetas y el cierre. Lo demás salió
+ * PCM que llega, el ciclo de señales y el cierre. Lo demás salió
  * a módulos con nombre propio, y todos reciben la sesión en vez de buscarla:
  *
  *   `espejo.js`           lo que se ve de la sesión: el disco y la pantalla
@@ -48,7 +48,6 @@ const captura = require('./captura');
 const idiomas = require('./idiomas');
 const videoCrudo = require('./video-crudo');
 const registro = require('./registro');
-const aplausos = require('./aplausos');
 const vivo = require('./notas-vivo');
 const historial = require('./deshacer');
 const nombreDeSesion = require('./nombre-de-sesion');
@@ -135,12 +134,9 @@ function soltar() {
  * "Iniciar grabación", y de él cuelgan todos los cuadros del XML. También es la
  * hora que va en el nombre del archivo (ver `nombre-de-sesion.js`).
  *
- * **El cero es el botón y no la primera claqueta**, aunque la claqueta sea la
- * referencia física. Con el cero en la claqueta, el número que el editor tendría
- * que compensar sería "cuánto tardaron en claquetear", que es cualquier cosa
- * entre siete segundos y dos minutos. Con el cero en el botón, el XML empieza
- * donde el editor apretó grabar y la primera claqueta queda marcada adentro,
- * con su timecode, que es exactamente lo que él necesita para correlacionar.
+ * **El cero es el botón**: el XML empieza donde el editor apretó grabar, que es
+ * donde empieza el WAV de la clase, y desde ahí se sincroniza contra las cámaras
+ * por forma de onda.
  *
  * @param {object} params { dir, numero, fps, idioma, dispositivo,
  *   sampleRate, canales, avisar, sinReloj, reanudar, carpetaPropia }
@@ -207,12 +203,6 @@ function iniciar(params) {
         }),
         dir,
         captura: null,
-        // El piso de esta sala y cuándo fue la última palmada (`aplausos.js`).
-        // Lo arma `abrirEscucha`, acá abajo, que es donde se sabe la tasa.
-        palmadas: null,
-        // Los golpes que todavía no se leyeron, en orden: la hora de cada uno. Se
-        // leen cuando el audio de alrededor ya está en el disco (`leerCandidatas`).
-        candidatas: [],
         // Las tomas que esperan que se les rehaga el texto, de a una; y la
         // promesa de la pasada que las está atendiendo, si hay una
         // (`engine/relecturas.js`).
@@ -281,47 +271,14 @@ function abrirEscucha(params) {
     });
     sesion.captura = { ...info, segundos: 0 };
     sesion.escuchadoHastaMs = info.desdeMs;
-    // El buscador de palmadas trabaja en marcos de 5 ms, así que necesita la
-    // tasa de verdad —la que quedó, no la que se pidió— para medirlos.
-    sesion.palmadas = aplausos.nuevo({ tasa: info.sampleRate });
     return info;
 }
 
-/**
- * El PCM que manda la ventana: se escribe y se mira si trajo una palmada.
- *
- * La hora que se le da al buscador de palmadas sale de la POSICIÓN EN EL AUDIO y
- * no de `Date.now()`, y eso importa por dos motivos. Uno: el pedazo que llega
- * ahora se grabó hace un instante, y el aplauso tiene que quedar donde suena.
- * El otro es que así el mismo código sirve para pasarle el audio de una clase
- * vieja a toda velocidad y comprobar que encuentra sus claquetas
- * (`tools/simular-grabacion.js`), que es la única forma de probar esto sin
- * ponerse a aplaudir delante del micrófono.
- *
- * **Las palmadas no se dejan de anotar nunca.** En Class Cut, con la claqueta ya
- * confirmada no se anotaba ninguna más, porque en una clase de allá se aplaude
- * una vez. Acá se claquetea cada vez que hace falta volver a sincronizar, así
- * que cada palmada es candidata y `anotarClaqueta` se ocupa de que dos que sean
- * la misma no entren dos veces.
- */
+/** El PCM que manda la ventana: se escribe, y lo oye el ciclo de señales. */
 function pcm(buffer) {
     if (!sesion || !sesion.captura) return null;
-
-    // Antes de escribir: `segundos` es cuánto había, o sea dónde arranca esto.
-    const desdeMs = sesion.captura.desdeMs + sesion.captura.segundos * 1000;
     const r = captura.escribir(sesion.captura.id, buffer);
     sesion.captura.segundos = r.segundos;
-
-    // Las palmadas que salen acá no son de ESTE pedazo: `aplausos.js` decide
-    // 300 ms tarde, porque la caída es parte de lo que la hace una palmada. El
-    // `ms` de cada una es el del pico, que es donde tiene que ir el marcador.
-    for (const palmada of aplausos.mirar(sesion.palmadas, buffer, Math.round(desdeMs)).aplausos) {
-        // Un aplauso solo no es una claqueta: se recuerda para emparejarlo con
-        // la palabra (la que oiga el ciclo en vivo, o la que se lea alrededor).
-        vivo.recordarAplauso(sesion.estado, palmada.ms);
-        sesion.candidatas.push(palmada.ms);
-        sesion.avisar({ tipo: 'golpe', ms: palmada.ms });
-    }
     return r;
 }
 
@@ -412,97 +369,6 @@ function vigilarDeriva() {
  */
 function tocaAvisarDeriva(escalon, avisado) {
     return escalon >= 1 && escalon >= Math.max(1, avisado * 2);
-}
-
-/* ─── Las claquetas ───────────────────────────────────────────────────────
- *
- * Cada aplauso ancla un punto de sincronía, y el editor los usa para saber si
- * los archivos de Premiere son uno o varios y dónde empieza cada uno.
- * Encontrarlos tiene dos mitades: la palmada la oye `aplausos.js` en el PCM, y
- * creerle o no es lo de acá. La tercera puerta —la palabra "claqueta" dicha— no
- * pasa por este tramo: entra por el ciclo de señales (`notas-vivo.senales`),
- * porque ahí el audio ya está transcripto.
- */
-
-/**
- * Una claqueta puesta a mano: el aplauso no se oyó, o se oyó un portazo.
- *
- * Confirmada por construcción. La afirmó una persona que estaba mirando, y
- * pedirle a Whisper que lo confirme sería desconfiar del editor para creerle a
- * un modelo.
- *
- * **Se estampa con el reloj del AUDIO y no con `Date.now()`.** Es el cambio que
- * hace que todo cierre en el total: el editor aprieta la tecla mientras oye la
- * claqueta, y el audio que se está escribiendo va uno o dos pedazos por detrás
- * del reloj de pared. Con `Date.now()` la marca caía adelante de donde suena, y
- * en una clase de tres horas eso son marcas que no coinciden con la onda. El
- * `paredMs` real se guarda igual, en el sidecar, para poder depurar.
- *
- * **Y si hubo una palmada cerca, se estampa en la palmada.** Es lo que evita la
- * claqueta doble: quien claquetea a mano lo hace mientras oye el aplauso, así
- * que el botón y la palmada son el MISMO gesto, pero llegaban con dos horas
- * distintas —la palmada con el pico de la onda, el botón con el tiempo de
- * reacción del dedo— y la confirmación del golpe, que tarda seis segundos en
- * volver de Whisper, entraba como una segunda claqueta si las dos horas se
- * habían separado más que `MISMA_CLAQUETA_MS`. Puestas las dos en el pico, se
- * funden siempre, y la que queda tiene el dato bueno: el de la onda.
- *
- * Al revés funciona igual y por lo mismo: si la confirmación ya llegó, el botón
- * cae exactamente sobre la claqueta que hay y la funde en vez de agregar otra.
- *
- * **Y la ventana puede señalar CUÁL palmada**, con `palmadaMs`. Buscar por
- * cercanía alcanza mientras el editor aprieta la tecla al oír el aplauso, y no
- * alcanza en el caso que importa: la pantalla no puede decir «palmada sin
- * confirmar» hasta doce segundos después —seis de audio que al motor le faltan
- * para poder leer, seis de la pasada de Whisper—, así que justo cuando el
- * editor se entera de que no se anotó ninguna, la ventana de seis segundos ya
- * pasó y la K caía donde estaba su dedo. Con el `ms` del aviso de vuelta cae en
- * la palmada. No se le cree a ojos cerrados: `aplausoOido` lo busca en la lista
- * de palmadas de esta sesión, así que la ventana puede señalar una vieja pero
- * no puede inventar una hora.
- *
- * **Va al historial como todo lo demás**, y la foto es de la claqueta que
- * quedó, con la que había ahí como foto de antes por si se fundieron.
- *
- * @param {number} [palmadaMs] el `ms` de un aviso `golpe`, para anotar en ESA
- */
-function claqueta(palmadaMs) {
-    if (!sesion || !sesion.captura) return null;
-    const ahora = espejo.grabadoHastaMs(sesion);
-    // La señalada manda sobre la buscada por cercanía: la ventana sabe cuál
-    // palmada está mirando el editor, y el motor solo puede adivinarlo.
-    const palmada = vivo.aplausoOido(sesion.estado, palmadaMs) ??
-        vivo.aplausoCerca(sesion.estado, ahora);
-    const ms = palmada == null ? ahora : palmada;
-    // El paso es de UNA claqueta: la que había ahí (si se funde) y la que quedó.
-    // Una foto de la lista entera se llevaba al deshacer las que el aplauso o
-    // la voz anotaron después (ver `ponerEnLista` en `deshacer.js`).
-    const cerca = vivo.claquetaCerca(sesion.estado, ms);
-    const antes = cerca ? { ...cerca } : null;
-    const anotada = vivo.anotarClaqueta(sesion.estado, {
-        ms,
-        paredMs: Date.now(),
-        frase: '',
-        confirmada: true,
-        origen: 'editor'
-    });
-    vivo.olvidarQuitada(sesion.estado, anotada.claqueta);
-    cambiosToma.anotarDeLaSesion(sesion, 'claquetas', antes,
-        { tipo: 'claquetas', n: anotada.claqueta.n }, { ...anotada.claqueta });
-    espejo.escribir(sesion);
-    return espejo.resumen(sesion);
-}
-
-/** Saca una claqueta de la lista: se marcó de más, o el portazo no era. */
-function quitarClaqueta(n) {
-    if (!sesion) return null;
-    const quitada = (sesion.estado.claquetas || []).find(c => c.n === Number(n));
-    if (!quitada) return espejo.resumen(sesion);
-    const antes = { ...quitada };
-    vivo.quitarClaqueta(sesion.estado, Number(n));
-    cambiosToma.anotarDeLaSesion(sesion, 'claquetas', antes, { tipo: 'claquetas', n: null }, null);
-    espejo.escribir(sesion);
-    return espejo.resumen(sesion);
 }
 
 /**
@@ -787,15 +653,12 @@ module.exports = {
     // La política del tope es pura y se prueba sin un WAV y sin un modelo, que
     // es la única forma de probar lo que pasa cuando la máquina no da.
     topeDeVentana: ciclo.topeDeVentana,
-    MARGEN_CLAQUETA_MS: ciclo.MARGEN_CLAQUETA_MS,
     activa,
     enCurso,
     dondeVa,
     anotarVideos,
     iniciar,
     pcm,
-    claqueta,
-    quitarClaqueta,
     cambiarIdioma,
     editar,
     editarGrabada: sesionesGrabadas.editarGrabada,

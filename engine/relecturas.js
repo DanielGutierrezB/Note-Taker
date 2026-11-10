@@ -373,19 +373,6 @@ async function rehacer(sesion, id) {
         const dentro = vivo.senales(toma.palabras).filter(s => s.tipo === 'cierra');
         toma.pausaAdentro = dentro.length ? toma.palabras[dentro[0].desde].t : null;
 
-        // Y las claquetas que el ciclo liviano no oyó. Es la segunda
-        // oportunidad de la tercera puerta: el modelo grande escribe
-        // "claqueta" donde el liviano escribió cualquier otra cosa, y una
-        // claqueta que se pierde es una marca de sincronía menos para el
-        // editor. Entran por `anotarClaqueta`, así que la que ya esté anotada
-        // a menos de cinco segundos se funde en vez de duplicarse.
-        // Igual que en vivo: solo con un aplauso cerca (`claquetaDicha`).
-        for (const s of vivo.senales(toma.palabras).filter(x => x.tipo === 'claqueta')) {
-            vivo.claquetaDicha(sesion.estado, toma.palabras[s.desde].t,
-                (toma.palabras.slice(Math.max(0, s.desde - 2), s.desde + 4) || [])
-                    .map(w => w.texto).join(' ').trim());
-        }
-
         espejo.fijar(sesion);
     } catch (err) {
         // Lo que llega acá ya no es un whisper-cli que se murió —eso lo atiende

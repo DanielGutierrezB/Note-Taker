@@ -56,10 +56,9 @@ function aPcm(wav, segundos) {
  *
  * Un `Int16Array` transferido por el puente, que es lo que arma el worklet
  * (`src/js/grabar/pcm-worklet.js`). Antes acá se le pasaba el `Buffer` de Node
- * tal cual salía de `readFileSync`, y esa diferencia dejó a la 0.1.2 sin una
- * sola claqueta: `aplausos.mirar` pedía un `Buffer`, en la app tiraba TODOS los
- * pedazos en silencio, y acá no se veía porque acá llegaba justo lo que el
- * código pedía. Una simulación que manda algo que la app no manda prueba otra
+ * tal cual salía de `readFileSync`, y esa diferencia dejó a la 0.1.2 con un
+ * motor que en la app tiraba TODOS los pedazos en silencio, y acá no se veía
+ * porque acá llegaba justo lo que el código pedía. Una simulación que manda algo que la app no manda prueba otra
  * app.
  */
 function comoLaVentana(trozo) {
@@ -81,7 +80,6 @@ function referencia(xmlPath) {
     const xml = path.basename(xmlPath);
     return {
         archivo: xml,
-        clap: leido.clap ? leido.clap.seconds : null,
         bloques: leido.blocks.filter(b => b.complete).map(b => ({
             desde: b.startSec, hasta: b.endSec, vista: b.view
         }))
@@ -162,7 +160,6 @@ async function main() {
                 // oyó el conteo o que se oyó y no se reconoció.
                 if (detalle) console.log(`\n  oyendo: ${aviso.oyendo || '(nada)'}`);
             }
-            if (aviso.tipo === 'golpe') eventos.push(`golpe a las ${hhmmss(aviso.ms)}`);
             if (aviso.tipo === 'error') eventos.push(`ERROR: ${aviso.mensaje}`);
             for (const ev of aviso.eventos || []) {
                 eventos.push(`toma ${ev.toma} ${ev.tipo}${ev.por ? ` (${ev.por})` : ''}`);
@@ -209,14 +206,7 @@ async function main() {
 
     console.log('Lo que pasó:');
     for (const ev of eventos) console.log(`  ${ev}`);
-    if (!eventos.length) console.log('  (nada: ni un golpe ni una señal)');
-
-    console.log(`\nClaquetas (${final.claquetas.length}):`);
-    if (!final.claquetas.length) console.log('  (ninguna)');
-    for (const c of final.claquetas) {
-        console.log(`  ${c.n}. ${hhmmss(c.ms)} · ${c.confirmada ? 'confirmada' : 'SIN confirmar'}` +
-            ` · por ${c.origen}${c.frase ? ` · «${c.frase}»` : ''}`);
-    }
+    if (!eventos.length) console.log('  (nada: ni una señal)');
 
     console.log(`\nTomas (${final.tomas.length}):`);
     for (const t of final.tomas) {
@@ -240,11 +230,6 @@ async function main() {
         const salieron = final.tomas
             .filter(t => !t.descartada && t.inMs != null && t.outMs != null)
             .map(t => ({ desde: t.inMs / 1000, hasta: t.outMs / 1000, vista: t.vista }));
-
-        if (ref.clap != null && final.claquetas.length) {
-            console.log(`  claqueta: el CD la puso en ${mmss(ref.clap)}, ` +
-                `acá la primera cayó en ${mmss(final.claquetas[0].ms / 1000 - ceroSec)}`);
-        }
 
         const { filas, sobrantes } = comparar(salieron, dentro, ceroSec);
         for (const f of filas) {

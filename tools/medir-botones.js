@@ -46,7 +46,6 @@ const ESCENARIOS = arg('escenario', null) ? [arg('escenario')] : maqueta.escenar
     // Los que no agregan ni un botón sobre el escenario del que salen: medirlos
     // otra vez son los mismos rectángulos con otro nombre.
     'en-vivo,desplegada': 'los mismos botones que en-vivo',
-    'en-vivo,claqueta-abierta': 'los mismos botones que toma-abierta',
     releyendo: 'los mismos que en-vivo, con otro texto',
     'sin-audio': 'los mismos que en-vivo, con un aviso',
     iconos: 'no es una pantalla: es la hoja de los dibujos'

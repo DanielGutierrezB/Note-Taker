@@ -97,12 +97,11 @@ module.exports = function (t) {
         const e = sesiones.paraMirar(s.json, null);
         // Los campos que la pantalla de la clase dibuja sin preguntar. Si alguno
         // falta, `pintar` se cae en el primero que toque.
-        for (const campo of ['secuencia', 'ceroMs', 'fps', 'tomas', 'claquetas', 'vistas',
+        for (const campo of ['secuencia', 'ceroMs', 'fps', 'tomas', 'vistas',
             'sueltas', 'segundos', 'historia', 'archivos', 'abierta', 'releyendo']) {
             t.ok(campo in e, `trae ${campo}`);
         }
         t.eq(e.tomas.length, 2);
-        t.eq(e.claquetas.length, 1);
         t.eq(e.tomas[1].comentario, 'La segunda', 'con las notas de verdad');
         t.eq(e.tomas[0].palabras.length, 20, 'y con el texto, que es donde se arrastra');
     });
@@ -192,16 +191,14 @@ module.exports = function (t) {
         t.eq(despues.terminada, antes.terminada, 'y sigue terminada');
     });
 
-    t.test('la vista, desactivar y la nota de la claqueta también', () => {
+    t.test('la vista y desactivar también', () => {
         const s = sembrar();
         sesiones.editarGrabada(s.json, { tipo: 'vista', toma: 1, vista: 'MG' });
-        sesiones.editarGrabada(s.json, { tipo: 'descartar', toma: 1, descartada: true });
-        const r = sesiones.editarGrabada(s.json, { tipo: 'nota-claqueta', n: 1, texto: 'Tarjeta 1' });
+        const r = sesiones.editarGrabada(s.json, { tipo: 'descartar', toma: 1, descartada: true });
         t.eq(r.estado.tomas[0].vista, 'MG');
         t.eq(r.estado.tomas[0].descartada, true);
-        t.eq(r.estado.claquetas[0].comentario, 'Tarjeta 1');
         const xml = fs.readFileSync(s.xml, 'utf8');
-        t.ok(xml.includes('Tarjeta 1'));
+        t.ok(xml.includes('Claqueta 1'), 'la claqueta que traía sigue en el XML');
         t.ok(!xml.includes('La primera'), 'y la toma desactivada ya no está en el XML');
     });
 
@@ -275,7 +272,7 @@ module.exports = function (t) {
     t.test('el cromo de grabar se esconde, y la salida va al sidecar', () => {
         const fuente = fs.readFileSync(path.join(SRC, 'pantalla-vivo.js'), 'utf8');
         const mirando = fuente.slice(fuente.indexOf('const mirando = esDeMirar();'));
-        for (const cual of ['btn-terminar', 'btn-claqueta', 'vivo-nivel', 'btn-deshacer', 'btn-rehacer']) {
+        for (const cual of ['btn-terminar', 'vivo-nivel', 'btn-deshacer', 'btn-rehacer']) {
             t.ok(new RegExp(`#${cual}'\\)\\.hidden = mirando`).test(mirando.slice(0, 700)),
                 `${cual} se esconde`);
         }

@@ -216,8 +216,8 @@ function sidecaresDe(donde, base) {
 }
 
 /**
- * Lo que la fila de la lista dice sin abrir nada: cuánto duró, cuántas tomas,
- * cuántas claquetas, y en qué estado quedó.
+ * Lo que la fila de la lista dice sin abrir nada: cuánto duró, cuántas tomas
+ * y en qué estado quedó.
  *
  * El estado va en PALABRAS y no solo en color, que es la regla de toda la
  * interfaz. Son tres y se excluyen:
@@ -238,7 +238,6 @@ function resumirParaLaLista(estado) {
     return {
         tomas: tomas.filter(t => !t.descartada).length,
         descartadas: tomas.filter(t => t.descartada).length,
-        claquetas: (estado.claquetas || []).length,
         segundos,
         sinReleer,
         estado: !estado.terminada ? 'abierta' : (sinReleer ? 'sin releer' : 'terminada')
@@ -416,17 +415,7 @@ function editarGrabada(json, cambio) {
     const estado = leerSidecar(json);
     const sitio = workspace.sesionDelSidecar(json);
 
-    if (c.tipo === 'quitar-claqueta') {
-        vivo.quitarClaqueta(estado, Number(c.n));
-    } else if (c.tipo === 'nota-claqueta') {
-        // Un sidecar de antes de que esto existiera no trae `comentario` en
-        // ninguna claqueta, y no hace falta migrarlo: el campo entra al
-        // escribirlo y el que no lo tiene se lee como vacío en todas partes
-        // (`comentarioDeClaqueta`, la fila, `fundir`).
-        const claqueta = (estado.claquetas || []).find(x => x.n === Number(c.n));
-        if (!claqueta) throw new Error(`Esa sesión no tiene la claqueta ${c.n}.`);
-        vivo.aplicarAClaqueta(claqueta, c);
-    } else if (c.tipo === 'dividir') {
+    if (c.tipo === 'dividir') {
         // Partir una toma no es escribir un campo, pero tampoco necesita el
         // audio: las palabras y las dos orillas ya están guardadas y lo único
         // que se hace es repartirlas por el corte (ver `vivo.dividir`). De ahí
@@ -502,7 +491,6 @@ function rehacerXml(json, enCurso) {
     workspace.writeJson(sitio.json, notasXml.sidecar(estado));
     return {
         tomas: vivo.tomasQueQuedan(estado).length,
-        claquetas: (estado.claquetas || []).length,
         // Cuántos bordes se corrieron al silencio, para poder decirlo: un botón
         // que contesta "8 tomas" y nada más no deja ver que además arregló seis
         // cortes que caían encima de una palabra.
@@ -518,8 +506,8 @@ function rehacerXml(json, enCurso) {
  *
  * **Es lo que protege el único invariante que importa acá**: que de una clase
  * salga UN XML con los tiempos cerrados de punta a punta. Con dos XML, el
- * editor tendría que sincronizar dos veces y correlacionar dos primeras
- * claquetas, que es justo el trabajo que esta app existe para ahorrarle.
+ * editor tendría que sincronizar dos veces, que es justo el trabajo que esta
+ * app existe para ahorrarle.
  *
  * Lo que NO se puede mover es el cero: los marcadores ya escritos cuelgan de él
  * y el editor pudo haber sincronizado contra ellos. El audio nuevo entra como
@@ -591,11 +579,9 @@ function paraReanudar(json, enCurso) {
             sueltas: estado.sueltas || [],
             recientes: [],
             sesiones,
-            // Los contadores siguen desde donde estaban: una toma nueva no puede
-            // reusar el id de una vieja, y una claqueta nueva no puede llamarse
-            // como una que ya está en el XML.
+            // El contador sigue desde donde estaba: una toma nueva no puede
+            // reusar el id de una vieja.
             proximaToma: (estado.tomas || []).reduce((n, t) => Math.max(n, t.id || 0), 0),
-            proximaClaqueta: (estado.claquetas || []).length,
             ultimaPalabraMs: 0,
             ultimaSenal: {}
         }

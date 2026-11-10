@@ -33,9 +33,8 @@ export const SE_HACEN = [
     'preparar', 'preparar-clase-repetida', 'preparar-sin-audio', 'preparar-microfono',
     'preparar-zoom-falso',
     'sin-whisper', 'sin-zoom', 'faltan-modelos', 'update',
-    'en-vivo', 'desplegada', 'claqueta-abierta', 'toma-abierta', 'releyendo',
+    'en-vivo', 'desplegada', 'toma-abierta', 'releyendo',
     'sin-audio', 'terminada', 'notas-de-antes', 'foto', 'foto-cien',
-    'palmada', 'palmada-vencida',
     'prproj', 'prproj-lleno', 'prproj-listo',
     'ajustes', 'ajustes-semanal', 'diagnostico', 'iconos',
     'semanal', 'semanal-primera-vez', 'semanal-sin-pantalla', 'semanal-grabando', 'semanal-sin-tomas',
@@ -248,8 +247,6 @@ window.nt = {
     grabarIniciar: async () => ({ ok: true, estado: laSesion() }),
     grabarReanudar: async () => ({ ok: true, estado: laSesion() }),
     grabarPcm: () => {},
-    grabarClaqueta: async () => estadoEnVivo(),
-    grabarQuitarClaqueta: async () => estadoEnVivo(),
     // Releyendo las que la pregunta dijo que iba a releer, y ninguna cuando
     // contestaron que solo de ahí en adelante: el aviso cuenta las dos cosas y
     // en la maqueta tienen que cuadrar con el diálogo que se acaba de ver.
@@ -321,7 +318,7 @@ window.nt = {
     },
     grabarBorrar: async () => ({ ok: true, secuencia: 'borrada', audios: 1 }),
     grabarRegenerar: async () => ({ ok: true, tomas: 6, sinAudio: 0, degradadas: 0, sinLeer: 0 }),
-    grabarRehacerXml: async () => ({ ok: true, tomas: 6, claquetas: 3 }),
+    grabarRehacerXml: async () => ({ ok: true, tomas: 6 }),
     grabarTerminar: async () => estadoEnVivo(),
     onGrabarAviso: cb => avisos.push(cb),
 
@@ -363,7 +360,7 @@ window.nt = {
         ok: true,
         ruta: `${carpeta}/Proyecto/${String(carpeta).split('/').pop()}.prproj`,
         cuenta: ['3 clase(s) en 2 captura(s) y 1 grupo(s), de 412 minutos con 5 de aire entre clases.',
-            '3 precortada(s) con 41 toma(s) y 7 claqueta(s) marcada(s) en las capturas.'],
+            '3 precortada(s) con 41 toma(s).'],
         avisos: ['clase-2_2026-09-28_14-30-00 quedó sin terminar: entra con lo que tenía guardado.']
     }),
     onPrprojAviso: () => {},
@@ -657,8 +654,8 @@ async function apretar(selector, comoSeLlama) {
  * Empujarle a la ventana un aviso del motor, desde afuera.
  *
  * Es la única manera de comprobar lo que la ventana hace con lo que LLEGA y no
- * con lo que pide: que un estado nuevo repinte, que el golpe de una palmada se
- * vea, y que con un menú abierto el texto de debajo se quede quieto.
+ * con lo que pide: que un estado nuevo repinte, y que con un menú abierto el
+ * texto de debajo se quede quieto.
  */
 window.maqueta = { avisar: a => { for (const cb of avisos) cb(a); } };
 
@@ -711,18 +708,12 @@ async function aplicar() {
     }
 
     if (hay('en-vivo') || hay('toma-abierta') || hay('releyendo') || hay('sin-audio') ||
-        hay('palmada') || hay('palmada-vencida') || hay('foto') || hay('foto-cien')) {
+        hay('foto') || hay('foto-cien')) {
         const estado = estadoEnVivo(estadoDeLaClase());
         vivo = estado;
         app.irAVivo(estado, { abierto: true, caido: hay('sin-audio'), pico: 0.42 });
         // Una toma cerrada desplegada: es donde se ven los dos bordes y las orillas.
         if (hay('desplegada')) document.querySelector('#lista-vivo [data-hace="plegar"][data-toma="1"]').click();
-        // Y una claqueta desplegada, que es donde se le escribe la nota: el
-        // renglón se abre igual que el de una toma y trae el mismo campo.
-        if (hay('claqueta-abierta')) {
-            document.querySelector('#lista-vivo [data-hace="plegar-claqueta"]').click();
-        }
-        if (hay('palmada') || hay('palmada-vencida')) await conPalmada(estado);
         // La foto del OUT en grande, abierta desde el bloque de su toma: es lo
         // que se mira para retomar, o lo que se copia para mandarle al profesor.
         if (hay('foto') || hay('foto-cien')) {
@@ -862,24 +853,6 @@ async function aplicar() {
 }
 
 /**
- * Una palmada oída, en sus dos momentos.
- *
- * Entra por donde entra de verdad —el aviso `golpe` del motor— y vence por donde
- * vence de verdad: con el reloj del audio grabado, que es un estado más con más
- * `segundos`. Nada de tocar la pastilla a mano, que es lo que habría mostrado
- * una pastilla linda encima de una cuenta que no funciona.
- */
-async function conPalmada(estado) {
-    const palmadaMs = estado.ceroMs + estado.segundos * 1000 - 400;
-    for (const cb of avisos) cb({ tipo: 'golpe', ms: palmadaMs });
-    if (!hay('palmada-vencida')) return;
-    // Los 6 s de audio que al motor le faltan para poder leer, más los 6 de la
-    // pasada de Whisper. Pasados, nadie confirmó nada y eso hay que decirlo.
-    await espera(50);
-    for (const cb of avisos) cb({ tipo: 'estado', estado: { ...estado, segundos: estado.segundos + 13 } });
-}
-
-/**
  * El estado en vivo de la maqueta, que abrir y cerrar sí cambian.
  *
  * Es lo mínimo para poder ARRASTRAR en la maqueta y ver qué pasa: soltar el IN
@@ -892,8 +865,8 @@ let vivo = null;
 /**
  * La sesión que el motor devolvería, de la clase o del vídeo de la semana.
  *
- * Son dos porque muestran cosas distintas: la semanal no tiene claquetas, ni
- * notas escritas, ni más vistas que la pantalla y la cámara. Con una sola, la
+ * Son dos porque muestran cosas distintas: la semanal no tiene notas escritas
+ * ni más vistas que la pantalla y la cámara. Con una sola, la
  * maqueta del modo semanal enseñaba tomas en «Slides» y renglones que decían
  * «Los tres pilares», y eso no es lo que ve quien graba su semana.
  */
@@ -1039,17 +1012,6 @@ function estadoDeNotas(json) {
 /** El cambio aplicado, para poder VER que el gesto llega al archivo. */
 function conCambio(base, c) {
     if (!c) return base;
-    if (c.tipo === 'quitar-claqueta') {
-        notas = { ...base, claquetas: base.claquetas.filter(q => q.n !== Number(c.n)) };
-        return notas;
-    }
-    if (c.tipo === 'nota-claqueta') {
-        notas = {
-            ...base,
-            claquetas: base.claquetas.map(q => (q.n === Number(c.n) ? { ...q, comentario: c.texto } : q))
-        };
-        return notas;
-    }
     const campo = { nota: 'comentario', vista: 'vista', descartar: 'descartada' }[c.tipo];
     if (!campo) return base;
     const valor = c.tipo === 'nota' ? c.texto : (c.tipo === 'vista' ? c.vista : Boolean(c.descartada));

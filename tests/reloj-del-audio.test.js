@@ -108,7 +108,7 @@ module.exports = function (t) {
         // seleccionando, que es el otro pedido de esta misma ronda.
         const codigo = leer('src', 'js', 'pantalla-vivo.js');
         const cuerpo = codigo.slice(codigo.indexOf("if (aviso.tipo === 'reloj')"),
-            codigo.indexOf("if (aviso.tipo === 'golpe')"));
+            codigo.indexOf("if (aviso.tipo === 'audio-roto')"));
         t.ok(/estado\.segundos = aviso\.segundos/.test(cuerpo), 'se queda con los segundos');
         t.ok(/pintarBarra\(\)/.test(cuerpo), 'y repinta la barra');
         t.ok(!/[^r]\bpintar\(\)/.test(cuerpo), 'pero no la pantalla entera');

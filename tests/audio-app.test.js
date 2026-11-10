@@ -46,8 +46,8 @@ module.exports = async function (t) {
     t.group('audio-app · los pedazos');
 
     t.test('re-empaqueta lo que llegue en pedazos de 4096 muestras', () => {
-        // Es el tamaño con el que se midieron los umbrales de `golpe.js`: con
-        // pedazos de otro largo, el mismo aplauso mediría distinto.
+        // El mismo tamaño que manda el worklet de la ventana: las dos fuentes
+        // entran por el mismo camino y el medidor se mueve igual con las dos.
         const pedazos = [];
         audioApp._conectar({ alPcm: p => pedazos.push(p), avisar: () => {}, mandando: true });
         for (let i = 0; i < 20; i++) audioApp.recibir(Buffer.alloc(480 * 2));

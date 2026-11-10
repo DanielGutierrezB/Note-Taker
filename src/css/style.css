@@ -3,7 +3,7 @@
 
    TRES TRABAJOS, TRES VOCES. La app hace tres cosas y hay que poder
    distinguirlas de un vistazo: DECIDIR (empezar una sesión, elegir la vista de
-   una toma), ESCANEAR (la lista de tomas y claquetas mientras la clase corre) y
+   una toma), ESCANEAR (la lista de tomas mientras la clase corre) y
    CONFIRMAR (estados, timecodes, contadores).
 
    El sistema es el de HyperPremiere v1.6.0, que se construyó midiendo y no
@@ -189,8 +189,8 @@
        que usan sus tablas de datos;
      · es la fila más chica que puede contener un control que cumpla WCAG 2.2
        SC 2.5.8 (24×24 px) con 4 px de aire arriba y abajo.
-     Es el alto de una fila de toma plegada y de una fila de claqueta, que son
-     las dos que se repiten veinte veces en una clase. */
+     Es el alto de una fila de toma plegada, que es la que se repite veinte
+     veces en una clase. */
   --row: 32px;
   --row-xs: 24px;
   --target-min: 24px;          /* SC 2.5.8, AA */
@@ -318,7 +318,6 @@ body {
 .tc,
 .num,
 .fila-toma time,
-.fila-claqueta time,
 .ses-dato {
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
@@ -826,7 +825,7 @@ b {
 }
 
 /* La fila plegada: 32 px, que es el criterio de aceptación de la lista de
-   tomas y el de la de claquetas. */
+   tomas. */
 .fila {
   display: flex;
   align-items: center;
@@ -889,24 +888,6 @@ b {
 .es-abierta > .fila .chevron,
 .fila.es-abierta .chevron {
   transform: rotate(90deg);
-}
-
-/* La fila de una claqueta, en la lista con las tomas: un renglón de 32 px como
-   ellas, pero sin fondo de color, porque no es una toma y no tiene vista. El
-   chevron sí lo tiene desde que se despliega para escribirle una nota, y va en
-   la misma columna que el de las tomas para que los números queden alineados. */
-.fila-claqueta {
-  background: transparent;
-}
-
-/* El hover se nota menos que el de una toma —el renglón parte de transparente,
-   no de `--bg-surface`— pero tiene que notarse: es la señal de que se abre. */
-.fila-claqueta:hover {
-  background: var(--bg-surface);
-}
-
-.fila-claqueta .hp-ico {
-  color: var(--text-secondary);
 }
 
 /* Los tres estados de una toma: un solo control con tres posiciones, porque
@@ -1418,7 +1399,7 @@ select {
 
    Es el cromo que se mira sin apartar la vista del profesor, así que lleva los
    dos elementos grandes de la app y nada más que lo que se consulta con la
-   clase corriendo: el timecode, el estado, cuántas tomas, cuántas claquetas.
+   clase corriendo: el timecode, el estado y cuántas tomas.
    ────────────────────────────────────────────────────────────────────────── */
 
 .barra-sesion {
@@ -1431,10 +1412,9 @@ select {
   border-bottom: 1px solid var(--hairline);
 }
 
-/* A 12 px y no a 16: con el botón de Claqueta adentro, la fila pide 30 px más
-   de los que hay al ancho mínimo de la ventana (900 px), y lo que cedía era el
-   timecode —los 32 px se encogían y se pintaban encima del número de al lado—.
-   Medido con `tools/medir-botones.js`. */
+/* A 16 px, y a 12 en lo angosto (abajo): al ancho mínimo de la ventana (900 px)
+   la fila va al límite, y lo que cedía era el timecode —los 32 px se encogían y
+   se pintaban encima del número de al lado—. Medido con `tools/medir-botones.js`. */
 .barra-arriba {
   display: flex;
   align-items: center;
@@ -1463,13 +1443,6 @@ select {
    esto se aplica. */
 @media (max-width: 1100px) {
   .barra-arriba {
-    gap: var(--sp-3);
-  }
-
-  /* Y los contadores se juntan entre ellos, que son dos números de dos
-     caracteres con su palabra debajo: 16 px entre «6 tomas» y «3 claquetas»
-     es aire que acá no hay. */
-  .contadores {
     gap: var(--sp-3);
   }
 
@@ -1892,7 +1865,7 @@ kbd {
   border-radius: 2px;
 }
 
-/* ── Las palabras con las que la app abre, cierra y claquetea ───────────────
+/* ── Las palabras con las que la app abre y cierra ───────────────────────────
    Lo que hace falta mientras la clase corre no es leer el transcript sino saber
    si la app OYÓ: si el «3, 2, 1» quedó escrito «3, 2, uña» no abre nada, y en
    texto corrido y gris eso se lee igual que el resto. Casi siempre caen además

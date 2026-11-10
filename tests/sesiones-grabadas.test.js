@@ -101,7 +101,6 @@ module.exports = function (t) {
         const lista = sesiones.listar([dir]);
         t.eq(lista.length, 1);
         t.eq(lista[0].resumen.tomas, 1);
-        t.eq(lista[0].resumen.claquetas, 1);
         t.eq(lista[0].resumen.segundos, 600);
         t.eq(lista[0].resumen.estado, 'terminada');
     });
@@ -487,14 +486,13 @@ module.exports = function (t) {
         t.eq(previa.estado.secuencia, s.secuencia);
     });
 
-    t.test('los contadores siguen desde donde estaban', () => {
-        // Una toma nueva no puede reusar el id de una vieja, y una claqueta
-        // nueva no puede llamarse como una que ya está en el XML.
+    t.test('el contador de tomas sigue desde donde estaba', () => {
+        // Una toma nueva no puede reusar el id de una vieja.
         const dir = carpeta();
         const s = sembrar(dir, { terminada: false });
         const previa = sesiones.paraReanudar(s.json);
         t.eq(previa.estado.proximaToma, 1);
-        t.eq(previa.estado.proximaClaqueta, 1);
+        t.eq(previa.estado.claquetas.length, 1, 'y la claqueta que traía se queda');
     });
 
     t.test('una sesión ya cerrada NO se reanuda', () => {
@@ -560,13 +558,6 @@ module.exports = function (t) {
         sesiones.editarGrabada(s.json, { tipo: 'vista', toma: 1, vista: 'R' });
         const xml = fs.readFileSync(s.xml, 'utf8');
         t.ok(xml.includes('<name>Toma 1 · R</name>'), 'el marcador cambió de vista');
-    });
-
-    t.test('quitar una claqueta también', () => {
-        const dir = carpeta();
-        const s = sembrar(dir);
-        sesiones.editarGrabada(s.json, { tipo: 'quitar-claqueta', n: 1 });
-        t.ok(!fs.readFileSync(s.xml, 'utf8').includes('Claqueta 1'));
     });
 
     t.test('reabrir una toma se niega, y dice por qué', () => {
