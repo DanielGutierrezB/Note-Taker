@@ -467,6 +467,8 @@ function rotuloDeEntrada() {
         dice,
         corto: !nombre ? 'Ninguna' : delSistema || ENTRADA_CORTA[a.clase] || dice,
         avisa: mal,
+        recargar: 'recargar-entradas',
+        recargarDice: 'Buscar de nuevo las entradas de audio: por si acabás de conectar un micrófono o de abrir Zoom',
         pista: (!nombre
             ? 'No está entrando audio a la clase. '
             : `${nombre}.${a.caido || a.roto ? ' Se cayó o está perdiendo audio.' : ''} `)
@@ -492,6 +494,8 @@ function rotuloDeCamara() {
         icono: 'camara',
         dice: !cual ? 'Ninguna' : cual.length > 22 ? `${cual.slice(0, 21)}…` : cual,
         corto: cual ? 'Puesta' : 'Ninguna',
+        recargar: 'recargar-camaras',
+        recargarDice: 'Buscar de nuevo las cámaras: por si acabás de conectar una o de abrir OBS',
         pista: `${cual || 'Sin cámara'}. De acá sale la foto de cómo quedó la pantalla al `
             + 'cerrar cada toma. No se graba vídeo: es un fotograma por toma.'
     };
@@ -1194,6 +1198,23 @@ async function alClic(e) {
         case 'idioma':
             rotuloBarra.abrir(boton.id, idiomas.opciones(estado.idioma), cual => cambiarIdioma(cual));
             break;
+        // Buscar de nuevo y mostrar lo que hay: el menú abierto con la lista
+        // nueva es la respuesta a «¿apareció la que acabo de conectar?».
+        case 'recargar-entradas': {
+            const lista = await app.entradasParaElegir();
+            avisar(`${lista.length} entrada${lista.length === 1 ? '' : 's'} de audio.`);
+            rotuloBarra.cerrar();
+            rotuloBarra.abrir('vivo-entrada', lista, id => cambiarEntrada(id));
+            break;
+        }
+        case 'recargar-camaras': {
+            const lista = await app.camarasParaElegir();
+            const cuantas = lista.filter(o => o.valor).length;
+            avisar(`${cuantas} cámara${cuantas === 1 ? '' : 's'}.`);
+            rotuloBarra.cerrar();
+            rotuloBarra.abrir('vivo-camara', lista, cual => app.ponerCamara(cual));
+            break;
+        }
         case 'camara':
             // La lista se pide al abrir el menú y no antes: una cámara virtual
             // aparece cuando alguien abre el OBS, y una lista de hace una hora

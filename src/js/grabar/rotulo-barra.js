@@ -90,6 +90,9 @@ function ponerTexto(nodo, texto) {
  *   barra no tiene un píxel de sobra: se dice acá y no se recorta con puntos
  *   suspensivos porque lo que importa está al final —«Auto · ES»— y cortar por
  *   la derecha se come justamente el idioma. Sin él se usa `dice`.
+ *   `recargar` es el `data-hace` de un botón pegado a la derecha que vuelve a
+ *   buscar las fuentes —para el audio y la cámara—, con `recargarDice` como
+ *   su título: es el gesto de quien acaba de enchufar algo y no lo ve.
  *   `avisa` lo pinta en ámbar: es para «lo tenés en español y suena a inglés»,
  *   que no es un error —se puede estar citando— pero hay que poder verlo de
  *   reojo sin leer el tooltip.
@@ -98,6 +101,13 @@ function ponerTexto(nodo, texto) {
  * palabra escondida a ventana chica, lo que se lee en voz alta sería «ES».
  */
 function rotulo(r) {
+    if (!r.recargar) return boton(r);
+    return `<span class="rotulo-grupo">${boton(r)}<button class="rotulo-recargar" type="button"
+            data-hace="${esc(r.recargar)}" aria-label="${esc(r.recargarDice || 'Buscar de nuevo')}"
+            title="${esc(r.recargarDice || 'Buscar de nuevo')}">${icono('regenerar')}</button></span>`;
+}
+
+function boton(r) {
     return `<button class="rotulo-barra" type="button" id="${esc(r.id)}"
             data-hace="${esc(r.hace)}" aria-haspopup="menu" aria-expanded="false"
             ${r.avisa ? 'data-avisa="si"' : ''}

@@ -102,6 +102,40 @@
   transition: width 80ms linear;
 }
 
+/* El medidor de la entrada, debajo de su desplegable y del mismo ancho: así se
+   lee como el de esa entrada. Más alto que el de la barra de la clase, que es
+   un indicador de reojo; este es el que se mira para saber si llega señal. */
+.medidor-fila {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.campo .medidor-fila {
+  margin-top: var(--sp-2);
+}
+
+.nivel.es-medidor {
+  flex: 1 1 auto;
+  max-width: 420px;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.campo .nivel.es-medidor {
+  max-width: none;
+}
+
+.nivel.es-medidor .nivel-barra {
+  border-radius: 4px;
+}
+
+.medidor-fila .pastilla {
+  flex: none;
+  cursor: help;
+}
+
 .nivel[data-pico='alto'] .nivel-barra { background: var(--warn); }
 .nivel[data-pico='clip'] .nivel-barra { background: var(--error); }
 

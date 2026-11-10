@@ -476,7 +476,7 @@ async function apretar(selector, comoSeLlama) {
  * con lo que pide: que un estado nuevo repinte, y que con un menú abierto el
  * texto de debajo se quede quieto.
  */
-window.maqueta = { avisar: a => { for (const cb of avisos) cb(a); } };
+window.maqueta = { avisar: a => { for (const cb of avisos) cb(a); }, conAudio: () => conAudio() };
 
 async function aplicar() {
     // Se espera el arranque de verdad y no un rato al azar: `arrancar` lee los
@@ -586,7 +586,8 @@ async function aplicar() {
         return;
     }
 
-    if (hay('ajustes')) app.verAjustes();
+    // Con nivel entrando: el medidor de la entrada está en Ajustes también.
+    if (hay('ajustes')) { await app.verAjustes(); conAudio(); }
     if (hay('diagnostico')) app.verDiagnostico();
 }
 

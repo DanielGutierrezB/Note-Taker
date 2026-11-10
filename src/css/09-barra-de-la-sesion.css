@@ -118,6 +118,55 @@
   cursor: pointer;
 }
 
+/* El rótulo y su botón de buscar de nuevo, pegados en una sola cápsula. */
+.rotulo-grupo {
+  display: inline-flex;
+  align-items: center;
+}
+
+.rotulo-grupo .rotulo-barra {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.rotulo-recargar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  margin-left: -1px;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--hairline);
+  border-radius: 0 999px 999px 0;
+  cursor: pointer;
+}
+
+.rotulo-recargar:hover {
+  background: var(--layer-hover);
+  color: var(--text-primary);
+}
+
+.rotulo-recargar .hp-ico {
+  width: 13px;
+  height: 13px;
+  flex-basis: 13px;
+}
+
+/* A ventana chica la fila no tiene un píxel de sobra: los botones de buscar
+   se angostan y los rótulos se juntan un poco, para que entren igual. */
+@media (max-width: 1000px) {
+  .rotulos-barra {
+    gap: var(--sp-1);
+  }
+
+  .rotulo-recargar {
+    width: 22px;
+  }
+}
+
 .rotulo-barra:hover {
   background: var(--layer-hover);
   color: var(--text-primary);

@@ -82,6 +82,7 @@ const app = {
         await pintarAjustes();
         dependencias.refrescar();
         verPanel('telon-ajustes', true);
+        ajustesEntrada.escuchar();
         // Cada vez que se abre, se pregunta: es donde se mira si hay una nueva.
         buscar(true);
     },
@@ -268,6 +269,7 @@ function cerrarPanel(id) {
     verPanel(id, false);
     if (id !== 'telon-ajustes') return;
     ojo.soltar('ajustes');
+    ajustesEntrada.soltar();
     // Preparar dice el fps, el idioma y el glosario, y Ajustes se abre desde
     // sus renglones: al volver, tienen que decir lo que se acaba de guardar.
     if ($('#vista-preparar').classList.contains('es-activa')) preparar.refrescar();

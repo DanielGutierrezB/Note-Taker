@@ -181,7 +181,7 @@ export const AJUSTES = {
     curso: 'Curso de automatizaciones',
     fps: 29.97,
     idioma: 'auto',
-    dispositivo: 'Audio de Zoom (la llamada)',
+    dispositivo: 'Audio del sistema (Zoom, Meet, lo que suene)',
     // Sin cámara de referencia: es como arranca la app, y es lo que deja que la
     // maqueta corra en una máquina sin ninguna cámara. Las fotos que se ven en
     // los bloques son las que el doble dice que ya están en el disco.

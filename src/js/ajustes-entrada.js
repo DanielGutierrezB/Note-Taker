@@ -13,6 +13,10 @@
  *
  * El botón de al lado le vuelve a preguntar al sistema qué entradas hay: es el
  * gesto de quien acaba de enchufar un micrófono, o de abrir Zoom, y no lo ve.
+ *
+ * Debajo va el medidor, el mismo de Preparar: si no hay ninguna entrada
+ * abierta, Ajustes abre la elegida mientras está a la vista, para que se
+ * pueda ver si llega señal sin ir a Preparar (`preparar.escucharParaAjustes`).
  */
 
 import { $, esc, avisar } from './chrome.js';
@@ -28,6 +32,29 @@ export function conectar(contexto) {
     $('#aj-entrada-buscar').innerHTML = icono('regenerar');
     $('#aj-entrada-buscar').addEventListener('click', () => pintar(true));
     $('#aj-entrada').addEventListener('change', e => elegir(e.target.value));
+    preparar.alCambiarElAudio(pintarEstado);
+}
+
+/** Empieza a medir la entrada elegida, si nadie la tiene abierta. */
+export async function escuchar() {
+    if (!await window.nt.grabarEstado()) await preparar.escucharParaAjustes();
+    pintarEstado(preparar.estadoDelAudio());
+}
+
+/** Al cerrar Ajustes: suelta la entrada si la abrió el medidor. */
+export function soltar() {
+    return preparar.soltarDeAjustes();
+}
+
+/** La pastilla del medidor: la palabra, y en el hover el porqué. */
+function pintarEstado(a) {
+    const pastilla = $('#aj-entrada-estado');
+    if (!pastilla) return;
+    const abierta = Boolean(preparar.entradaAbierta());
+    pastilla.hidden = !abierta && !a.porque;
+    pastilla.dataset.estado = a.clave;
+    pastilla.textContent = a.palabra;
+    pastilla.title = a.porque || '';
 }
 
 const enPreparar = () => $('#vista-preparar').classList.contains('es-activa');
@@ -77,6 +104,7 @@ async function elegir(id) {
         } else {
             const r = await window.nt.ajustesGuardar({ dispositivo: entrada.dice });
             if (r.ok) app.ajustes = r.ajustes;
+            await preparar.escucharParaAjustes(true);
         }
     } finally {
         $('#aj-entrada').disabled = false;

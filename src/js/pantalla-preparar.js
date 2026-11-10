@@ -75,6 +75,62 @@ let camaras = [];
 let ultimoPico = 0;
 /** El último estado del audio que se dibujó, para repintar solo al cambiar. */
 let ultimoEstado = null;
+/** La entrada se abrió solo para el medidor de Ajustes, sin Preparar delante. */
+let soloParaAjustes = false;
+/** Quienes quieren saber cuándo cambia el estado del audio (el medidor de Ajustes). */
+const alCambiarAudio = new Set();
+
+const seVe = () => $('#vista-preparar').classList.contains('es-activa');
+
+/** Repinta solo si la pantalla está delante: el audio también se abre desde Ajustes. */
+function pintarSiSeVe() {
+    if (seVe()) pintar();
+}
+
+export function alCambiarElAudio(fn) {
+    alCambiarAudio.add(fn);
+}
+
+/** Cómo está el audio ahora, dicho como lo dice la pastilla de Preparar. */
+export function estadoDelAudio() {
+    return estados.deAudio(audio);
+}
+
+/**
+ * Abre la entrada elegida para que el medidor de Ajustes tenga qué medir,
+ * cuando no hay ninguna abierta: es mirar si llega señal sin ir a Preparar.
+ * Se cierra al cerrar Ajustes (`soltarDeAjustes`). Con `otra` se reabre con la
+ * que se acaba de elegir.
+ */
+export async function escucharParaAjustes(otra) {
+    if (audio.abriendo || (audio.abierto && !(otra && soloParaAjustes))) return;
+    await releerEntradas();
+    const elegida = entradas.find(d => d.nombre === app.ajustes.dispositivo);
+    if (!elegida) return;
+    soloParaAjustes = true;
+    await abrirEntrada(elegida.id);
+}
+
+/** Cierra lo que abrió Ajustes, si nadie más la está usando. */
+export async function soltarDeAjustes() {
+    if (!soloParaAjustes) return;
+    soloParaAjustes = false;
+    if (seVe() || await window.nt.grabarEstado()) return;
+    await cerrarEntrada();
+    avisarCambio();
+}
+
+function avisarCambio() {
+    for (const fn of alCambiarAudio) fn(estados.deAudio(audio));
+}
+
+/** Todos los medidores de la entrada: el de Preparar y el de Ajustes. */
+function pintarMedidores(pico) {
+    for (const barra of document.querySelectorAll('[data-medidor="entrada"]')) {
+        barra.firstElementChild.style.width = `${Math.min(100, pico * 140)}%`;
+        barra.dataset.pico = pico > 0.95 ? 'clip' : (pico > 0.7 ? 'alto' : '');
+    }
+}
 
 export function conectar(contexto) {
     app = contexto;
@@ -90,6 +146,7 @@ export function conectar(contexto) {
  */
 export async function ver(opciones) {
     reanudar = (opciones && opciones.reanudar) || null;
+    soloParaAjustes = false;
     cargando = true;
     pintar();
     verVista('vista-preparar');
@@ -178,6 +235,11 @@ export async function refrescar() {
 
 export async function salir() {
     if (window.nt.grabarSoltarOido) window.nt.grabarSoltarOido();
+    soloParaAjustes = false;
+    await cerrarEntrada();
+}
+
+async function cerrarEntrada() {
     await fuente.cerrar();
     Object.assign(audio, { abierto: false, caido: false, pico: 0, error: null, roto: null });
 }
@@ -226,10 +288,11 @@ function pintar() {
           </select>
           <button class="btn btn-ico" type="button" data-hace="releer-entradas" aria-label="Buscar de nuevo las entradas"
                   title="Volver a preguntarle al sistema qué entradas hay: por si acabás de conectar el micrófono o de abrir Zoom">${icono('regenerar')}</button>
-          <div class="nivel" id="prep-nivel"><div class="nivel-barra"></div></div>
-          <span class="pastilla" data-estado="${a.clave}">${esc(a.palabra)}</span>
         </div>
-        ${a.porque ? `<div class="prep-nota es-aviso">${esc(a.porque)}</div>` : ''}
+        <div class="medidor-fila">
+          <div class="nivel es-medidor" id="prep-nivel" data-medidor="entrada" aria-hidden="true"><div class="nivel-barra"></div></div>
+          <span class="pastilla" data-estado="${a.clave}" tabindex="0" ${a.porque ? `title="${esc(a.porque)}"` : ''}>${esc(a.palabra)}</span>
+        </div>
       </div>
       <div class="prep-fila">
         <span class="prep-etiqueta">Cámara ${ayuda('Una cámara, o una cámara virtual como la de OBS para una señal por NDI. '
@@ -445,7 +508,7 @@ async function abrirEntrada(id) {
     // reemplazó, y no puede volver a encender Iniciar en el medio.
     audio.abierto = false;
     audio.abriendo = (audio.abriendo || 0) + 1;
-    pintar();
+    pintarSiSeVe();
     let r;
     try {
         r = await abrirLaEntrada(entrada);
@@ -458,11 +521,13 @@ async function abrirEntrada(id) {
         // El motivo va al renglón y no a un aviso que se va: es lo que hay que
         // leer para arreglarlo, y en cuatro segundos no se lee.
         Object.assign(audio, { abierto: false, dispositivo: entrada.nombre, error: r.error });
+        avisarCambio();
         return r;
     }
     const nombre = entrada.nombre;
     Object.assign(audio, { abierto: true, caido: false, dispositivo: nombre });
     app.ajustes = (await window.nt.ajustesGuardar({ dispositivo: nombre })).ajustes;
+    avisarCambio();
     return r;
 }
 
@@ -471,11 +536,7 @@ function abrirLaEntrada(entrada) {
         alNivel: pico => {
             ultimoPico = Math.max(pico, ultimoPico * 0.85);
             audio.pico = ultimoPico;
-            const barra = $('#prep-nivel');
-            if (barra) {
-                barra.firstElementChild.style.width = `${Math.min(100, ultimoPico * 140)}%`;
-                barra.dataset.pico = ultimoPico > 0.95 ? 'clip' : (ultimoPico > 0.7 ? 'alto' : '');
-            }
+            pintarMedidores(ultimoPico);
             // El renglón se rehace solo cuando el ESTADO cambia, no en cada
             // pedazo: el nivel llega doce veces por segundo y repintar a esa
             // velocidad tira el foco del selector mientras alguien lo está
@@ -484,11 +545,11 @@ function abrirLaEntrada(entrada) {
             // pantalla contradiciéndose. Se mira la clave y no `listo`: callada
             // o sonando, la entrada deja iniciar igual.
             const ahora = estados.deAudio(audio).clave;
-            if (ahora !== ultimoEstado) { ultimoEstado = ahora; pintar(); }
+            if (ahora !== ultimoEstado) { ultimoEstado = ahora; pintarSiSeVe(); avisarCambio(); }
         },
-        alCaerse: () => { audio.caido = true; pintar(); },
+        alCaerse: () => { audio.caido = true; pintarSiSeVe(); avisarCambio(); },
         // La escucha de Zoom vuelve sola de una traba o de un rearme.
-        alVolver: () => { audio.caido = false; pintar(); },
+        alVolver: () => { audio.caido = false; pintarSiSeVe(); avisarCambio(); },
         /**
          * El procesado de un pedazo de PCM reventó en medio de la grabación.
          *
