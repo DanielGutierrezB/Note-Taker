@@ -12,11 +12,6 @@
  * MISMA pantalla de En vivo, para mirarla y ajustarle las notas (`irANotas`). No
  * es una pantalla más: es la misma con otro estado.
  *
- * **Había un segundo recorrido, el modo `semanal`**: grabarse explicando la
- * semana y salir con un MP4 cortado. Ya no se puede elegir (`MODOS` en
- * `engine/ajustes.js`) porque pasó a un proyecto aparte, y su código sigue acá
- * como base de ese proyecto (`docs/guia-video-para-claude.md`).
- *
  * Ajustes y Diagnóstico son paneles y no pantallas: se abren encima de
  * cualquiera de las cuatro, porque la pregunta que contestan —«¿a cuántos
  * cuadros va esto?», «¿encontró Whisper?»— aparece en cualquier momento.
@@ -28,7 +23,6 @@ import * as sesiones from './pantalla-sesiones.js';
 import * as preparar from './pantalla-preparar.js';
 import * as vivo from './pantalla-vivo.js';
 import * as cierre from './pantalla-cierre.js';
-import * as semanal from './pantalla-semanal.js';
 import * as dependencias from './dependencias.js';
 import * as ojo from './grabar/ojo.js';
 import * as rotuloBarra from './grabar/rotulo-barra.js';
@@ -77,17 +71,6 @@ const app = {
         vivo.salir();
         $('#btn-volver').hidden = false;
         cierre.ver(salida);
-    },
-
-    /**
-     * El otro modo, que es una pantalla y no un recorrido.
-     *
-     * Se llega acá por el ajuste y no por un botón: quien lo usa abre la app y
-     * ya está dentro. Las cuatro pantallas de clase se quedan sin montar.
-     */
-    irASemanal() {
-        $('#btn-volver').hidden = true;
-        return semanal.ver();
     },
 
     // Pintar es parte de abrir: los ajustes se leen del archivo y la lista de
@@ -147,17 +130,15 @@ async function arrancar() {
     preparar.conectar(app);
     vivo.conectar(app);
     cierre.conectar(app);
-    semanal.conectar(app);
 
     conectarAjustes();
     conectarActualizaciones();
-    // Los rótulos de la barra —el idioma y la cámara— los usan las dos
-    // pantallas y el menú es uno solo en el documento, así que se conecta acá
-    // una vez, igual que el del clic derecho sobre una palabra.
+    // El menú de los rótulos de la barra —el idioma y la cámara— es uno solo
+    // en el documento, así que se conecta acá una vez, igual que el del clic
+    // derecho sobre una palabra.
     rotuloBarra.conectar();
 
-    // El modo decide qué pantalla abre la app, y es lo único que decide.
-    await (app.ajustes.modo === 'semanal' ? app.irASemanal() : sesiones.ver());
+    await sesiones.ver();
     await revisarDependencias();
 
     const info = await window.nt.appInfo();
@@ -182,7 +163,6 @@ async function loQueVeLaVentana() {
     const activa = document.querySelector('.vista.es-activa');
     return {
         pantalla: activa ? activa.id : null,
-        modo: app.ajustes.modo,
         ventana: { ancho: window.innerWidth, alto: window.innerHeight, escala: window.devicePixelRatio },
         idioma: navigator.language,
         navegador: navigator.userAgent,
@@ -310,11 +290,7 @@ function conectarAjustes() {
         `<option value="${f}">${f} ${esNtsc(f) ? '(NTSC)' : ''}</option>`).join('');
 
     $('#aj-fps').addEventListener('change', e => guardar({ fps: Number(e.target.value) }));
-    // Al idioma del modo en que se está, no siempre al de la clase: son dos
-    // ajustes porque son dos preguntas distintas (ver `idiomaDelModo`).
-    $('#aj-idioma').addEventListener('change', e => guardar(app.ajustes.modo === 'semanal'
-        ? { semanal: { idioma: e.target.value } }
-        : { idioma: e.target.value }));
+    $('#aj-idioma').addEventListener('change', e => guardar({ idioma: e.target.value }));
     $('#aj-camara').addEventListener('change', e => ponerCamara(e.target.value));
     $('#btn-log').addEventListener('click', e => reportar(e.currentTarget));
 }
@@ -324,43 +300,26 @@ function esNtsc(f) {
 }
 
 async function pintarAjustes() {
-    // En el modo semanal no hay secuencia: el fps lo fija el modo. Se deja a la
-    // vista pero apagado, que dice más que esconderlo.
-    $('#aj-fps').disabled = app.ajustes.modo === 'semanal';
     $('#aj-fps').value = String(app.ajustes.fps);
     pintarIdioma();
     pintarCamaras();
 }
 
 /**
- * El idioma del modo en que se está, con su porqué.
+ * El idioma de la clase, con su porqué.
  *
- * Son dos ajustes y un solo control porque son la misma pregunta hecha a dos
- * personas distintas: el editor da una clase de un idioma de punta a punta, y
- * quien cuenta su semana se pasa al inglés a mitad de frase. Lo que cambió es
- * que los dos vienen en automático, y el motivo está en `engine/ajustes.js`:
- * detectar ya no cuesta 400 ms en cada pasada, y equivocarse sí cuesta, porque
- * con el idioma equivocado Whisper no se queda corto, traduce.
+ * Viene en automático, y el motivo está en `engine/ajustes.js`: detectar ya no
+ * cuesta 400 ms en cada pasada, y equivocarse sí cuesta, porque con el idioma
+ * equivocado Whisper no se queda corto, traduce.
  */
 function pintarIdioma() {
-    const semanal = app.ajustes.modo === 'semanal';
-    $('#aj-idioma-rotulo').textContent = semanal
-        ? 'Idioma de tus vídeos' : 'Idioma de la clase';
-    $('#aj-idioma').value = idiomaDelModo();
+    $('#aj-idioma').value = app.ajustes.idioma;
     $('#aj-idioma-dice').textContent =
         'Automático elige entre español e inglés, y mientras grabás el rótulo de la barra '
         + 'dice cuál está oyendo. Ponerlo a mano sirve cuando se sabe —y hace falta para el '
         + 'portugués, que automático no elige—: ojo con dejarlo en el idioma equivocado, '
         + 'porque entonces el transcript sale traducido. '
-        + (semanal
-            ? 'Acá conviene automático: contando tu semana es normal pasarse al inglés a mitad de frase.'
-            : 'Se puede cambiar en medio de una clase desde la barra, y las tomas ya cerradas se vuelven a leer.');
-}
-
-function idiomaDelModo() {
-    return app.ajustes.modo === 'semanal'
-        ? ((app.ajustes.semanal && app.ajustes.semanal.idioma) || 'auto')
-        : app.ajustes.idioma;
+        + 'Se puede cambiar en medio de una clase desde la barra, y las tomas ya cerradas se vuelven a leer.';
 }
 
 /* ─── La cámara de referencia ─────────────────────────────────────────── */
@@ -638,11 +597,11 @@ async function buscar(aMano) {
     $('#update-dice').textContent = `Hay la ${r.version}.`;
     if (aMano) return;
     // Una sola vez por versión se dice en voz alta; después queda el botón. Con
-    // algo grabando —una clase o el vídeo de la semana— no se dice nada: el
-    // botón está ahí y no molesta, y el aviso espera a la próxima consulta.
+    // una clase grabando no se dice nada: el botón está ahí y no molesta, y el
+    // aviso espera a la próxima consulta.
     const dicho = pref.leer('update.avisada', '');
-    const grabandoAlgo = $('#vista-vivo').classList.contains('es-activa') || semanal.grabando();
-    if (dicho !== r.version && !grabandoAlgo) {
+    const grabando = $('#vista-vivo').classList.contains('es-activa');
+    if (dicho !== r.version && !grabando) {
         pref.guardar('update.avisada', r.version);
         avisar(`Hay una versión nueva (${r.version}). Está arriba, en «Actualizar».`);
     }

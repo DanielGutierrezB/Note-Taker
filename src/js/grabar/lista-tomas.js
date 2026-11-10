@@ -1,21 +1,10 @@
 /**
- * lista-tomas.js — Las tomas como fichas, las mismas en las dos pantallas.
+ * lista-tomas.js — Las tomas como fichas.
  *
- * La clase y el vídeo semanal graban con el mismo motor y producen las mismas
- * tomas, así que la lista de abajo tiene que ser la misma lista: una fila que
- * se lee de un vistazo —toma, momento, cuánto dura, lo que empieza diciendo y
- * cómo está— y, al abrirla, su texto con el IN y el OUT para mover.
- *
- * Está acá y no copiado en cada pantalla por lo de siempre: dos listas que se
- * parecen se separan. La de la clase ya tenía el acordeón, el color de la
- * vista y la pastilla de estado, y la semanal iba a tener que reinventarlos
- * peor.
- *
- * Lo que NO entra acá es lo que de verdad cambia entre las dos: la clase tiene
- * notas y comentarios al XML, y la semanal no tiene nada de eso
- * porque la persona que graba su vídeo de la semana no edita en Premiere. Por
- * eso el cuerpo de la ficha lo arma cada pantalla y este módulo solo pone la
- * caja: lo compartido es lo que se ve igual, no lo que hace cada una.
+ * Una fila que se lee de un vistazo —toma, momento, cuánto dura, lo que
+ * empieza diciendo y cómo está— y, al abrirla, su texto con el IN y el OUT
+ * para mover. El cuerpo de la ficha lo arma la pantalla; este módulo pone la
+ * caja, el acordeón, el color de la vista y la pastilla de estado.
  */
 
 import { esc } from '../chrome.js';
@@ -27,7 +16,7 @@ import { estiloDeVista } from '../colores.js';
 /**
  * Una toma como ficha: la fila plegada y, si está abierta, su cuerpo.
  *
- * `o` lleva lo que cambia entre pantallas:
+ * `o` lleva lo que le pasa la pantalla:
  *
  *   sesion     el estado entero, que es lo que mira `estados.deToma`
  *   abierta    si esta ficha está desplegada
@@ -47,12 +36,6 @@ export function ficha(t, o) {
         ? `<div class="cuerpo-toma">${o.cuerpo(t)}</div>`
         : ''}
     </div>`;
-}
-
-/** La lista entera, de la más nueva a la más vieja. */
-export function lista(tomas, deCadaUna) {
-    return tomas.slice().sort((a, b) => b.inMs - a.inMs)
-        .map(t => ficha(t, deCadaUna(t))).join('');
 }
 
 /**

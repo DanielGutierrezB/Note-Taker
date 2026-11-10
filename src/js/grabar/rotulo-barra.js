@@ -14,11 +14,9 @@
  * Así que son rótulos: dicen cómo está la cosa, y al apretarlos la cambian.
  * Viven en la barra, que es donde ya se miran el timecode y el nivel.
  *
- * **Está acá y no en una pantalla porque lo usan las dos**, igual que
- * `menu-de-palabra.js`: la clase y el vídeo de la semana tienen los dos un
- * idioma que cambiar. Y el menú vive fuera de la barra por lo mismo que aquel
- * vive fuera de la tarjeta: la tarjeta del vídeo semanal se rehace entera, y
- * un menú abierto adentro se lo llevaría puesto.
+ * El menú vive fuera de la barra por lo mismo que `menu-de-palabra.js` vive
+ * fuera de la tarjeta: lo que se repinta se llevaría puesto un menú abierto
+ * adentro.
  */
 
 import { $, esc } from '../chrome.js';
@@ -196,12 +194,11 @@ export function conectar() {
         cerrar();
     });
     // Con el menú abierto el teclado es del menú, y se escucha en la captura
-    // para llegar antes que cualquier pantalla: en el vídeo semanal, una letra
-    // de vista con el menú abierto le cambiaba la vista a una toma que no se
-    // estaba mirando. Escape lo cierra —antes que los telones— y las flechas
-    // van de una opción a otra. Enter y espacio siguen hasta el botón con foco,
-    // que es lo que lo aprieta, pero la pantalla no se entera; el Tab es del
-    // navegador.
+    // para llegar antes que la pantalla: una letra de vista con el menú
+    // abierto le cambiaría la vista a una toma que no se está mirando. Escape
+    // lo cierra —antes que los telones— y las flechas van de una opción a
+    // otra. Enter y espacio siguen hasta el botón con foco, que es lo que lo
+    // aprieta, pero la pantalla no se entera; el Tab es del navegador.
     document.addEventListener('keydown', e => {
         if (!abierto || e.key === 'Tab') return;
         e.stopPropagation();

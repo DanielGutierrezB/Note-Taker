@@ -13,7 +13,7 @@
  * recorre es el mismo que recorre la app de verdad.
  */
 
-import { estadoEnVivo, estadoSemanal, SESIONES, SEMANALES, AJUSTES, ENTRADAS, CAMARAS, DOCTOR } from './datos.js';
+import { estadoEnVivo, SESIONES, AJUSTES, ENTRADAS, CAMARAS, DOCTOR } from './datos.js';
 
 /**
  * Todos los escenarios que este doble sabe armar, dicho de una vez.
@@ -36,10 +36,7 @@ export const SE_HACEN = [
     'en-vivo', 'desplegada', 'toma-abierta', 'releyendo',
     'sin-audio', 'terminada', 'notas-de-antes', 'foto', 'foto-cien',
     'prproj', 'prproj-lleno', 'prproj-listo',
-    'ajustes', 'ajustes-semanal', 'diagnostico', 'iconos',
-    'semanal', 'semanal-primera-vez', 'semanal-sin-pantalla', 'semanal-grabando', 'semanal-sin-tomas',
-    'semanal-con-aviso', 'semanal-atrasado', 'semanal-carpeta', 'semanal-ficha', 'semanal-revisar', 'semanal-revisar-fuera',
-    'semanal-cortando', 'semanal-hecho'
+    'ajustes', 'diagnostico', 'iconos'
 ];
 
 const escenarios = new Set(
@@ -87,26 +84,6 @@ const PANTALLA_FALSA = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
       <rect x="20" y="160" width="120" height="4" rx="2" fill="#2a3040"/>
     </svg>`);
 
-/**
- * Y una cara, para el otro lado del selector de la revisión.
- *
- * Esa pantalla pregunta «¿esta toma con tu cara o con tu pantalla?», así que
- * las dos miniaturas tienen que distinguirse de un vistazo o no se está
- * mirando el diseño que se quiere mirar. Dibujada igual de a mano y por el
- * mismo motivo: que no se pueda confundir con la cara de nadie.
- */
-const CARA_FALSA = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 320 180">
-      <rect width="320" height="180" fill="#1a1d24"/>
-      <rect x="0" y="120" width="320" height="60" fill="#151821"/>
-      <circle cx="160" cy="78" r="34" fill="#39404f"/>
-      <circle cx="148" cy="72" r="3.4" fill="#aab4c4"/><circle cx="172" cy="72" r="3.4" fill="#aab4c4"/>
-      <path d="M146 92q14 10 28 0" stroke="#aab4c4" stroke-width="2.4" fill="none" stroke-linecap="round"/>
-      <path d="M104 180q0-44 56-44t56 44z" fill="#39404f"/>
-      <text x="160" y="170" fill="#6d7686" font-family="Helvetica" font-size="8"
-            text-anchor="middle">tu cámara</text>
-    </svg>`);
-
 /* ─── El puente ───────────────────────────────────────────────────────── */
 
 const avisos = [];
@@ -115,15 +92,9 @@ if (hay('sin-carpeta')) ajustes = { ...ajustes, carpeta: null, carpetas: [] };
 if (hay('preparar-microfono')) ajustes = { ...ajustes, dispositivo: 'MacBook Pro Microphone (Built-in)' };
 if (hay('preparar-zoom-falso')) ajustes = { ...ajustes, dispositivo: 'ZoomAudioDevice (Virtual)' };
 if (hay('preparar-sin-audio') || hay('sin-zoom')) ajustes = { ...ajustes, dispositivo: null };
-// El panel de Ajustes visto desde el modo semanal: el idioma cambia de rótulo,
-// de valor de fábrica y de sitio donde se guarda, y el fps está apagado. No se
-// llega cambiando el modo a mano porque cambiarlo navega.
-if (hay('ajustes-semanal')) ajustes = { ...ajustes, modo: 'semanal' };
 
 const progresoUpdate = [];
 const listaUpdate = [];
-const progresoSemanal = [];
-const avisosSemanal = [];
 let oyenteDependencias = null;
 const DEPENDENCIAS = [
     ['modelo-grande', 'Modelo de Whisper (large-v3-turbo)', 'Relee cada toma cerrada y escribe el texto que va al XML. También es el que oye el texto en vivo.', true, 'Descargar (1,6 GB)'],
@@ -153,21 +124,10 @@ const doctor = hay('sin-whisper')
     }
     : DOCTOR;
 
-/**
- * Lo que hay grabado en una carpeta.
- *
- * El modo semanal y el de clase no comparten material, y acá tampoco: se
- * contesta según el modo que esté puesto. Antes esto devolvía siempre las
- * clases, así que la tarjeta de «lo último que grabaste» del modo semanal
- * aparecía con el nombre de un curso, que es algo que no puede pasar.
- *
- * `semanal-primera-vez` es la carpeta recién elegida: no hay nada de antes y la
- * tarjeta no está. Es el estado en el que entra alguien el primer día, y el que
- * no se mira nunca si no se lo nombra.
- */
+/** Lo que hay grabado en una carpeta. */
 function sesiones() {
-    if (hay('vacio') || hay('sin-carpeta') || hay('semanal-primera-vez')) return [];
-    return esLaSemana() ? SEMANALES : SESIONES;
+    if (hay('vacio') || hay('sin-carpeta')) return [];
+    return SESIONES;
 }
 
 window.nt = {
@@ -175,9 +135,7 @@ window.nt = {
     doctor: async () => doctor,
 
     ajustesLeer: async () => ajustes,
-    // El parche entra un nivel, igual que `ajustes.conParche` en el motor: con
-    // el parche pegado por arriba, guardar la carpeta del vídeo semanal borraba
-    // el idioma de al lado, y la maqueta mentía sobre eso.
+    // El parche entra un nivel, igual que `ajustes.conParche` en el motor.
     ajustesGuardar: async parche => {
         const llano = x => Boolean(x) && typeof x === 'object' && !Array.isArray(x);
         const nuevos = { ...ajustes };
@@ -232,7 +190,6 @@ window.nt = {
     // Y a la primera de las que tienen varias salidas, que es la de hacer algo.
     preguntar: async ({ opciones } = {}) => (opciones && opciones[0] ? opciones[0].valor : null),
     reveal: async ruta => { console.log('reveal', ruta); return true; },
-    openPath: async () => '',
 
     // El sonido de Zoom. `?e=sin-zoom` es Zoom cerrado.
     audioAppEstado: async () => ({ soportado: true, abierta: !hay('sin-zoom'), sonando: true }),
@@ -261,27 +218,12 @@ window.nt = {
     // Las notas de una clase ya grabada: el mismo estado de la clase con
     // `grabando: false`, que es lo que la pantalla usa para no dibujar el cromo
     // de grabar (ver `paraMirar` en engine/sesiones-grabadas.js).
-    // En el modo semanal, «lo grabado» es la sesión que se acaba de cerrar: es
-    // de donde la revisión saca el texto de cada toma para poder moverle los
-    // bordes. En el de clase es una clase vieja que se abre a mirar.
-    grabarAbrirGrabada: async json => ({
-        ok: true,
-        estado: esLaSemana() ? cerradaDelTodo() : estadoDeNotas(json)
-    }),
-    grabarEditarGrabada: async (json, c) => (esLaSemana()
-        ? { ok: true, estado: cambiarEnVivo(c) }
-        : { ok: true, estado: conCambio(estadoDeNotas(json), c) }),
+    grabarAbrirGrabada: async json => ({ ok: true, estado: estadoDeNotas(json) }),
+    grabarEditarGrabada: async (json, c) => ({ ok: true, estado: conCambio(estadoDeNotas(json), c) }),
     grabarAbrirToma: async ms => abrirEn(ms),
     grabarCerrarToma: async ms => cerrarEn(ms),
-    // En la semanal devuelve la sesión que el doble viene guardando, para que
-    // deshacer un descarte REPONGA la toma y se pueda mirar de verdad; en la
-    // de clase sigue siendo la respuesta fija de siempre.
-    grabarDeshacer: async () => (esLaSemana()
-        ? { ok: true, que: 'descartar una toma', estado: deshacerSemanal() }
-        : { ok: true, que: 'poner la toma 4 en S', estado: estadoEnVivo() }),
-    grabarRehacer: async () => ({ ok: false, estado: esLaSemana() ? laSesion() : estadoEnVivo() }),
-    grabarEstado: async () => laSesion(),
-    grabarVistas: async () => estadoEnVivo().vistas,
+    grabarDeshacer: async () => ({ ok: true, que: 'poner la toma 4 en S', estado: estadoEnVivo() }),
+    grabarRehacer: async () => ({ ok: false, estado: estadoEnVivo() }),
     grabarListar: async () => sesiones(),
     grabarRenombrar: async () => ({ ok: true, secuencia: 'renombrada', movida: true, audios: 1 }),
 
@@ -296,7 +238,7 @@ window.nt = {
      */
     grabarNombreSiguiente: async (dir, que) => {
         const q = que || {};
-        const suyas = esLaSemana() ? [] : SESIONES;
+        const suyas = SESIONES;
         const pedido = q.numero != null && q.numero !== '' ? Math.floor(Number(q.numero)) : null;
         const numero = pedido != null
             ? pedido
@@ -381,158 +323,6 @@ window.nt = {
     fotoCopiar: async () => ({ ok: true }),
 
     anotar: async () => true,
-    /* ─── El modo semanal ──────────────────────────────────────────────
-     *
-     * Lo mismo que el resto del puente: se contesta lo que contestaría Node,
-     * sin escribir nada. El progreso del corte se empuja en escalones para que
-     * la barra se vea moverse, que es lo único que esa tarjeta tiene que
-     * mostrar bien.
-     */
-    semanalAbrir: async pedido => ({
-        ok: true, id: 1, cual: pedido.cual, tipo: pedido.tipo, empezoMs: pedido.empezoMs,
-        archivo: `/Users/daniel/Movies/Semanal/xml/Video/semana-${pedido.cual}.mp4`
-    }),
-    semanalTrozo: () => {},
-    semanalCerrar: async () => ({
-        ok: true, enLaSesion: 2,
-        videos: [
-            { cual: 'camara', bytes: 48_000_000, segundos: 214 },
-            { cual: 'pantalla', bytes: 96_000_000, segundos: 214 }
-        ]
-    }),
-    /**
-     * El montaje: dónde cae cada toma en los dos vídeos crudos.
-     *
-     * Sale de las MISMAS tomas que la lista de mientras se graba, y no de una
-     * lista escrita al lado: con las dos a mano se iban separando —una decía
-     * cuatro tomas y la otra otras cuatro distintas— y la maqueta dejaba de
-     * servir justo para lo que está, que es mirar el camino entero.
-     *
-     * Los «vídeos crudos» son dos sintéticos de 40 s hechos con ffmpeg, uno
-     * apaisado y chico como una cámara y el otro 1920x1080 como una pantalla,
-     * los dos con una barra que viaja: así se ve de un golpe cuál de los dos
-     * está puesto, que el encuadre es el que le toca a cada uno (la cámara
-     * recortada, la pantalla entera) y que el reproductor buscó donde dijo.
-     *
-     * Y los segundos de cada toma son los del TRAMO, no los de la sesión falsa:
-     * si dijeran 56 s y el tramo durara ocho, el salto a la toma siguiente no se
-     * podría probar. La toma 3 se queda sin pantalla a propósito: es el caso feo
-     * —una fuente que no cubre esa toma— y hay que poder ver cómo se dice.
-     *
-     * Y la toma 4 cruza un cambio de ventana: sale de la primera pantalla, pasa
-     * por medio segundo en negro y termina en la segunda, sin dejar de ser una
-     * toma de pantalla. Es el único sitio de la maqueta donde se puede ver que
-     * el reproductor cambia de archivo a mitad de toma y que el recuadro de la
-     * cámara cruza el negro sin parpadear.
-     */
-    semanalMontaje: async () => {
-        if (hay('semanal-sin-tomas')) return { ok: true, tomas: [], avisos: [] };
-        const cerradas = laSesion().tomas.filter(t => t.outMs != null);
-        // A cada toma, un tramo suyo del archivo, en orden y de distinto largo:
-        // con todos iguales la línea de tomas saldría en trozos iguales y no se
-        // vería que cada trozo mide lo que dura.
-        const LARGOS = [7, 3, 9, 5];
-        let desde = 1;
-        // La primera que sirva: de pantalla, que esté en el corte y que no sea
-        // la que ya retrata el caso de la fuente que falta. Elegirla así y no
-        // por número es lo que hace que siga saliendo si mañana cambian las
-        // tomas de la sesión falsa.
-        const laPartida = cerradas.find(t => t.id !== 3 && t.vista !== 'PV' && !t.descartada);
-        return {
-            ok: true,
-            avisos: hay('semanal-con-aviso')
-                ? ['La toma 3 va sin la cámara: ese trozo no está grabado.'] : [],
-            archivos: {
-                camara: '/maqueta/semanal-camara.mp4',
-                pantalla: '/maqueta/semanal-pantalla.mp4',
-                pantallas: ['/maqueta/semanal-pantalla.mp4', '/maqueta/semanal-pantalla-2.mp4']
-            },
-            recuadro: { lado: 0.1875, margen: 0.025, redondeo: 0.125 },
-            tomas: cerradas.map((t, i) => {
-                const sinPantalla = t.id === 3;
-                const partida = Boolean(laPartida) && t.id === laPartida.id;
-                const pide = t.vista === 'PV' ? 'camara' : 'pantalla';
-                const largo = LARGOS[i % LARGOS.length];
-                const arranca = desde;
-                desde += largo + 1;
-                return {
-                    id: t.id,
-                    vista: t.vista,
-                    descartada: Boolean(t.descartada),
-                    segundos: largo,
-                    // Como el motor: dónde empieza en el reloj de la clase, que
-                    // es con lo que «Dividir acá» traduce la aguja a una hora.
-                    desdeMs: t.inMs,
-                    fondo: sinPantalla ? 'camara' : pide,
-                    camaraDesde: arranca,
-                    pantallaDesde: sinPantalla ? null : arranca,
-                    pantallaRuta: sinPantalla ? null : '/maqueta/semanal-pantalla.mp4',
-                    // La mitad en una ventana, medio segundo en negro y el
-                    // resto en la otra: los tres suman lo que dura la toma,
-                    // que es lo que el reproductor no perdona.
-                    pantallaPartes: partida ? [
-                        { ruta: '/maqueta/semanal-pantalla.mp4', desdeSec: arranca, enLaToma: 0, segundos: largo / 2 },
-                        { negro: true, enLaToma: largo / 2, segundos: 0.5 },
-                        { ruta: '/maqueta/semanal-pantalla-2.mp4', desdeSec: 2, enLaToma: largo / 2 + 0.5, segundos: largo / 2 - 0.5 }
-                    ] : null,
-                    sonido: { cual: 'camara' }
-                };
-            })
-        };
-    },
-
-    semanalExportar: async (json, como) => {
-        for (const pct of [8, 24, 51, 78, 96]) {
-            for (const cb of progresoSemanal) cb({ pct, segundos: pct * 1.6, total: 162 });
-            // Despacio solo donde la barra es lo que se mira. En los demás
-            // escenarios el corte falso tiene que terminar dentro del rato que
-            // esperan `capturar.js` y compañía, o la foto sale con la barra a
-            // medias en vez de con el vídeo listo.
-            await espera(hay('semanal-cortando') ? 4000 : 20);
-        }
-        if (hay('semanal-sin-tomas')) {
-            return {
-                ok: false, tomas: 0,
-                error: 'No se abrió ninguna toma: no hay nada que cortar. '
-                    + 'Los vídeos y el audio quedaron guardados.'
-            };
-        }
-        // Con los silencios quitados el vídeo dura menos y sale en más
-        // pedazos: es lo que hay que poder ver en la pantalla del final para
-        // saber si la opción hizo algo o no.
-        const quita = Boolean(como && como.quitarSilencios);
-        return {
-            ok: true,
-            tomas: 3,
-            pedazos: quita ? 7 : 3,
-            segundos: quita ? 134 : 162,
-            bytes: quita ? 34_100_000 : 41_300_000,
-            // Un vídeo de verdad, servido por la maqueta: el reproductor del
-            // final se mide y se captura con algo que carga y se puede mover,
-            // no con un cuadro negro. La pantalla resuelve la ruta contra la
-            // página (`urlDeArchivo`), así que acá una ruta del servidor y en
-            // la app una del disco son lo mismo.
-            ruta: '/maqueta/semana_2026-10-03_09-12-40.mp4',
-            avisos: (hay('semanal-con-aviso')
-                ? ['La toma 3 va sin la cámara: ese trozo no está grabado.']
-                : []
-            ).concat(quita ? ['Se quitaron 4 silencio(s) de más de 0.7 s: 28 s menos de vídeo.'] : [])
-        };
-    },
-    onSemanalProgreso: cb => progresoSemanal.push(cb),
-    onSemanalAviso: cb => avisosSemanal.push(cb),
-
-    // La mirilla es una ventana del proceso principal, así que en el navegador
-    // no existe: acá se contesta que sí y no se abre nada. Lo que SÍ se puede
-    // ver en la maqueta es el botón —puesto o no— y que la semanal no se rompa
-    // mandando el espejo en cada repintado, que es lo que pasaba antes de que
-    // estas existieran. Son las de la semanal: las de la mirilla viven en su
-    // propio puente (`preload-mirilla.js`).
-    mirillaPoner: async () => ({ ok: true, visible: true }),
-    mirillaPantalla: async () => ({ ok: true, monitor: null, sitio: null }),
-    mirillaEspejo: () => {},
-    onMirillaGesto: () => {},
-
     reporteArmar: async () => ({ ok: true, archivo: '/Users/maqueta/Downloads/NoteTaker-reporte-20261023-174201.zip', partes: [], faltan: [] }),
     onUpdateProgress: cb => progresoUpdate.push(cb),
     onUpdateReady: cb => listaUpdate.push(cb)
@@ -554,10 +344,10 @@ window.nt = {
 Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
     value: {
-        // Un `MediaStream` vacío de verdad y no un objeto parecido: la
-        // pantalla del modo semanal lo pega en un `<video>`, y `srcObject`
-        // solo acepta uno de verdad. Vacío quiere decir sin fotogramas, que es
-        // lo que la maqueta no puede inventar.
+        // Un `MediaStream` vacío de verdad y no un objeto parecido: la vista
+        // previa de la cámara lo pega en un `<video>`, y `srcObject` solo
+        // acepta uno de verdad. Vacío quiere decir sin fotogramas, que es lo
+        // que la maqueta no puede inventar.
         getUserMedia: async () => new MediaStream(),
         enumerateDevices: async () => [
             ...ENTRADAS.map(d => ({ kind: 'audioinput', deviceId: d.id, label: d.nombre })),
@@ -565,36 +355,6 @@ Object.defineProperty(navigator, 'mediaDevices', {
         ]
     }
 });
-
-/**
- * La pantalla y el grabador de vídeo, falseados por el mismo motivo que el
- * `AudioContext`: sin un `MediaStream` de verdad no se pueden armar.
- *
- * El selector de pantalla de macOS no se puede contestar desde una maqueta, y
- * `MediaRecorder` necesita una pista real. Lo que la maqueta no puede probar
- * sigue siendo lo mismo que con el micrófono: que la captura abra. Lo que sí
- * prueba —y es para lo que está— es que la pantalla del modo semanal recorra
- * sus cuatro momentos por el camino de verdad.
- */
-navigator.mediaDevices.getDisplayMedia = async () => ({
-    getTracks: () => [{ label: 'Pantalla 1 · Studio Display', stop: () => {} }],
-    getVideoTracks: () => [{
-        label: 'Pantalla 1 · Studio Display',
-        getSettings: () => ({ width: 3008, height: 1692 }),
-        stop: () => {},
-        set onended(_fn) { /* la maqueta no suelta la pantalla sola */ }
-    }]
-});
-
-window.MediaRecorder = class {
-    static isTypeSupported() { return true; }
-    constructor() { this.state = 'inactive'; this.ondataavailable = null; this.onstop = null; }
-    start() { this.state = 'recording'; }
-    stop() {
-        this.state = 'inactive';
-        if (this.onstop) this.onstop();
-    }
-};
 
 // Y el grafo de audio, que sin un `MediaStream` de verdad no se puede armar.
 // Es la última cosa que la maqueta falsea, y la que más claramente marca su
@@ -631,9 +391,8 @@ const espera = ms => new Promise(r => setTimeout(r, ms));
  * Esperar a que algo aparezca, en vez de esperar un rato y cruzar los dedos.
  *
  * Los ratos fijos de acá abajo son para animaciones que duran lo que duran. Esto
- * es para lo otro: lo que tarda lo que tarde. El corte falso, por ejemplo, va por
- * cinco pasos de barra antes de dar el vídeo, y cuánto suma eso depende del
- * escenario. Contar un rato que alcance es apostar; esperar el botón es saber.
+ * es para lo otro: lo que tarda lo que tarde. Contar un rato que alcance es
+ * apostar; esperar el botón es saber.
  */
 async function hastaQue(selector, comoSeLlama) {
     for (let i = 0; i < 300; i++) {
@@ -763,92 +522,7 @@ async function aplicar() {
         return;
     }
 
-    /* ── El modo semanal, en sus cuatro momentos ───────────────────────
-     *
-     * Se recorre apretando los botones de verdad, igual que los demás
-     * escenarios: elegir la pantalla, Grabar, y Terminar. Lo único puesto a
-     * mano es el estado de la grabación que el motor devolvería, que es lo que
-     * dibuja el contador de tomas.
-     */
-    if (esLaSemana()) {
-        await app.irASemanal();
-        await espera(120);
-        // Sin pantalla elegida no hay botón de grabar: es justamente la
-        // pantalla que este escenario retrata, así que acá se termina.
-        if (hay('semanal-sin-pantalla')) return;
-        await apretar('[data-hace="elegir-pantalla"]', 'Elegir pantalla');
-        // Hasta que quede elegida, y no un rato fijo: Grabar sin pantalla
-        // pregunta antes de grabar, así que apretarlo antes de tiempo era
-        // contestar esa pregunta en vez de grabar.
-        await hastaQue('[data-hace="elegir-pantalla"][data-elegida="si"]', 'la pantalla elegida');
-        // La pantalla de inicio, con la tarjeta de lo último grabado y sin ella.
-        if (hay('semanal') || hay('semanal-primera-vez')) return;
-        // Y con una carpeta elegida a mano: lo que se encontró ahí, para
-        // elegir con cuál seguir.
-        if (hay('semanal-carpeta')) {
-            await apretar('[data-hace="elegir-carpeta"]', 'Elegir carpeta…');
-            await espera(200);
-            return;
-        }
-
-        // Arrancar tarda: antes de grabar se comprueba que el codificador
-        // acepte cada fuente (`aguanta` en `src/js/grabar/filmar.js`), y son
-        // 200 ms por fuente. Sin esperarlos, acá todavía no hay botón que
-        // apretar.
-        await apretar('[data-hace="grabar"]', 'Grabar');
-        await espera(700);
-        if (hay('semanal-grabando') || hay('semanal-ficha')) {
-            await espera(300);
-            // Una ficha abierta: es donde se le corrigen los bordes a una toma
-            // sin esperar al final, que es lo que se pidió después de grabar
-            // el primer vídeo de verdad.
-            if (hay('semanal-ficha')) {
-                await apretar('#semanal-cuerpo [data-hace="plegar"][data-toma="3"]', 'la ficha de la toma 3');
-                await espera(120);
-            }
-            return;
-        }
-
-        // Terminar ya no exporta: lleva a la revisión. De ahí en adelante hay
-        // que apretar «Cortar y exportar», que es el camino de verdad.
-        await apretar('[data-hace="terminar"]', 'Terminar');
-        await espera(300);
-        // Parado en otra toma, y con las desactivadas ocultas: es el editor
-        // cuando ya se decidió qué va y qué no, y la línea de arriba pasa a ser
-        // exactamente el corte que va a salir.
-        if (hay('semanal-revisar-fuera')) {
-            await apretar('.linea-toma[data-toma="3"]', 'la toma 3 en la línea');
-            await espera(150);
-            await apretar('[data-hace="ocultar-fuera"]', 'Ocultar desactivadas');
-            await espera(150);
-            return;
-        }
-        if (hay('semanal-revisar')) return;
-
-        // Sin ninguna toma abierta no hay nada que revisar y «Terminar» ya cortó
-        // —y ya falló— sin pasar por acá. Es el único camino que se saltea la
-        // revisión, y conviene decirlo: antes esto era un `if (cortar)` que
-        // tapaba por igual este caso legítimo y cualquier botón que se hubiera
-        // dejado de dibujar por error.
-        //
-        // Pregunta por «Grabar otro», que es de la tarjeta del final y de
-        // ninguna otra. Antes preguntaba por «Ver lo que se grabó», y el día
-        // que el editor también tuvo su botón al Finder esto empezó a decir
-        // «ya está» estando en la revisión: el escenario del vídeo hecho se
-        // quedaba a medio camino.
-        if (document.querySelector('[data-hace="otro"]')) return;
-        await apretar('[data-hace="exportar"]', 'Cortar y exportar');
-        // El corte falso va por cinco pasos de barra. Antes acá se volvía en el
-        // acto y las herramientas dormían 300 ms, que alcanzaban por poco:
-        // quitada esa siesta, la foto de «semanal-hecho» salía de la barra a
-        // medias. Ahora se espera lo que se está esperando de verdad —cada
-        // escenario, lo suyo: uno retrata la barra andando y el otro el final.
-        if (hay('semanal-cortando')) await hastaQue('.nivel-barra', 'la barra del corte');
-        else await hastaQue('[data-hace="ver-brutos"]', 'el vídeo cortado');
-        return;
-    }
-
-    if (hay('ajustes') || hay('ajustes-semanal')) app.verAjustes();
+    if (hay('ajustes')) app.verAjustes();
     if (hay('diagnostico')) app.verDiagnostico();
 }
 
@@ -862,35 +536,10 @@ async function aplicar() {
  */
 let vivo = null;
 
-/**
- * La sesión que el motor devolvería, de la clase o del vídeo de la semana.
- *
- * Son dos porque muestran cosas distintas: la semanal no tiene notas escritas
- * ni más vistas que la pantalla y la cámara. Con una sola, la
- * maqueta del modo semanal enseñaba tomas en «Slides» y renglones que decían
- * «Los tres pilares», y eso no es lo que ve quien graba su semana.
- */
-const esLaSemana = () => [...escenarios].some(e => e.startsWith('semanal'));
-
+/** La sesión que el motor devolvería. */
 function laSesion() {
     if (vivo) return vivo;
-    // El ciclo de señales que no llega: los números de la sesión del 8 de
-    // octubre, que es la que se perdió las notas (ver
-    // `tests/ciclo-que-no-llega.test.js`).
-    const atrasado = hay('semanal-atrasado') ? { atrasoSec: 31, salteadoSec: 19 } : {};
-    return esLaSemana() ? estadoSemanal(atrasado) : estadoEnVivo(atrasado);
-}
-
-/** La sesión con todas las tomas cerradas: lo que deja Terminar. */
-function cerradaDelTodo() {
-    const base = laSesion();
-    vivo = {
-        ...base,
-        grabando: false,
-        abierta: null,
-        tomas: base.tomas.map(t => (t.outMs == null ? { ...t, outMs: t.inMs + 30000 } : t))
-    };
-    return vivo;
+    return estadoEnVivo();
 }
 
 /** Un cambio sobre una toma de la sesión viva: para VER que el gesto llega. */
@@ -960,23 +609,6 @@ function cambiarEnVivo(c) {
     else if (c.tipo === 'descartar') cambiada.descartada = Boolean(c.descartada);
     else return base;
     vivo = { ...base, tomas: base.tomas.map(t => (t === toma ? cambiada : t)) };
-    return vivo;
-}
-
-/**
- * Deshacer en la semanal: repone la lista de tomas de fábrica.
- *
- * No es una pila: es lo justo para que el botón haga algo que se vea, que es
- * lo que hace falta para mirar la pantalla. La pila de verdad está en
- * `engine/deshacer.js` y tiene sus pruebas.
- */
-function deshacerSemanal() {
-    const base = laSesion();
-    vivo = {
-        ...base,
-        tomas: estadoSemanal().tomas,
-        historia: { atras: 0, adelante: 1, queAtras: '', queAdelante: base.historia.queAtras }
-    };
     return vivo;
 }
 
@@ -1144,10 +776,9 @@ async function verIconos() {
 /**
  * La promesa de que el escenario ya está puesto Y DIBUJADO.
  *
- * Las herramientas la esperan en vez de contar un rato al azar: los escenarios
- * del modo semanal tardan segundos en armarse —elegir pantalla, grabar,
- * terminar, apretar cosas— y una espera fija dejaba la foto a medio camino sin
- * decirlo.
+ * Las herramientas la esperan en vez de contar un rato al azar: hay escenarios
+ * que tardan en armarse —abrir una clase, apretar cosas— y una espera fija
+ * dejaba la foto a medio camino sin decirlo.
  *
  * Las dos vueltas de `requestAnimationFrame` al final son la diferencia entre
  * «el guion terminó» y «la pantalla se puede fotografiar»: el último `.click()`

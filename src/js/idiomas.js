@@ -39,8 +39,7 @@ export function sigla(idioma, oido) {
 }
 
 /**
- * El rótulo del idioma, para `rotulo-barra.rotulo`. Es el mismo en la clase y
- * en el vídeo semanal; cambia el id, que es de cada barra.
+ * El rótulo del idioma, para `rotulo-barra.rotulo`.
  *
  * Angosto dice solo las dos letras, que es la pregunta de verdad —en qué idioma
  * está saliendo el transcript—: que lo haya elegido solo se lee en el menú.
@@ -94,7 +93,7 @@ export function opciones(puesto) {
 }
 
 /**
- * Cambia el idioma de lo que se está grabando, la clase o el vídeo semanal.
+ * Cambia el idioma de la clase que se está grabando.
  *
  * Cambiar el idioma y releer son dos cosas, y la segunda pisa trabajo hecho: el
  * texto de las tomas cerradas es el que va al Premiere. Quien se da cuenta a

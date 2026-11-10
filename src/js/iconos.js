@@ -66,12 +66,6 @@ const DIBUJOS = {
         '<rect x="3" y="7.2" width="12.6" height="9.6" rx="2"/>' +
         '<path d="m15.6 11.4 4.4-2.6v6.4l-4.4-2.6z"/>',
 
-    // La pantalla que se graba: el monitor con su pie. Es el dibujo del botón
-    // de compartir de macOS, que es lo que se aprieta después.
-    pantalla:
-        '<rect x="3" y="4.6" width="18" height="12" rx="2"/>' +
-        '<path d="M8.6 20h6.8M12 16.6V20"/>',
-
     // El idioma: el globo con su meridiano, que es el dibujo que cualquiera ya
     // leyó en un selector de idioma. A 16 px lo que lo separa del reloj es el
     // meridiano vertical: sin él, un círculo con una raya es un reloj.
@@ -81,15 +75,6 @@ const DIBUJOS = {
         '<path d="M12 3.6a5.2 8.4 0 0 1 0 16.8 5.2 8.4 0 0 1 0-16.8z"/>',
 
     /* ── Las acciones ─────────────────────────────────────────────── */
-
-    // Empezar a grabar: el punto lleno. A trazo se lee como un círculo vacío,
-    // que es lo contrario de lo que este botón hace.
-    grabar:
-        '<circle class="solido" cx="12" cy="12" r="6"/>',
-
-    // Terminar: el cuadrado lleno, por lo mismo.
-    terminar:
-        '<rect class="solido" x="7" y="7" width="10" height="10" rx="2.2"/>',
 
     // Abrir y cerrar una toma: la misma raya con la flecha para el otro lado.
     //
@@ -131,10 +116,6 @@ const DIBUJOS = {
         '<path d="M3.6 12s3.4-6 8.4-6 8.4 6 8.4 6-3.4 6-8.4 6-8.4-6-8.4-6z"/>' +
         '<circle cx="12" cy="12" r="2.6"/><path d="m4.6 4.6 14.8 14.8"/>',
 
-    recuperar:
-        '<path d="M3.6 12s3.4-6 8.4-6 8.4 6 8.4 6-3.4 6-8.4 6-8.4-6-8.4-6z"/>' +
-        '<circle cx="12" cy="12" r="2.6"/>',
-
     // Borrar: el cesto, y solo acá. Es la única acción de la app que borra
     // archivos del disco.
     borrar:
@@ -169,9 +150,6 @@ const DIBUJOS = {
     ok: '<path d="M5.4 12.6 10 17.2l8.6-10"/>',
     atencion: '<path d="M12 4.6 21 20H3z"/><path d="M12 10v4.2M12 17.1v.1"/>',
     error: '<circle cx="12" cy="12" r="8.4"/><path d="m8.8 8.8 6.4 6.4M15.2 8.8l-6.4 6.4"/>',
-    // «Todavía no»: el círculo abierto de un pendiente. No es un reloj: un
-    // reloj dice «está tardando» y esto dice «falta hacerlo».
-    pendiente: '<circle cx="12" cy="12" r="8.4" stroke-dasharray="3 3"/>',
 
     chevron: '<path d="m9.6 5.8 6.2 6.2-6.2 6.2"/>',
     volver: '<path d="M19.4 12H5"/><path d="m10.6 5.6-5 6.4 5 6.4"/>',
@@ -183,15 +161,7 @@ const DIBUJOS = {
     sinEnlace: '<path d="M10.3 13.7a3.4 3.4 0 0 1 0-4.8l2.4-2.4a3.4 3.4 0 0 1 4.8 4.8l-1.2 1.2"/>'
         + '<path d="M13.7 10.3a3.4 3.4 0 0 1 0 4.8l-2.4 2.4a3.4 3.4 0 0 1-4.8-4.8l1.2-1.2"/>'
         + '<path d="m4.6 4.6 14.8 14.8"/>',
-    cerrar: '<path d="m6.4 6.4 11.2 11.2M17.6 6.4 6.4 17.6"/>',
-    mas: '<path d="M12 5.2v13.6M5.2 12h13.6"/>',
-
-    // Los dos del reproductor del montaje. Rellenos y no de línea, al revés que
-    // todo el resto: es el único par de iconos de la app que se mira de reojo
-    // mientras pasa el vídeo, y un triángulo hueco a ese tamaño no se lee.
-    reproducir: '<path d="M8 5.4 19 12 8 18.6z" fill="currentColor" stroke="none"/>',
-    pausa: '<path d="M8.4 5.6h2.8v12.8H8.4zM12.8 5.6h2.8v12.8h-2.8z"'
-        + ' fill="currentColor" stroke="none"/>'
+    cerrar: '<path d="m6.4 6.4 11.2 11.2M17.6 6.4 6.4 17.6"/>'
 };
 
 /**

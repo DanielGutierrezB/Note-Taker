@@ -5,11 +5,7 @@
  *
  * Es lo que deja correr un borde mirando el texto: para adelantar el IN hay que
  * ver qué se dijo antes, y para atrasar el OUT, qué se dijo después. Vivía en
- * `pantalla-vivo.js` y el vídeo de la semana no lo tenía: su editor mostraba
- * solo la orilla corta de la relectura, sin la marca de dónde termina la toma
- * anterior, y con la toma abierta no mostraba nada antes del IN. El editor lo
- * pidió así: «al editar debería salirme el transcript previo al IN para ajustar
- * cortes». Ahora las dos pantallas lo piden acá.
+ * `pantalla-vivo.js`, que no se puede importar en las pruebas.
  *
  * Son cuentas sobre el estado de una sesión —`{ tomas, sueltas, vistas }`— y
  * nada más: ni DOM ni puente, así que se prueban importándolas.

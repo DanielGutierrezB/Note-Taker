@@ -237,53 +237,9 @@ function malParada(texto, b) {
     return true;
 }
 
-/**
- * Qué bordes se pueden poner en una palabra, sin arrastrar nada.
- *
- * Es lo que necesita el menú del clic derecho, y vive acá y no en la pantalla
- * porque son las mismas reglas del arrastre y salen del mismo sitio: el orden de
- * los hermanos. Contesta también el `ms` de cada uno, que es el que `soltar`
- * calcularía si la línea se hubiera arrastrado hasta ahí, así que las dos
- * maneras de mover un borde le piden al motor exactamente lo mismo.
- *
- *   · **El IN va DELANTE de la palabra** y ella queda adentro: su `ms` es el de
- *     la palabra. Alcanza con que esté antes del OUT — una toma de una palabra
- *     sola es legal, es lo que `malParada` deja pasar.
- *   · **El OUT va DETRÁS** y la palabra es la última de la toma: su `ms` es el
- *     de la palabra SIGUIENTE, que es donde apoya la pared. Si no hay
- *     siguiente no se puede: no hay pared, y el arrastre tampoco puede.
- *   · **Poner un borde donde ya está no se ofrece**: no cambiaría nada y
- *     dejaría un paso de deshacer que no deshace nada.
- *   · **Sobre una palabra que ya es de otra toma, su borde no se ofrece.** Es el
- *     mismo tope que frena el arrastre (`malParada`), leído del mismo sitio: si
- *     el menú lo ofreciera, el gesto que la app dibuja como imposible sería
- *     posible por el otro camino. Hacia atrás es el IN contra la toma anterior,
- *     y hacia adelante el OUT contra la siguiente.
- */
 /** Un transcript abajo del todo, con holgura: dos renglones de margen, que es lo que falla si no. */
 export function estaAlFondo(rollo) {
     return rollo.scrollHeight - rollo.scrollTop - rollo.clientHeight < 8;
-}
-
-/**
- * Dónde dejar el scroll de un transcript al volver a ponerlo en la pantalla.
- *
- * Lo nuevo entra abajo, así que abajo es donde hay que mirar: un texto rehecho
- * entero arranca ahí, y el que estaba abajo se queda abajo y se sigue
- * escribiendo solo. **Salvo que alguien haya subido** a buscar una palabra,
- * que se queda donde lo dejó. Y si el nodo se sacó y se volvió a meter —un
- * repintado entero de la pantalla—, hay que devolvérselo: el DOM le borra el
- * scroll al remontarlo, y sin esto quien había subido aparecía arriba del todo.
- *
- * @param {object} p
- * @param {boolean} p.rehecho    el texto es otro nodo: no hay dónde haber subido
- * @param {boolean} p.remontado  el mismo nodo, sacado y vuelto a meter
- * @param {{fondo:boolean, arriba:number}|undefined} p.antes lo último que se vio
- * @returns {'fondo'|number|null} abajo, ese `scrollTop`, o no tocarlo
- */
-export function dondeQueda({ rehecho, remontado, antes }) {
-    if (rehecho || !antes || antes.fondo) return 'fondo';
-    return remontado ? antes.arriba : null;
 }
 
 /**
@@ -293,10 +249,8 @@ export function dondeQueda({ rehecho, remontado, antes }) {
  *   abierta  el OUT la cierra en esa palabra; el IN mueve el principio
  *   cerrada  los dos mueven su borde
  *
- * Está acá y no en cada pantalla porque es la misma regla para las dos y para
- * el menú del clic derecho, que tiene que nombrar lo que va a pasar. Escrita
- * tres veces ya se separó una: la semana mandaba el IN de la toma abierta a
- * cerrarla, y correr el IN la cerraba en esa palabra.
+ * Está acá y no en la pantalla porque es la misma regla para el arrastre y
+ * para el menú del clic derecho, que tiene que nombrar lo que va a pasar.
  *
  * Y `dividir`, que no es un borde sino los dos: parte la toma en esa palabra y
  * deja las dos mitades pegadas. No depende de qué texto sea —solo se ofrece
@@ -325,6 +279,29 @@ export function sePuedePartirEn(texto, w) {
         && (!lineaOut || antes(w, lineaOut));
 }
 
+/**
+ * Qué bordes se pueden poner en una palabra, sin arrastrar nada.
+ *
+ * Es lo que necesita el menú del clic derecho, y vive acá y no en la pantalla
+ * porque son las mismas reglas del arrastre y salen del mismo sitio: el orden de
+ * los hermanos. Contesta también el `ms` de cada uno, que es el que `soltar`
+ * calcularía si la línea se hubiera arrastrado hasta ahí, así que las dos
+ * maneras de mover un borde le piden al motor exactamente lo mismo.
+ *
+ *   · **El IN va DELANTE de la palabra** y ella queda adentro: su `ms` es el de
+ *     la palabra. Alcanza con que esté antes del OUT — una toma de una palabra
+ *     sola es legal, es lo que `malParada` deja pasar.
+ *   · **El OUT va DETRÁS** y la palabra es la última de la toma: su `ms` es el
+ *     de la palabra SIGUIENTE, que es donde apoya la pared. Si no hay
+ *     siguiente no se puede: no hay pared, y el arrastre tampoco puede.
+ *   · **Poner un borde donde ya está no se ofrece**: no cambiaría nada y
+ *     dejaría un paso de deshacer que no deshace nada.
+ *   · **Sobre una palabra que ya es de otra toma, su borde no se ofrece.** Es el
+ *     mismo tope que frena el arrastre (`malParada`), leído del mismo sitio: si
+ *     el menú lo ofreciera, el gesto que la app dibuja como imposible sería
+ *     posible por el otro camino. Hacia atrás es el IN contra la toma anterior,
+ *     y hacia adelante el OUT contra la siguiente.
+ */
 export function bordesQuePuede(texto, w) {
     const lineaIn = texto.querySelector('.borde.es-in');
     const lineaOut = texto.querySelector('.borde.es-out');

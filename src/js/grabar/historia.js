@@ -1,10 +1,10 @@
 /**
- * historia.js — Deshacer y rehacer, los mismos en las dos pantallas.
+ * historia.js — Deshacer y rehacer: la tecla, el aviso y cómo se dice qué se va
+ * a deshacer.
  *
- * La pila vive en el motor (`engine/deshacer.js`) y es una por sesión, así que
- * la clase y el vídeo de la semana la usan igual: la misma tecla, el mismo
- * aviso y la misma forma de decir qué se va a deshacer. Lo único que cambia es
- * dónde guarda cada pantalla el estado que vuelve, y por eso es un parámetro.
+ * La pila vive en el motor (`engine/deshacer.js`) y es una por sesión. Esto es
+ * lo de la ventana, y va aparte de la pantalla para poder importarlo en las
+ * pruebas sin documento.
  */
 
 import { avisar } from '../chrome.js';

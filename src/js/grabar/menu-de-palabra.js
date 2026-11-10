@@ -6,20 +6,14 @@
  * una línea treinta renglones hacia arriba pide pulso, y porque en una toma
  * larga el borde que se quiere mover puede estar fuera de la vista.
  *
- * **Está acá y no en una pantalla porque lo usan las dos**, igual que
- * `texto-toma.js`, que es de donde salen las palabras sobre las que esto abre.
- * La pantalla de clase y la del vídeo de la semana dibujan el mismo transcript
- * con el mismo módulo, así que el menú tiene que ofrecer lo mismo en las dos y
- * arreglar una tiene que arreglar las dos. Vivía dentro de `pantalla-vivo.js`
- * cuando era de una sola.
- *
- * Lo que cambia entre pantallas son tres cosas y se dicen al conectar: dónde
- * vuelve el foco al cerrar, qué hacer con lo que quedó sin pintar mientras
- * estaba abierto, y a quién se le pide el borde. El resto —qué se ofrece, cómo
- * se llama, dónde se dibuja— es igual.
+ * Vive al lado de `texto-toma.js`, que es de donde salen las palabras sobre
+ * las que esto abre y las reglas de qué borde se puede poner en cada una. La
+ * pantalla dice tres cosas al conectar: dónde vuelve el foco al cerrar, qué
+ * hacer con lo que quedó sin pintar mientras estaba abierto, y a quién se le
+ * pide el borde.
  *
  * **Seleccionar de corrido sigue siendo comentar.** Son dos gestos que no se
- * pisan: cada pantalla ignora el botón derecho al seleccionar, y esto solo mira
+ * pisan: la pantalla ignora el botón derecho al seleccionar, y esto solo mira
  * una palabra.
  */
 
@@ -37,17 +31,10 @@ import * as texto from './texto-toma.js';
 let abierto = null;
 
 /**
- * Las pantallas que lo usan, por su raíz.
- *
- * Un registro y no una sola dueña porque **las dos se conectan al arrancar la
- * app** (`vivo.conectar` y `semanal.conectar`, seguidas, en `app.js`) y el menú
- * es uno solo en el documento: `#menu-palabra` vive fuera de `<main>`, que es
- * lo que lo salva del repintado de la tarjeta de debajo. Con una sola dueña
- * ganaría la que se conectó última y el menú de una pantalla le pediría el
- * borde a la otra. Se enruta por dónde se hizo el clic, que es exacto y no
- * depende del orden.
+ * La pantalla que lo usa. `#menu-palabra` vive fuera de `<main>`, que es lo
+ * que lo salva del repintado de la tarjeta de debajo.
  */
-const dueños = new Map();
+let dueño = null;
 
 /** El `#menu-palabra` lo atiende este módulo, y una sola vez. */
 let enganchado = false;
@@ -61,16 +48,12 @@ let enganchado = false;
  * MISMO sitio al que se lo pide el arrastre.
  */
 export function conectar(p) {
-    dueños.set(p.raiz, {
+    dueño = {
         raiz: p.raiz,
         foco: p.foco || p.raiz,
         alCerrar: typeof p.alCerrar === 'function' ? p.alCerrar : () => {},
-        alElegir: typeof p.alElegir === 'function' ? p.alElegir : () => {},
-        // Si esta pantalla sabe partir una toma. Lo declara ella y no se
-        // supone acá: el vídeo de la semana usa el mismo menú y no lo sabe
-        // hacer, y ofrecérselo sería un botón que no hace nada.
-        puedeDividir: p.puedeDividir === true
-    });
+        alElegir: typeof p.alElegir === 'function' ? p.alElegir : () => {}
+    };
     $(p.raiz).addEventListener('contextmenu', alClicDerecho);
     if (enganchado) return;
     enganchado = true;
@@ -106,8 +89,7 @@ function alClicDerecho(e) {
     const w = e.target.closest && e.target.closest('.palabra');
     const donde = w && w.closest('.transcript.es-movible');
     cerrar();
-    const dueño = w && [...dueños.values()].find(d => w.closest(d.raiz));
-    if (!w || !donde || !dueño) return false;
+    if (!w || !donde || !dueño || !w.closest(dueño.raiz)) return false;
     // Sin esto sale el menú del navegador encima del nuestro. Electron no pone
     // ninguno propio (no hay `context-menu` en `main.js`), pero el de Chromium
     // aparece igual mientras se mira la maqueta.
@@ -123,7 +105,7 @@ function alClicDerecho(e) {
     // partir solo cabe dentro de la toma (`sePuedePartirEn`). La diferencia es
     // qué pasa con lo de antes — el IN lo deja afuera y dividir lo deja en una
     // toma propia.
-    if (dueño.puedeDividir && cual !== 'espera' && texto.sePuedePartirEn(donde, w)) {
+    if (cual !== 'espera' && texto.sePuedePartirEn(donde, w)) {
         opciones.push({ borde: 'dividir', ms: Number(w.dataset.t), ...NOMBRES.dividir });
     }
     if (!opciones.length) return false;

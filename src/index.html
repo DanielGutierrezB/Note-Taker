@@ -205,31 +205,6 @@
       </div>
     </div>
   </section>
-
-  <!-- ── El modo semanal ──────────────────────────────────────────────
-       Una pantalla para las tres cosas, porque son tres momentos de lo mismo
-       y no tres sitios: preparar, grabar y el vídeo listo. Lo que cambia es
-       qué tarjeta está puesta, y lo decide `pantalla-semanal.js`.
-
-       No comparte nada con las cuatro de arriba a propósito: quien usa este
-       modo no tiene por qué ver una lista de clases, ni una checklist de
-       rodaje, ni un XML. -->
-  <section class="vista" id="vista-semanal">
-    <div class="scroll">
-      <div class="seccion">
-        <div class="seccion-titulo">
-          <span id="semanal-titulo">Tu vídeo de la semana</span>
-          <span class="crece"></span>
-          <!-- En qué idioma oye, que acá cambia de verdad a mitad de frase: es
-               el modo donde alguien cuenta su semana y se pasa al inglés. La
-               cámara no va: la de este modo es la mirilla y se elige aparte. -->
-          <span class="rotulos-barra" id="semanal-rotulos"></span>
-          <span id="semanal-reloj" class="grande-tc" hidden>00:00:00</span>
-        </div>
-        <div id="semanal-cuerpo"></div>
-      </div>
-    </div>
-  </section>
 </div>
 
 <!-- ── El menú del clic derecho sobre una palabra ─────────────────────
@@ -240,8 +215,8 @@
 
 <!-- ── El menú de un rótulo de la barra ───────────────────────────────
      El idioma y la cámara de referencia, cambiados sin salir de la pantalla.
-     Vive acá afuera por lo mismo que el de arriba: la tarjeta del vídeo
-     semanal se rehace entera y se llevaría puesto un menú abierto adentro.
+     Vive acá afuera por lo mismo que el de arriba: lo que se rehace se
+     llevaría puesto un menú abierto adentro.
      Lo llena `src/js/grabar/rotulo-barra.js`. -->
 <div class="menu-palabra" id="menu-barra" role="menu" hidden></div>
 
@@ -264,12 +239,8 @@
           calculan todos los marcadores del XML, así que cambiarlo a mitad de una
           clase movería los que ya se escribieron: se aplica a la sesión siguiente.</span>
       </label>
-      <!-- El único campo de abajo que vale en los dos modos, y el único que
-           guarda en dos sitios: el idioma de una clase y el de los vídeos de la
-           semana son ajustes distintos, con fábricas distintas, y se muestra el
-           del modo en que se está. -->
       <label class="campo">
-        <span class="rotulo" id="aj-idioma-rotulo">Idioma de la clase</span>
+        <span class="rotulo">Idioma de la clase</span>
         <select id="aj-idioma">
           <option value="auto">Automático</option>
           <option value="es">Español</option>

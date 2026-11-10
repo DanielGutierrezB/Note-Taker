@@ -58,11 +58,7 @@ const TIPOS = {
     '.js': 'text/javascript; charset=utf-8',
     '.woff2': 'font/woff2',
     '.png': 'image/png',
-    '.svg': 'image/svg+xml',
-    // El vídeo de ejemplo del modo semanal. Son 37 kB y se manda entero, sin
-    // atender rangos: el reproductor acepta el 200 completo y busca dentro de
-    // lo que ya tiene, que con tres segundos es todo.
-    '.mp4': 'video/mp4'
+    '.svg': 'image/svg+xml'
 };
 
 /**
@@ -127,38 +123,7 @@ function crear(puerto) {
     const tipo = TIPOS[path.extname(base)] || 'application/octet-stream';
     const largo = fs.statSync(base).size;
 
-    /* Por trozos, si los piden.
-     *
-     * Hace falta para el vídeo y no es un lujo: un `<video>` solo puede
-     * buscar dentro de lo que el servidor le deje pedir por trozos. Sin esto,
-     * `currentTime = 4.5` se lee de vuelta como 0 —el navegador lo recorta a
-     * lo que lleva descargado— y la maqueta no puede probar nada que no sea
-     * el principio de cada toma. En la app no se nota porque ahí las rutas
-     * son `file:`, que se busca entero. Lo encontré probando el arrastre por
-     * la línea de tomas: el montaje caía siempre en cero y parecía un fallo
-     * del montaje. */
-    const rango = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
-    if (rango) {
-        const desde = rango[1] ? Number(rango[1]) : Math.max(0, largo - Number(rango[2]));
-        const hasta = rango[1] && rango[2] ? Math.min(Number(rango[2]), largo - 1) : largo - 1;
-        if (!(desde >= 0) || desde > hasta) {
-            res.writeHead(416, { 'Content-Range': `bytes */${largo}` });
-            return res.end();
-        }
-        res.writeHead(206, {
-            'Content-Type': tipo,
-            'Accept-Ranges': 'bytes',
-            'Content-Range': `bytes ${desde}-${hasta}/${largo}`,
-            'Content-Length': hasta - desde + 1
-        });
-        return fs.createReadStream(base, { start: desde, end: hasta }).pipe(res);
-    }
-
-    res.writeHead(200, {
-        'Content-Type': tipo,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': largo
-    });
+    res.writeHead(200, { 'Content-Type': tipo, 'Content-Length': largo });
     res.end(fs.readFileSync(base));
     });
 }
@@ -167,11 +132,9 @@ function crear(puerto) {
  * Lo que hay que dibujar: cada escenario, y los que van juntos con coma.
  *
  * **Estaba escrito tres veces** —en `capturar.js`, en `medir-botones.js` y en
- * `auditar.js`— y las tres listas habían derivado: 37, 34 y 21 nombres. Cinco
- * que la maqueta sabe armar no estaban en NINGUNA: los tres del modo semanal
- * que se salen del camino felíz, el aviso de versión nueva, y el estado vacío.
- * O sea que los estados de error, que son los que se escriben con menos cuidado
- * y los que más se leen cuando algo falló, no los miraba nadie.
+ * `auditar.js`— y las tres listas habían derivado: 37, 34 y 21 nombres, y
+ * algunos estados de error —los que se escriben con menos cuidado y los que
+ * más se leen cuando algo falló— no estaban en NINGUNA.
  *
  * El catálogo de verdad es `SE_HACEN` en `doble.js`, que es el archivo que los
  * implementa. Esto es la misma lista puesta para Node —que no puede importar un
@@ -192,13 +155,7 @@ const ESCENARIOS = [
     'toma-abierta', 'releyendo', 'sin-audio', 'terminada', 'notas-de-antes',
     'foto', 'foto-cien',
     'prproj', 'prproj-lleno', 'prproj-listo',
-    'ajustes', 'ajustes-semanal', 'diagnostico',
-    // El modo semanal, momento por momento, más los tres que se salen del
-    // camino felíz: sin pantalla compartida, sin ninguna toma, y con el aviso
-    // de que un vídeo se rompió a mitad.
-    'semanal', 'semanal-primera-vez', 'semanal-sin-pantalla', 'semanal-grabando', 'semanal-sin-tomas',
-    'semanal-con-aviso', 'semanal-grabando,semanal-atrasado', 'semanal-carpeta', 'semanal-ficha', 'semanal-revisar',
-    'semanal-revisar-fuera', 'semanal-cortando', 'semanal-hecho',
+    'ajustes', 'diagnostico',
     'iconos'
 ];
 

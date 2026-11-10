@@ -107,71 +107,6 @@ const SUELTAS = palabras(
     'conectamos el disparador con la condición de salida fíjense que cuando ' +
     'cambia el valor se vuelve a evaluar todo desde el principio', 1015);
 
-/**
- * Las tomas de un vídeo de la semana, que no son las de una clase.
- *
- * Están aparte porque el modo semanal muestra otra cosa: solo dos vistas —la
- * pantalla y la cámara— y ninguna nota escrita a mano. Con
- * las de la clase, la maqueta enseñaba tomas en «Slides» y en «Motion Graphics» y
- * renglones que decían «Los tres pilares», que ahí no existen: la captura
- * mentía sobre la pantalla que estaba enseñando.
- *
- * Lo que sí se repite de la clase es lo que de verdad pasa igual: una toma
- * descartada, una que repite a otra y los números cortos de quien se graba
- * explicando su semana en cinco minutos.
- */
-const TOMAS_SEMANA = [
-    {
-        id: 1, vista: 'R', comentario: '', cuenta: '3, 2, 1.',
-        inMs: seg(18), outMs: seg(74), descartada: false, cerradaSola: false,
-        palabras: palabras('Esta semana terminamos el importador y ya está corriendo ' +
-            'en producción con los tres clientes grandes', 18),
-        antes: palabras('tres dos uno', 16), despues: palabras('pausa', 75),
-        comentarios: [], relectura: null, repiteA: null, pausaAdentro: null
-    },
-    {
-        id: 2, vista: 'R', comentario: '', cuenta: '3, 2, 1.',
-        inMs: seg(96), outMs: seg(110), descartada: true, cerradaSola: false,
-        palabras: palabras('Lo segundo que hicimos fue perdón me equivoqué', 96),
-        antes: [], despues: [], comentarios: [], relectura: null, repiteA: null, pausaAdentro: null
-    },
-    {
-        id: 3, vista: 'R', comentario: '', cuenta: '3, 2, 1.',
-        inMs: seg(124), outMs: seg(212), descartada: false, cerradaSola: false,
-        palabras: palabras('Lo segundo que hicimos fue bajar el tiempo de carga a la ' +
-            'mitad y acá en la pantalla les muestro de dónde salía la demora', 124),
-        antes: [], despues: [], comentarios: [], relectura: null, repiteA: 2, pausaAdentro: null
-    },
-    {
-        id: 4, vista: 'PV', comentario: '', cuenta: '3, 2, 1.',
-        inMs: seg(240), outMs: seg(288), descartada: false, cerradaSola: true,
-        palabras: palabras('La semana que viene arrancamos con el rediseño del panel ' +
-            'y les voy a pedir una mano con las pruebas', 240),
-        antes: [], despues: [], comentarios: [], relectura: null, repiteA: null, pausaAdentro: null
-    }
-];
-
-/** Lo que se oyó después de la última toma del vídeo de la semana. */
-const SUELTAS_SEMANA = palabras(
-    'bueno creo que con eso estamos y si queda alguna duda me escriben por acá', 292);
-
-/**
- * El estado de un vídeo de la semana a mitad de grabar: tres tomas y la cuarta
- * abierta, que es el momento en que esta pantalla se mira de verdad.
- */
-export function estadoSemanal(extra) {
-    return estadoEnVivo(Object.assign({
-        secuencia: 'semana_2026-10-03_09-12-40',
-        segundos: 300,
-        // Con un paso atrás: la toma 2 de esta lista está desactivada, así que
-        // alguien la desactivó, y los dos botones se miran en la captura con
-        // uno encendido y el otro no.
-        historia: { atras: 1, adelante: 0, queAtras: 'desactivar la toma 2', queAdelante: '' },
-        sueltas: SUELTAS_SEMANA,
-        tomas: TOMAS_SEMANA
-    }, extra || {}));
-}
-
 /** El estado de una sesión en curso, como lo manda `espejo.resumen`. */
 export function estadoEnVivo(extra) {
     const estado = Object.assign({
@@ -194,7 +129,7 @@ export function estadoEnVivo(extra) {
         releyendo: 0,
         terminando: false,
         // El ciclo al día, que es lo normal: medio segundo de atraso y nada
-        // salteado. El escenario `semanal-atrasado` es el que los sube.
+        // salteado.
         atrasoSec: 0.5,
         salteadoSec: 0,
         abierta: null,
@@ -209,40 +144,6 @@ export function estadoEnVivo(extra) {
 }
 
 /** Las sesiones que hay en la carpeta, como las manda `sesiones-grabadas.listar`. */
-/**
- * Las grabaciones del modo semanal, que son otra cosa que las clases.
- *
- * Una por carpeta (`Grabación-...`), con el nombre y el resumen que la pantalla
- * de inicio usa para ofrecer «Seguir con esa».
- */
-export const SEMANALES = [
-    {
-        secuencia: 'semana_2026-10-04_19-29-01',
-        curso: 'semana',
-        ceroMs: new Date('2026-10-04T19:29:01').getTime(),
-        carpeta: '/Users/vos/Vídeos/Grabación-2026-10-04_19-29-01',
-        archivos: {
-            xml: '/Users/vos/Vídeos/Grabación-2026-10-04_19-29-01/xml/semana.xml',
-            json: '/Users/vos/Vídeos/Grabación-2026-10-04_19-29-01/xml/Datos/semana_notas-en-vivo.json'
-        },
-        resumen: { tomas: 3, descartadas: 1, segundos: 162, sinReleer: 0, estado: 'terminada' }
-    },
-    // La de la semana anterior. Está para que «Elegir carpeta…» tenga más de
-    // una cosa que mostrar: con una sola entra directo y el caso de elegir no
-    // se vería nunca en la maqueta.
-    {
-        secuencia: 'semana_2026-09-27_18-40-12',
-        curso: 'semana',
-        ceroMs: new Date('2026-09-27T18:40:12').getTime(),
-        carpeta: '/Volumes/Rodaje/Grabación-2026-09-27_18-40-12',
-        archivos: {
-            xml: '/Volumes/Rodaje/Grabación-2026-09-27_18-40-12/xml/semana.xml',
-            json: '/Volumes/Rodaje/Grabación-2026-09-27_18-40-12/xml/Datos/semana_notas-en-vivo.json'
-        },
-        resumen: { tomas: 5, descartadas: 0, segundos: 304, sinReleer: 0, estado: 'terminada' }
-    }
-];
-
 export const SESIONES = [
     {
         secuencia: '03_curso-de-automatizaciones_2026-09-28_09-02-11',
@@ -284,11 +185,7 @@ export const AJUSTES = {
     // Sin cámara de referencia: es como arranca la app, y es lo que deja que la
     // maqueta corra en una máquina sin ninguna cámara. Las fotos que se ven en
     // los bloques son las que el doble dice que ya están en el disco.
-    camara: null,
-    // En modo de clase, que es el que tienen que ver todos los escenarios menos
-    // los del modo semanal: ese se pide por la URL.
-    modo: 'clase',
-    semanal: { carpeta: '/Users/daniel/Movies/Semanal', idioma: 'auto' }
+    camara: null
 };
 
 // Los nombres son los de verdad de una Mac con Zoom instalado: es la lista

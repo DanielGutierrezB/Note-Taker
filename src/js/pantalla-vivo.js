@@ -146,10 +146,7 @@ export function conectar(contexto) {
         // Por `ponerBorde`, igual que el arrastre: si el menú llamara al motor
         // por su cuenta, el deshacer por campo vería dos cosas distintas para
         // el mismo cambio.
-        alElegir: q => ponerBorde(q.cual, q.toma, q.borde, q.ms),
-        // Partir una toma en dos es de esta pantalla: el vídeo de la semana usa
-        // el mismo menú y no lo sabe hacer.
-        puedeDividir: true
+        alElegir: q => ponerBorde(q.cual, q.toma, q.borde, q.ms)
     });
 
     $('#btn-compacto').addEventListener('click', () => {
@@ -739,7 +736,7 @@ function cuerpoToma(t) {
 }
 
 /**
- * Los tres estados de la toma, el control compartido con el vídeo de la semana.
+ * Los tres estados de la toma (`grabar/estados-toma.js`).
  *
  * Descartar se esconde cuando la clase está cerrada: ahí no hay deshacer
  * —`sesiones-grabadas.js` dice por qué— y antes el botón estaba igual y lo
@@ -959,7 +956,7 @@ function montarTextos(quedan) {
  * pasa por el motor por su puerta de siempre, así que el deshacer por campo
  * (`engine/deshacer.js`) ve lo mismo que veía: un `borde` es un cambio de toma,
  * cerrar es cerrar y abrir es abrir. Qué toca en cada texto lo dice
- * `texto.queHaceElBorde`, que es la misma regla de la semana y del menú.
+ * `texto.queHaceElBorde`, que es la misma regla del menú.
  */
 function ponerBorde(cual, tomaId, borde, ms) {
     switch (texto.queHaceElBorde(cual, borde)) {

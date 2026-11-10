@@ -532,12 +532,10 @@ module.exports = function (t) {
 
     t.group('dividir · dónde se ofrece');
 
-    t.test('en la pantalla de clase', () => {
+    t.test('dentro de la toma y no en sus costados', () => {
         const menu = leer('src', 'js', 'grabar', 'menu-de-palabra.js');
-        t.ok(/puedeDividir: p\.puedeDividir === true/.test(menu), 'lo declara la pantalla');
-        t.ok(/dueño\.puedeDividir && cual !== 'espera' && texto\.sePuedePartirEn\(donde, w\)/.test(menu),
-            'y solo dentro de una toma que existe, no sobre lo gris de sus costados');
-        t.ok(/puedeDividir: true/.test(leer('src', 'js', 'pantalla-vivo.js')), 'la clase lo pide');
+        t.ok(/cual !== 'espera' && texto\.sePuedePartirEn\(donde, w\)/.test(menu),
+            'solo dentro de una toma que existe, no sobre lo gris de sus costados');
     });
 
     t.test('el gesto entra por la misma puerta que los bordes', () => {

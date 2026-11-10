@@ -83,9 +83,9 @@ export function atrasado(estado) {
             clave: 'sin audio',
             palabra: 'transcript con huecos',
             porque: `La app se quedó sin tiempo para escuchar y ${fmt(estado.salteadoSec)} s de ` +
-                'audio no se transcribieron. El audio y el vídeo están completos —no se perdió ' +
-                'nada de la grabación—, pero al texto le faltan trozos, así que los bordes de ' +
-                'las tomas de este rato pueden estar mal puestos: revisalos antes de exportar. ' +
+                'audio no se transcribieron. El audio está completo —no se perdió nada de la ' +
+                'grabación—, pero al texto le faltan trozos, así que los bordes de las tomas ' +
+                'de este rato pueden estar mal puestos: revisalos antes de entregar el XML. ' +
                 'Si sigue subiendo, cerrá lo que esté pesando en la Mac.'
         };
     }
@@ -151,27 +151,6 @@ export function deSesion(estado, audio) {
         return { clave: 'releyendo', palabra: `releyendo ${estado.releyendo}` };
     }
     return { clave: 'escuchando', palabra: 'escuchando' };
-}
-
-/**
- * La pastilla del vídeo de la semana mientras se graba.
- *
- * La misma prioridad que `deSesion` y por lo mismo: el ciclo que no llega va
- * antes que la toma abierta, porque es con una toma abierta cuando un
- * transcript atrasado le pone mal los bordes. Lo que cambia es la palabra de
- * reposo: acá no se está «escuchando» una clase, se espera el «3, 2, 1». Y la
- * clave de la toma abierta: `grabando` y no `abierta`, porque lo que se dice
- * sale en el vídeo y va en el rojo de grabar, no en el acento de la clase.
- *
- * @returns {{clave, palabra, porque?}} `porque` solo cuando va atrasado
- */
-export function deSemanal(sesion) {
-    const atras = atrasado(sesion);
-    if (atras) return atras;
-    const abierta = ((sesion && sesion.tomas) || []).some(t => t.outMs == null);
-    return abierta
-        ? { clave: 'grabando', palabra: 'toma abierta' }
-        : { clave: 'listo', palabra: 'esperando el «3, 2, 1»' };
 }
 
 /** Cómo está una sesión ya guardada, en la lista. */
