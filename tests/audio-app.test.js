@@ -351,30 +351,41 @@ module.exports = async function (t) {
         }
     });
 
-    t.test('ZoomAudioDevice nunca se pone en verde', () => {
+    t.test('ZoomAudioDevice avisa en ámbar, pero deja empezar', () => {
         // Parece la llamada y no lo es: es lo que Zoom usa para MANDAR el
-        // sonido de la Mac al compartir pantalla.
+        // sonido de la Mac al compartir pantalla. Se dice, y se cambia grabando.
         const e = estados.deAudio({ abierto: true, clase: 'zoom-falso', pico: 0.5 });
-        t.eq(e.listo, 'mal');
+        t.eq(e.listo, 'si', 'no frena las notas');
+        t.eq(e.clave, 'en silencio', 'en ámbar');
         t.ok(e.porque.includes('Audio de Zoom'), 'y dice qué elegir');
     });
 
-    t.test('un micrófono no se pone en verde aunque suene', () => {
-        // Es el error que esto vino a evitar: la sala tiene ruido, el medidor
-        // se mueve, y la llamada no se oye.
+    t.test('un micrófono local que suena está listo, sin preguntar si la clase es presencial', () => {
+        // Si está elegido uno local, es local: confirmarlo hacía sentir la app
+        // como rota.
         const e = estados.deAudio({ abierto: true, clase: 'microfono', pico: 0.5 });
-        t.eq(e.listo, 'no');
-        t.eq(e.palabra, 'graba la sala');
+        t.eq(e.listo, 'si');
+        t.eq(e.palabra, 'entra audio');
+        t.eq(e.porque, undefined, 'y sin un aviso que leer');
     });
 
-    t.test('los auriculares Bluetooth avisan además del modo llamada', () => {
+    t.test('los auriculares Bluetooth avisan del modo llamada, sin frenar', () => {
         const e = estados.deAudio({ abierto: true, clase: 'bluetooth', pico: 0.5 });
+        t.eq(e.listo, 'si');
         t.ok(e.porque.includes('Bluetooth'));
     });
 
-    t.test('un micrófono aceptado a sabiendas sí sirve: la clase presencial', () => {
-        const e = estados.deAudio({ abierto: true, clase: 'microfono', aceptado: true, pico: 0.5 });
-        t.eq(e.listo, 'si');
+    t.test('una entrada en silencio deja empezar, y dice que se cambia grabando', () => {
+        const e = estados.deAudio({ abierto: true, clase: 'microfono', pico: 0 });
+        t.eq(e.listo, 'si', 'el silencio no frena: se arregla grabando');
+        t.eq(e.clave, 'en silencio', 'pero se ve');
+        t.ok(/rótulo Audio/.test(e.porque), 'y dice dónde se cambia');
+    });
+
+    t.test('sin ninguna entrada abierta sí frena', () => {
+        t.eq(estados.deAudio({ abierto: false }).listo, 'no');
+        t.eq(estados.deAudio({ abierto: true, caido: true, clase: 'microfono' }).listo, 'mal',
+            'una que se cayó tampoco está abierta');
     });
 
     t.test('Zoom en silencio no bloquea, pero avisa en ámbar', () => {

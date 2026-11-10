@@ -12,8 +12,9 @@
  * te manda a otra pantalla a buscarlo es un checklist que hay que aprender.
  *
  * **El botón de Iniciar se enciende solo cuando lo esencial está.** Lo esencial
- * son tres: la carpeta, una entrada por la que entre sonido, y Whisper. La
- * cámara no, porque es de referencia y no se graba.
+ * son tres: la carpeta, una entrada abierta, y Whisper. Que la entrada suene, o
+ * que sea la que conviene, se dice pero no frena: se cambia grabando, desde el
+ * rótulo Audio de la barra. La cámara no, porque es de referencia y no se graba.
  */
 
 import { $, esc, avisar, verVista } from './chrome.js';
@@ -30,9 +31,9 @@ let reanudar = null;
 
 /**
  * Lo que se sabe de la entrada elegida. `clase` es qué tipo de entrada es
- * (`estados.claseDeEntrada`), `aceptado` que alguien eligió usar un micrófono
- * a sabiendas, `error` el motivo cuando no se pudo abrir, y `roto` el audio que
- * se perdió en medio de la grabación (`alRomperse`, más abajo).
+ * (`estados.claseDeEntrada`), `error` el motivo cuando no se pudo abrir, y
+ * `roto` el audio que se perdió en medio de la grabación (`alRomperse`, más
+ * abajo).
  *
  * **Este objeto lo mira también la pantalla de En vivo**, que lo recibe tal
  * cual en `app.irAVivo` y lo lee en cada repintado de la barra: la entrada la
@@ -41,7 +42,7 @@ let reanudar = null;
  */
 const audio = {
     abierto: false, caido: false, pico: 0, dispositivo: null,
-    clase: null, aceptado: false, error: null, roto: null
+    clase: null, error: null, roto: null
 };
 
 /**
@@ -56,7 +57,7 @@ let nombre = null;
 /** El pico decae solo: sin esto, un golpe deja el medidor arriba para siempre. */
 let ultimoPico = 0;
 /** El último estado del audio que se dibujó, para repintar solo al cambiar. */
-let ultimoListo = null;
+let ultimoEstado = null;
 
 export function conectar(contexto) {
     app = contexto;
@@ -151,12 +152,7 @@ function pintar() {
               <div class="nivel" id="prep-nivel"><div class="nivel-barra"></div></div>
               <button class="btn btn-tenue" type="button" data-hace="releer-entradas"
                       title="Volver a preguntarle al sistema qué entradas hay, por si acabás de conectar el micrófono o de abrir el Zoom">
-                Buscar de nuevo</button>
-              ${(audio.clase === 'microfono' || audio.clase === 'bluetooth') && !audio.aceptado
-                ? `<button class="btn" type="button" data-hace="usar-igual"
-                     title="Para una clase presencial, donde el profesor está en la sala">
-                     Es una clase presencial: usar el micrófono</button>`
-                : ''}`
+                Buscar de nuevo</button>`
         }),
         check({
             listo: w.listo,
@@ -346,11 +342,6 @@ async function alClic(e) {
             pintar();
             break;
         }
-        case 'usar-igual':
-            audio.aceptado = true;
-            ultimoListo = null;
-            pintar();
-            break;
         case 'diagnostico': app.verDiagnostico(); break;
         case 'ajustes': app.verAjustes(); break;
         case 'volver': app.irASesiones(); break;
@@ -366,15 +357,13 @@ async function abrirEntrada(id) {
         });
         return;
     }
-    // Cada entrada nueva vuelve a preguntar: haber aceptado usar un micrófono
-    // no vale para el siguiente que se elija. Y lo que se perdió se perdió con
-    // la entrada anterior: esta arranca limpia.
+    // Lo que se perdió se perdió con la entrada anterior: esta arranca limpia.
     Object.assign(audio, {
-        clase: estados.claseDeEntrada(entrada), aceptado: false, error: null,
+        clase: estados.claseDeEntrada(entrada), error: null,
         caido: false, pico: 0, roto: null
     });
     ultimoPico = 0;
-    ultimoListo = null;
+    ultimoEstado = null;
     const r = await fuente.abrir(entrada, {
         alNivel: pico => {
             ultimoPico = Math.max(pico, ultimoPico * 0.85);
@@ -388,11 +377,11 @@ async function abrirEntrada(id) {
             // pedazo: el nivel llega doce veces por segundo y repintar a esa
             // velocidad tira el foco del selector mientras alguien lo está
             // usando. Sin esto, en cambio, la pastilla se quedaba diciendo «en
-            // silencio» con el medidor moviéndose al lado —o sea, con la
-            // pantalla contradiciéndose— y el botón de Iniciar apagado para
-            // siempre, que es el error que esta pantalla existe para evitar.
-            const ahora = estados.deAudio(audio).listo;
-            if (ahora !== ultimoListo) { ultimoListo = ahora; pintar(); }
+            // silencio» con el medidor moviéndose al lado, o sea con la
+            // pantalla contradiciéndose. Se mira la clave y no `listo`: callada
+            // o sonando, la entrada deja iniciar igual.
+            const ahora = estados.deAudio(audio).clave;
+            if (ahora !== ultimoEstado) { ultimoEstado = ahora; pintar(); }
         },
         alCaerse: () => { audio.caido = true; pintar(); },
         // La escucha de Zoom vuelve sola de una traba o de un rearme.
