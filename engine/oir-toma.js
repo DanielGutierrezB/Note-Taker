@@ -159,6 +159,11 @@ async function leer(archivos, toma, opciones) {
     if (!donde || !fs.existsSync(donde.archivo)) return null;
 
     const finDelArchivo = donde.desdeMs + (donde.segundos || 0) * 1000;
+    // Una toma que sigue después del final de su WAV —quedó cruzando un cambio
+    // de entrada, por un ⌘Z— no se puede leer entera de un archivo: leída de
+    // este, perdía lo de después y su OUT se acercaba al final del archivo. Se
+    // queda con lo que tiene, como una toma sin audio donde buscar.
+    if (toma.outMs != null && toma.outMs > finDelArchivo + 500) return null;
     const pedido = {
         sesion: donde,
         desdeMs: Math.max(donde.desdeMs, toma.inMs - orillaIzquierda(toma, o.tomas)),

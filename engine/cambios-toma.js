@@ -552,6 +552,20 @@ function reabrir(sesion, toma) {
     // contar. Una abierta que no cuenta deja al ciclo mandando al colchón lo
     // que se dice dentro de ella, y eso no se ve en ningún sitio. Y tiene que
     // caber: mientras no contaba, otra pudo correr su IN por encima de ella.
+    // Con la entrada cambiada —o la Mac dormida— desde que cerró, su IN está en
+    // un WAV de antes y lo que siga iría a otro: una toma no se relee de dos
+    // archivos, y lo de después del cambio se perdería de ella. Se dice, como
+    // la pisada, y no se toca nada (así tampoco deja paso en el historial).
+    if (sesion.captura && toma.inMs != null && toma.inMs < sesion.captura.desdeMs) {
+        if (sesion.avisar) {
+            sesion.avisar({
+                tipo: 'aviso',
+                mensaje: `No puedo reabrir la toma ${toma.id}: desde que cerró cambió el audio (otra entrada, `
+                    + 'o la Mac se durmió). Abrí una toma nueva para seguir.'
+            });
+        }
+        return;
+    }
     const pisada = vivo.laQuePisa(tomas, { ...toma, descartada: false, outMs: null });
     if (pisada) {
         if (sesion.avisar) {

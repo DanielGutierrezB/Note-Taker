@@ -214,6 +214,31 @@ module.exports = function (t) {
         }
     });
 
+    t.test('una toma de antes de un cambio de entrada no se reabre, y se dice por qué', () => {
+        grabando(10);
+        const avisos = [];
+        try {
+            grabacion._sesion().avisar = a => avisos.push(a);
+            grabacion.abrirToma();
+            for (let i = 0; i < 20; i++) grabacion.pcm(pedazo());
+            grabacion.cerrarToma();
+            const id = grabacion._sesion().estado.tomas[0].id;
+            grabacion.cambiarEntrada({ dispositivo: 'AirPods', sampleRate: 48000, canales: 1 });
+            grabacion._sesion().avisar = a => avisos.push(a);
+            const r = grabacion.editar({ tipo: 'reabrir', toma: id });
+            t.ok(r.tomas.every(t2 => t2.outMs != null), 'sigue cerrada');
+            t.ok(avisos.some(a => /No puedo reabrir la toma/.test(a.mensaje || '')), 'y lo dice');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('una toma que cruza a otro WAV no se relee de uno solo', async () => {
+        const oirToma = require('../engine/oir-toma');
+        const archivos = [{ archivo: __filename, desdeMs: 1000, segundos: 10 }, { archivo: __filename, desdeMs: 11500, segundos: 10 }];
+        t.eq(await oirToma.leer(archivos, { id: 1, inMs: 5000, outMs: 15000 }), null);
+    });
+
     t.test('recargada con Zoom grabando, la ventana se engancha a la escucha que sigue y no la reabre', async () => {
         const audioApp = require('../engine/audio-app');
         const canales = new Map();
