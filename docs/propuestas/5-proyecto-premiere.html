@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../src/css/style.css">
+<link rel="stylesheet" href="propuestas.css">
+<style>
+  .PV { --c: #d22c36; } .R { --c: #e96f24; } .S { --c: #718637; } .MG { --c: #3b82f6; } .X2 { --c: #af8bb1; --t: #0a0c10; }
+</style>
+</head><body style="background: rgba(0,0,0,0.6)">
+<div class="pr-app">
+  <header class="pr-top"><span class="marca">Note Taker</span><span class="crece"></span>
+    <span class="tenue">v0.6.1</span><span class="tenue">Report</span><span class="tenue">Ajustes</span></header>
+  <main class="pr-cuerpo" style="padding-top: 12px">
+    <div class="pp">
+      <div class="pp-cabeza">
+        <div><h1>Proyecto de Premiere</h1><div class="sub">Curso de automatizaciones · 3 clases</div></div>
+        <span class="crece"></span>
+        <span class="v3">✕</span>
+      </div>
+      <div class="pp-cuerpo">
+        <div>
+          <div class="pp-bloque">
+            <div class="pp-paso">1 · CAPTURAS <span class="ayuda" title="Cada captura es una secuencia vacía donde soltás el vídeo de esa cámara o pantalla y lo sincronizás con el audio que ya trae.">?</span></div>
+            <div class="pp-capturas">
+              <span class="pp-cap">Captura 1 ✕</span><span class="pp-cap">Captura 2 ✕</span><span class="pp-cap">Captura 3 ✕</span><span class="pp-cap">Captura 4 ✕</span><span class="pp-cap es-agregar">+ Agregar captura</span>
+            </div>
+          </div>
+          <div class="pp-bloque">
+            <div class="pp-paso">2 · QUÉ SE VE EN CADA VISTA <span class="ayuda" title="Arrastrá para cambiar el orden: la de la derecha va arriba. Unidas, van en una sola secuencia anidada.">?</span></div>
+            <div class="pp-vista PV"><span class="pp-sigla">PV</span>
+              <div class="pp-vista-fila"><span class="pp-chip PV">Captura 1</span><span class="pp-chip PV">Captura 2</span></div></div>
+            <div class="pp-vista R"><span class="pp-sigla">R</span>
+              <div class="pp-vista-fila"><span class="pp-anidada R"><span class="pp-chip R">Captura 2</span><span class="pp-chip R">Captura 1</span></span><span class="pp-donde">unidas</span></div></div>
+            <div class="pp-vista X2"><span class="pp-sigla">X2</span>
+              <div class="pp-vista-fila"><span class="pp-chip X2">Captura 1</span><span class="pp-chip X2">Captura 2</span></div></div>
+            <div class="pp-vista S"><span class="pp-sigla">S</span>
+              <div class="pp-vista-fila"><span class="pp-chip S">Captura 2</span><span class="pp-chip S">Captura 1</span><span class="pp-donde">sin tomas</span></div></div>
+            <div class="pp-vista MG"><span class="pp-sigla">MG</span>
+              <div class="pp-vista-fila"><span class="pp-chip MG">Captura 2</span><span class="pp-chip MG">Captura 1</span><span class="pp-donde">sin tomas</span></div></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="pp-paso">3 · ASÍ QUEDA CADA CLASE EN PREMIERE <span class="ayuda" title="La secuencia precortada de una clase, con todas las pistas encendidas para que se vea qué hay en cada una. Se actualiza al cambiar lo de la izquierda.">?</span>
+            <span class="crece" style="flex:1"></span><span class="v3" style="font-weight:500">03_curso-de-automatizaciones · 2 h 43 min</span></div>
+          <div class="pp-linea">
+            <div class="pp-regla"><span></span><div class="pp-regla-marcas"><span>00:00</span><span>00:40</span><span>01:20</span><span>02:00</span><span>02:43</span></div></div>
+            <div class="pp-pista"><span class="pp-pista-nombre"><b>V9</b> MG</span><div class="pp-pista-clips"><span class="pp-clip MG" style="left:0;right:0">Captura 1 <small>· MG</small></span></div></div>
+            <div class="pp-pista"><span class="pp-pista-nombre"><b>V8</b> MG</span><div class="pp-pista-clips"><span class="pp-clip MG" style="left:0;right:0">Captura 2 <small>· MG</small></span></div></div>
+            <div class="pp-pista"><span class="pp-pista-nombre"><b>V7</b> S</span><div class="pp-pista-clips"><span class="pp-clip S" style="left:0;right:0">Captura 1 <small>· S</small></span></div></div>
+            <div class="pp-pista"><span class="pp-pista-nombre"><b>V6</b> S</span><div class="pp-pista-clips"><span class="pp-clip S" style="left:0;right:0">Captura 2 <small>· S</small></span></div></div>
+            <div class="pp-pista"><span class="pp-pista-nombre"><b>V5</b> X2</span><div class="pp-pista-clips"><span class="pp-clip X2" style="left:0;right:0;color:#0a0c10">Captura 2 <small>· X2</small></span></div></div>
+            <div class="pp-pista"><span class="pp-pista-nombre"><b>V4</b> X2</span><div class="pp-pista-clips"><span class="pp-clip X2" style="left:0;right:0;color:#0a0c10">Captura 1 <small>· X2</small></span></div></div>
+            <div class="pp-pista"><span class="pp-pista-nombre"><b>V3</b> R</span><div class="pp-pista-clips"><span class="pp-clip R es-anidado" style="left:0;right:0">R <small>· anidada: Captura 2 + Captura 1</small></span></div></div>
+            <div class="pp-pista"><span class="pp-pista-nombre"><b>V2</b> PV</span><div class="pp-pista-clips"><span class="pp-clip PV" style="left:0;right:0">Captura 2 <small>· PV</small></span></div></div>
+            <div class="pp-pista"><span class="pp-pista-nombre"><b>V1</b> PV</span><div class="pp-pista-clips"><span class="pp-clip PV" style="left:0;right:0">Captura 1 <small>· PV</small></span></div></div>
+            <div class="pp-pista es-separa"><span class="pp-pista-nombre"><b>A1</b> Referencia</span><div class="pp-pista-clips"><span class="pp-clip es-audio" style="left:0;right:0">Audio de la clase <small>· 03_curso-de-automatizaciones.wav</small></span></div></div>
+            <div class="pp-pista"><span class="pp-pista-nombre"><b>A2</b> Captura 1</span><div class="pp-pista-clips"><span class="pp-clip es-audio" style="left:0;right:0">Captura 1 <small>· audio</small></span></div></div>
+          </div>
+          <div class="pp-leyenda"><span>Cada pista con el color de su vista</span><span>◫ secuencia anidada</span><span>En Premiere cada toma enciende las pistas de su vista</span></div>
+        </div>
+      </div>
+      <div class="pp-pie">
+        <span>Se guarda en <code>Curso de automatizaciones/Proyecto/Curso de automatizaciones.prproj</code></span>
+        <span class="crece"></span>
+        <button class="btn btn-tenue" type="button">Cerrar</button>
+        <button class="btn btn-primario" type="button">Generar proyecto</button>
+      </div>
+    </div>
+    <div class="pr-centro" style="max-width:1360px">
+      <div class="pr-nota-propuesta">
+        <b>Qué cambia.</b> Tres pasos numerados y casi sin texto (las explicaciones van en el «?»): las capturas, qué captura se ve en
+        cada vista, y a la derecha la línea de tiempo de una clase tal como queda en Premiere. Cada pista va del color de su vista:
+        una captura suelta se llama «Captura 1 · PV»; una anidada se llama como la vista y dice qué tiene adentro
+        («R · anidada: Captura 2 + Captura 1»). La línea se redibuja al cambiar cualquier cosa de la izquierda, y muestra todo
+        encendido para que se vea qué hay en cada pista.
+      </div>
+    </div>
+  </main>
+  <span class="pr-etiqueta-propuesta">PROPUESTA 5</span>
+</div>
+</body></html>

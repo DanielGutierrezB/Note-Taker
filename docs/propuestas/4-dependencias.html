@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../src/css/style.css">
+<link rel="stylesheet" href="propuestas.css">
+</head><body style="background: rgba(0,0,0,0.6)">
+<div class="pr-app">
+  <header class="pr-top"><span class="marca">Note Taker</span><span class="crece"></span>
+    <span class="tenue">v0.6.1</span><span class="tenue">Report</span><span class="tenue">Ajustes</span></header>
+  <main class="pr-cuerpo">
+    <div class="pr-panel">
+      <div class="pr-panel-cabeza">
+        <h1>Falta algo para poder grabar</h1>
+        <p>Note Taker necesita estas piezas para oír la clase y escribir las notas. Se instalan una sola vez.</p>
+        <button class="btn btn-primario pr-boton-grande" type="button">Instalar dependencias</button>
+        <div class="v3" style="margin-top:10px">Baja 2,1 GB: el modelo grande y el liviano</div>
+      </div>
+      <div class="pr-panel-cuerpo">
+        <details class="pr-grupo" open>
+          <summary>Dependencias que faltan <span class="pr-cuenta es-falta">2</span></summary>
+          <div class="pr-dep"><span class="marca-falta">✕</span>
+            <div><b>Modelo de Whisper (large-v3-turbo)</b><span>Relee cada toma cerrada y escribe el texto que va al XML.</span></div>
+            <span class="pastilla" data-estado="falta">imprescindible · 1,6 GB</span></div>
+          <div class="pr-dep"><span class="marca-recom">!</span>
+            <div><b>Modelo liviano (small)</b><span>El respaldo: si el grande se cae a mitad de una toma, se relee con este.</span></div>
+            <span class="pastilla" data-estado="sin releer">recomendado · 488 MB</span></div>
+        </details>
+        <details class="pr-grupo">
+          <summary>Dependencias instaladas <span class="pr-cuenta es-ok">5</span></summary>
+          <div class="pr-dep"><span class="marca-ok">✓</span><div><b>ffmpeg</b><span>Corta el audio grabado.</span></div><span></span></div>
+        </details>
+      </div>
+      <div class="pr-panel-pie"><button class="btn btn-tenue" type="button">Ahora no</button></div>
+    </div>
+    <div class="pr-centro">
+      <div class="pr-nota-propuesta">
+        <b>Qué cambia.</b> «Instalar dependencias» va arriba y en el centro, con lo que va a bajar. Debajo, dos desplegables:
+        «Dependencias que faltan», siempre abierto, y «Dependencias instaladas», cerrado: quien quiera ver qué hay, lo abre.
+        «Ahora no» queda abajo, como salida.
+      </div>
+    </div>
+  </main>
+  <span class="pr-etiqueta-propuesta">PROPUESTA 4</span>
+</div>
+</body></html>

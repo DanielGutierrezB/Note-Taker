@@ -490,11 +490,12 @@ async function aplicar() {
     if (hay('iconos')) return verIconos();
 
     // El número de clase abierto para cambiarlo. Es el único estado de la
-    // primera pantalla que no se veía desde ninguna herramienta: el lápiz
-    // reemplaza la fila entera por un campo, y una fila que nadie dibuja es una
-    // fila que nadie audita.
+    // primera pantalla que no se veía desde ninguna herramienta: «Cambiar el
+    // número de clase», en el menú «···», reemplaza el título de la fila por un
+    // campo, y una fila que nadie dibuja es una fila que nadie audita.
     if (hay('numero-de-clase')) {
-        await apretar('.fila [data-hace="renombrar"]', 'el lápiz de la primera clase');
+        await apretar('.ses-fila [data-hace="menu"]', 'el «···» de la primera clase');
+        await apretar('#ses-menu [data-hace="renombrar"]', 'cambiar el número, en el menú');
         await hastaQue('[data-campo="numero"]', 'el campo del número');
         return;
     }

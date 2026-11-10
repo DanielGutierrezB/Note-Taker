@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../src/css/style.css">
+<link rel="stylesheet" href="propuestas.css">
+</head><body>
+<div class="pr-app">
+  <header class="pr-top"><span class="marca">Note Taker</span><span class="crece"></span>
+    <span class="tenue">v0.6.1</span><span class="tenue">Report</span><span class="tenue">Ajustes</span></header>
+  <main class="pr-cuerpo" style="padding-top: 22px">
+    <div class="pr-centro" style="max-width: 1000px">
+      <div class="pr-curso" style="padding-bottom: 14px">
+        <div class="pr-curso-texto">
+          <div class="pr-curso-sobre">Curso</div>
+          <h1>Curso de automatizaciones</h1>
+          <div class="pr-curso-ruta">
+            <code>/Volumes/Rodaje/Curso de automatizaciones</code>
+            <span class="pr-enlace">Mostrar en Finder</span>
+            <span class="pr-enlace">Cambiar de curso</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pr-barra">
+        <button class="btn btn-primario" type="button">Nueva sesión</button>
+        <span class="v3">La próxima es la 15</span>
+        <span class="crece"></span>
+        <button class="btn pr-secundario" type="button">Generar proyecto de Premiere</button>
+      </div>
+
+      <div class="pr-lista-cabeza" style="margin-top: 6px">
+        <h2>Clases</h2><span class="v3">14 en este curso</span><span class="crece"></span>
+        <span class="v3">Vista</span>
+        <span class="pr-alternar"><span class="es-activo">Compacta</span><span>Cómoda</span></span>
+      </div>
+
+      <div class="pr-tabla" id="tabla">
+        <div class="pr-tabla-cabeza"><span>N.º</span><span>Fecha</span><span>Duración</span><span>Tomas</span><span>Estado</span><span>Archivo</span><span></span><span></span></div>
+      </div>
+
+      <div class="pr-nota-propuesta">
+        <b>Qué cambia.</b> Con más de 8 clases la lista pasa sola a la vista compacta: una fila de 34 px por clase, con columnas
+        (número, fecha, duración, tomas, estado y el nombre del archivo). Entran unas 18 clases en una pantalla, y 80 se
+        recorren sin perderse. El interruptor «Compacta / Cómoda» la cambia a mano, y se recuerda. «Nueva sesión» queda arriba
+        de la lista, a la izquierda, y «Generar proyecto de Premiere» en el borde derecho, con borde y texto claros para que se
+        lea como un botón. Pasando el mouse por una fila aparecen «Abrir notas» y el menú «···».
+      </div>
+    </div>
+  </main>
+  <span class="pr-etiqueta-propuesta">PROPUESTA 3 · COMPACTA</span>
+</div>
+<script>
+  const filas = [
+    [14, '10/11 09:15', '2 h 51 min', 16, 'terminada', 'lista'], [13, '07/11 09:10', '2 h 38 min', 15, 'terminada', 'lista'],
+    [12, '05/11 09:04', '2 h 44 min', 14, 'sin releer', 'falta releer'], [11, '03/11 09:00', '2 h 40 min', 13, 'terminada', 'lista'],
+    [10, '31/10 09:12', '2 h 12 min', 11, 'terminada', 'lista'], [9, '29/10 09:05', '2 h 49 min', 17, 'terminada', 'lista'],
+    [8, '27/10 09:00', '45 min', 4, 'abierta', 'quedó abierta'], [7, '24/10 09:03', '2 h 33 min', 12, 'terminada', 'lista'],
+    [6, '22/10 09:08', '2 h 41 min', 15, 'terminada', 'lista'], [5, '20/10 09:02', '2 h 29 min', 13, 'terminada', 'lista'],
+    [4, '17/10 09:11', '2 h 50 min', 18, 'terminada', 'lista'], [3, '15/10 09:00', '2 h 43 min', 14, 'terminada', 'lista'],
+    [2, '13/10 09:07', '1 h 30 min', 9, 'sin releer', 'falta releer'], [1, '10/10 09:00', '2 h 36 min', 12, 'terminada', 'lista']
+  ];
+  const tabla = document.getElementById('tabla');
+  filas.forEach(([n, f, d, t, estado, dice], i) => {
+    const nn = String(n).padStart(2, '0');
+    const fila = document.createElement('div');
+    fila.className = 'pr-fila-c' + (i === 2 ? ' es-hover' : '');
+    fila.innerHTML = `<span class="n">${nn}</span><span>${f}</span><span>${d}</span><span>${t}</span>
+      <span class="pastilla" data-estado="${estado}">${dice}</span>
+      <span class="archivo">${nn}_curso-de-automatizaciones_2026-${f.slice(3, 5)}-${f.slice(0, 2)}_${f.slice(6).replace(':', '-')}-00</span>
+      <span class="accion">${estado === 'abierta' ? 'Reanudar' : (i === 2 ? 'Abrir notas' : '')}</span>
+      <span class="pr-mas">${i === 2 ? '···' : ''}</span>`;
+    if (i === 2) fila.insertAdjacentHTML('beforeend',
+      '<div class="pr-tip" style="left: 230px; top: 32px">Alguna toma quedó con el texto rápido del vivo. «Releer todo con el modelo grande», en el menú ···, lo arregla.</div>');
+    tabla.append(fila);
+  });
+</script>
+</body></html>
