@@ -283,8 +283,10 @@ function cerrarPanel(id) {
  * insistir con algo que la persona decidió no instalar.
  */
 async function revisarDependencias() {
+    $('.deps-cerrar').innerHTML = icono('cerrar');
     await dependencias.montar($('#deps-ajustes'));
-    await dependencias.montar($('#deps-inicio'));
+    await dependencias.montar($('#deps-faltan'), 'faltan');
+    await dependencias.montar($('#deps-hay'), 'hay');
     $('#btn-deps-todo').addEventListener('click', async () => {
         $('#btn-deps-todo').disabled = true;
         try { await dependencias.instalarTodo(); } finally { $('#btn-deps-todo').disabled = false; }
@@ -300,6 +302,12 @@ async function revisarDependencias() {
                 ? 'Se puede grabar, pero con esto la app anda mejor. Lo podés instalar ahora o después desde Ajustes.'
                 : 'Está todo.');
         $('#btn-deps-todo').hidden = !requeridas.length && !otras.length;
+        const baja = dependencias.loQueBaja();
+        $('#deps-pesa').textContent = baja.bytes ? `Baja ${gigas(baja.bytes)}: ${baja.nombres.join(' y ')}` : '';
+        const cuantas = requeridas.length + otras.length;
+        $('#deps-cuenta-faltan').textContent = cuantas;
+        $('#deps-cuenta-hay').textContent = $('#deps-hay').children.length;
+        $('#deps-grupo-faltan').hidden = !cuantas;
         // Ya no falta nada: el aviso se cierra solo.
         if (!requeridas.length && !otras.length) verPanel('telon-dependencias', false);
     });
@@ -311,6 +319,10 @@ async function revisarDependencias() {
         verPanel('telon-dependencias', true);
         pref.guardar('dependencias.avisadas', true);
     }
+}
+
+function gigas(bytes) {
+    return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1).replace('.', ',')} GB` : `${Math.round(bytes / 1e6)} MB`;
 }
 
 /**

@@ -13,8 +13,13 @@
 import { esc, avisar } from './chrome.js';
 import { icono } from './iconos.js';
 
-/** Los contenedores donde se dibuja la lista. */
-const donde = new Set();
+/** Los contenedores donde se dibuja la lista, con cuáles van en cada uno. */
+const donde = new Map();
+const CUALES = {
+    todas: () => true,
+    faltan: d => !d.esta,
+    hay: d => d.esta
+};
 let lista = [];
 /** clave → { pct, texto } de lo que se está instalando. */
 const instalando = new Map();
@@ -28,8 +33,9 @@ export function alActualizar(fn) {
     alCambiar.add(fn);
 }
 
-export async function montar(contenedor) {
-    donde.add(contenedor);
+/** `cuales`: todas, las que faltan o las que hay. */
+export async function montar(contenedor, cuales = 'todas') {
+    donde.set(contenedor, CUALES[cuales]);
     if (!escuchando && window.nt.onDependenciasProgreso) {
         escuchando = true;
         window.nt.onDependenciasProgreso(p => {
@@ -55,8 +61,7 @@ export function faltan() {
 }
 
 function pintar() {
-    const html = lista.map(fila).join('');
-    for (const c of donde) c.innerHTML = html;
+    for (const [c, entra] of donde) c.innerHTML = lista.filter(entra).map(fila).join('');
 }
 
 function fila(d) {
@@ -64,9 +69,10 @@ function fila(d) {
     const r = resultado.get(d.clave);
     const listo = d.esta ? 'si' : (d.requerida ? 'mal' : 'no');
     const marca = d.esta ? 'ok' : (d.requerida ? 'error' : 'atencion');
+    const peso = d.accion && d.accion.peso ? ` · ${esc(d.accion.peso)}` : '';
     const pastilla = d.esta
         ? '<span class="pastilla" data-estado="listo">está</span>'
-        : `<span class="pastilla" data-estado="${d.requerida ? 'falta' : 'modelo liviano'}">${d.requerida ? 'falta' : 'recomendado'}</span>`;
+        : `<span class="pastilla" data-estado="${d.requerida ? 'falta' : 'modelo liviano'}">${d.requerida ? 'imprescindible' : 'recomendado'}${peso}</span>`;
 
     let accion = '';
     if (enCurso) {
@@ -75,7 +81,7 @@ function fila(d) {
                    title="Dejar de bajar ${esc(d.nombre)}. Lo bajado hasta acá se borra.">Cancelar</button>`
             : '';
     } else if (!d.esta && d.accion && d.accion.etiqueta) {
-        // Secundario: la acción principal del aviso es «Instalar lo que falta».
+        // Secundario: la acción principal del aviso es «Instalar dependencias».
         accion = `<button class="btn" type="button"
                     data-instalar="${esc(d.clave)}"
                     title="Bajar ${esc(d.nombre)} y dejarlo donde la app lo busca. Se baja una sola vez.">${esc(d.accion.etiqueta)}</button>`;
@@ -145,7 +151,17 @@ export async function instalarUna(clave) {
 export async function instalarTodo() {
     const orden = [...lista].sort((a, b) => Number(b.requerida) - Number(a.requerida));
     for (const d of orden) {
-        if (d.esta || !d.accion || !['descargar', 'brew', 'compilar'].includes(d.accion.tipo)) continue;
+        if (!seInstalaSola(d)) continue;
         await instalarUna(d.clave);
     }
+}
+
+function seInstalaSola(d) {
+    return !d.esta && d.accion && ['descargar', 'brew', 'compilar'].includes(d.accion.tipo);
+}
+
+/** Lo que bajaría «Instalar dependencias»: los modelos que faltan, con su peso. */
+export function loQueBaja() {
+    const modelos = lista.filter(d => seInstalaSola(d) && d.accion.bytes);
+    return { bytes: modelos.reduce((t, d) => t + d.accion.bytes, 0), nombres: modelos.map(d => d.nombre) };
 }

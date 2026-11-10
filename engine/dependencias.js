@@ -157,7 +157,7 @@ function encontrada(d) {
 function accionDe(d) {
     if (d.modelo) {
         const m = MODELOS[d.modelo];
-        return { tipo: 'descargar', etiqueta: `Descargar (${mega(m.bytes)})` };
+        return { tipo: 'descargar', etiqueta: `Descargar (${mega(m.bytes)})`, bytes: m.bytes, peso: mega(m.bytes) };
     }
     if (d.brew) {
         return brew()

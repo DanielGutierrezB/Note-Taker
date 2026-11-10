@@ -377,3 +377,93 @@
 .aj-version-dice[data-estado='lista'] {
   color: var(--accent);
 }
+
+/* El aviso de lo que falta: lo que hay que hacer, arriba y en el centro; lo que
+   falta, abierto; lo instalado, plegado, para quien quiera mirarlo. */
+.panel.es-deps {
+  width: min(640px, 100%);
+}
+
+.deps-cabeza {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-6) var(--sp-6) var(--sp-5);
+  text-align: center;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.deps-cerrar {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+}
+
+.deps-titulo {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.deps-dice {
+  max-width: 50ch;
+  margin: 0 0 var(--sp-3);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.deps-cuerpo {
+  gap: var(--sp-3);
+}
+
+.deps-grupo > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.deps-grupo > summary::-webkit-details-marker {
+  display: none;
+}
+
+.deps-grupo > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-right: var(--sp-1);
+  border-right: 1.5px solid var(--text-muted);
+  border-bottom: 1.5px solid var(--text-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+
+.deps-grupo[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.deps-cuenta {
+  min-width: 18px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 999px;
+}
+
+.deps-cuenta.es-falta {
+  color: var(--on-error);
+  background: var(--error);
+}
+
+.deps-cuenta.es-ok {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+}

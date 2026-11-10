@@ -111,8 +111,8 @@ const progresoUpdate = [];
 const listaUpdate = [];
 let oyenteDependencias = null;
 const DEPENDENCIAS = [
-    ['modelo-grande', 'Modelo de Whisper (large-v3-turbo)', 'Relee cada toma cerrada y escribe el texto que va al XML. También es el que oye el texto en vivo.', true, 'Descargar (1,6 GB)'],
-    ['modelo-liviano', 'Modelo liviano (small)', 'El respaldo: si el grande se cae a mitad de una toma, se relee con este.', false, 'Descargar (488 MB)'],
+    ['modelo-grande', 'Modelo de Whisper (large-v3-turbo)', 'Relee cada toma cerrada y escribe el texto que va al XML. También es el que oye el texto en vivo.', true, 'Descargar (1,6 GB)', 1624555275, '1,6 GB'],
+    ['modelo-liviano', 'Modelo liviano (small)', 'El respaldo: si el grande se cae a mitad de una toma, se relee con este.', false, 'Descargar (488 MB)', 487601967, '488 MB'],
     ['ffmpeg', 'ffmpeg', 'Corta el audio grabado en los pedazos que se le pasan a Whisper.', true, null],
     ['ffprobe', 'ffprobe', 'Lee cuánto dura y cómo está hecho un audio.', true, null],
     ['whisper-cli', 'whisper-cli', 'Transcribe: sin él no se oye el conteo, ni la pausa, ni hay texto.', true, null],
@@ -120,10 +120,10 @@ const DEPENDENCIAS = [
     ['escuchar-app', 'Escucha de Zoom', 'Graba el sonido de la llamada de Zoom directo.', false, null]
 ];
 const faltanModelos = new URLSearchParams(location.search).get('e') === 'faltan-modelos';
-const dependencias = DEPENDENCIAS.map(([clave, nombre, para, requerida, etiqueta]) => {
+const dependencias = DEPENDENCIAS.map(([clave, nombre, para, requerida, etiqueta, bytes, peso]) => {
     const esta = !(faltanModelos && etiqueta);
     return { clave, nombre, para, requerida, esta, donde: esta ? '/Applications/Note Taker.app' : null,
-        accion: esta ? null : { tipo: 'descargar', etiqueta } };
+        accion: esta ? null : { tipo: 'descargar', etiqueta, bytes, peso } };
 });
 
 /** El oyente del sonido de Zoom, para poder mandarle nivel desde `conAudio`. */

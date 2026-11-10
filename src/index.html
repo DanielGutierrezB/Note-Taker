@@ -452,22 +452,29 @@
      instalador publicado no trae los modelos (pesan más que el tope de un
      archivo en GitHub), y sin ellos no se puede grabar. -->
 <div class="telon" id="telon-dependencias">
-  <div class="panel">
-    <div class="panel-cabeza">
-      <span class="v1" id="deps-titulo">Antes de empezar</span>
-      <span class="crece"></span>
-      <button class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-dependencias"
+  <div class="panel es-deps">
+    <div class="deps-cabeza">
+      <button class="btn btn-tenue btn-ico deps-cerrar" type="button" data-cerrar="telon-dependencias"
               title="Cerrar sin instalar nada. Lo que falta se puede instalar después, desde Ajustes."></button>
+      <h2 class="deps-titulo" id="deps-titulo">Antes de empezar</h2>
+      <p class="deps-dice" id="deps-dice"></p>
+      <button id="btn-deps-todo" class="btn btn-primario btn-grande" type="button"
+              title="Bajar e instalar todo lo que falta, uno detrás del otro. Los modelos se bajan una sola vez.">Instalar dependencias</button>
+      <span class="v3" id="deps-pesa"></span>
     </div>
-    <div class="panel-cuerpo">
-      <p class="v2" id="deps-dice"></p>
-      <div id="deps-inicio"></div>
+    <div class="panel-cuerpo deps-cuerpo">
+      <details class="deps-grupo" id="deps-grupo-faltan" open>
+        <summary>Dependencias que faltan <span class="deps-cuenta es-falta" id="deps-cuenta-faltan"></span></summary>
+        <div id="deps-faltan"></div>
+      </details>
+      <details class="deps-grupo" id="deps-grupo-hay">
+        <summary>Dependencias instaladas <span class="deps-cuenta es-ok" id="deps-cuenta-hay"></span></summary>
+        <div id="deps-hay"></div>
+      </details>
     </div>
     <div class="panel-pie">
       <button class="btn btn-tenue" type="button" data-cerrar="telon-dependencias"
               title="Cerrar sin instalar nada. Lo que falta se puede instalar después, desde Ajustes.">Ahora no</button>
-      <button id="btn-deps-todo" class="btn btn-primario" type="button"
-              title="Bajar e instalar todo lo que falta, uno detrás del otro. Los modelos se bajan una sola vez.">Instalar lo que falta</button>
     </div>
   </div>
 </div>
