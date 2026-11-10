@@ -698,7 +698,6 @@
 .pp-muestra {
   width: 18px;
   height: 10px;
-  background: linear-gradient(90deg, #d22c36 0 33%, #e96f24 33% 66%, #3b82f6 66%);
   border-radius: 2px;
 }
 

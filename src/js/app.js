@@ -395,6 +395,7 @@ function conectarAjustes() {
     glosario.conectar();
     ajustesEntrada.conectar(app);
     // Cambiar el tema repinta lo que tiene colores de vista y está a la vista.
+    // Los paneles no: tapan la barra del tema, y se pintan al abrirse.
     tema.conectar(() => { vivo.repintar(); cierre.repintar(); });
     $('#aj-camara-buscar').innerHTML = icono('regenerar');
     $('#aj-camara-buscar').addEventListener('click', () => pintarCamaras(true));

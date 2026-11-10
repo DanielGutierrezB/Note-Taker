@@ -28,7 +28,7 @@
 
 import { $, esc, avisar, verPanel } from './chrome.js';
 import { icono } from './iconos.js';
-import { estiloDeVista } from './colores.js';
+import { estiloDeVista, coloresDeVista } from './colores.js';
 import { duracion } from './formato.js';
 
 /** El tope de capturas del menú: más que esto no es una clase, es un estudio. */
@@ -96,7 +96,17 @@ export async function abrir(laCarpeta) {
     verPanel('telon-prproj', true);
 }
 
+/** La muestra de la leyenda, con los colores de las primeras vistas y no unos fijos. */
+function pintarMuestra() {
+    const colores = vistas.slice(0, 3).map(v => coloresDeVista(vistas, v.nombre).color);
+    const paso = 100 / colores.length;
+    $('#prproj-muestra').style.background = colores.length
+        ? `linear-gradient(90deg, ${colores.map((c, i) => `${c} ${i * paso}% ${(i + 1) * paso}%`).join(', ')})`
+        : '';
+}
+
 function pintar() {
+    pintarMuestra();
     const ids = Array.from({ length: config.capturas }, (_, i) => i + 1);
     $('#prproj-capturas').innerHTML = ids.map(id => `
         <span class="prproj-captura">Captura ${id}${id > 1 && id === config.capturas

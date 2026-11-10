@@ -18,8 +18,9 @@ import { $, pref } from './chrome.js';
 const LETRA_MIN = 14;
 const LETRA_MAX = 30;
 
+/** De fábrica, desde la 1.0.0, el nuevo: quien no eligió nada abre con él. */
 export function esNuevo() {
-    return pref.leer('tema', 'clasico') === 'nuevo';
+    return pref.leer('tema', 'nuevo') === 'nuevo';
 }
 
 export function distribucion() {
