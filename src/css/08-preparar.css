@@ -1,0 +1,124 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   8. LA LISTA DE VERIFICACIÓN DE «PREPARAR»
+
+   Cada renglón dice qué falta y ofrece el arreglo EN EL MISMO SITIO. Es lo que
+   hace la pantalla autoexplicativa: un checklist que dice «falta el
+   dispositivo» y te manda a buscarlo a otra pantalla es un checklist que hay
+   que aprender.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.check + .check {
+  margin-top: var(--sp-2);
+}
+
+.check-marca {
+  flex: 0 0 16px;
+  margin-top: 2px;
+}
+
+.check[data-listo='si'] .check-marca { color: var(--ok); }
+.check[data-listo='no'] .check-marca { color: var(--warn); }
+.check[data-listo='mal'] .check-marca { color: var(--error); }
+
+.check-texto {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.check-titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.check-dice {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+/* Una dependencia: su botón va al lado del nombre, y la barra de avance abajo. */
+.dep .check-titulo .btn {
+  flex: 0 0 auto;
+}
+
+.dep-progreso {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+
+.dep-barra {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
+.check-arreglo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+/* El medidor de nivel. Es la única cosa de la app que se mueve sola y no dice
+   una palabra, y está bien: lo que dice es «entra sonido», que es lo que el
+   renglón de al lado escribe con palabras. */
+.nivel {
+  position: relative;
+  height: 6px;
+  /* Ancho acotado: es un indicador, no un gráfico. Sin techo, en la barra de
+     la sesión se estiraba de punta a punta y se leía como una barra de
+     progreso —o sea, como si la clase tuviera un final conocido—. */
+  flex: 0 1 120px;
+  min-width: 80px;
+  max-width: 160px;
+  background: var(--bg-inset);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.nivel-barra {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--ok);
+  border-radius: 999px;
+  transition: width 80ms linear;
+}
+
+.nivel[data-pico='alto'] .nivel-barra { background: var(--warn); }
+.nivel[data-pico='clip'] .nivel-barra { background: var(--error); }
+
+/* Lo último que Whisper oyó, tal cual. Es el renglón que deja darse cuenta de
+   que está entrando el micrófono de la Mac en vez del audio del Zoom antes de
+   haber grabado media clase. Monoespaciado y en inset: se lee como una cita de
+   la máquina y no como texto de la app. */
+.oyendo {
+  padding: var(--sp-3);
+  background: var(--bg-inset);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  min-height: 46px;
+  user-select: text;
+  -webkit-user-select: text;
+}

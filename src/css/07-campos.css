@@ -1,0 +1,126 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   7. CAMPOS
+
+   El borde es lo único que dice que ahí se escribe, así que va a
+   `--border-field` (3.37:1) y no a la hairline decorativa: WCAG 1.4.11.
+   ────────────────────────────────────────────────────────────────────────── */
+
+input[type='text'],
+input[type='number'],
+select,
+textarea {
+  width: 100%;
+  min-height: var(--row);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-field);
+  border-radius: var(--radius-sm);
+}
+
+textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+select {
+  appearance: none;
+  padding-right: var(--sp-6);
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%),
+    linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%);
+  background-position: right 14px center, right 9px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.campo-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+
+/* Las frases que oye la app (Ajustes). Cada frase es una ficha con su ×. */
+.frases-cuenta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.frases-cuenta input {
+  accent-color: var(--accent);
+}
+
+.frases-lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.frases-fichas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.ficha {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--row-xs);
+  padding: 0 var(--sp-1) 0 var(--sp-3);
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+.ficha-vista {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ficha-quitar {
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.ficha-quitar:hover,
+.ficha-quitar:focus-visible {
+  color: var(--text-primary);
+  background: var(--layer-hover);
+}
+
+.frases-elige-vista {
+  width: auto;
+  flex: none;
+}
+
+.glosario-dice[data-falta='si'] {
+  color: var(--warn);
+}

@@ -1,0 +1,170 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   2. TIPOGRAFÍA — tres tamaños, tres pesos
+
+   La escala es 13 / 12 / 11 px y NO es una escala modular: en listas densas el
+   rango útil da tres pasos de 1 px y un paso de 1 px no se lee. Los tres son
+   además los tres del escritorio de Apple —Body 13/16, Callout 12/15,
+   Subheadline 11/14— y el 12 es el `label-01` de Carbon.
+
+   NADA POR DEBAJO DE 11: la densidad se consigue recortando padding y no texto
+   («Higher density is typically applied by decreasing the top and bottom
+   padding»; «Text size shouldn't change as the container size scales»).
+
+   Pesos: 400 / 500 / 600. Sin 300 (los trazos finos se adelgazan todavía más
+   sobre fondo oscuro) y sin 700.
+   ────────────────────────────────────────────────────────────────────────── */
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Los tres niveles de voz ──────────────────────────────────────────────
+   Nivel 1 — IDENTIDAD DE FILA: lo que buscás cuando escaneás. 13 / 600 /
+     --text-primary. Uno solo por fila.
+   Nivel 2 — ESTADO Y DATO: lo que te dice qué pasó. 12 / 500 / color semántico
+     o --text-secondary. Uno por fila, siempre en la misma columna.
+   Nivel 3 — METADATO: lo que confirmás después. 11 / 400 / --text-muted. */
+
+.v1 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.v2 {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.v3 {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* Los DOS elementos grandes de toda la app, y no hay un tercero.
+   El timecode se mira de lejos mientras se toma nota; el estado de la toma
+   abierta es lo único que hay que poder confirmar sin apartar la vista del
+   profesor. */
+.grande-tc {
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.grande-estado {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+/* Números tabulares en todo lo que se lee en columna. Material,
+   «Similarity»: los elementos que representan lo mismo se alinean igual. Sin
+   esto el ancho de cada dígito cambia y la columna baila mientras el
+   cronómetro corre. */
+.tc,
+.num,
+.fila-toma time,
+.ses-dato {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* El número de clase de una sesión mientras se lo cambia: el campo del número
+   y, al lado y fijo, el resto del nombre, que no se toca. Cabe en el renglón de
+   32 px, así que el campo es de 24 y no del alto de un formulario. */
+.ses-renombre {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* Estrecho porque lo que entra son dos dígitos: un campo de 180 px para
+   escribir «04» decía que ahí iba un nombre, que es lo que antes iba. */
+.ses-renombre input[type='number'] {
+  width: 84px;
+  min-height: 24px;
+  height: 24px;
+  padding: 0 var(--sp-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* El número de la lista de verificación, que sí está en un formulario y va del
+   alto de los demás campos de esa pantalla. Su rótulo no se parte en dos
+   líneas: «Número de / clase» hacía que el renglón midiera distinto que los
+   otros cuatro y la lista dejaba de leerse como una lista. */
+.prep-numero {
+  width: 88px;
+  font-variant-numeric: tabular-nums;
+}
+
+.check-arreglo .campo-fila > .v2 {
+  white-space: nowrap;
+}
+
+.ses-base {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Mientras se renombra, la fila es solo eso: los datos se apartan porque la
+   fecha ya está en el nombre, y las otras acciones también, porque a 900 px no
+   caben al lado del campo y porque «borrar» no tiene nada que hacer al lado de
+   algo que se está escribiendo. Queda el lápiz, que es el que cancela. */
+.fila.es-renombrando .ses-dato,
+.fila.es-renombrando .pastilla,
+.fila.es-renombrando > .btn:not([data-hace='renombrar']) {
+  display: none;
+}
+
+.tc {
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+}
+
+/* Sin tracking. Un 0.1em en un rótulo de 11 px es tracking de display aplicado
+   a un caption: ensancha la palabra 1 px por letra. El HIG lo dice al revés y
+   bien: la fuente del sistema ajusta el tracking dinámicamente en cada tamaño. */
+button,
+input,
+select,
+textarea,
+label,
+.rotulo {
+  letter-spacing: 0;
+  font-family: inherit;
+}
+
+/* Cero MAYÚSCULAS. Un rótulo en versalitas es más lento de leer y no agrega
+   jerarquía que el peso no dé. */
+.rotulo {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: none;
+}
+
+strong,
+b {
+  font-weight: 600;
+}

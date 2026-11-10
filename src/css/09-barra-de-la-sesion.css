@@ -1,0 +1,277 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   9. LA BARRA DE LA SESIÓN (En vivo)
+
+   Es el cromo que se mira sin apartar la vista del profesor, así que lleva los
+   dos elementos grandes de la app y nada más que lo que se consulta con la
+   clase corriendo: el timecode, el estado y cuántas tomas.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.barra-sesion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+  padding: var(--sp-3) var(--sp-5) var(--sp-2);
+  background: var(--bg-inset);
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* A 16 px, y a 12 en lo angosto (abajo): al ancho mínimo de la ventana (900 px)
+   la fila va al límite, y lo que cedía era el timecode —los 32 px se encogían y
+   se pintaban encima del número de al lado—. Medido con `tools/medir-botones.js`. */
+.barra-arriba {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+/* De los dos rótulos, el que cabe. Los dos están siempre en el documento y es
+   el ancho de la ventana el que decide cuál se ve: así el tooltip, el `aria` y
+   el menú son los mismos, y no hay dos maneras de dibujar lo mismo. */
+.rotulo-angosto {
+  display: none;
+}
+
+/* A 900 px, que es el ancho mínimo de la ventana, esta fila va al límite: con
+   el idioma y la cámara adentro pide 145 px más de los que hay. Lo que cede es
+   el aire entre bloques —hay once huecos, así que bajarlos de 12 a 4 px devuelve
+   88 px— y los dos rótulos, que pasan a su forma corta: «ES» en vez de
+   «Auto · ES», con el resto en el tooltip. Se dice en el HTML y no se recorta
+   con puntos suspensivos porque lo que importa está al final y cortar por la
+   derecha se come justamente el idioma.
+
+   Lo que NO cede es nada de lo que se lee: ni el timecode, ni el estado, ni los
+   contadores. Y la fila no se parte en dos renglones aunque entrarían: el cromo
+   fijo de esta pantalla ya está en el 20 % de la ventana, que es el tope de
+   `tools/auditar.js`. A 1180 y 1440, que es donde se graba de verdad, nada de
+   esto se aplica. */
+@media (max-width: 1100px) {
+  .barra-arriba {
+    gap: var(--sp-3);
+  }
+
+  .rotulo-ancho {
+    display: none;
+  }
+
+  .rotulo-angosto {
+    display: inline;
+  }
+
+  .nivel {
+    min-width: 32px;
+  }
+}
+
+/* Un número que se consulta, no el que ancla la pantalla. El timecode es el
+   único de 32 px; este va en el mismo escalón que el estado y los contadores,
+   porque se mira cuando uno quiere saber cuánto dura la clase cortada y no
+   treinta veces por segundo. */
+.num-consulta {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+
+/* Ninguno de los tres se encoge: son números y palabras cortas que no tienen
+   de dónde ceder, y encogidos partían «toma abierta» en dos renglones o
+   pintaban el timecode encima del de al lado. Lo que cede es el nivel, que es
+   un indicador y se sigue leyendo más angosto. */
+.barra-bloque {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 0 0 auto;
+}
+
+/* El idioma y la cámara de referencia: se consultan de reojo y se cambian ahí
+   mismo. Son botones y no pastillas porque se aprietan, y de 24 px de alto
+   porque es lo mínimo que se acierta con el mouse (`tools/medir-botones.js`).
+   Van juntos y pegados al nivel, en el extremo de la barra que no cambia
+   mientras se graba: lo de la izquierda —timecode, estado, contadores— se mira
+   seguido, y esto solo cuando algo no cuadra. */
+.rotulos-barra {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+}
+
+.rotulo-barra {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 24px;
+  max-width: 200px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.rotulo-barra:hover {
+  background: var(--layer-hover);
+  color: var(--text-primary);
+}
+
+.rotulo-barra[aria-expanded='true'] {
+  background: var(--layer-press);
+  color: var(--text-primary);
+}
+
+/* En ámbar cuando lo que dice no es lo que está pasando: el idioma puesto en
+   español y la clase sonando en inglés. No es un error —se puede estar citando
+   una frase— pero con el idioma equivocado Whisper TRADUCE la clase, así que
+   tiene que poder verse sin leer el tooltip. */
+.rotulo-barra[data-avisa='si'] {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+/* De qué es el rótulo, en metadato: «Idioma: Auto · ES». El dato es lo que se
+   lee de reojo, así que la palabra va un escalón más atrás y no compite.
+
+   Solo con la ventana ancha. Debajo de 1200 px la fila no tiene lugar para dos
+   palabras más —a 900 px no tiene ni uno— y de qué es cada rótulo lo dice el
+   icono, que está siempre. Medido: a 1180 px sobran 95 px en la fila y las dos
+   palabras piden más que eso. */
+.rotulo-que {
+  display: none;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+@media (min-width: 1200px) {
+  .rotulo-que {
+    display: inline;
+  }
+}
+
+.contadores {
+  display: flex;
+  gap: var(--sp-5);
+}
+
+.contador {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.contador-num {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+/* Los atajos, debajo del timecode.
+   Están escritos y a la vista en vez de estar en una ayuda —son cinco y se usan
+   con el profesor hablando— y son botones: la misma cosa se hace con la tecla o
+   con el mouse, sin tener que acordarse de cuál era. Estaban en un pie, al otro
+   extremo de la pantalla, o sea lejos de donde se mira. */
+.atajos {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+}
+
+.atajo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+  min-height: 24px;
+  padding: 0 var(--sp-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--ease);
+}
+
+.atajo:hover:not(:disabled) {
+  background: var(--layer-hover);
+  color: var(--text-secondary);
+}
+
+.atajo:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.atajo:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* La vista elegida, rellena de su color: es el mismo lenguaje que el selector
+   de la toma (`.btn-vista`), así que se lee sin aprender nada nuevo. */
+.atajo-vistas {
+  display: inline-flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+/* Sobre qué toma caen las vistas. Pegado a los botones y en tono secundario:
+   no es un atajo, es el sujeto de la frase que los botones completan. */
+.atajo-vistas-de {
+  flex: 0 0 auto;
+  margin-left: var(--sp-2);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.atajo-vistas .atajo {
+  box-shadow: inset 0 -2px 0 var(--vista);
+}
+
+.atajo-vistas .atajo.es-elegida {
+  background: var(--vista);
+  color: var(--vista-tinta);
+  box-shadow: none;
+}
+
+/* La ruta del XML es lo último que cede: los atajos hay que poder leerlos, la
+   ruta se puede recortar y sigue diciendo de qué carpeta es. */
+#vivo-donde {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 11 px y no 10: el piso vale también para la tecla dibujada, que es texto que
+   hay que poder leer de reojo con el profesor hablando. La densidad se
+   consigue recortando el padding, no el texto. */
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--sp-2);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+}

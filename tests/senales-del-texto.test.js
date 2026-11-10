@@ -20,6 +20,7 @@
  */
 
 const fs = require('fs');
+const cssEntero = require('./fixtures/css');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
@@ -220,7 +221,7 @@ module.exports = async t => {
     });
 
     t.test('el estilo no toca la geometría ni pisa los colores de vista', () => {
-        const css = leer('src', 'css', 'style.css');
+        const css = cssEntero();
         const desde = css.indexOf(".transcript .palabra[data-senal] {");
         t.ok(desde > 0, 'la regla existe');
         const bloque = css.slice(desde, css.indexOf('}', css.indexOf("[data-senal='pausa-corta']")));

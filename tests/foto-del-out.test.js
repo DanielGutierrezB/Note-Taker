@@ -15,6 +15,7 @@
  */
 
 const fs = require('fs');
+const cssEntero = require('./fixtures/css');
 const path = require('path');
 
 const RAIZ = path.join(__dirname, '..');
@@ -227,7 +228,7 @@ module.exports = function (t) {
 
     t.test('el visor la puede ver al 100 %, y el que se desplaza es el marco', () => {
         const panel = leer('src', 'js', 'panel-foto.js');
-        const css = leer('src', 'css', 'style.css');
+        const css = cssEntero();
         t.ok(/btn-foto-zoom/.test(html), 'el botón');
         t.ok(/function cien\(/.test(panel), 'y quien lo atiende');
         t.ok(/cien\(false\)/.test(panel), 'cada foto se abre entera');

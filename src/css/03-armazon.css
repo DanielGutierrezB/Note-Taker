@@ -1,0 +1,94 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   3. EL ARMAZÓN: cromo fijo y contenido
+
+   La barra de arriba mide 48 px y es lo único fijo en Sesiones y en Cierre. En
+   En vivo hay una barra más —la de la sesión, 64 px— y ese es el techo: 112 px
+   de 840 son el 13 %, por debajo del 20 % que el criterio de aceptación pone.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: 48px;
+  flex: 0 0 48px;
+  /* 96 px a la izquierda es donde terminan los semáforos de macOS con
+     `titleBarStyle: hiddenInset`. */
+  padding: 0 var(--sp-5) 0 96px;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--hairline);
+  -webkit-app-region: drag;
+}
+
+.topbar button,
+.topbar select,
+.topbar input {
+  -webkit-app-region: no-drag;
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* La versión, en el tercer nivel de texto: está para poder decirla, no para
+   leerla. El botón de actualizar que aparece al lado es el que tiene que
+   llamar la atención. */
+.version {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.marca .hp-ico {
+  color: var(--accent);
+}
+
+.crece {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.vista {
+  display: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.vista.es-activa {
+  display: flex;
+}
+
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--sp-5);
+}
+
+/* Un interruptor: un botón que se queda apretado. Apretado lleva el recuadro
+   encendido, que es como esta app dice "elegido" (ver `.fila.es-elegida`), y no
+   el acento, que es de la acción principal. */
+.btn-interruptor[aria-pressed='true'] {
+  border-color: var(--border-field);
+  color: var(--text-primary);
+}
+
+/* Compacto: fuera lo gris de alrededor de cada toma. El campo de espera no,
+   porque ahí TODO es gris: es lo que se oye sin toma. */
+.es-compacto .transcript:not(.es-inactiva) .es-orilla {
+  display: none;
+}

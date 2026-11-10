@@ -1,0 +1,127 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   4. ACCIONES — el rectángulo con borde, y una sola primaria por pantalla
+   ────────────────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: var(--row-xs);
+  min-width: var(--target-min);
+  /* Un botón NUNCA se encoge. Es el orden de prioridad de toda la app escrito
+     en una línea: cuando el ancho aprieta, lo que cede es el nombre y la nota
+     —que recortan con puntos suspensivos y se siguen entendiendo— y no el
+     control, que encogido pinta su etiqueta afuera de su caja y se ve igual
+     que uno sano. Medido con `tools/medir-botones.js` a 900 px. */
+  flex: 0 0 auto;
+  padding: var(--sp-2) var(--sp-4);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--ease), border-color var(--ease);
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--bg-surface-hover);
+}
+
+.btn:active:not(:disabled) {
+  background: var(--layer-press);
+}
+
+.btn:disabled {
+  opacity: 0.38;              /* Material, disabled state */
+  cursor: not-allowed;
+}
+
+/* La acción principal de la pantalla. UNA por pantalla: es uno de los tres
+   usos del acento, y con dos ninguna de las dos dice «acá». */
+.btn-primario {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.btn-primario:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* Sin relleno ni borde, para lo que acompaña. Sigue siendo un rectángulo: lo
+   que lo separa de una pastilla es que no tiene radio de píldora. */
+.btn-tenue {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-tenue:hover:not(:disabled) {
+  background: var(--layer-hover);
+  color: var(--text-primary);
+}
+
+/* Destructiva: borra archivos del disco. El rojo va en el TEXTO y el borde, no
+   en el relleno: un botón rojo lleno al lado del primario pelea por la
+   atención, y esto no es la acción principal de ninguna pantalla. */
+.btn-peligro {
+  color: var(--error);
+  border-color: rgba(255, 138, 138, 0.35);
+}
+
+.btn-peligro:hover:not(:disabled) {
+  background: rgba(255, 138, 138, 0.1);
+}
+
+/* El de icono solo, en una lista, se queda quieto hasta que lo tocan.
+   Con diez sesiones eran diez recuadros rojos: la lista entera se leía como
+   una advertencia, que es lo contrario de lo que es —el rojo tiene que decir
+   «esto borra» cuando la mano va para ahí, no «acá hay un problema» mientras
+   se escanea—. El color aparece con el puntero y con el foco del teclado, así
+   que se descubre por los dos caminos. */
+.btn-peligro.btn-ico {
+  color: var(--text-muted);
+  border-color: transparent;
+}
+
+.btn-peligro.btn-ico:hover:not(:disabled),
+.btn-peligro.btn-ico:focus-visible {
+  color: var(--error);
+  border-color: rgba(255, 138, 138, 0.35);
+  background: rgba(255, 138, 138, 0.1);
+}
+
+.btn-ico {
+  padding: var(--sp-2);
+  min-width: var(--row-xs);
+}
+
+.hp-ico {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+.hp-ico svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+/* El foco del teclado, que es el tercer uso del acento. Va con `:focus-visible`
+   y no con `:focus` para que un clic con el mouse no deje el anillo puesto. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

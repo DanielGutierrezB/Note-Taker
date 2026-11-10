@@ -1,0 +1,136 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   1. LOS TOKENS
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Superficies: CUATRO, y se leen como niveles ───────────────────────
+     En oscuro la separación por tono es un canal pobre, así que el ramal se
+     abre lo que aguanta (surface/base = 1.157, overlay/base = 1.325) y el
+     agrupamiento se apoya en espacio y hairlines, que es lo que Material llama
+     «explicit grouping: outlines, dividers and shadows». */
+  --bg-base: #0f1115;          /* el lienzo y todo el cromo fijo */
+  --bg-surface: #1c2027;       /* filas, tarjetas, chips */
+  --bg-surface-hover: #22272f;
+  --bg-inset: #090a0d;         /* campos de texto, el transcript, la barra */
+  --bg-overlay: #252b33;       /* Ajustes, Diagnóstico, los menús */
+
+  /* ── Texto: TRES niveles, y el tercero es el piso ──────────────────────
+     NN/g: «Use no more than 3 contrast variations for complex designs. If
+     everything is contrasted, then nothing stands out.» Los tres, medidos
+     contra las cuatro superficies (peor caso) con `tools/contrastes.js`:
+       primary 12.13:1 · secondary 6.71:1 · muted 4.83:1
+     No hay un cuarto nivel, y `--text-muted` NO es "el que casi no se ve": es
+     el tercer nivel y pasa AA. */
+  --text-primary: #e9edf2;
+  --text-secondary: #a8b3c1;
+  --text-muted: #8e97a3;
+
+  /* ── Estados: tres tonos, y el cuarto canal es la FORMA ────────────────
+     Verde «listo», ámbar «atención», rojo «error». Los tres pasan 4.5:1 sobre
+     las cuatro superficies.
+
+     Y NO hay un cuarto tono, a propósito: cuatro matices en el arco 0°–150° no
+     se distinguen de forma confiable a 11-13 px —y menos con deuteranopía,
+     donde rojo, naranja y ámbar colapsan—. WCAG 1.4.1 pide justamente no
+     depender del color solo. Así que la separación real la hace la FORMA: los
+     estados son pastillas de texto, las acciones son botones con borde. */
+  --ok: #3ed890;
+  --warn: #f5b43c;
+  --error: #ff8a8a;
+
+  /* ── El acento, con UN significado ─────────────────────────────────────
+     «Acá va tu atención ahora». Tres usos y ni uno más: el foco del teclado, la
+     acción principal de la pantalla y lo que está corriendo (la toma abierta,
+     la relectura en vuelo, «Profesor Preview» encendido; apagado va teñido,
+     que es lo mismo todavía sin encender). El hover es una capa de superficie, no un cambio
+     de color: pintar de acento cada cosa por la que pasa el mouse convierte
+     cualquier movimiento del puntero en un semáforo. */
+  --accent: #7ab4ff;
+  --accent-hover: #8ec0ff;
+  --accent-8: rgba(122, 180, 255, 0.08);
+  --accent-14: rgba(122, 180, 255, 0.14);
+
+  /* Las capas de estado, de Material («State layers»: hover +8 %, press +12 %). */
+  --layer-hover: rgba(255, 255, 255, 0.08);
+  --layer-press: rgba(255, 255, 255, 0.12);
+
+  /* Las tintas que van ENCIMA de un relleno de color. Son cuatro y no una
+     porque cada una se calcula contra su propio fondo: un mismo gris oscuro
+     daría 4:1 sobre uno y 9:1 sobre otro. */
+  --on-accent: #0a1220;
+  --on-ok: #06180f;
+  --on-warn: #2a1e00;
+  --on-error: #330909;
+
+  /* ── Líneas: dos, y una sola pide 3:1 ──────────────────────────────────
+     WCAG 1.4.11 pide 3:1 para «visual information required to identify user
+     interface components and states», y el propio documento aclara que un
+     botón CON etiqueta no necesita borde para identificarse. Un campo de texto
+     vacío, en cambio, no tiene nada más que su borde. Entonces:
+     `--border-field` (campos, desplegables, anillo de foco, seleccionado) a
+     3.37:1 medido; `--hairline` (divisores, bordes de tarjeta y de botón)
+     decorativa, a 1.44:1. Poner TODO a 3:1 haría que la retícula compitiera
+     con el contenido. */
+  --hairline: #2b3138;
+  --border-field: #737c86;
+
+  /* ── Retícula de 4 px ──────────────────────────────────────────────────
+     Material: «Padding… is measured in increments of 8dp or 4dp». Carbon:
+     «multiples of two, four, and eight». Seis valores, y lo que se escriba de
+     acá en adelante sale de la lista. */
+  --sp-1: 2px;
+  --sp-2: 4px;
+  --sp-3: 8px;
+  --sp-4: 12px;
+  --sp-5: 16px;
+  --sp-6: 24px;
+
+  /* ── Alto de fila ──────────────────────────────────────────────────────
+     32 px, y tiene DOS derivaciones independientes que dan el mismo número:
+     · es el `sm` de la escala de filas de Carbon (xs 24 / sm 32 / md 40), la
+       que usan sus tablas de datos;
+     · es la fila más chica que puede contener un control que cumpla WCAG 2.2
+       SC 2.5.8 (24×24 px) con 4 px de aire arriba y abajo.
+     Es el alto de una fila de toma plegada, que es la que se repite veinte
+     veces en una clase. */
+  --row: 32px;
+  --row-xs: 24px;
+  --target-min: 24px;          /* SC 2.5.8, AA */
+
+  /* ── Radios: tres, por función ─────────────────────────────────────────
+     4 px para controles (un radio de 6 en un botón de 24 px de alto es el 25 %
+     de su altura y se lee blando), 6 px para contenedores, y 999 px para las
+     pastillas de estado, que es la forma que las distingue de las acciones. */
+  --radius: 6px;               /* contenedores */
+  --radius-sm: 4px;            /* controles */
+
+  --ease: 120ms ease-out;      /* Doherty: por debajo de 400 ms la UI no espera */
+
+  /* En oscuro, una sombra negra sobre una superficie casi negra es puro costo.
+     Queda la fuerte, y solo donde de verdad separa algo: los paneles flotantes. */
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(0, 0, 0, 0.5);
+
+  /* Las cinco vistas NO tienen color acá: cada bloque lo recibe en `--vista`
+     desde `colorDeMarcador`, que es el mismo entero que va al XML
+     (`src/js/colores.js`). Así la toma se ve en la pantalla del color con el
+     que va a llegar su marcador a Premiere. */
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* `[hidden]` gana siempre. Sin esto, cualquier regla con `display` lo pisa —los
+   botones son `inline-flex`— y un elemento escondido se sigue viendo. Es un
+   error que no da ningún síntoma al escribirlo: la propiedad se pone bien y el
+   elemento queda ahí. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+}

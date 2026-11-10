@@ -1,0 +1,252 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   11. PANELES FLOTANTES (Ajustes, Diagnóstico)
+   ────────────────────────────────────────────────────────────────────────── */
+
+.telon {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6);
+  z-index: 40;
+}
+
+.telon.es-activa {
+  display: flex;
+}
+
+.panel {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--bg-overlay);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+}
+
+.panel-cabeza {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.panel-cuerpo {
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.panel-pie {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-top: 1px solid var(--hairline);
+}
+
+/* Dos paneles crecen hasta donde la ventana deja: el visor de la foto, donde lo
+   que hay que ver es la imagen, y el menú del .prproj, donde una vista de seis
+   capturas es una fila larga.
+
+   El texto no crece con ellos. Una línea de 980 px son unos 160 caracteres y a
+   esa medida el ojo pierde el renglón al volver; los párrafos se quedan en la
+   medida de lectura y lo ancho lo aprovechan las filas. */
+.panel.es-ancho {
+  width: min(980px, 100%);
+}
+
+.panel.es-ancho .panel-cuerpo > p,
+.panel.es-ancho .campo > p {
+  max-width: 74ch;
+}
+
+/* El menú de «Generar .prproj». Las capturas son pastillas en fila con
+   «Agregar» al final; cada vista es un renglón de 32 px con su sigla del color
+   de la vista —la misma que en la pantalla de la clase— y un botón por captura,
+   del mismo estilo que los de elegir vista, porque es el mismo gesto. */
+.prproj-capturas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.prproj-captura {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: 32px;
+  padding: 0 var(--sp-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+.prproj-captura .btn-ico {
+  margin-right: calc(-1 * var(--sp-2));
+}
+
+.prproj-vistas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.prproj-vista {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  min-height: 32px;
+}
+
+.prproj-sigla {
+  min-width: 32px;
+  padding: 2px var(--sp-2);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--vista-tinta);
+  background: var(--vista);
+  border-radius: var(--radius-sm);
+}
+
+.prproj-titulo {
+  width: 120px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.prproj-vista.es-sin-tomas .prproj-titulo {
+  color: var(--text-secondary);
+}
+
+/* Las cajitas de una vista envuelven en vez de empujar el panel.
+
+   Con seis capturas encendidas la fila mide más que la ventana, y sin esto el
+   panel entero crecía detrás del borde de la pantalla: quedaba una barra de
+   desplazamiento horizontal y las siglas de las vistas sin poder verse. Al
+   envolver, lo que crece es el alto, que es por donde el panel ya sabe
+   desplazarse. */
+.prproj-elige {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-1);
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.prproj-elige .btn-vista {
+  min-width: 32px;
+  justify-content: center;
+}
+
+/* La pila de una vista: de izquierda a derecha, de abajo hacia arriba.
+
+   El recuadro no es decoración: es lo único que dice si las capturas van juntas
+   adentro de una anidación, así que lleva el borde de los controles (3:1, SC
+   1.4.11) y no la hairline. El hueco de 3 px se reserva siempre, encendido o
+   no, para que al anidar no se muevan las cajitas de al lado. */
+.prproj-pila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.prproj-pila.es-anidada {
+  border-color: var(--border-field);
+  background: var(--layer-hover);
+}
+
+/* Dónde termina la pila y empiezan las capturas que esta vista no usa. */
+.prproj-corte {
+  width: 1px;
+  height: 16px;
+  margin: 0 var(--sp-1);
+  background: var(--hairline);
+}
+
+/* El número y su palabra son una sola cajita: se arrastra del número, pero
+   soltar encima de la palabra cuenta igual, porque visualmente son lo mismo.
+
+   Por eso el hueco de adentro es menor que el de afuera: con el mismo hueco en
+   los dos lados, «solo X2» parecía la palabra de la captura siguiente. */
+.prproj-caja {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.prproj-pila:not(.es-anidada) {
+  gap: var(--sp-3);
+}
+
+.prproj-elige .btn-vista[draggable="true"] {
+  cursor: grab;
+}
+
+.prproj-elige .se-arrastra {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.prproj-une svg {
+  width: 15px;
+  height: 15px;
+}
+
+.prproj-une[aria-pressed="true"] {
+  color: var(--text-primary);
+}
+
+/* «en todas» / «solo PV»: la palabra que dice dónde está esa captura.
+
+   Va en minúscula y chica, a la altura de la cajita: es un dato de la captura
+   que tiene al lado, no un control de la fila. Los dos estados valen lo mismo
+   —ninguno es «apagado»— así que ninguno se tiñe de color; el que está puesto
+   se lee más claro, nada más. */
+.prproj-siempre {
+  height: 26px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.prproj-siempre[aria-pressed="true"] {
+  color: var(--text-primary);
+}
+
+.prproj-hecho {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  flex: 1;
+  color: var(--text-primary);
+}
+
+/* El gris apagado sobre el verde del aviso queda en 3,9:1; el secundario pasa. */
+.prproj-hecho .v3 {
+  color: var(--text-secondary);
+}
+
+.prproj-avisos {
+  margin: 0;
+  padding-left: var(--sp-4);
+  color: var(--warn);
+}

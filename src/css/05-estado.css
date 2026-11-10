@@ -1,0 +1,95 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   5. ESTADO — la guarda y la pastilla
+
+   Un canal, un significado, y la palabra siempre. `data-estado` es lo que
+   pinta las dos cosas, así que un estado nuevo se agrega en un solo sitio.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.pastilla {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 18px;
+  /* Tampoco cede: es la palabra del estado, y media palabra no dice el estado. */
+  flex: 0 0 auto;
+  padding: 0 var(--sp-3);
+  border-radius: 999px;
+  border: 0;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: rgba(168, 179, 193, 0.14);
+  color: var(--text-secondary);
+}
+
+.pastilla[data-estado='corriendo'],
+.pastilla[data-estado='abierta'],
+.pastilla[data-estado='releyendo'],
+.pastilla[data-estado='escuchando'] {
+  background: var(--accent-14);
+  color: var(--accent);
+}
+
+.pastilla[data-estado='lista'],
+.pastilla[data-estado='terminada'],
+.pastilla[data-estado='confirmada'],
+.pastilla[data-estado='entra'],
+.pastilla[data-estado='listo'] {
+  background: rgba(62, 216, 144, 0.14);
+  color: var(--ok);
+}
+
+.pastilla[data-estado='sin releer'],
+.pastilla[data-estado='por confirmar'],
+.pastilla[data-estado='sin cerrar'],
+.pastilla[data-estado='en silencio'],
+.pastilla[data-estado='modelo liviano'] {
+  background: rgba(245, 180, 60, 0.14);
+  color: var(--warn);
+}
+
+.pastilla[data-estado='sin audio'],
+.pastilla[data-estado='dispositivo perdido'],
+.pastilla[data-estado='sin confirmar'],
+.pastilla[data-estado='falta'] {
+  background: rgba(255, 138, 138, 0.14);
+  color: var(--error);
+}
+
+.pastilla[data-estado='desactivada'] {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+/* La guarda: el mismo significado que la pastilla, en el borde izquierdo de la
+   fila. Son dos canales para lo mismo a propósito — la guarda se barre con la
+   vista en una lista de veinte filas, la palabra se lee cuando hace falta. */
+.guarda {
+  border-left: 3px solid transparent;
+}
+
+.guarda[data-estado='corriendo'],
+.guarda[data-estado='abierta'],
+.guarda[data-estado='releyendo'] {
+  border-left-color: var(--accent);
+}
+
+.guarda[data-estado='lista'],
+.guarda[data-estado='terminada'],
+.guarda[data-estado='confirmada'] {
+  border-left-color: var(--ok);
+}
+
+.guarda[data-estado='sin releer'],
+.guarda[data-estado='por confirmar'],
+.guarda[data-estado='sin cerrar'] {
+  border-left-color: var(--warn);
+}
+
+.guarda[data-estado='sin audio'] {
+  border-left-color: var(--error);
+}
+
+.guarda[data-estado='desactivada'] {
+  border-left-color: var(--hairline);
+}

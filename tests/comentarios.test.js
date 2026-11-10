@@ -15,6 +15,7 @@
  */
 
 const path = require('path');
+const cssEntero = require('./fixtures/css');
 const fs = require('fs');
 
 const vivo = require('../engine/notas-vivo');
@@ -117,7 +118,7 @@ module.exports = function (t) {
         t.ok(!/dblclick/.test(codigo), 'y ya no hace falta el doble clic');
         // Con el repintado de cada segundo, los dos clics de un doble clic caen
         // en nodos distintos: grabando casi no se podía dar.
-        const css = fs.readFileSync(path.join(RAIZ, 'src', 'css', 'style.css'), 'utf8');
+        const css = cssEntero();
         const regla = css.slice(css.indexOf('.comentario-dicho {'), css.indexOf('}', css.indexOf('.comentario-dicho {')));
         t.ok(/cursor: pointer;/.test(regla), 'y se ve que se toca');
         t.ok(/min-height: var\(--row-xs\)/.test(regla),

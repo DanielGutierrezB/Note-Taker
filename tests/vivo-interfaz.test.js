@@ -10,6 +10,7 @@
  */
 
 const fs = require('fs');
+const cssEntero = require('./fixtures/css');
 const path = require('path');
 
 const RAIZ = path.join(__dirname, '..');
@@ -149,7 +150,7 @@ module.exports = function (t) {
         // preguntó al verlo. La palabra no cabe a cualquier ancho —medido, a
         // 1180 px sobran 95 px en la fila y las dos palabras piden más—, así que
         // entra a partir de 1200 px y donde no entra lo dice el icono.
-        const css = leer('src', 'css', 'style.css');
+        const css = cssEntero();
         t.ok(/\.rotulo-que \{\s*display: none;/.test(css), 'la palabra arranca escondida');
         t.ok(/@media \(min-width: 1200px\) \{\s*\n\s*\.rotulo-que \{\s*\n\s*display: inline;/.test(css),
             'y entra solo donde hay lugar medido');
@@ -163,7 +164,7 @@ module.exports = function (t) {
         // pasar es que se resuelva recortando con puntos suspensivos —«Auto ·
         // ES» cortado por la derecha se come justo el idioma— ni escondiendo un
         // número.
-        const css = leer('src', 'css', 'style.css');
+        const css = cssEntero();
         const estrecho = tramo(css, '@media (max-width: 1100px) {', '\n}\n');
         t.ok(/\.rotulo-ancho \{\s*display: none;/.test(estrecho), 'se va la forma larga');
         t.ok(/\.rotulo-angosto \{\s*display: inline;/.test(estrecho), 'y entra la corta');

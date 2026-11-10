@@ -16,6 +16,7 @@
  */
 
 const fs = require('fs');
+const cssEntero = require('./fixtures/css');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
@@ -168,7 +169,7 @@ module.exports = async t => {
     });
 
     t.test('y el rojo sale del CSS por la misma clave que las demás', () => {
-        const css = leer('src', 'css', 'style.css');
+        const css = cssEntero();
         t.ok(css.includes(".pastilla[data-estado='sin audio']"), 'la clave ya tiene color');
     });
 };

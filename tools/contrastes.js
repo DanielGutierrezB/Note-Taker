@@ -23,7 +23,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const CSS = path.join(__dirname, '..', 'src', 'css', 'style.css');
+const cssEntero = require('../tests/fixtures/css');
 
 function hex2rgb(h) {
     let s = String(h).trim().replace('#', '');
@@ -44,7 +44,7 @@ function ratio(a, b) {
 
 /** Los tokens `--nombre: #hex;` del CSS, en el orden en que están escritos. */
 function tokens() {
-    const css = fs.readFileSync(CSS, 'utf8');
+    const css = cssEntero();
     const salida = new Map();
     const re = /--([a-z0-9-]+):\s*(#[0-9a-fA-F]{3,8})\s*;/g;
     let m;
@@ -58,7 +58,7 @@ function tokens() {
  * esta medición no puedan separarse.
  */
 const TINTE_HOVER = (() => {
-    const css = fs.readFileSync(CSS, 'utf8');
+    const css = cssEntero();
     const m = css.match(/\.con-vista > \.fila:hover\s*\{[^}]*var\(--vista\)\s+(\d+)%,\s*var\(--([a-z-]+)\)/);
     if (!m) throw new Error('No encontré el tinte de hover de .con-vista en style.css');
     return { p: Number(m[1]) / 100, sobre: m[2] };
