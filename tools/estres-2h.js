@@ -12,6 +12,9 @@
  * más, si la memoria crece, cuánto pesa lo que se manda a la ventana, y si al
  * final el XML y el sidecar dicen lo que tienen que decir: todas las tomas con
  * IN y OUT, cada palabra con su hora, dentro de su toma y en orden.
+ *
+ * **Sale con error si encuentra algo**, como una prueba: antes lo imprimía y
+ * salía con cero, y un informe que nadie lee no frena nada.
  */
 
 const fs = require('fs');
@@ -20,6 +23,7 @@ const path = require('path');
 
 const grabacion = require('../engine/grabacion');
 const oirToma = require('../engine/oir-toma');
+const vivo = require('../engine/notas-vivo');
 const rodecaster = require('./rodecaster-xml');
 
 const horas = Number((process.argv.find(a => a.startsWith('--horas=')) || '--horas=2').split('=')[1]);
@@ -49,7 +53,6 @@ async function main() {
     oirToma.tramo = async (_a, desdeMs, hastaMs) => ({ palabras: palabrasEntre(desdeMs, hastaMs, cero) });
     // La relectura devuelve las mismas palabras, repartidas por la toma de verdad.
     oirToma.leer = async (_a, toma) => {
-        const vivo = require('../engine/notas-vivo');
         const ws = palabrasEntre(toma.inMs - 6000, toma.outMs + 6000, cero);
         return { ...vivo.repartir(ws, toma), colapsadas: 0, relectura: null };
     };
@@ -99,13 +102,23 @@ async function main() {
         if (side.tomas[i].inMs < side.tomas[i - 1].outMs) problemas.push(`toma ${side.tomas[i].id} empieza antes de que termine la anterior`);
     }
     const esperadas = Math.floor(PASADAS / 60);
-    const leido = rodecaster.parse ? rodecaster.parse(xml) : null;
+    if (Math.abs(side.tomas.length - esperadas) > 1) {
+        problemas.push(`${side.tomas.length} tomas, y se dijeron ${esperadas} «3, 2, 1»`);
+    }
     const wav = side.sesiones.reduce((s, x) => s + x.segundos, 0);
+    if (Math.abs(wav - PASADAS) > 1) problemas.push(`el WAV tiene ${wav.toFixed(1)} s y se grabaron ${PASADAS}`);
+    const leido = rodecaster.parseXml(xml);
+    if (!leido.ok) problemas.push(`el XML no se vuelve a leer: ${leido.error}`);
+    else if (leido.blockCount !== side.tomas.filter(t => !t.descartada).length) {
+        problemas.push(`el XML trae ${leido.blockCount} bloques y el sidecar ${side.tomas.length} tomas`);
+    }
+    for (const p of (salida.comprobacion && salida.comprobacion.problemas) || []) problemas.push(`al terminar: ${p}`);
     console.log(`tomas: ${side.tomas.length} (se dijeron ${esperadas}) · palabras con hora: ${palabras}`);
     console.log(`WAV: ${wav.toFixed(1)} s de ${PASADAS} · XML ${(xml.length / 1e6).toFixed(2)} MB · sidecar ${(fs.statSync(salida.archivos.json).size / 1e6).toFixed(2)} MB`);
-    if (leido) console.log(`el XML se vuelve a leer: ${JSON.stringify(Object.keys(leido)).slice(0, 80)}`);
+    if (leido.ok) console.log(`el XML se vuelve a leer: ${leido.blockCount} bloques, ${leido.markerCount} marcadores`);
     console.log(problemas.length ? `PROBLEMAS (${problemas.length}):\n  ${problemas.slice(0, 15).join('\n  ')}` : 'Sin problemas.');
     fs.rmSync(dir, { recursive: true, force: true });
+    if (problemas.length) process.exitCode = 1;
 }
 
 main().catch(e => { console.error(e); grabacion.apagar(); process.exit(1); });

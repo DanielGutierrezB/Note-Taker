@@ -147,7 +147,7 @@ function crear(puerto) {
 const ESCENARIOS = [
     'vacio', 'sin-carpeta', 'sesiones', 'numero-de-clase',
     'preparar', 'preparar-clase-repetida', 'preparar-sin-audio', 'preparar-microfono',
-    'preparar-zoom-falso',
+    'preparar-zoom-falso', 'disco-lleno',
     'sin-whisper', 'sin-zoom', 'faltan-modelos', 'update',
     // `desplegada` no es una pantalla: es cómo queda la de en vivo con una toma
     // abierta, así que va con ella.

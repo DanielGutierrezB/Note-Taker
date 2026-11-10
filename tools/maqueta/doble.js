@@ -31,7 +31,7 @@ import { estadoEnVivo, SESIONES, AJUSTES, ENTRADAS, CAMARAS, DOCTOR } from './da
 export const SE_HACEN = [
     'vacio', 'sin-carpeta', 'sesiones', 'numero-de-clase',
     'preparar', 'preparar-clase-repetida', 'preparar-sin-audio', 'preparar-microfono',
-    'preparar-zoom-falso',
+    'preparar-zoom-falso', 'disco-lleno',
     'sin-whisper', 'sin-zoom', 'faltan-modelos', 'update',
     'en-vivo', 'desplegada', 'toma-abierta', 'releyendo',
     'sin-audio', 'terminada', 'notas-de-antes', 'foto', 'foto-cien',
@@ -217,6 +217,9 @@ window.nt = {
     // La app arranca sin ninguna clase grabando: cada escenario va a su
     // pantalla después (`aplicar`).
     grabarEstado: async () => null,
+    grabarDisco: async () => (hay('disco-lleno')
+        ? { escribible: true, libre: 600e6, minutos: 104 }
+        : { escribible: true, libre: 300e9, minutos: 52000 }),
     grabarCambiarEntrada: async como => ({ ok: true, toma: null, estado: { ...laSesion(), dispositivo: como.dispositivo } }),
     grabarListar: async () => sesiones(),
     grabarRenombrar: async () => ({ ok: true, secuencia: 'renombrada', movida: true, audios: 1 }),
@@ -434,7 +437,7 @@ async function aplicar() {
 
     if (hay('preparar') || hay('preparar-clase-repetida') || hay('preparar-sin-audio') ||
         hay('sin-whisper') || hay('preparar-microfono') || hay('preparar-zoom-falso') ||
-        hay('sin-zoom')) {
+        hay('sin-zoom') || hay('disco-lleno')) {
         await app.irAPreparar();
         // Escribir el número de una clase que ya está grabada: la pantalla tiene
         // que decir que va a quedar como V2 ANTES de grabar tres horas.

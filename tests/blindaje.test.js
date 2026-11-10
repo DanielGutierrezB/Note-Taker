@@ -18,6 +18,8 @@ const grabacion = require('../engine/grabacion');
 const sesionesGrabadas = require('../engine/sesiones-grabadas');
 const workspace = require('../engine/workspace');
 const comprobarClase = require('../engine/comprobar-clase');
+const disco = require('../engine/disco');
+const { pathToFileURL } = require('url');
 const registro = require('../engine/registro');
 const vivo = require('../engine/notas-vivo');
 const notasXml = require('../engine/notas-xml');
@@ -41,7 +43,9 @@ function wavDe(archivo, segundos) {
     fs.writeFileSync(archivo, Buffer.concat([captura.cabecera(bytes, 48000, 1), Buffer.alloc(bytes)]));
 }
 
-module.exports = function (t) {
+module.exports = async function (t) {
+    const estados = await import(pathToFileURL(path.join(RAIZ, 'src', 'js', 'estados.js')).href);
+
     t.group('blindaje · la Mac despierta y la ventana sin frenar');
 
     t.test('mientras se graba no se duerme, y al terminar se suelta', () => {
@@ -151,6 +155,59 @@ module.exports = function (t) {
 
     t.test('whisper-server que se cae solo queda en el diario', () => {
         t.ok(/registro\.anotar\('main', 'residente\.se-cayo'/.test(leer('engine', 'oido-residente.js')));
+    });
+
+    t.group('blindaje · el disco');
+
+    t.test('se prueba escribiendo, y se dice cuánta clase entra', () => {
+        const r = disco.revisar(carpeta());
+        t.eq(r.escribible, true);
+        t.ok(r.minutos > 0, `${r.minutos} min`);
+        const no = disco.revisar('/no/existe/esta/carpeta');
+        t.eq(no.escribible, false, 'una carpeta que no está no se puede escribir');
+        t.ok(no.error, 'y dice por qué');
+        t.eq(disco.bytesPorMinuto(48000, 1), 48000 * 2 * 60, 'unos 345 MB por hora');
+    });
+
+    t.test('Preparar frena sin carpeta, sin poder escribir o sin espacio, y avisa con poco', () => {
+        t.eq(estados.deCarpeta(null, null).listo, 'mal');
+        t.eq(estados.deCarpeta('/x', { escribible: false, error: 'EROFS' }).listo, 'mal');
+        t.eq(estados.deCarpeta('/x', { escribible: true, minutos: 10 }).listo, 'mal', 'diez minutos no alcanzan para una clase');
+        const poco = estados.deCarpeta('/x', { escribible: true, minutos: 100 });
+        t.eq(poco.listo, 'si', 'cien sí, para una corta');
+        t.eq(poco.clave, 'en silencio', 'pero en ámbar');
+        t.eq(estados.deCarpeta('/x', { escribible: true, minutos: null }).listo, 'si', 'un disco de red que no dice cuánto queda no frena');
+        t.eq(estados.deCarpeta('/x', { escribible: true, minutos: 5000 }).clave, 'listo');
+    });
+
+    t.test('grabando, avisa al cruzar cada umbral, una vez', () => {
+        grabacion.iniciar({ dir: carpeta(), curso: 'prueba', fps: 30, sinReloj: true });
+        const avisos = [];
+        const real = disco.revisar;
+        let minutos = 200;
+        disco.revisar = () => ({ escribible: true, libre: 0, minutos });
+        try {
+            const s = grabacion._sesion();
+            s.avisar = a => avisos.push(a);
+            for (minutos of [200, 59, 55, 29, 28, 4]) {
+                s.discoMiradoMs = 0;
+                grabacion.vigilarDisco();
+            }
+        } finally {
+            disco.revisar = real;
+            grabacion.apagar();
+        }
+        t.deep(avisos.map(a => /Quedan unos (\d+) min/.exec(a.mensaje)[1]), ['59', '29', '4']);
+    });
+
+    t.group('blindaje · la clase que quedó abierta');
+
+    t.test('al abrir la app se ofrece seguirla', () => {
+        const app = leer('src', 'js', 'app.js');
+        t.ok(/await sesiones\.ver\(\);\s*await ofrecerLaQueQuedoAbierta\(\);/.test(app));
+        const fn = app.slice(app.indexOf('async function ofrecerLaQueQuedoAbierta() {'));
+        t.ok(/s\.resumen\.estado === 'abierta' && Date\.now\(\) - s\.ceroMs < ABIERTA_RECIENTE_MS/.test(fn), 'solo las recientes');
+        t.ok(/app\.irAPreparar\(\{ reanudar: abierta\.archivos\.json/.test(fn), 'y lleva a reanudarla');
     });
 
     t.group('blindaje · al terminar se comprueba la clase');

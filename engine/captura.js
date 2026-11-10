@@ -188,6 +188,10 @@ function cerrar(id, hastaMs) {
     sesiones.delete(id);
     let error = null;
     try {
+        // Si el último pedazo no se pudo escribir, el archivo es más corto que
+        // lo que cuenta `bytes`: se completa con silencio, que es donde iba ese
+        // pedazo, y así la cabecera dice lo que el archivo tiene.
+        if (fs.fstatSync(s.fd).size < 44 + s.bytes) fs.ftruncateSync(s.fd, 44 + s.bytes);
         fs.writeSync(s.fd, cabecera(s.bytes, s.sampleRate, s.canales), 0, 44, 0);
     } catch (err) {
         error = err.message;

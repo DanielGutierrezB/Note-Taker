@@ -299,6 +299,48 @@ export function deAudio(audio) {
     return { clave: 'entra', palabra: 'entra audio', listo: 'si' };
 }
 
+/** Con menos que esto no se empieza: no alcanza para ninguna clase. */
+const MINUTOS_MINIMOS = 15;
+/** Con menos que esto se avisa: alcanza para una clase corta y no para una de tres horas. */
+const MINUTOS_PARA_AVISAR = 180;
+
+/**
+ * La carpeta donde se guarda: que esté elegida, que se pueda escribir en ella y
+ * cuánta clase entra en el disco (`engine/disco.js`).
+ *
+ * @param {string|null} carpeta
+ * @param {{escribible:boolean, minutos:number|null, error?:string}|null} disco
+ *   null mientras no se preguntó
+ */
+export function deCarpeta(carpeta, disco) {
+    if (!carpeta) {
+        return { clave: 'falta', palabra: 'sin elegir', listo: 'mal',
+            porque: 'Sin carpeta no hay dónde escribir el XML ni el audio.' };
+    }
+    if (disco && !disco.escribible) {
+        return { clave: 'falta', palabra: 'no se puede escribir', listo: 'mal',
+            porque: `No se pudo escribir en la carpeta (${disco.error}). Revisá que el disco esté conectado.` };
+    }
+    const minutos = disco ? disco.minutos : null;
+    if (minutos != null && minutos < MINUTOS_MINIMOS) {
+        return { clave: 'falta', palabra: 'sin espacio', listo: 'mal',
+            porque: `Quedan unos ${minutos} min de disco: no alcanza para una clase. Liberá espacio y volvé a entrar.` };
+    }
+    if (minutos != null && minutos < MINUTOS_PARA_AVISAR) {
+        return { clave: 'en silencio', palabra: `${horasDe(minutos)} de disco`, listo: 'si',
+            porque: `Quedan unos ${minutos} min de disco para el audio: alcanza para una clase corta. `
+                + 'Si va a ser larga, liberá espacio antes de empezar.' };
+    }
+    return { clave: 'listo', palabra: 'lista', listo: 'si' };
+}
+
+/** «2 h 10 min», o «45 min». */
+function horasDe(minutos) {
+    const h = Math.floor(minutos / 60);
+    const m = minutos % 60;
+    return h ? `${h} h${m ? ` ${m} min` : ''}` : `${m} min`;
+}
+
 /** Qué encontró Whisper, dicho en palabras y no en rutas. */
 export function deWhisper(doctor) {
     if (!doctor) return { clave: 'falta', palabra: 'sin comprobar', listo: 'no' };

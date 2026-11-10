@@ -25,6 +25,8 @@ import * as estados from './estados.js';
 
 let app = null;
 let doctor = null;
+/** Si en la carpeta se puede escribir y cuánto queda (`engine/disco.js`). */
+let disco = null;
 let entradas = [];
 let zoom = { soportado: false };
 let reanudar = null;
@@ -74,6 +76,7 @@ export async function ver(opciones) {
     reanudar = (opciones && opciones.reanudar) || null;
     verVista('vista-preparar');
     doctor = await window.nt.doctor();
+    disco = app.ajustes.carpeta ? await window.nt.grabarDisco(app.ajustes.carpeta) : null;
     // Al reanudar no se pregunta: esa clase ya tiene su número y su nombre, y
     // ofrecerle el siguiente invitaría a cambiarle el nombre a una sesión que ya
     // tiene marcadores escritos y que el editor puede haber sincronizado.
@@ -129,8 +132,9 @@ function pintar() {
     const a = estados.deAudio(audio);
     const w = estados.deWhisper(doctor);
     const carpeta = app.ajustes.carpeta;
+    const c = estados.deCarpeta(carpeta, disco);
 
-    const listo = a.listo === 'si' && w.listo === 'si' && Boolean(carpeta);
+    const listo = a.listo === 'si' && w.listo === 'si' && c.listo === 'si';
     const boton = $('#btn-iniciar');
     boton.disabled = !listo;
     boton.textContent = reanudar ? 'Reanudar la grabación' : 'Iniciar grabación';
@@ -165,14 +169,13 @@ function pintar() {
                 Ver Diagnóstico</button>`
         }),
         check({
-            listo: carpeta ? 'si' : 'mal',
+            listo: c.listo,
             titulo: 'Dónde se guarda',
-            estado: carpeta
-                ? { clave: 'listo', palabra: 'lista' }
-                : { clave: 'falta', palabra: 'sin elegir',
-                    porque: 'Sin carpeta no hay dónde escribir el XML ni el audio.' },
+            estado: c,
             dice: carpeta
                 ? `El XML, el audio y los datos van a <code>${esc(carpeta)}/xml/</code>.`
+                    + (disco && disco.minutos != null && c.clave === 'listo'
+                        ? ` Queda lugar para unas ${Math.floor(disco.minutos / 60)} h de audio.` : '')
                 : 'Elegí la carpeta del curso en la pantalla anterior.',
             arreglo: `<button class="btn btn-tenue" type="button" data-hace="volver"
                         title="Volver atrás para elegir la carpeta del curso">

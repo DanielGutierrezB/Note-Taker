@@ -15,6 +15,7 @@
 const grabacion = require('../engine/grabacion');
 const nombreDeSesion = require('../engine/nombre-de-sesion');
 const audioApp = require('../engine/audio-app');
+const disco = require('../engine/disco');
 
 /** Cada cuánto se repite el aviso de que el audio se está perdiendo. */
 const AVISO_DE_PCM_MS = 2000;
@@ -212,6 +213,8 @@ function registrar({ ipcMain, app, send, anotar }) {
     });
 
     ipcMain.handle('grabar-estado', () => grabacion.resumen());
+    // Si en la carpeta se puede escribir y cuánta clase entra, antes de empezar.
+    ipcMain.handle('grabar-disco', (event, dir) => disco.revisar(dir));
     ipcMain.handle('grabar-listar', (event, dirs) => grabacion.listar(dirs));
 
     /**

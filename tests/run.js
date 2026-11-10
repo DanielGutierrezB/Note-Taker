@@ -38,6 +38,7 @@ const FILES = [
     'reanudar-y-cierre.test.js',
     'ventana-perdida.test.js',
     'blindaje.test.js',
+    'caos.test.js',
     'reloj-del-audio.test.js',
     'revision-motor.test.js',
     'final-de-toma.test.js',

@@ -157,7 +157,7 @@ module.exports = function (t) {
     t.test('al arrancar, una clase grabando lleva a su pantalla y no a la lista', () => {
         const app = leer('src', 'js', 'app.js');
         const arranque = app.slice(app.indexOf('async function arrancar() {'));
-        t.ok(/const enCurso = await window\.nt\.grabarEstado\(\);\s*if \(enCurso\) await volverALaClase\(enCurso\);\s*else await sesiones\.ver\(\);/
+        t.ok(/const enCurso = await window\.nt\.grabarEstado\(\);\s*if \(enCurso\) await volverALaClase\(enCurso\);\s*else \{\s*await sesiones\.ver\(\);/
             .test(arranque));
         const volver = app.slice(app.indexOf('async function volverALaClase(enCurso) {'));
         t.ok(/preparar\.reengancharGrabando\(enCurso\)/.test(volver), 'y vuelve a abrir el audio');

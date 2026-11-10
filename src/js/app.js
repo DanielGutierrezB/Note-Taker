@@ -151,7 +151,10 @@ async function arrancar() {
     // decía que no había nada grabando y no dejaba iniciar otra.
     const enCurso = await window.nt.grabarEstado();
     if (enCurso) await volverALaClase(enCurso);
-    else await sesiones.ver();
+    else {
+        await sesiones.ver();
+        await ofrecerLaQueQuedoAbierta();
+    }
     await revisarDependencias();
 
     const info = await window.nt.appInfo();
@@ -171,6 +174,34 @@ async function volverALaClase(enCurso) {
     app.irAVivo(r.estado || enCurso, preparar.elAudio());
     if (r.ok) avisar('Volviste a la clase que se estaba grabando. Lo anotado sigue ahí.', 'ok');
     else avisar(r.error, 'error');
+}
+
+/** Hasta cuánto atrás una clase sin terminar se ofrece al abrir la app. */
+const ABIERTA_RECIENTE_MS = 12 * 3600 * 1000;
+
+/**
+ * Si la app se fue en medio de una clase, al volver a abrirla se ofrece seguir.
+ *
+ * Antes había que encontrarla en la lista, entre las demás, y saber que el
+ * botón para seguir estaba ahí: lo más probable, con la clase andando, era
+ * apretar «Nueva sesión» y partirla en dos XML. Solo las de las últimas doce
+ * horas: una de la semana pasada ya no es una clase que se está dando.
+ */
+async function ofrecerLaQueQuedoAbierta() {
+    const carpeta = app.ajustes.carpeta;
+    if (!carpeta) return;
+    const lista = await window.nt.grabarListar([carpeta]);
+    const abierta = (lista || [])
+        .filter(s => s.resumen && s.resumen.estado === 'abierta' && Date.now() - s.ceroMs < ABIERTA_RECIENTE_MS)
+        .sort((a, b) => b.ceroMs - a.ceroMs)[0];
+    if (!abierta) return;
+    const r = await window.nt.preguntar({
+        titulo: 'Una clase quedó sin terminar',
+        mensaje: `«${abierta.secuencia}» se estaba grabando cuando la app se cerró. Reanudarla `
+            + 'sigue en el mismo XML, con lo anotado, y el audio nuevo entra como otro WAV en su hora.',
+        opciones: [{ valor: 'reanudar', dice: 'Reanudarla' }, { valor: 'no', dice: 'Ahora no' }]
+    });
+    if (r === 'reanudar') app.irAPreparar({ reanudar: abierta.archivos.json, sesion: abierta });
 }
 
 /**

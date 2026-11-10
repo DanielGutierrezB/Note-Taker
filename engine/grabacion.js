@@ -59,6 +59,7 @@ const cambiosToma = require('./cambios-toma');
 const sesionesGrabadas = require('./sesiones-grabadas');
 const ciclo = require('./ciclo-senales');
 const comprobarClase = require('./comprobar-clase');
+const disco = require('./disco');
 const { CICLO_MS, CONTEXTO_MS } = ciclo;
 
 let sesion = null;
@@ -196,6 +197,7 @@ function iniciar(params) {
                 ciclo.buscarSenales(sesion);
                 vigilarDeriva();
                 guardarLaAbierta();
+                vigilarDisco();
             }, CICLO_MS);
             // El modelo grande cargado para el texto en vivo. No se espera:
             // mientras carga, el ciclo oye por whisper-cli como siempre
@@ -231,6 +233,42 @@ function iniciar(params) {
  * se arriesga, contra reescribir el archivo entero una vez por segundo.
  */
 const GUARDAR_LA_ABIERTA_MS = 10000;
+
+/**
+ * Cuántos minutos de disco quedan, mirado cada medio minuto.
+ *
+ * Se avisa al cruzar cada uno de estos umbrales, una vez: una hora alcanza para
+ * terminar una clase normal y es lo primero que conviene saber; cinco minutos
+ * es lo último que se puede hacer algo.
+ */
+const AVISOS_DE_DISCO_MIN = [60, 30, 10, 5];
+const MIRAR_EL_DISCO_MS = 30000;
+
+function vigilarDisco() {
+    if (!sesion || !sesion.captura || sesion.terminando) return;
+    const ahora = Date.now();
+    if (ahora - (sesion.discoMiradoMs || 0) < MIRAR_EL_DISCO_MS) return;
+    sesion.discoMiradoMs = ahora;
+    const r = disco.revisar(workspace.audioDir(sesion.dir), sesion.captura);
+    if (!r.escribible) {
+        if (sesion.discoSinEscribir) return;
+        sesion.discoSinEscribir = true;
+        registro.anotar('main', 'disco.no-escribe', { error: r.error });
+        sesion.avisar({ tipo: 'error', mensaje: `No se puede escribir en la carpeta de la clase: ${r.error}` });
+        return;
+    }
+    sesion.discoSinEscribir = false;
+    if (r.minutos == null) return;
+    const cruzado = AVISOS_DE_DISCO_MIN.filter(u => r.minutos <= u).pop();
+    if (cruzado == null || (sesion.discoAvisado != null && cruzado >= sesion.discoAvisado)) return;
+    sesion.discoAvisado = cruzado;
+    registro.anotar('main', 'disco.poco', { minutos: r.minutos });
+    sesion.avisar({
+        tipo: 'error',
+        mensaje: `Quedan unos ${r.minutos} min de disco para el audio de esta clase. Liberá espacio `
+            + 'ya: con el disco lleno el audio deja de escribirse.'
+    });
+}
 
 function guardarLaAbierta() {
     if (!sesion || sesion.terminando || vivo.tomaAbierta(sesion.estado) == null) return;
@@ -774,6 +812,7 @@ module.exports = {
     // el segundo del reloj.
     buscarSenales: () => ciclo.buscarSenales(sesion),
     guardarLaAbierta,
+    vigilarDisco,
     vigilarDeriva,
     avisarReloj,
     // Para las pruebas que necesitan poner palabras a mano en una toma, que es
