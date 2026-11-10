@@ -459,10 +459,7 @@ function sequenceXml(params) {
             id: nextId(),
             registry,
             source: clip.source,
-            startFrame: toFrames(clip.startSec, fps),
-            endFrame: toFrames(clip.endSec, fps),
-            inFrame: toFrames(clip.sourceInSec || 0, fps),
-            outFrame: toFrames((clip.sourceInSec || 0) + (clip.endSec - clip.startSec), fps),
+            ...cuadrosDelClip(clip, fps),
             enabled: clip.enabled,
             fps,
             kind: 'video'
@@ -510,10 +507,7 @@ function sequenceXml(params) {
             id: pista.ids[canal][i],
             registry,
             source: clip.source,
-            startFrame: toFrames(clip.startSec, fps),
-            endFrame: toFrames(clip.endSec, fps),
-            inFrame: toFrames(clip.sourceInSec || 0, fps),
-            outFrame: toFrames((clip.sourceInSec || 0) + (clip.endSec - clip.startSec), fps),
+            ...cuadrosDelClip(clip, fps),
             enabled: clip.enabled,
             fps,
             kind: 'audio',
@@ -574,6 +568,22 @@ ${markersXml}      </sequence>
   </project>
 </xmeml>
 `;
+}
+
+/**
+ * Dónde va un clip en la secuencia y qué parte de su fuente muestra, en cuadros.
+ *
+ * El final sale del principio más lo que dura en la fuente, y no redondeado por
+ * su cuenta: un WAV que no empieza justo en un cuadro —el segundo de una clase
+ * que cambió de entrada— redondeaba los dos extremos para lados distintos, y el
+ * clip quedaba un cuadro más largo o más corto que lo que muestra de la fuente.
+ */
+function cuadrosDelClip(clip, fps) {
+    const desde = clip.sourceInSec || 0;
+    const startFrame = toFrames(clip.startSec, fps);
+    const inFrame = toFrames(desde, fps);
+    const outFrame = toFrames(desde + (clip.endSec - clip.startSec), fps);
+    return { startFrame, endFrame: startFrame + (outFrame - inFrame), inFrame, outFrame };
 }
 
 module.exports = {
