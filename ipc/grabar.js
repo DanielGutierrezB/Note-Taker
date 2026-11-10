@@ -14,7 +14,6 @@
 
 const grabacion = require('../engine/grabacion');
 const nombreDeSesion = require('../engine/nombre-de-sesion');
-const vivo = require('../engine/notas-vivo');
 const audioApp = require('../engine/audio-app');
 
 /** Cada cuánto se repite el aviso de que el audio se está perdiendo. */
@@ -202,9 +201,6 @@ function registrar({ ipcMain, app, send, anotar }) {
     });
 
     ipcMain.handle('grabar-estado', () => grabacion.resumen());
-    // Las vistas viajan con el estado de la grabación en curso, pero una sesión
-    // ya terminada también deja cambiarlas y ahí no hay estado del que sacarlas.
-    ipcMain.handle('grabar-vistas', () => vivo.VISTAS);
     ipcMain.handle('grabar-listar', (event, dirs) => grabacion.listar(dirs));
 
     /**

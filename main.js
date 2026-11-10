@@ -13,7 +13,7 @@
  */
 
 const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, clipboard,
-    session, desktopCapturer, screen, systemPreferences } = require('electron');
+    screen, systemPreferences } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -22,17 +22,15 @@ const ajustes = require('./engine/ajustes');
 const updates = require('./engine/updates');
 const registro = require('./engine/registro');
 const dependencias = require('./engine/dependencias');
+const grabacion = require('./engine/grabacion');
 const ipcGrabar = require('./ipc/grabar');
 const ipcPrproj = require('./ipc/prproj');
 const ipcReferencias = require('./ipc/referencias');
-const ipcSemanal = require('./ipc/semanal');
-const ipcMirilla = require('./ipc/mirilla');
 const ipcReporte = require('./ipc/reporte');
 const { conDiario } = require('./ipc/con-diario');
 const devShot = require('./dev-shot');
 
 let mainWindow = null;
-let mirilla = null;
 let descargaEnCurso = null;
 
 function appVersion() {
@@ -43,12 +41,7 @@ function appVersion() {
     }
 }
 
-/**
- * Avisarle algo a la ventana de la app.
- *
- * Solo a ella. La mirilla no escucha al motor: lo que muestra se lo cuenta la
- * pantalla semanal por el espejo (`ipc/mirilla.js`), que es la dueña.
- */
+/** Avisarle algo a la ventana de la app. */
 function send(channel, payload) {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
 }
@@ -64,7 +57,7 @@ function anotar(evento, datos) {
  * dirían lo mismo cada vez y no son acciones.
  */
 const ipc = conDiario(ipcMain, anotar, new Set([
-    'registro-anotar', 'app-info', 'ajustes-leer', 'grabar-estado', 'grabar-vistas', 'audio-app-estado'
+    'registro-anotar', 'app-info', 'ajustes-leer', 'grabar-estado', 'audio-app-estado'
 ]));
 
 function createWindow() {
@@ -86,48 +79,12 @@ function createWindow() {
         }
     });
 
-    permitirPedirLaPantalla();
     mainWindow.once('ready-to-show', () => mainWindow.show());
-    // La mirilla se va con ella. Es una ventana sin marco y sin botón de
-    // cerrar, pegada encima de todo lo demás: sola en la pantalla, sin la app
-    // que la mandó abrir, no habría forma de quitársela de encima. Y en macOS
-    // la app no se cierra al cerrar su ventana, así que esto no es hipotético.
-    mainWindow.on('closed', () => {
-        mainWindow = null;
-        if (mirilla) mirilla.cerrar('se cerró la ventana de la app');
-    });
+    mainWindow.on('closed', () => { mainWindow = null; });
     mainWindow.loadFile('src/index.html');
     // El arnés de desarrollo (capturas, JS inyectado) vive en `dev-shot.js` y
     // sin sus flags no hace nada.
     mainWindow.webContents.once('did-finish-load', () => devShot.correr(mainWindow));
-}
-
-/**
- * Deja que la ventana pueda pedir la pantalla (el modo semanal la graba).
- *
- * En Electron, `navigator.mediaDevices.getDisplayMedia` no hace nada hasta que
- * el proceso principal dice quién elige la fuente. Con `useSystemPicker` la
- * elige el selector de macOS —el mismo que sale al compartir pantalla en
- * cualquier app— y entonces este handler ni se llama. Es lo que se quiere: la
- * persona ve las ventanas y las pantallas de verdad, con sus miniaturas, sin
- * que esta app tenga que dibujar un selector propio.
- *
- * El selector del sistema es de macOS 15 en adelante, y esta app corre desde la
- * 14.2 (la tiene como mínimo el ayudante de audio). Por eso el handler está
- * puesto igual: en una Mac más vieja no hay selector, así que se graba la
- * pantalla principal, que es lo que esa persona iba a elegir de todos modos.
- */
-function permitirPedirLaPantalla() {
-    session.defaultSession.setDisplayMediaRequestHandler(async (pedido, contestar) => {
-        try {
-            const fuentes = await desktopCapturer.getSources({ types: ['screen'] });
-            anotar('semanal.pantalla-sin-selector', { cuantas: fuentes.length });
-            contestar(fuentes.length ? { video: fuentes[0] } : {});
-        } catch (err) {
-            anotar('semanal.pantalla-falla', { error: err.message });
-            contestar({});
-        }
-    }, { useSystemPicker: true });
 }
 
 // Un fallo suelto no puede dejar la app viva pero muda: se registra y sigue.
@@ -145,11 +102,6 @@ process.on('unhandledRejection', reason => {
 /**
  * La ventana de la clase, al frente: la que hay aunque esté escondida, o una
  * nueva si se cerró.
- *
- * Mirar si queda «alguna ventana» no alcanza, y así estaba: la mirilla es una
- * ventana, así que con ella abierta y la de la clase escondida, el clic en el
- * dock no hacía nada y la clase quedaba grabando sin ventana desde donde
- * terminarla.
  */
 function traerLaVentana() {
     if (!mainWindow || mainWindow.isDestroyed()) { createWindow(); return; }
@@ -196,11 +148,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-    // La mirilla, antes que nada y sin esperar a que se cierre la ventana de la
-    // app: con ⌘Q no se le pedía nada a ella, y una ventana encima de todo que
-    // tarda en irse es lo primero que se ve de una app que dice haberse cerrado.
-    if (mirilla) mirilla.cerrar('la app se cierra');
-    // Y el último segundo del diario, que si no se pierde. Es el segundo más
+    // El último segundo del diario, que si no se pierde. Es el segundo más
     // interesante cuando alguien cierra la app porque se le quedó colgada. (La
     // grabación en curso la cierra su propio puente: `ipc/grabar.js`.)
     anotar('app.cierra', {});
@@ -342,7 +290,7 @@ ipc.handle('update-install', async (event, target) => {
     }
     // En medio de una clase no: cerrar acá pierde lo que se esté grabando, y el
     // instalador puede esperar.
-    if (require('./engine/grabacion').activa()) {
+    if (grabacion.activa()) {
         return { ok: false, error: 'Hay una clase grabando. Terminala antes de actualizar.' };
     }
 
@@ -420,17 +368,7 @@ ipc.handle('reveal', (event, target) => {
     return true;
 });
 
-ipc.handle('open-path', async (event, target) => {
-    if (!target) return 'No llegó ninguna ruta.';
-    return shell.openPath(target);
-});
-
 ipcGrabar.registrar({ ipcMain: ipc, app, send, anotar });
 ipcPrproj.registrar({ ipcMain: ipc, dialog, ventana: () => mainWindow, send, anotar });
 ipcReferencias.registrar({ ipcMain: ipc, nativeImage, clipboard, anotar });
-ipcSemanal.registrar({ ipcMain: ipc, send, anotar });
 ipcReporte.registrar({ ipcMain: ipc, app, shell, screen, systemPreferences, version: appVersion, anotar });
-mirilla = ipcMirilla.registrar({
-    ipcMain: ipc, BrowserWindow, screen,
-    ventanaPrincipal: () => mainWindow, anotar
-});

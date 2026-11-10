@@ -9,6 +9,7 @@
  */
 
 const puente = require('../ipc/grabar');
+const vivo = require('../engine/notas-vivo');
 
 function armar() {
     const canales = new Map();
@@ -42,7 +43,7 @@ module.exports = function (t) {
             'grabar-iniciar', 'grabar-reanudar',
             'grabar-editar', 'grabar-editar-grabada',
             'grabar-abrir-toma', 'grabar-cerrar-toma',
-            'grabar-deshacer', 'grabar-rehacer', 'grabar-estado', 'grabar-vistas',
+            'grabar-deshacer', 'grabar-rehacer', 'grabar-estado',
             'grabar-listar', 'grabar-renombrar', 'grabar-borrar', 'grabar-regenerar',
             'grabar-terminar'
         ];
@@ -62,8 +63,7 @@ module.exports = function (t) {
     t.group('puente · lo que contesta');
 
     t.test('las vistas salen con su nombre y un solo color, el del marcador', () => {
-        const p = armar();
-        const vistas = p.llamar('grabar-vistas');
+        const vistas = vivo.VISTAS;
         t.eq(vistas.length, 5);
         for (const v of vistas) {
             t.ok(v.nombre, 'tiene nombre');

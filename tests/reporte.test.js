@@ -110,10 +110,9 @@ module.exports = async function (t) {
     t.test('todos los módulos registran por el que anota', () => {
         const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
         t.ok(!/ipcMain\.handle\(/.test(main), 'en main.js ningún handle se salta el diario');
-        for (const m of ['ipcGrabar', 'ipcPrproj', 'ipcReferencias', 'ipcSemanal', 'ipcReporte']) {
+        for (const m of ['ipcGrabar', 'ipcPrproj', 'ipcReferencias', 'ipcReporte']) {
             t.ok(new RegExp(`${m}\\.registrar\\(\\{ ipcMain: ipc,`).test(main), `${m} recibe el que anota`);
         }
-        t.ok(/ipcMain: ipc, BrowserWindow/.test(main), 'y la mirilla también');
     });
 
     t.group('reporte · cada gesto de la ventana, en el diario');

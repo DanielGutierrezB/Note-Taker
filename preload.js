@@ -31,7 +31,6 @@ contextBridge.exposeInMainWorld('nt', {
     confirmar: payload => ipcRenderer.invoke('confirmar', payload),
     preguntar: payload => ipcRenderer.invoke('preguntar', payload),
     reveal: target => ipcRenderer.invoke('reveal', target),
-    openPath: target => ipcRenderer.invoke('open-path', target),
 
     // La grabación. El audio va por `send` y no por `invoke` porque llega varias
     // veces por segundo y no hay nada que esperar de vuelta: esperar una
@@ -62,7 +61,6 @@ contextBridge.exposeInMainWorld('nt', {
     grabarDeshacer: () => ipcRenderer.invoke('grabar-deshacer'),
     grabarRehacer: () => ipcRenderer.invoke('grabar-rehacer'),
     grabarEstado: () => ipcRenderer.invoke('grabar-estado'),
-    grabarVistas: () => ipcRenderer.invoke('grabar-vistas'),
     grabarListar: dirs => ipcRenderer.invoke('grabar-listar', dirs),
     grabarNombreSiguiente: (dir, que) => ipcRenderer.invoke('grabar-nombre-siguiente', dir, que),
     grabarRenombrar: (json, cambio) => ipcRenderer.invoke('grabar-renombrar', json, cambio),
@@ -81,41 +79,6 @@ contextBridge.exposeInMainWorld('nt', {
     prprojGenerar: (carpeta, config) => ipcRenderer.invoke('prproj-generar', carpeta, config),
     onPrprojAviso: callback => {
         ipcRenderer.on('prproj-aviso', (_event, payload) => callback(payload));
-    },
-
-    // El modo semanal (`ipc/semanal.js`): los dos vídeos mientras se graban, y
-    // el corte al final. Los trozos van por `send` por lo mismo que el PCM, y
-    // `empezoMs` lo pone la ventana porque es la que llama a `start()`: es la
-    // hora que alinea el vídeo con el audio (ver `engine/video-crudo.js`).
-    semanalAbrir: pedido => ipcRenderer.invoke('semanal-abrir', pedido),
-    semanalTrozo: (cual, trozo) => ipcRenderer.send('semanal-trozo', cual, trozo),
-    // Sin `cual` cierra los dos, que es terminar de grabar. Con uno cierra solo
-    // esa fuente: es cambiar de ventana, que parte la pantalla en tramos y deja
-    // la cámara andando.
-    semanalCerrar: cual => ipcRenderer.invoke('semanal-cerrar', cual || null),
-    // Devuelve RUTAS del disco, no `data:`. La ventana las resuelve contra su
-    // propia página —que en la app es `file:`— y se las da a los dos `<video>`
-    // del editor. Son dos vídeos de decenas de megas: meterlos por el puente
-    // codificados no entra en un mensaje de IPC ni haría falta.
-    semanalMontaje: json => ipcRenderer.invoke('semanal-montaje', json),
-    semanalExportar: (json, como) => ipcRenderer.invoke('semanal-exportar', json, como),
-    onSemanalProgreso: callback => {
-        ipcRenderer.on('semanal-progreso', (_event, payload) => callback(payload));
-    },
-    onSemanalAviso: callback => {
-        ipcRenderer.on('semanal-aviso', (_event, payload) => callback(payload));
-    },
-
-    // La mirilla: la ventanita flotante donde te ves mientras grabás
-    // (`ipc/mirilla.js`). Esta es la mitad de la semanal, que es la dueña:
-    // la enciende, le manda el espejo y escucha sus gestos. La otra mitad está
-    // en `preload-mirilla.js`. El espejo va por `send` porque sale en cada
-    // repintado y no hay nada que esperar de vuelta.
-    mirillaPoner: encendida => ipcRenderer.invoke('mirilla-poner', encendida),
-    mirillaPantalla: pista => ipcRenderer.invoke('mirilla-pantalla', pista),
-    mirillaEspejo: info => ipcRenderer.send('mirilla-espejo', info),
-    onMirillaGesto: callback => {
-        ipcRenderer.on('mirilla-gesto', (_event, payload) => callback(payload));
     },
 
     // Las fotos del OUT (`ipc/referencias.js`). El JPEG cruza como bytes y las

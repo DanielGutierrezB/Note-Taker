@@ -17,9 +17,8 @@
  * cuánto mide (`sinLoEscrito`). Los bytes, las claves y las rutas los tapa
  * `registro.sanear` al anotar, como en cualquier otra línea.
  *
- * Lo que llega varias veces por segundo —el audio, los pedazos de vídeo, el
- * espejo de la mirilla— va por `on` y no se anota: son datos, no acciones, y
- * llenarían el diario en minutos.
+ * Lo que llega varias veces por segundo —el audio— va por `on` y no se anota:
+ * son datos, no acciones, y llenarían el diario en minutos.
  */
 
 /** Cuántos campos de una respuesta se guardan: los primeros dicen de qué se trata. */
