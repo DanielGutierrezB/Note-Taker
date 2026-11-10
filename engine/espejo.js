@@ -166,6 +166,9 @@ function resumen(sesion) {
         // Y lo que de verdad suena, para que la barra pueda decir «Auto · EN» y
         // avisar cuando el idioma puesto no es el que se está hablando.
         idiomaOido: e.idiomaOido || null,
+        // Por dónde entra el audio, por su nombre: con esto una ventana que se
+        // recargó en medio de la clase sabe qué entrada volver a abrir.
+        dispositivo: e.dispositivo || null,
         // Las que se releerían si se cambia el idioma pidiendo releer: las que
         // van al XML, que es donde está el texto en juego. Lo cuenta el motor
         // porque es el que relee; la ventana lo pregunta con este número y no

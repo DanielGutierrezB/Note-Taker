@@ -156,6 +156,12 @@ function registrar({ ipcMain, app, send, anotar }) {
     ipcMain.handle('grabar-idioma', (event, cual, opciones) =>
         grabacion.cambiarIdioma(cual, opciones));
 
+    /**
+     * Otra entrada de audio, con la clase grabando. La ventana ya la abrió y
+     * manda con qué tasa suena; el motor cierra el WAV y abre otro.
+     */
+    ipcMain.handle('grabar-cambiar-entrada', (event, como) => grabacion.cambiarEntrada(como));
+
     ipcMain.handle('grabar-editar', (event, cambio) => {
         anotar('grabar.editar', { toma: cambio && cambio.toma, tipo: cambio && cambio.tipo });
         return grabacion.editar(cambio);
@@ -342,7 +348,10 @@ function registrar({ ipcMain, app, send, anotar }) {
     // cabecera del WAV queda con el tamaño real y el XML con lo último que pasó.
     // La sesión NO queda marcada como terminada, así que se puede reanudar:
     // cerrar la app en medio de un rodaje no puede costar la clase.
-    app.on('before-quit', () => {
+    // En `will-quit` y no en `before-quit`: ese lo puede cancelar quien
+    // pregunta si terminar la clase (`main.js`), y un `preventDefault` no
+    // frena a los demás oyentes. Acá la salida ya es segura.
+    app.on('will-quit', () => {
         // El ayudante primero: si siguiera mandando mientras se cierra la
         // sesión, el último pedazo podría llegar a una sesión que ya no está.
         try { audioApp.cerrar(); } catch (e) { /* ya estaba cerrado */ }

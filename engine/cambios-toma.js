@@ -358,6 +358,31 @@ function vistaDesdeAhora(sesion, toma, c) {
  * un paso se aplica la numeración es siempre la que había cuando se anotó. El
  * razonamiento entero está en `engine/deshacer.js`.
  */
+/**
+ * La toma abierta, cuando la entrada de audio cambia a mitad de la clase.
+ *
+ * Cada entrada escribe su propio WAV, y una toma se relee de UN solo WAV: el
+ * que tiene su IN (`captura.laQueContiene`). Una toma que cruzara el cambio se
+ * quedaría sin el texto de después. Así que se parte donde terminó el audio
+ * viejo, y la segunda mitad —que sigue abierta, con la misma vista— empieza
+ * donde empieza el nuevo. Entre los dos queda el hueco en que no se grabó.
+ *
+ * Una toma recién abierta, demasiado corta para partirla, no se parte: su IN
+ * pasa al principio del WAV nuevo, y lo poco que se dijo antes queda suelto.
+ *
+ * **No va al historial.** Deshacerlo juntaría otra vez una toma con medio
+ * texto en cada WAV, que es justo lo que esto evita.
+ *
+ * @returns {'partida'|'corrida'|null} qué se hizo, o null sin toma abierta
+ */
+function pasarAOtroAudio(sesion, finDelViejo, inicioDelNuevo) {
+    const abierta = vivo.tomaAbierta(sesion.estado);
+    if (!abierta) return null;
+    const partida = partir(sesion, abierta, finDelViejo, abierta.vista);
+    vivo.moverInAbierta(sesion.estado, vivo.tomaAbierta(sesion.estado), inicioDelNuevo);
+    return partida ? 'partida' : 'corrida';
+}
+
 function correrLoDeAfuera(sesion, movidas) {
     if (!(movidas || []).length) return;
     const cambia = new Map(movidas.map(m => [m.de, m.a]));
@@ -689,4 +714,4 @@ function cerrarToma(sesion, opciones) {
     return espejo.resumen(sesion);
 }
 
-module.exports = { editar, comoSeLlama, volver, abrirToma, cerrarToma };
+module.exports = { editar, comoSeLlama, volver, abrirToma, cerrarToma, pasarAOtroAudio };

@@ -47,6 +47,8 @@ contextBridge.exposeInMainWorld('nt', {
         ipcRenderer.on('audio-app', (_event, payload) => callback(payload));
     },
     grabarIdioma: (cual, opciones) => ipcRenderer.invoke('grabar-idioma', cual, opciones),
+    // Con la tasa de la entrada que quedó abierta: el motor cierra el WAV y abre otro.
+    grabarCambiarEntrada: como => ipcRenderer.invoke('grabar-cambiar-entrada', como),
     grabarEditar: cambio => ipcRenderer.invoke('grabar-editar', cambio),
     grabarEditarGrabada: (json, cambio) => ipcRenderer.invoke('grabar-editar-grabada', json, cambio),
     // Abrir una clase ya grabada en la misma pantalla de la clase, de solo

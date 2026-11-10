@@ -76,7 +76,7 @@ async function clicLento(p, punto) {
     await p.setViewport({ width: 1440, height: 820 });
 
     for (const [escenario, id] of [
-        ['en-vivo', 'vivo-idioma'], ['en-vivo', 'vivo-camara']
+        ['en-vivo', 'vivo-entrada'], ['en-vivo', 'vivo-idioma'], ['en-vivo', 'vivo-camara']
     ]) {
         console.log(`\n── ${id}\n`);
         await p.goto(`${sitio.url}?e=${escenario}`, { waitUntil: 'networkidle0' });

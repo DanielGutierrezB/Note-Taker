@@ -396,12 +396,12 @@ function pintarBarra() {
 }
 
 /**
- * El idioma y la cámara, en la barra.
+ * La entrada de audio, el idioma y la cámara, en la barra.
  *
- * Solo grabando: en una clase ya terminada cambiar el idioma no transcribiría
- * nada —para eso está «Regenerar»— y la cámara de referencia no saca fotos de
- * algo que ya pasó. Se esconden y no se apagan, por lo mismo que el resto del
- * cromo de esta barra.
+ * Solo grabando: en una clase ya terminada no entra audio, cambiar el idioma no
+ * transcribiría nada —para eso está «Regenerar»— y la cámara de referencia no
+ * saca fotos de algo que ya pasó. Se esconden y no se apagan, por lo mismo que
+ * el resto del cromo de esta barra.
  *
  * Se piden en cada vuelta de la barra, y `rotuloBarra.pintar` los pone al día
  * sin rehacer los botones.
@@ -410,9 +410,46 @@ function pintarRotulos() {
     const caja = $('#vivo-rotulos');
     if (!caja) return;
     rotuloBarra.pintar(caja, esDeMirar() ? [] : [
+        rotuloDeEntrada(),
         idiomas.rotulo('vivo-idioma', estado.idioma, estado.idiomaOido || null),
         rotuloDeCamara()
     ]);
+}
+
+/** Lo que dice el rótulo angosto de cada clase de entrada (`estados.claseDeEntrada`). */
+const ENTRADA_CORTA = {
+    llamada: 'Llamada', bluetooth: 'Bluetooth', microfono: 'Micrófono',
+    virtual: 'Virtual', 'zoom-falso': 'Zoom', otra: 'Otra'
+};
+
+/**
+ * El rótulo de la entrada de audio, que se cambia sin parar la clase.
+ *
+ * Las dos del sistema tienen nombres largos que explican qué graban —sirven en
+ * el menú y en Preparar—, y en la barra alcanza con de dónde sale. Va en ámbar
+ * si no hay ninguna abierta, si se cayó o si está perdiendo audio, que es justo
+ * cuando cambiarla es el arreglo.
+ */
+function rotuloDeEntrada() {
+    const a = audio || {};
+    const nombre = a.abierto ? a.dispositivo : null;
+    const delSistema = { [fuente.SISTEMA.nombre]: 'Sistema', [fuente.ZOOM.nombre]: 'Zoom' }[nombre];
+    const dice = !nombre ? 'Ninguna' : delSistema || (nombre.length > 22 ? `${nombre.slice(0, 21)}…` : nombre);
+    const mal = !nombre || Boolean(a.caido || a.roto);
+    return {
+        id: 'vivo-entrada',
+        hace: 'entrada',
+        que: 'Audio',
+        icono: a.clase === 'llamada' ? 'oido' : 'microfono',
+        dice,
+        corto: !nombre ? 'Ninguna' : delSistema || ENTRADA_CORTA[a.clase] || dice,
+        avisa: mal,
+        pista: (!nombre
+            ? 'No está entrando audio a la clase. '
+            : `${nombre}.${a.caido || a.roto ? ' Se cayó o está perdiendo audio.' : ''} `)
+            + 'Tocá para cambiar de entrada sin parar la clase: lo anotado se queda, la toma '
+            + 'abierta sigue, y solo se pierde el segundo que tarda en abrir la nueva.'
+    };
 }
 
 /**
@@ -1129,6 +1166,11 @@ async function alClic(e) {
             vista.elegida = toma;
             pintar();
             break;
+        case 'entrada':
+            // La lista se pide al abrir: unos auriculares que se conectan a
+            // mitad de la clase aparecen recién ahí.
+            rotuloBarra.abrir(boton.id, await app.entradasParaElegir(), id => cambiarEntrada(id));
+            break;
         case 'idioma':
             rotuloBarra.abrir(boton.id, idiomas.opciones(estado.idioma), cual => cambiarIdioma(cual));
             break;
@@ -1438,6 +1480,34 @@ async function cambiarIdioma(cual) {
     await app.guardarAjustes({ idioma: cual });
     pintar();
     avisar(r.aviso, 'ok');
+}
+
+/**
+ * Otra entrada de audio, con la clase grabando.
+ *
+ * Se dice qué pasó con la toma abierta porque es lo único que cambia en la
+ * lista: si se partió, aparece una más, y cada mitad se relee de su audio.
+ */
+async function cambiarEntrada(id) {
+    if (!estado || esDeMirar()) return;
+    const r = await app.cambiarEntrada(id);
+    if (!r.ok) {
+        avisar(r.error, 'error');
+        pintarBarra();
+        return;
+    }
+    if (!r.estado) return;
+    estado = r.estado;
+    pintar();
+    const cual = audio && audio.dispositivo;
+    if (r.volvio) {
+        avisar(`${r.error} Sigue grabando con ${cual}.`, 'error');
+        return;
+    }
+    const conToma = r.toma === 'partida'
+        ? ' La toma abierta siguió en otra, para que cada mitad se lea de su audio.'
+        : '';
+    avisar(`Ahora graba de ${cual}.${conToma}`, 'ok');
 }
 
 /* ─── Las teclas ──────────────────────────────────────────────────────── */

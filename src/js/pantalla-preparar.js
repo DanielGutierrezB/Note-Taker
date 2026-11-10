@@ -466,3 +466,91 @@ async function iniciar() {
 export function elAudio() {
     return audio;
 }
+
+/**
+ * Las entradas para el menú de la barra de En vivo, con la puesta marcada.
+ *
+ * Se vuelven a pedir cada vez que se abre: unos AirPods que se conectan a
+ * mitad de la clase aparecen recién ahí, y son justo los que se buscan.
+ */
+export async function entradasParaElegir() {
+    await releerEntradas();
+    return entradas.map(d => ({
+        valor: d.id,
+        dice: d.nombre,
+        pista: d.tipo === 'app'
+            ? 'Lo que suena en la Mac, sin pasar por un micrófono.'
+            : `La voz entra por ${d.nombre}.`,
+        marcada: d.nombre === audio.dispositivo
+    }));
+}
+
+/**
+ * Cambia la entrada con la clase grabando, sin perder nada de lo anotado.
+ *
+ * El orden es lo que lo hace seguro, y cada paso tiene su porqué:
+ *
+ *   1. **se deja de mandar** antes de tocar nada: un pedazo de la entrada vieja
+ *      que llegue tarde no puede caer en el WAV nuevo, ni al revés;
+ *   2. **se abre la nueva**, y si no abre se vuelve a la que había: la clase no
+ *      se puede quedar sin audio por un clic;
+ *   3. **el motor cierra el WAV y abre otro** con la tasa de la que quedó
+ *      abierta, aunque sea la misma de antes: el rato del cambio no está en el
+ *      archivo, y seguir en el mismo correría todo lo de después;
+ *   4. **se vuelve a mandar**.
+ *
+ * @returns {{ok:boolean, estado?:object, toma?:string|null, volvio?:boolean, error?:string}}
+ */
+export async function cambiarEntradaGrabando(id) {
+    const antes = audio.abierto ? entradas.find(d => d.nombre === audio.dispositivo) || null : null;
+    if (antes && antes.id === id) return { ok: true, estado: null };
+    await fuente.dejarDeMandar();
+    await abrirEntrada(id);
+    const fallo = audio.abierto ? null : (audio.error || 'No se pudo abrir esa entrada.');
+    if (fallo && antes) await abrirEntrada(antes.id);
+    if (!audio.abierto) {
+        return { ok: false, error: `${fallo} La clase no está grabando audio: elegí otra entrada en el rótulo Audio.` };
+    }
+    const r = await mandarAlMotor();
+    if (!r.ok) return r;
+    return { ...r, volvio: Boolean(fallo), error: fallo };
+}
+
+/**
+ * Vuelve a enganchar el audio de una clase que siguió grabando sin ventana.
+ *
+ * Pasa al recargar la ventana o al volver a abrirla después de cerrarla: el
+ * motor siguió con la sesión, pero un micrófono lo abre la ventana y con ella
+ * se fue. Se reabre la misma entrada, por su nombre, y desde ahí es un cambio
+ * de entrada como cualquier otro: un WAV nuevo desde ahora, con el hueco del
+ * rato en que no hubo ventana.
+ *
+ * @returns {{ok:boolean, estado?:object, error?:string}}
+ */
+export async function reengancharGrabando(estado) {
+    await releerEntradas();
+    const cual = entradas.find(d => d.nombre === estado.dispositivo)
+        || entradas.find(d => d.nombre === app.ajustes.dispositivo)
+        || null;
+    if (!cual) {
+        return { ok: false, error: `No encontré ${estado.dispositivo || 'la entrada de la clase'}: `
+            + 'elegí otra en el rótulo Audio para seguir grabando audio.' };
+    }
+    await abrirEntrada(cual.id);
+    if (!audio.abierto) {
+        return { ok: false, error: `${audio.error || 'No se pudo abrir la entrada.'} `
+            + 'Elegí otra en el rótulo Audio para seguir grabando audio.' };
+    }
+    return mandarAlMotor();
+}
+
+/** Le dice al motor con qué suena la entrada que quedó abierta, y empieza a mandar. */
+async function mandarAlMotor() {
+    const como = fuente.comoSuena();
+    const r = await window.nt.grabarCambiarEntrada({
+        dispositivo: como.dispositivo, sampleRate: como.sampleRate, canales: como.canales
+    });
+    if (!r || !r.ok) return { ok: false, error: (r && r.error) || 'El motor no aceptó la entrada nueva.' };
+    await fuente.empezarAMandar();
+    return { ok: true, estado: r.estado, toma: r.toma };
+}

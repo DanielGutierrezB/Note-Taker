@@ -214,6 +214,10 @@ window.nt = {
     grabarCerrarToma: async ms => cerrarEn(ms),
     grabarDeshacer: async () => ({ ok: true, que: 'poner la toma 4 en S', estado: estadoEnVivo() }),
     grabarRehacer: async () => ({ ok: false, estado: estadoEnVivo() }),
+    // La app arranca sin ninguna clase grabando: cada escenario va a su
+    // pantalla después (`aplicar`).
+    grabarEstado: async () => null,
+    grabarCambiarEntrada: async como => ({ ok: true, toma: null, estado: { ...laSesion(), dispositivo: como.dispositivo } }),
     grabarListar: async () => sesiones(),
     grabarRenombrar: async () => ({ ok: true, secuencia: 'renombrada', movida: true, audios: 1 }),
 
@@ -459,7 +463,10 @@ async function aplicar() {
         hay('foto') || hay('foto-cien')) {
         const estado = estadoEnVivo(estadoDeLaClase());
         vivo = estado;
-        app.irAVivo(estado, { abierto: true, caido: hay('sin-audio'), pico: 0.42 });
+        app.irAVivo(estado, {
+            abierto: true, caido: hay('sin-audio'), pico: 0.42,
+            dispositivo: 'Audio del sistema (Zoom, Meet, lo que suene)', clase: 'llamada'
+        });
         // Una toma cerrada desplegada: es donde se ven los dos bordes y las orillas.
         if (hay('desplegada')) document.querySelector('#lista-vivo [data-hace="plegar"][data-toma="1"]').click();
         // La foto del OUT en grande, abierta desde el bloque de su toma: es lo

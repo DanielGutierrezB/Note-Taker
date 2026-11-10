@@ -95,7 +95,14 @@ const app = {
     camarasParaElegir: () => camarasParaElegir(),
 
     /** Elegir una cámara desde cualquier sitio: Ajustes o la barra de la clase. */
-    ponerCamara: cual => ponerCamara(cual)
+    ponerCamara: cual => ponerCamara(cual),
+
+    /**
+     * Las entradas de audio y el cambio con la clase grabando. Las abre y las
+     * sigue Preparar, que es la dueña del audio; la barra de En vivo pregunta.
+     */
+    entradasParaElegir: () => preparar.entradasParaElegir(),
+    cambiarEntrada: id => preparar.cambiarEntradaGrabando(id)
 };
 
 async function arrancar() {
@@ -139,12 +146,31 @@ async function arrancar() {
     // derecho sobre una palabra.
     rotuloBarra.conectar();
 
-    await sesiones.ver();
+    // Una clase que sigue grabando sin ventana: se cerró la ventana o se
+    // recargó. Se vuelve a ella en vez de abrir la lista, que es donde la app
+    // decía que no había nada grabando y no dejaba iniciar otra.
+    const enCurso = await window.nt.grabarEstado();
+    if (enCurso) await volverALaClase(enCurso);
+    else await sesiones.ver();
     await revisarDependencias();
 
     const info = await window.nt.appInfo();
     pintarVersion(info.version);
     window.nt.anotar('ventana.lista', { version: info.version });
+}
+
+/**
+ * La pantalla de la clase que se está grabando, con su audio otra vez enganchado.
+ *
+ * Si el audio no se puede volver a abrir, se entra igual: la clase sigue
+ * grabando las notas, y el rótulo Audio de la barra es donde se elige otra
+ * entrada.
+ */
+async function volverALaClase(enCurso) {
+    const r = await preparar.reengancharGrabando(enCurso);
+    app.irAVivo(r.estado || enCurso, preparar.elAudio());
+    if (r.ok) avisar('Volviste a la clase que se estaba grabando. Lo anotado sigue ahí.', 'ok');
+    else avisar(r.error, 'error');
 }
 
 /**

@@ -23,7 +23,7 @@ function armar() {
             handle: (canal, fn) => canales.set(canal, fn),
             on: (canal, fn) => escuchas.set(canal, fn)
         },
-        app: { on: (evento, fn) => { if (evento === 'before-quit') alCerrar.push(fn); } },
+        app: { on: (evento, fn) => { if (evento === 'will-quit') alCerrar.push(fn); } },
         send: (canal, payload) => avisos.push({ canal, payload }),
         anotar: (evento, datos) => diario.push({ evento, datos })
     });
@@ -113,7 +113,10 @@ module.exports = function (t) {
 
     t.group('puente · el cierre de la app');
 
-    t.test('se engancha a before-quit para no perder la clase', () => {
+    t.test('se engancha a will-quit para no perder la clase', () => {
+        // En `will-quit` y no en `before-quit`: ese lo cancela main.js cuando
+        // pregunta si terminar la clase, y apagar ahí cerraría la clase aunque
+        // la respuesta fuera seguir grabando.
         const p = armar();
         t.eq(p.alCerrar.length, 1);
         p.alCerrar[0]();  // sin sesión no hace nada, y no puede tirar

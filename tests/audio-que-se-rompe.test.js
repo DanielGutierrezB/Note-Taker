@@ -138,7 +138,8 @@ module.exports = async t => {
         t.eq(e.clave, 'sin audio', 'en rojo, como todo lo que le pasa al audio');
         t.ok(/no llegó al WAV/.test(e.porque), 'y explica qué se perdió');
         t.ok(/ENOSPC/.test(e.porque), 'con el motivo de verdad');
-        t.ok(/reanudar/.test(e.porque), 'y qué hacer, que es lo que un aviso tiene que dar');
+        t.ok(/rótulo Audio/.test(e.porque), 'y qué hacer, que es lo que un aviso tiene que dar');
+        t.ok(!/reanudar/.test(e.porque), 'y no manda a terminar y reanudar, que una clase terminada no se reanuda');
     });
 
     t.test('manda sobre «sin audio»: una entrada caída se nota y esto no', () => {

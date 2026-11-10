@@ -131,11 +131,18 @@ export function deSesion(estado, audio) {
                 ? 'Un pedazo del audio no se pudo procesar y no llegó al WAV'
                 : `${n} pedazos del audio no se pudieron procesar y no llegaron al WAV`) +
                 ': lo que falta no está, y todo lo que viene después queda corrido contra la ' +
-                `cámara. Motivo: ${audio.roto.mensaje}. Si sigue pasando, terminá la sesión: ` +
-                'se puede reanudar en otro WAV y el XML sigue siendo el mismo.'
+                `cámara. Motivo: ${audio.roto.mensaje}. Si sigue pasando, elegí otra entrada en ` +
+                'el rótulo Audio de la barra: la clase sigue en el mismo XML, con otro WAV.'
         };
     }
-    if (audio && audio.caido) return { clave: 'sin audio', palabra: 'sin audio' };
+    if (audio && audio.caido) {
+        return {
+            clave: 'sin audio',
+            palabra: 'sin audio',
+            porque: 'La entrada dejó de mandar audio. Elegí otra en el rótulo Audio de la barra: '
+                + 'la clase sigue en el mismo XML.'
+        };
+    }
     // El ciclo que no llega, y va ANTES de «toma abierta» a propósito: es con
     // una toma abierta cuando esto hace daño. Los bordes de una toma salen de
     // las palabras, así que un transcript atrasado no es solo texto que tarda:
@@ -232,9 +239,11 @@ export function deAudio(audio) {
             listo: 'mal',
             porque: audio.clase === 'llamada'
                 ? 'Se dejó de oír a Zoom: la app se cerró o salió de la reunión. Volvé a ' +
-                  'abrirla y elegí «Audio de Zoom» otra vez; la grabación sigue en el mismo XML.'
+                  'abrirla y elegí «Audio de Zoom» otra vez en el rótulo Audio de la barra; la ' +
+                  'grabación sigue en el mismo XML.'
                 : 'La entrada dejó de existir: se desenchufó, o el programa que la creaba se ' +
-                  'cerró. Elegí otra y la grabación sigue en el mismo XML.'
+                  'cerró. Elegí otra en el rótulo Audio de la barra y la grabación sigue en el ' +
+                  'mismo XML.'
         };
     }
 

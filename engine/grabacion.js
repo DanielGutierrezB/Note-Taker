@@ -252,7 +252,12 @@ function abrirEscucha(params) {
         // su tiempo corre a golpes de `pcm` y no con el reloj, así que al
         // reanudar una clase simulada el WAV nuevo tiene que nacer DESPUÉS del
         // viejo, como en la realidad. La app nunca lo manda.
-        desdeMs: p.sinReloj && Number.isFinite(p.desdeMs) ? p.desdeMs : Date.now()
+        //
+        // `noAntesDe` es donde terminó el WAV anterior de esta misma sesión:
+        // dos WAV encimados en A1 dirían dos veces el mismo instante.
+        desdeMs: Math.max(
+            p.sinReloj && Number.isFinite(p.desdeMs) ? p.desdeMs : Date.now(),
+            Number.isFinite(p.noAntesDe) ? p.noAntesDe : 0)
     });
     sesion.captura = { ...info, segundos: 0 };
     sesion.escuchadoHastaMs = info.desdeMs;
@@ -354,6 +359,66 @@ function vigilarDeriva() {
  */
 function tocaAvisarDeriva(escalon, avisado) {
     return escalon >= 1 && escalon >= Math.max(1, avisado * 2);
+}
+
+/**
+ * Cambia la entrada de audio con la clase grabando, sin perder lo anotado.
+ *
+ * La ventana ya abrió la nueva y dejó de mandar la vieja; acá se cierra el WAV
+ * que venía y se abre otro con la tasa de la que quedó, aunque sea la misma: el
+ * rato del cambio no está en el archivo, y seguir en el mismo correría todo lo
+ * de después contra la cámara. Es lo mismo que pasa al reanudar, y el XML ya
+ * sabe llevar varios WAV, cada uno en su sitio.
+ *
+ * La toma abierta se parte en el cambio (`cambiosToma.pasarAOtroAudio`).
+ *
+ * @param {{dispositivo:string, sampleRate:number, canales:number}} params
+ */
+function cambiarEntrada(params) {
+    // Sin `captura` también: si abrir el WAV nuevo falló la vez anterior, la
+    // clase sigue en pie sin audio y lo que hace falta es justamente otra
+    // entrada.
+    if (!sesion || !sesion.viva || sesion.terminando) {
+        return { ok: false, error: 'No hay una clase grabando.', estado: null };
+    }
+    const p = params || {};
+    const tasa = Number(p.sampleRate);
+    if (!(tasa >= 8000 && tasa <= 192000)) {
+        return { ok: false, error: 'La entrada nueva no dijo a qué tasa suena.', estado: espejo.resumen(sesion) };
+    }
+    const vieja = sesion.captura;
+    if (vieja) {
+        const cerrada = captura.cerrar(vieja.id, Date.now());
+        if (cerrada) {
+            const { error, ...wav } = cerrada;
+            if (error) registro.anotar('main', 'captura.no-cerro', { archivo: wav.archivo, error });
+            sesion.estado.sesiones.push(wav);
+        }
+        sesion.captura = null;
+    }
+    const ultimo = sesion.estado.sesiones[sesion.estado.sesiones.length - 1];
+    const finDelViejo = ultimo ? ultimo.desdeMs + (ultimo.segundos || 0) * 1000 : sesion.estado.ceroMs;
+    let nueva;
+    try {
+        nueva = abrirEscucha({ sampleRate: tasa, canales: Number(p.canales) || 1, noAntesDe: finDelViejo });
+    } catch (err) {
+        registro.anotar('main', 'grabacion.otra-entrada-falla', { error: err.message });
+        espejo.escribir(sesion);
+        return { ok: false, error: `No pude abrir el audio nuevo: ${err.message}`, estado: espejo.resumen(sesion) };
+    }
+    const toma = cambiosToma.pasarAOtroAudio(sesion, finDelViejo, nueva.desdeMs);
+    sesion.estado.dispositivo = p.dispositivo || null;
+    // El atraso se mide desde el WAV nuevo: el viejo ya no corre.
+    sesion.derivaAvisada = 0;
+    registro.anotar('main', 'grabacion.otra-entrada', {
+        dispositivo: sesion.estado.dispositivo,
+        sampleRate: tasa,
+        antes: vieja ? { sampleRate: vieja.sampleRate, segundos: vieja.segundos } : null,
+        huecoMs: Math.max(0, Math.round(nueva.desdeMs - finDelViejo)),
+        toma
+    });
+    espejo.escribir(sesion);
+    return { ok: true, toma, estado: espejo.resumen(sesion) };
 }
 
 /**
@@ -661,6 +726,7 @@ module.exports = {
     enCurso,
     iniciar,
     pcm,
+    cambiarEntrada,
     cambiarIdioma,
     editar,
     editarGrabada: sesionesGrabadas.editarGrabada,

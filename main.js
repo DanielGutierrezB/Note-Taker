@@ -12,7 +12,7 @@
  * motor se puede probar entero sin abrir la app (`node tests/run.js`).
  */
 
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, clipboard,
+const { app, BrowserWindow, Menu, ipcMain, dialog, shell, nativeImage, clipboard,
     screen, systemPreferences } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -79,7 +79,15 @@ function createWindow() {
         }
     });
 
+    cerrarYa = false;
     mainWindow.once('ready-to-show', () => mainWindow.show());
+    // Con una clase grabando, cerrar la ventana la dejaba grabando sin pantalla
+    // desde donde terminarla. Se pregunta.
+    mainWindow.on('close', e => {
+        if (cerrarYa || !grabacion.activa()) return;
+        e.preventDefault();
+        terminarAntesDe(() => { if (mainWindow) mainWindow.close(); });
+    });
     mainWindow.on('closed', () => { mainWindow = null; });
     mainWindow.loadFile('src/index.html');
     // El arnés de desarrollo (capturas, JS inyectado) vive en `dev-shot.js` y
@@ -98,6 +106,69 @@ process.on('unhandledRejection', reason => {
     anotar('error.promesa', { mensaje: reason && reason.message ? reason.message : String(reason) });
     console.error('Promesa rechazada:', reason);
 });
+
+/** Ya se preguntó y se terminó la clase: cerrar no vuelve a preguntar. */
+let cerrarYa = false;
+let preguntando = false;
+
+/**
+ * Pregunta antes de cerrar la ventana o salir con una clase grabando, y si la
+ * respuesta es terminar, la termina como el botón —cierra el audio y relee lo
+ * que falta— antes de `seguir`.
+ */
+async function terminarAntesDe(seguir) {
+    if (preguntando) return;
+    preguntando = true;
+    try {
+        const { response } = await dialog.showMessageBox(mainWindow, {
+            type: 'warning',
+            buttons: ['Seguir grabando', 'Terminar la clase y cerrar'],
+            defaultId: 0,
+            cancelId: 0,
+            message: 'Hay una clase grabando',
+            detail: 'Cerrar termina la clase: se cierra el audio y se releen las últimas tomas, '
+                + 'como con el botón Terminar. Para seguir tomando notas, elegí «Seguir grabando».'
+        });
+        if (response !== 1) return;
+        anotar('app.termina-para-cerrar', {});
+        await grabacion.terminar();
+        cerrarYa = true;
+        seguir();
+    } catch (err) {
+        anotar('app.no-termino-para-cerrar', { error: err.message });
+        dialog.showErrorBox('No se pudo terminar la clase', `${err.message}\n\nLa clase sigue grabando.`);
+    } finally {
+        preguntando = false;
+    }
+}
+
+/**
+ * El menú de la app, sin «Recargar».
+ *
+ * El de fábrica de Electron trae Recargar (⌘R) y Forzar recarga: recargar la
+ * ventana con una clase grabando corta el micrófono, que lo abre la ventana. Y
+ * las herramientas de desarrollo, que en la app instalada no tienen nada que
+ * hacer. El resto es el mismo: el menú de la app, Edición —que es lo que hace
+ * andar copiar y pegar en los campos— y Ventana.
+ */
+function ponerElMenu() {
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+        { role: 'appMenu' },
+        { role: 'editMenu' },
+        {
+            label: 'Ver',
+            submenu: [
+                { role: 'resetZoom' },
+                { role: 'zoomIn' },
+                { role: 'zoomOut' },
+                { type: 'separator' },
+                { role: 'togglefullscreen' },
+                ...(app.isPackaged ? [] : [{ type: 'separator' }, { role: 'toggleDevTools' }])
+            ]
+        },
+        { role: 'windowMenu' }
+    ]));
+}
 
 /**
  * La ventana de la clase, al frente: la que hay aunque esté escondida, o una
@@ -138,6 +209,7 @@ if (!app.requestSingleInstanceLock()) {
             arch: process.arch,
             diario: diario.ok ? `guardando (${diario.teniamos} línea(s) de antes)` : `sin guardar: ${diario.error}`
         });
+        ponerElMenu();
         createWindow();
         app.on('activate', traerLaVentana);
     });
@@ -147,10 +219,17 @@ app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', e => {
+    // ⌘Q con una clase grabando: se pregunta, igual que al cerrar la ventana.
+    // Si se termina, `app.quit()` vuelve a entrar acá con la clase ya cerrada.
+    if (!cerrarYa && grabacion.activa()) {
+        e.preventDefault();
+        terminarAntesDe(() => app.quit());
+        return;
+    }
     // El último segundo del diario, que si no se pierde. Es el segundo más
-    // interesante cuando alguien cierra la app porque se le quedó colgada. (La
-    // grabación en curso la cierra su propio puente: `ipc/grabar.js`.)
+    // interesante cuando alguien cierra la app porque se le quedó colgada. (Lo
+    // que quede de la grabación lo cierra su propio puente: `ipc/grabar.js`.)
     anotar('app.cierra', {});
     registro.volcar();
 });
