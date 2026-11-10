@@ -180,24 +180,65 @@ function iniciar(params) {
         avisar: typeof p.avisar === 'function' ? p.avisar : () => {}
     };
 
-    abrirEscucha({ sampleRate: p.sampleRate, canales: p.canales, sinReloj: p.sinReloj, desdeMs: p.desdeMs });
-    // `sinReloj` es para la simulación, que empuja el ciclo a mano después de
-    // cada pedazo: con el reloj andando las dos pasadas se pisarían y la que
-    // llegara segunda no vería nada.
-    if (!p.sinReloj) {
-        sesion.timer = setInterval(() => { avisarReloj(); ciclo.buscarSenales(sesion); vigilarDeriva(); }, CICLO_MS);
-        // El modelo grande cargado para el texto en vivo. No se espera: mientras
-        // carga, el ciclo oye por whisper-cli como siempre (`oir.escuchar`).
-        residente.arrancar({ idioma: sesion.estado.idioma || 'es' });
+    // Si algo de lo que sigue falla —el disco desenchufado al abrir el WAV, la
+    // carpeta sin permiso al escribir el XML—, la sesión no puede quedar en pie:
+    // nadie podría terminarla y cada «Iniciar» siguiente diría que ya hay una
+    // grabación en curso, hasta reiniciar la app.
+    try {
+        abrirEscucha({ sampleRate: p.sampleRate, canales: p.canales, sinReloj: p.sinReloj, desdeMs: p.desdeMs });
+        // `sinReloj` es para la simulación, que empuja el ciclo a mano después
+        // de cada pedazo: con el reloj andando las dos pasadas se pisarían y la
+        // que llegara segunda no vería nada.
+        if (!p.sinReloj) {
+            sesion.timer = setInterval(() => {
+                avisarReloj();
+                ciclo.buscarSenales(sesion);
+                vigilarDeriva();
+                guardarLaAbierta();
+            }, CICLO_MS);
+            // El modelo grande cargado para el texto en vivo. No se espera:
+            // mientras carga, el ciclo oye por whisper-cli como siempre
+            // (`oir.escuchar`).
+            residente.arrancar({ idioma: sesion.estado.idioma || 'es' });
+        }
+        // Al reanudar, la toma que quedó abierta cuando la app murió viene
+        // cerrada donde llegó el audio y provisional (`paraReanudar`): se relee,
+        // para que su OUT caiga en la última palabra y su texto sea el del
+        // modelo grande.
+        if (previa) {
+            for (const t of sesion.estado.tomas) if (t.outProvisional) relecturas.encolar(sesion, t.id);
+        }
+        espejo.escribir(sesion);
+    } catch (err) {
+        if (sesion.timer) clearInterval(sesion.timer);
+        if (!p.sinReloj) residente.apagar();
+        if (sesion.captura) captura.cerrar(sesion.captura.id, Date.now());
+        registro.anotar('main', 'grabacion.no-arranco', { error: err.message });
+        soltar();
+        throw err;
     }
-    // Al reanudar, la toma que quedó abierta cuando la app murió viene cerrada
-    // donde llegó el audio y provisional (`paraReanudar`): se relee, para que
-    // su OUT caiga en la última palabra y su texto sea el del modelo grande.
-    if (previa) {
-        for (const t of sesion.estado.tomas) if (t.outProvisional) relecturas.encolar(sesion, t.id);
-    }
-    espejo.escribir(sesion);
     return espejo.resumen(sesion);
+}
+
+/**
+ * Cada cuánto se guarda la sesión mientras hay una toma abierta, aunque nada
+ * haya cambiado.
+ *
+ * El archivo de notas se escribe con cada cambio, y una toma abierta crece sin
+ * cambios: el ciclo le agrega palabras y el WAV sigue. Si la app se muere, lo
+ * dicho desde el último cambio no estaba en el disco. Diez segundos es lo que
+ * se arriesga, contra reescribir el archivo entero una vez por segundo.
+ */
+const GUARDAR_LA_ABIERTA_MS = 10000;
+
+function guardarLaAbierta() {
+    if (!sesion || sesion.terminando || vivo.tomaAbierta(sesion.estado) == null) return;
+    if (Date.now() - (sesion.guardadoMs || 0) < GUARDAR_LA_ABIERTA_MS) return;
+    try {
+        espejo.escribir(sesion);
+    } catch (err) {
+        registro.anotar('main', 'grabacion.no-guardo', { error: err.message });
+    }
 }
 
 function abrirEscucha(params) {
@@ -462,7 +503,11 @@ function cerrarLoAbierto() {
     }
     if (sesion.captura) {
         const cerrada = captura.cerrar(sesion.captura.id, Date.now());
-        if (cerrada) sesion.estado.sesiones.push(cerrada);
+        if (cerrada) {
+            const { error, ...wav } = cerrada;
+            if (error) registro.anotar('main', 'captura.no-cerro', { archivo: wav.archivo, error });
+            sesion.estado.sesiones.push(wav);
+        }
         sesion.captura = null;
     }
     return abierta ? abierta.id : null;
@@ -502,25 +547,44 @@ function apagar() {
  * sesión y cuál es.
  */
 
+/**
+ * Si la sesión ya no acepta gestos: «Terminar» está cerrando.
+ *
+ * Mientras dice «terminando», el audio ya se cerró y se releen las últimas
+ * tomas. Un Enter, un Reabrir o un ⌘Z que entrara ahí podía abrir una toma
+ * después de cerrar lo abierto, y esa toma no llegaba al XML. Se contesta el
+ * estado tal cual, igual que con una toma que no existe.
+ */
+function cerrando() {
+    return Boolean(sesion && sesion.terminando);
+}
+
 function editar(cambio) {
+    if (cerrando()) return espejo.resumen(sesion);
     return cambiosToma.editar(sesion, cambio);
 }
 
 /** `ms`, si viene, es la palabra donde se soltó el IN; sin él, ahora. */
 function abrirToma(ms) {
+    if (cerrando()) return espejo.resumen(sesion);
     return cambiosToma.abrirToma(sesion, { ms: ms == null ? undefined : Number(ms) });
 }
 
 /** `ms`, si viene, es la palabra donde se soltó el OUT; sin él, la última dicha. */
 function cerrarToma(ms) {
+    if (cerrando()) return espejo.resumen(sesion);
     return cambiosToma.cerrarToma(sesion, { ms: ms == null ? undefined : Number(ms) });
 }
 
+const NO_MIENTRAS_TERMINA = 'La clase está terminando: ya no se puede deshacer ni rehacer.';
+
 function deshacer() {
+    if (cerrando()) return { ok: false, error: NO_MIENTRAS_TERMINA, estado: espejo.resumen(sesion) };
     return cambiosToma.volver(sesion, 'atras');
 }
 
 function rehacer() {
+    if (cerrando()) return { ok: false, error: NO_MIENTRAS_TERMINA, estado: espejo.resumen(sesion) };
     return cambiosToma.volver(sesion, 'adelante');
 }
 
@@ -621,6 +685,7 @@ module.exports = {
     // Para poder empujar el ciclo desde una prueba o desde el arnés, sin esperar
     // el segundo del reloj.
     buscarSenales: () => ciclo.buscarSenales(sesion),
+    guardarLaAbierta,
     vigilarDeriva,
     avisarReloj,
     // Para las pruebas que necesitan poner palabras a mano en una toma, que es

@@ -195,7 +195,18 @@ ipc.handle('dependencias-cancelar', (event, clave) => dependencias.cancelar(clav
 
 // ─── Ajustes ──────────────────────────────────────────────────────────
 
-ipc.handle('ajustes-leer', () => ajustes.leer());
+// Con el aviso de unos ajustes que no se pudieron leer, si lo hay: no se
+// guarda —`sanear` lo deja afuera— y la ventana lo muestra al arrancar.
+let ajustesIlegiblesAnotados = false;
+ipc.handle('ajustes-leer', () => {
+    const leidos = ajustes.leer();
+    const aviso = ajustes.aviso();
+    if (aviso && !ajustesIlegiblesAnotados) {
+        ajustesIlegiblesAnotados = true;
+        anotar('ajustes.ilegibles', { aviso });
+    }
+    return aviso ? { ...leidos, aviso } : leidos;
+});
 
 /**
  * Guarda un PARCHE sobre lo que hay, no el objeto entero.

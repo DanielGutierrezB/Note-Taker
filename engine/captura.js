@@ -41,6 +41,13 @@ const workspace = require('./workspace');
 const BITS = 16;
 
 const sesiones = new Map();
+/**
+ * El número del último WAV abierto en este proceso.
+ *
+ * Vuelve a cero con cada arranque, así que no alcanza para nombrar: al reanudar
+ * después de reabrir la app, el `-1.wav` ya está en el disco con la primera
+ * mitad de la clase. `abrir` salta los que ya existen.
+ */
 let proxima = 0;
 
 function cabecera(bytesDeDatos, sampleRate, canales) {
@@ -76,11 +83,29 @@ function abrir(params) {
 
     const sampleRate = Math.round(p.sampleRate || 48000);
     const canales = Math.max(1, Math.min(2, Math.round(p.canales || 1)));
-    const id = ++proxima;
-    const archivo = path.join(dir, `${workspace.safeName(p.nombre || 'escucha')}-${id}.wav`);
+    const base = workspace.safeName(p.nombre || 'escucha');
 
-    const fd = fs.openSync(archivo, 'w');
-    fs.writeSync(fd, cabecera(0, sampleRate, canales), 0, 44, 0);
+    // Con `wx` y no con `w`: abrir un archivo que ya existe lo truncaría, y lo
+    // que hay adentro es audio de una clase que no se puede volver a grabar.
+    let id;
+    let archivo;
+    let fd;
+    for (;;) {
+        id = ++proxima;
+        archivo = path.join(dir, `${base}-${id}.wav`);
+        try {
+            fd = fs.openSync(archivo, 'wx');
+            break;
+        } catch (err) {
+            if (err.code !== 'EEXIST') throw err;
+        }
+    }
+    try {
+        fs.writeSync(fd, cabecera(0, sampleRate, canales), 0, 44, 0);
+    } catch (err) {
+        try { fs.closeSync(fd); } catch (e) { /* ya estaba cerrado */ }
+        throw err;
+    }
 
     const sesion = {
         id,
@@ -123,18 +148,31 @@ function segundosDe(s) {
     return s.bytes / (s.sampleRate * s.canales * BITS / 8);
 }
 
-/** Cierra la sesión dejando la cabecera con el tamaño real. */
+/**
+ * Cierra la sesión dejando la cabecera con el tamaño real.
+ *
+ * **Siempre suelta la sesión, aunque la cabecera no se pueda escribir.** Antes
+ * el error salía antes de soltarla: el archivo quedaba cerrado y la sesión en
+ * la lista, así que cada «Terminar» siguiente volvía a escribir sobre un
+ * archivo cerrado y volvía a fallar. El audio ya está en el disco —la cabecera
+ * se escribe con cada pedazo—, así que lo que se pierde es a lo sumo el último
+ * tamaño, y el error vuelve en `error` para que quien cierra lo diga.
+ */
 function cerrar(id, hastaMs) {
     const s = sesiones.get(id);
     if (!s) return null;
+    sesiones.delete(id);
+    let error = null;
     try {
         fs.writeSync(s.fd, cabecera(s.bytes, s.sampleRate, s.canales), 0, 44, 0);
-    } finally {
-        try { fs.closeSync(s.fd); } catch (e) { /* ya estaba cerrado */ }
+    } catch (err) {
+        error = err.message;
     }
+    try { fs.closeSync(s.fd); } catch (e) { /* ya estaba cerrado */ }
     s.hastaMs = Number(hastaMs) || Date.now();
-    sesiones.delete(id);
-    return resumen(s);
+    const salida = resumen(s);
+    if (error) salida.error = error;
+    return salida;
 }
 
 function resumen(s) {

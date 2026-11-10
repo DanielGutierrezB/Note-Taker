@@ -97,6 +97,7 @@ function escribir(sesion) {
 
     workspace.writeAtomic(archivos.xml, notasXml.xmlDeNotas(conSesiones));
     workspace.writeJson(archivos.json, notasXml.sidecar(conSesiones));
+    sesion.guardadoMs = Date.now();
     return archivos;
 }
 

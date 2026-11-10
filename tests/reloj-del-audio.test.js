@@ -87,7 +87,7 @@ module.exports = function (t) {
     t.test('el reloj de la sesión lo llama, y antes que al ciclo', () => {
         // Si fuera al revés, una pasada que tarda se lleva puesto el segundo.
         const codigo = leer('engine', 'grabacion.js');
-        const m = codigo.match(/setInterval\(\(\) => \{ ([^}]+)\}/);
+        const m = codigo.match(/setInterval\(\(\) => \{\s*([^}]+)\}/);
         t.ok(m, 'la sesión tiene su reloj');
         t.ok(/^avisarReloj\(\);/.test(m[1].trim()), `el reloj va primero: «${m[1].trim()}»`);
     });

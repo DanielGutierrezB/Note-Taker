@@ -102,6 +102,7 @@ async function arrancar() {
     // Lo primero: desde acá cada gesto queda en el diario (`acciones.js`).
     anotarLosGestos(window.nt.anotar);
     app.ajustes = await window.nt.ajustesLeer();
+    if (app.ajustes.aviso) avisar(app.ajustes.aviso, 'error');
 
     $('#marca').innerHTML = `${icono('claqueta')}<span>Note Taker</span>`;
     $('#btn-ajustes').innerHTML = icono('ajustes');

@@ -35,6 +35,7 @@ const FILES = [
     'foto-del-out.test.js',
     'ajustar-corte.test.js',
     'sesion.test.js',
+    'reanudar-y-cierre.test.js',
     'reloj-del-audio.test.js',
     'revision-motor.test.js',
     'final-de-toma.test.js',

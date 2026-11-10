@@ -221,14 +221,48 @@ function sanear(crudo) {
     };
 }
 
+/**
+ * Dónde quedó la copia de un archivo de ajustes que no se pudo leer, si hubo uno.
+ *
+ * Unos ajustes ilegibles se leen como los de fábrica —no pueden dejar sin
+ * grabar—, y el próximo guardado escribe encima. Sin la copia, eso borraba en
+ * silencio el fps, la carpeta y la cámara de quien usaba la app: la secuencia
+ * seguía a 23,976 y los marcadores salían a 30.
+ */
+let rescatado = null;
+
 function leer() {
+    let texto;
     try {
-        return sanear(JSON.parse(fs.readFileSync(archivo(), 'utf8')));
+        texto = fs.readFileSync(archivo(), 'utf8');
     } catch (err) {
-        // Sin archivo o con un archivo roto se arranca con lo de fábrica: unos
-        // ajustes ilegibles no pueden dejar sin grabar.
         return sanear(null);
     }
+    try {
+        return sanear(JSON.parse(texto));
+    } catch (err) {
+        rescatar(texto);
+        return sanear(null);
+    }
+}
+
+/** Guarda aparte el archivo roto, una vez, antes de que nadie escriba encima. */
+function rescatar(texto) {
+    if (rescatado) return;
+    const copia = `${archivo()}.ilegible-${Date.now()}`;
+    try {
+        fs.writeFileSync(copia, texto);
+        rescatado = copia;
+    } catch (e) {
+        rescatado = null;
+    }
+}
+
+/** Qué decirle a la persona si sus ajustes no se pudieron leer, o null. */
+function aviso() {
+    if (!rescatado) return null;
+    return 'Los ajustes no se podían leer y volvieron a los de fábrica: revisá los cuadros '
+        + `por segundo y la carpeta. El archivo de antes quedó en ${rescatado}.`;
 }
 
 function guardar(datos) {
@@ -260,6 +294,6 @@ function recordarCarpeta(ruta) {
 }
 
 module.exports = {
-    leer, guardar, recordarCarpeta, dondeViven: archivo,
+    leer, guardar, recordarCarpeta, aviso, dondeViven: archivo,
     sanear, archivo, DEFAULTS, RECIENTES, FPS_POSIBLES
 };

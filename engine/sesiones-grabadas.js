@@ -488,6 +488,26 @@ function rehacerXml(json, enCurso) {
  * @param {string} [enCurso] la secuencia que se está grabando ahora
  * @returns {{dir:string, ceroMs:number, estado:object}}
  */
+/**
+ * Cuántos segundos de audio tiene un WAV, contados por su tamaño.
+ *
+ * Por el tamaño y no por la cabecera: la cabecera se reescribe con cada pedazo,
+ * pero el último pedazo puede haber llegado sin ella si la app murió entre las
+ * dos escrituras. Los 44 bytes de la cabecera no son audio.
+ *
+ * @returns {number|null} null si el archivo no está
+ */
+function segundosEnElDisco(archivo, wav) {
+    let bytes;
+    try {
+        bytes = fs.statSync(archivo).size;
+    } catch (e) {
+        return null;
+    }
+    const porSegundo = (wav.sampleRate || 48000) * (wav.canales || 1) * 2;
+    return Math.round(Math.max(0, bytes - 44) / porSegundo * 100) / 100;
+}
+
 function paraReanudar(json, enCurso) {
     const sitio = workspace.sesionDelSidecar(json);
     const estado = leerSidecar(json);
@@ -506,11 +526,18 @@ function paraReanudar(json, enCurso) {
     }
 
     // El WAV anterior tiene que quedar apuntado donde está HOY: es de ahí que
-    // sale el clip de A1 y la relectura de sus tomas.
-    const sesiones = (estado.sesiones || []).map(s => ({
-        ...s,
-        archivo: dondeQuedoElWav(sitio, s.archivo)
-    }));
+    // sale el clip de A1 y la relectura de sus tomas. Y con lo que mide HOY: el
+    // que estaba abierto cuando la app murió dice en el archivo de notas los
+    // segundos del último guardado, y el disco tiene todo lo que llegó después.
+    const sesiones = (estado.sesiones || []).map(s => {
+        const archivo = dondeQuedoElWav(sitio, s.archivo);
+        const medidos = segundosEnElDisco(archivo, s);
+        return {
+            ...s,
+            archivo,
+            segundos: medidos != null ? Math.max(Number(s.segundos) || 0, medidos) : s.segundos
+        };
+    });
 
     // Una toma que quedó abierta se cierra donde llegó el audio. Apagar la
     // app lo hace (`cerrarLoAbierto`), pero la app que se MUERE no apaga nada:

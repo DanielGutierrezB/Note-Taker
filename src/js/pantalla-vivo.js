@@ -1491,6 +1491,8 @@ function escribiendo() {
 
 async function alTeclado(e) {
     if (!$('#vista-vivo').classList.contains('es-activa')) return;
+    // Terminando, el motor ya no acepta gestos (`cerrando` en `grabacion.js`).
+    if (terminando) return;
     // Con Ajustes o Diagnóstico abiertos encima, el teclado es de ellos: una
     // «p» en el selector de idioma cambiaba la vista de una toma.
     if (document.querySelector('.telon.es-activa')) return;
