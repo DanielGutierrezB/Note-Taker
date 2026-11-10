@@ -133,6 +133,7 @@
 .mini-vistas { display: inline-flex; gap: 2px; flex: 0 0 auto; }
 
 .mini-vista {
+  display: none;
   min-width: 26px;
   height: 20px;
   padding: 0 4px;
@@ -155,7 +156,7 @@
 .mini-vista:hover { color: var(--text-primary); background: color-mix(in srgb, var(--vista) 30%, transparent); }
 .fila:hover .mini-vista,
 .fila.es-elegida .mini-vista,
-.bloque-toma.es-abierta .mini-vista { visibility: visible; }
+.bloque-toma.es-abierta .mini-vista { display: inline-flex; align-items: center; justify-content: center; visibility: visible; }
 
 /* La foto del OUT, chica: se abre en grande con un clic. */
 .tema-nuevo .foto-mini img { width: 72px; }
@@ -263,3 +264,33 @@
 .tema-nuevo .transcript .palabra.es-hallada-actual { background: #f5c54a; color: #1a1300; box-shadow: 0 0 0 2px #f5c54a; }
 .buscar-pasos { gap: 2px; }
 .buscar-pasos .btn { min-width: 26px; min-height: 26px; font-size: 10px; }
+
+/* ── Que se vea todo en cualquier ancho y distribución ─────────────────────
+   Lo que no entra pasa a otro renglón entero, en vez de empujar lo de la
+   derecha fuera de la ventana; y en una fila lo que se achica es la frase. */
+.tema-nuevo #ahora .tarjeta-cabeza { flex-wrap: wrap; row-gap: var(--sp-2); }
+.tema-nuevo #ahora .tarjeta-cabeza .v1 { white-space: nowrap; }
+.tema-nuevo .seccion-titulo { flex-wrap: wrap; row-gap: var(--sp-2); }
+.tema-nuevo .seccion-titulo > * { white-space: nowrap; }
+.tema-nuevo .buscar-tomas { flex: 1 1 220px; min-width: 180px; max-width: 360px; }
+.tema-nuevo .buscar-tomas input { width: 100%; min-width: 0; }
+.tema-nuevo #lista-vivo .fila > * { flex-shrink: 0; }
+.tema-nuevo #lista-vivo .fila > .fila-nota { flex: 1 1 auto; min-width: 0; }
+.tema-nuevo #lista-vivo .fila > .crece { flex: 0 0 0; }
+
+/* En horizontal la vista se elige en los atajos: el encabezado de la toma no
+   la repite, y le queda lugar al botón de cerrar. */
+.tema-nuevo.es-horizontal #ahora .tarjeta-cabeza .selector-vista { display: none; }
+.tema-nuevo #lista-vivo .bloque-toma.es-abierta > .fila { flex-wrap: wrap; row-gap: var(--sp-1); }
+.tema-nuevo #lista-vivo .bloque-toma.es-abierta > .fila > .fila-nota { flex-basis: 0; min-width: 8ch; }
+
+/* La cabeza de Tomas (el buscador con ▲▼) queda a la vista mientras se recorre
+   la lista, también cuando ▲▼ la hace correr. */
+.tema-nuevo #vista-vivo .scroll > .seccion:last-child > .seccion-titulo {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg-base);
+  padding-block: var(--sp-2);
+}
+.tema-nuevo #lista-vivo .bloque-toma { scroll-margin-top: 96px; }
