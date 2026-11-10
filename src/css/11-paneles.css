@@ -61,6 +61,103 @@
   width: min(980px, 100%);
 }
 
+/* Ajustes: ancho para que una fila de fichas o una frase larga entren en un
+   renglón, con el texto a medida de lectura. Las secciones son <details> con
+   el mismo `name`, así que se abre una a la vez y el panel no se vuelve una
+   columna de tres pantallas. */
+.panel.es-ajustes {
+  width: min(860px, 100%);
+}
+
+.panel.es-ajustes .panel-cuerpo {
+  gap: var(--sp-3);
+}
+
+.panel.es-ajustes .v3 {
+  max-width: 78ch;
+}
+
+.aj-seccion {
+  background: var(--bg-base);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.aj-seccion[open] {
+  border-color: var(--border-field);
+}
+
+.aj-seccion > summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  min-height: 44px;
+  padding: var(--sp-4) var(--sp-5);
+  cursor: pointer;
+  list-style: none;
+}
+
+.aj-seccion > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* El chevron, girado cuando está abierta. */
+.aj-seccion > summary::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-right: var(--sp-1);
+  border-right: 2px solid var(--text-secondary);
+  border-bottom: 2px solid var(--text-secondary);
+  transform: translateY(-2px) rotate(-45deg);
+  transition: transform var(--ease);
+}
+
+.aj-seccion[open] > summary::before {
+  transform: translateY(-3px) rotate(45deg);
+}
+
+.aj-seccion > summary:hover {
+  background: var(--layer-hover);
+}
+
+.aj-titulo {
+  flex: none;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.aj-resumen {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+#aj-deps-dice[data-falta='si'] {
+  color: var(--warn);
+}
+
+.aj-contenido {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: 0 var(--sp-5) var(--sp-5);
+}
+
+.aj-buscar {
+  flex: none;
+}
+
+.panel.es-ajustes .camara-previa {
+  width: 224px;
+  height: 126px;
+}
+
 .panel.es-ancho .panel-cuerpo > p,
 .panel.es-ancho .campo > p {
   max-width: 74ch;

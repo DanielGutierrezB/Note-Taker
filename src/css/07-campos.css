@@ -54,7 +54,52 @@ select {
 }
 
 
-/* Las frases que oye la app (Ajustes). Cada frase es una ficha con su ×. */
+/* Las frases que oye la app y el glosario (Ajustes). Cada grupo es una caja
+   con un filete a la izquierda del color de lo que hace, el mismo que tiene en
+   la pantalla de la clase: el IN azul (`--accent`) y el OUT rojo (`--error`),
+   como las líneas del transcript, y cada vista el suyo (`--vista`). Las fichas
+   del grupo llevan ese color en el borde, así una frase suelta dice de qué
+   lista es sin leer el título. */
+.frases-grupo {
+  --tono: var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--tono);
+  border-radius: var(--radius);
+}
+
+.frases-grupo.es-in { --tono: var(--accent); }
+.frases-grupo.es-out { --tono: var(--error); }
+
+.frases-cabeza {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+/* «IN» y «OUT» como plaquitas rellenas del color de su línea. */
+.frases-marca {
+  padding: 1px var(--sp-2);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  background: var(--tono);
+}
+
+.es-in > .frases-cabeza .frases-marca { color: var(--on-accent); }
+.es-out > .frases-cabeza .frases-marca { color: var(--on-error); }
+
+.frases-que {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 .frases-cuenta {
   display: flex;
   align-items: center;
@@ -65,12 +110,6 @@ select {
 
 .frases-cuenta input {
   accent-color: var(--accent);
-}
-
-.frases-lista {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
 }
 
 .frases-fichas {
@@ -87,15 +126,9 @@ select {
   padding: 0 var(--sp-1) 0 var(--sp-3);
   font-size: 13px;
   color: var(--text-primary);
-  background: var(--bg-surface);
-  border: 1px solid var(--hairline);
+  background: var(--bg-inset);
+  border: 1px solid color-mix(in srgb, var(--tono, var(--hairline)) 55%, var(--hairline));
   border-radius: var(--radius-sm);
-}
-
-.ficha-vista {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
 }
 
 .ficha-quitar {
@@ -116,9 +149,63 @@ select {
   background: var(--layer-hover);
 }
 
-.frases-elige-vista {
-  width: auto;
+/* «Cambiar de vista»: una fila por vista, con su sigla rellena del color de la
+   vista —la misma que en la barra de la clase— y su filete. */
+#aj-frases-vistas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.frases-vista {
+  --tono: var(--vista);
+  display: grid;
+  grid-template-columns: 168px 1fr;
+  align-items: start;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: color-mix(in srgb, var(--vista) 8%, var(--bg-inset));
+  border-left: 3px solid var(--vista);
+  border-radius: var(--radius-sm);
+}
+
+.frases-vista-quien {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--row);
+}
+
+.frases-fichas:empty {
+  display: none;
+}
+
+.frases-sigla {
   flex: none;
+  min-width: 32px;
+  padding: 0 var(--sp-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--row-xs);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--vista-tinta);
+  background: var(--vista);
+  border-radius: var(--radius-sm);
+}
+
+.frases-vista-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.frases-vista-nombre {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .glosario-dice[data-falta='si'] {

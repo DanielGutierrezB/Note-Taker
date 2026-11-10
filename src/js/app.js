@@ -30,6 +30,7 @@ import * as fotos from './fotos.js';
 import { anotarLosGestos } from './acciones.js';
 import * as frases from './frases.js';
 import * as glosario from './glosario.js';
+import * as ajustesEntrada from './ajustes-entrada.js';
 
 const app = {
     ajustes: null,
@@ -326,7 +327,7 @@ function pintarResumenDeps(requeridas, otras) {
     const caja = $('#aj-deps');
     if (!dice || !caja) return;
     const faltan = requeridas.concat(otras).map(d => d.nombre);
-    dice.textContent = faltan.length ? `· falta ${faltan.join(', ')}` : '· está todo';
+    dice.textContent = faltan.length ? `falta ${faltan.join(', ')}` : 'está todo';
     dice.dataset.falta = requeridas.length ? 'si' : '';
     if (requeridas.length) caja.open = true;
 }
@@ -354,12 +355,22 @@ function conectarAjustes() {
     $('#aj-fps').innerHTML = FPS.map(f =>
         `<option value="${f}">${f} ${esNtsc(f) ? '(NTSC)' : ''}</option>`).join('');
 
-    $('#aj-fps').addEventListener('change', e => guardar({ fps: Number(e.target.value) }));
-    $('#aj-idioma').addEventListener('change', e => guardar({ idioma: e.target.value }));
+    $('#aj-fps').addEventListener('change', e => guardar({ fps: Number(e.target.value) }).then(resumenDeLaClase));
+    $('#aj-idioma').addEventListener('change', e => guardar({ idioma: e.target.value }).then(resumenDeLaClase));
     $('#aj-camara').addEventListener('change', e => ponerCamara(e.target.value));
     $('#btn-log').addEventListener('click', e => reportar(e.currentTarget));
     frases.conectar(guardar);
     glosario.conectar();
+    ajustesEntrada.conectar(app);
+    $('#aj-camara-buscar').innerHTML = icono('regenerar');
+    $('#aj-camara-buscar').addEventListener('click', () => pintarCamaras(true));
+    // Una sección abierta a la vez lo hace el `name` de los <details>; esto
+    // solo deja a la vista la que se acaba de abrir.
+    for (const seccion of $$('.aj-seccion')) {
+        seccion.addEventListener('toggle', () => {
+            if (seccion.open) seccion.scrollIntoView({ block: 'nearest' });
+        });
+    }
 }
 
 function esNtsc(f) {
@@ -369,8 +380,10 @@ function esNtsc(f) {
 async function pintarAjustes() {
     $('#aj-fps').value = String(app.ajustes.fps);
     pintarIdioma();
+    resumenDeLaClase();
     frases.pintar(app.ajustes.frases);
     await glosario.pintar(app.ajustes.carpeta);
+    ajustesEntrada.pintar(false);
     pintarCamaras();
 }
 
@@ -414,6 +427,7 @@ function pintarIdioma() {
 async function ponerCamara(cual) {
     await guardar({ camara: cual || null });
     await fotos.cambiarCamara(app.ajustes.camara);
+    ajustesEntrada.resumen();
     const select = $('#aj-camara');
     if (select) select.value = app.ajustes.camara || '';
     // La vista previa es de Ajustes, y la suelta cerrar Ajustes. Pedida desde
@@ -460,10 +474,22 @@ async function camarasParaElegir() {
  * **La elegida se guarda aunque hoy no esté conectada**, y sigue en la lista con
  * su nombre: una cámara desenchufada no es un cambio de ajuste.
  */
-async function pintarCamaras() {
+/** El renglón de «La clase» cerrada: a cuántos cuadros y en qué idioma. */
+function resumenDeLaClase() {
+    const idioma = $('#aj-idioma').selectedOptions[0];
+    $('#aj-resumen-clase').textContent = `${app.ajustes.fps} cuadros · ${idioma ? idioma.textContent : app.ajustes.idioma}`;
+}
+
+async function pintarCamaras(aMano) {
     const select = $('#aj-camara');
     const elegida = app.ajustes.camara || '';
-    const { ok, lista, error } = await ojo.camaras();
+    const boton = $('#aj-camara-buscar');
+    if (aMano) boton.disabled = true;
+    const { ok, lista, error } = await ojo.camaras().finally(() => { boton.disabled = false; });
+    if (aMano && ok) {
+        $('#aj-camara-dice').textContent = `${(lista || []).length} cámara${(lista || []).length === 1 ? '' : 's'} encontrada${(lista || []).length === 1 ? '' : 's'}.`;
+    }
+    ajustesEntrada.resumen();
     const nombres = (lista || []).map(c => c.nombre);
     if (elegida && !nombres.includes(elegida)) nombres.push(elegida);
 

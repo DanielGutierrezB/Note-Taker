@@ -63,6 +63,10 @@ function dibujar() {
     $('#aj-glosario-dice').textContent = `${actual.palabras} de ${actual.tope} palabras.`
         + (afuera.length ? ` No entran y quedan afuera: ${afuera.join(', ')}.` : '');
     $('#aj-glosario-dice').dataset.falta = afuera.length ? 'si' : '';
+    const n = (actual.entran || []).length;
+    $('#aj-resumen-glosario').textContent = n
+        ? `${n} término${n === 1 ? '' : 's'}: ${(actual.delCurso || []).length} del curso y ${(actual.general || []).length} generales`
+        : 'vacío';
 }
 
 /** Un guardado a la vez, por lo mismo que en `frases.js`: dos × seguidas se pisaban. */

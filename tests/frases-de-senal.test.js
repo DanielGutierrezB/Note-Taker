@@ -304,8 +304,25 @@ module.exports = async function (t) {
     });
 
     t.test('Ajustes tiene las mismas vistas y las mismas de fábrica que el motor', () => {
-        t.deep(frasesDeAjustes.VISTAS, vivo.VISTAS.map(v => ({ nombre: v.nombre, titulo: v.titulo })));
+        t.deep(frasesDeAjustes.VISTAS, JSON.parse(JSON.stringify(vivo.VISTAS)), 'con el mismo color de cada una');
         t.deep(frasesDeAjustes.DE_FABRICA, JSON.parse(JSON.stringify(vivo.FRASES_DE_FABRICA)));
+    });
+
+    t.test('Ajustes: secciones plegables de a una, IN y OUT con sus colores y una fila por vista', () => {
+        const html = leer('src', 'index.html');
+        const secciones = html.match(/<details class="aj-seccion" name="ajustes"/g) || [];
+        t.ok(secciones.length >= 5, `${secciones.length} secciones con el mismo name: se abre una a la vez`);
+        t.ok(/class="frases-grupo es-in" data-lista="abrir"/.test(html) && /class="frases-grupo es-out" data-lista="cerrar"/.test(html));
+        t.ok(/<select id="aj-entrada"/.test(html) && /id="aj-entrada-buscar"/.test(html), 'el micrófono, con su botón de buscar de nuevo');
+        t.ok(/id="aj-camara-buscar"/.test(html), 'y la cámara también');
+        const js = leer('src', 'js', 'frases.js');
+        t.ok(/data-lista="vista" data-vista="\$\{v\.nombre\}" style="\$\{estiloDeVista\(VISTAS, v\.nombre\)\}"/.test(js),
+            'una fila por vista, con su color');
+        const css = require('./fixtures/css')();
+        t.ok(/\.frases-grupo\.es-in \{ --tono: var\(--accent\); \}/.test(css), 'el IN azul, como su línea');
+        t.ok(/\.frases-grupo\.es-out \{ --tono: var\(--error\); \}/.test(css), 'el OUT rojo');
+        t.ok(/\.borde\.es-in \{ background: var\(--accent\); \}/.test(css) && /\.borde\.es-out \{ background: var\(--error\); \}/.test(css),
+            'que son los de las líneas del transcript');
     });
 
     t.test('una frase de una sola palabra entra con una advertencia', () => {

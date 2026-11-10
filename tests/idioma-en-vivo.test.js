@@ -563,8 +563,8 @@ module.exports = function (t) {
 
     t.test('«Lo que la app necesita» viene plegado', () => {
         const html = leer('src', 'index.html');
-        t.ok(/<details class="campo" id="aj-deps">/.test(html), 'es un desplegable');
-        t.ok(!/<details class="campo" id="aj-deps" open>/.test(html), 'y no nace abierto');
+        t.ok(/<details class="aj-seccion" name="ajustes" id="aj-deps">/.test(html), 'es un desplegable');
+        t.ok(!/id="aj-deps" open>/.test(html), 'y no nace abierto');
         t.ok(/id="aj-deps-dice"/.test(html), 'con un resumen que dice si falta algo');
     });
 

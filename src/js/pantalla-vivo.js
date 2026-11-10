@@ -1526,7 +1526,7 @@ async function cambiarIdioma(cual) {
  * Se dice qué pasó con la toma abierta porque es lo único que cambia en la
  * lista: si se partió, aparece una más, y cada mitad se relee de su audio.
  */
-async function cambiarEntrada(id) {
+export async function cambiarEntrada(id) {
     if (!estado || esDeMirar()) return;
     const r = await app.cambiarEntrada(id);
     if (!r.ok) {

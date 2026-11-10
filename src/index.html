@@ -222,10 +222,12 @@
 <div class="menu-palabra" id="menu-barra" role="menu" hidden></div>
 
 <!-- ── Ajustes ────────────────────────────────────────────────────────
-     Lo que no cambia durante una clase. El fps está acá y no en Preparar
-     porque es del proyecto del editor y no de la sesión. -->
+     Ancho, y en secciones plegables de las que se abre una a la vez (`name`
+     en los <details>): cada una cabe entera sin scroll, y el renglón de cada
+     sección dice cómo está sin abrirla. Los colores son los de la pantalla de
+     la clase: el IN azul, el OUT rojo y cada vista con el suyo. -->
 <div class="telon" id="telon-ajustes">
-  <div class="panel">
+  <div class="panel es-ajustes">
     <div class="panel-cabeza">
       <span class="v1">Ajustes</span>
       <span class="crece"></span>
@@ -233,130 +235,174 @@
               title="Cerrar Ajustes. Cada cosa se guarda al cambiarla, así que no hay nada que confirmar."></button>
     </div>
     <div class="panel-cuerpo">
-      <label class="campo">
-        <span class="rotulo">Cuadros por segundo de la secuencia</span>
-        <select id="aj-fps"></select>
-        <span class="v3">Es el del timeline del editor, no el del audio. Con él se
-          calculan todos los marcadores del XML, así que cambiarlo a mitad de una
-          clase movería los que ya se escribieron: se aplica a la sesión siguiente.</span>
-      </label>
-      <label class="campo">
-        <span class="rotulo">Idioma de la clase</span>
-        <select id="aj-idioma">
-          <option value="auto">Automático</option>
-          <option value="es">Español</option>
-          <option value="en">Inglés</option>
-          <option value="pt">Portugués</option>
-        </select>
-        <span class="v3" id="aj-idioma-dice"></span>
-      </label>
+      <details class="aj-seccion" name="ajustes" id="aj-clase" open>
+        <summary><span class="aj-titulo">La clase</span><span class="aj-resumen" id="aj-resumen-clase"></span></summary>
+        <div class="aj-contenido">
+          <label class="campo">
+            <span class="rotulo">Cuadros por segundo de la secuencia</span>
+            <select id="aj-fps"></select>
+            <span class="v3">Es el del timeline del editor, no el del audio. Con él se
+              calculan todos los marcadores del XML, así que cambiarlo a mitad de una
+              clase movería los que ya se escribieron: se aplica a la sesión siguiente.</span>
+          </label>
+          <label class="campo">
+            <span class="rotulo">Idioma de la clase</span>
+            <select id="aj-idioma">
+              <option value="auto">Automático</option>
+              <option value="es">Español</option>
+              <option value="en">Inglés</option>
+              <option value="pt">Portugués</option>
+            </select>
+            <span class="v3" id="aj-idioma-dice"></span>
+          </label>
+        </div>
+      </details>
+
+      <!-- Lo mismo que se elige en Preparar y en la barra de la clase, por la
+           misma puerta: sirve para probar una entrada que no aparece. Lo llena
+           `src/js/ajustes-entrada.js`; la cámara, `app.js`. -->
+      <details class="aj-seccion" name="ajustes" id="aj-fuentes">
+        <summary><span class="aj-titulo">Micrófono y cámara</span><span class="aj-resumen" id="aj-resumen-fuentes"></span></summary>
+        <div class="aj-contenido">
+          <div class="campo">
+            <span class="rotulo">Entrada de audio</span>
+            <div class="campo-fila">
+              <select id="aj-entrada" aria-label="Entrada de audio"></select>
+              <button id="aj-entrada-buscar" class="btn btn-ico aj-buscar" type="button"
+                      aria-label="Buscar de nuevo las entradas de audio"
+                      title="Volver a preguntarle al sistema qué entradas hay: por si acabás de conectar un micrófono o de abrir Zoom"></button>
+            </div>
+            <span class="v3" id="aj-entrada-dice"></span>
+          </div>
+          <div class="campo">
+            <span class="rotulo">Cámara de referencia</span>
+            <div class="campo-fila">
+              <select id="aj-camara" class="camara-elige" aria-label="Cámara de referencia">
+                <option value="">Ninguna</option>
+              </select>
+              <button id="aj-camara-buscar" class="btn btn-ico aj-buscar" type="button"
+                      aria-label="Buscar de nuevo las cámaras"
+                      title="Volver a preguntarle al sistema qué cámaras hay: por si acabás de conectar una o de abrir OBS"></button>
+            </div>
+            <video id="aj-camara-ve" class="camara-previa" muted playsinline hidden></video>
+            <span class="v3" id="aj-camara-dice">De acá sale la foto de cómo quedó la pantalla al
+              cerrarse cada toma, para verla al retomar o mandársela al profesor. No se graba vídeo:
+              es un fotograma por toma, guardado al lado de las notas y fuera del XML. Si la señal
+              llega por NDI, ponela en una cámara virtual (la de OBS, por ejemplo) y elegila acá.</span>
+          </div>
+        </div>
+      </details>
+
       <!-- Las señales del profesor. Se cambian con la clase andando: Ajustes
            se abre encima de En vivo y la pasada siguiente ya oye las nuevas.
            Lo llena `src/js/frases.js`. -->
-      <div class="campo" id="aj-frases">
-        <span class="rotulo">Frases que oye la app</span>
-        <span class="v3">Lo que dice el profesor para abrir o cerrar una toma, o para pasar a otra
-          vista. Se comparan sin mayúsculas, acentos ni signos, y la frase nunca queda adentro de
-          la toma. Si cambiás algo mientras grabás, la app lo oye desde el segundo siguiente.</span>
-        <label class="frases-cuenta">
-          <input type="checkbox" id="aj-frases-cuenta">
-          <span>La cuenta «3, 2, 1» abre una toma (también en inglés, y con «ok» delante)</span>
-        </label>
-        <div class="frases-lista" data-lista="abrir">
-          <span class="rotulo">Abrir toma (IN): el IN va después de la frase</span>
-          <div class="frases-fichas"></div>
+      <details class="aj-seccion" name="ajustes" id="aj-frases">
+        <summary><span class="aj-titulo">Frases que oye la app</span><span class="aj-resumen" id="aj-resumen-frases"></span></summary>
+        <div class="aj-contenido">
+          <span class="v3">Lo que dice el profesor para abrir o cerrar una toma, o para pasar a otra
+            vista. Se comparan sin mayúsculas, acentos ni signos, y la frase nunca queda adentro de
+            la toma. Si cambiás algo mientras grabás, la app lo oye desde el segundo siguiente.</span>
+
+          <div class="frases-grupo es-in" data-lista="abrir">
+            <div class="frases-cabeza">
+              <span class="frases-marca">IN</span>
+              <span class="frases-que">Abrir la toma</span>
+              <span class="v3">El IN va después de la frase.</span>
+            </div>
+            <label class="frases-cuenta">
+              <input type="checkbox" id="aj-frases-cuenta">
+              <span>La cuenta «3, 2, 1» abre una toma (también en inglés, y con «ok» delante)</span>
+            </label>
+            <div class="frases-fichas"></div>
+            <div class="campo-fila">
+              <input type="text" maxlength="60" data-frase-nueva aria-label="Otra frase que abre una toma"
+                     placeholder="Otra frase que abre, por ejemplo «retoma»">
+              <button class="btn" type="button" data-frase-agregar>Agregar</button>
+            </div>
+          </div>
+
+          <div class="frases-grupo es-out" data-lista="cerrar">
+            <div class="frases-cabeza">
+              <span class="frases-marca">OUT</span>
+              <span class="frases-que">Cerrar la toma</span>
+              <span class="v3">El OUT va antes de la frase. Una de una sola palabra pide un segundo de silencio detrás.</span>
+            </div>
+            <div class="frases-fichas"></div>
+            <div class="campo-fila">
+              <input type="text" maxlength="60" data-frase-nueva aria-label="Otra frase que cierra la toma"
+                     placeholder="Otra frase que cierra, por ejemplo «cortamos acá»">
+              <button class="btn" type="button" data-frase-agregar>Agregar</button>
+            </div>
+          </div>
+
+          <div class="frases-grupo es-vistas">
+            <div class="frases-cabeza">
+              <span class="frases-que">Cambiar de vista</span>
+              <span class="v3">La toma se parte después de la frase y sigue en esa vista. Sin toma
+                abierta, queda elegida para la próxima.</span>
+            </div>
+            <div id="aj-frases-vistas"></div>
+          </div>
+
+          <span class="v3" id="aj-frases-dice" role="status"></span>
           <div class="campo-fila">
-            <input type="text" maxlength="60" data-frase-nueva aria-label="Otra frase que abre una toma"
-                   placeholder="Otra frase que abre, por ejemplo «retoma»">
-            <button class="btn" type="button" data-frase-agregar>Agregar</button>
+            <button id="aj-frases-fabrica" class="btn btn-tenue" type="button"
+                    title="Abrir con la cuenta y «retomamos», cerrar con «pausa» y «pause», y ninguna de vista">Volver a las de fábrica</button>
           </div>
         </div>
-        <div class="frases-lista" data-lista="cerrar">
-          <span class="rotulo">Cerrar toma (OUT): el OUT va antes de la frase</span>
-          <div class="frases-fichas"></div>
-          <div class="campo-fila">
-            <input type="text" maxlength="60" data-frase-nueva aria-label="Otra frase que cierra la toma"
-                   placeholder="Otra frase que cierra, por ejemplo «cortamos acá»">
-            <button class="btn" type="button" data-frase-agregar>Agregar</button>
-          </div>
-        </div>
-        <div class="frases-lista" data-lista="vista">
-          <span class="rotulo">Cambiar de vista: la toma se parte después de la frase y sigue en esa vista</span>
-          <div class="frases-fichas"></div>
-          <div class="campo-fila">
-            <input type="text" maxlength="60" data-frase-nueva aria-label="Una frase que cambia de vista"
-                   placeholder="Por ejemplo «vamos a nuestra pantalla»">
-            <select id="aj-frase-vista" class="frases-elige-vista" aria-label="La vista a la que pasa"></select>
-            <button class="btn" type="button" data-frase-agregar>Agregar</button>
-          </div>
-        </div>
-        <span class="v3" id="aj-frases-dice" role="status"></span>
-        <div class="campo-fila">
-          <button id="aj-frases-fabrica" class="btn btn-tenue" type="button"
-                  title="Abrir con la cuenta y «retomamos», cerrar con «pausa» y «pause», y ninguna de vista">Volver a las de fábrica</button>
-        </div>
-      </div>
+      </details>
+
       <!-- Las palabras que el modelo grande tiene que escribir bien. Lo llena
            `src/js/glosario.js`. -->
-      <div class="campo" id="aj-glosario">
-        <span class="rotulo">Glosario</span>
-        <span class="v3">Nombres de herramientas, personas o siglas que el modelo grande tiene que
-          escribir bien al releer cada toma y al regenerar. Se pueden agregar varias separadas por
-          coma. Si cambiás algo mientras grabás, la próxima toma que se relea ya lo usa.</span>
-        <div class="frases-lista" data-glosario="general" id="aj-glosario-general">
-          <span class="rotulo">General: para todas las clases</span>
-          <div class="frases-fichas"></div>
-          <div class="campo-fila">
-            <input type="text" maxlength="200" data-termino-nuevo aria-label="Otra palabra del glosario general"
-                   placeholder="Por ejemplo «Figma, Notion»">
-            <button class="btn" type="button" data-termino-agregar>Agregar</button>
+      <details class="aj-seccion" name="ajustes" id="aj-glosario">
+        <summary><span class="aj-titulo">Glosario</span><span class="aj-resumen" id="aj-resumen-glosario"></span></summary>
+        <div class="aj-contenido">
+          <span class="v3">Nombres de herramientas, personas o siglas que el modelo grande tiene que
+            escribir bien al releer cada toma y al regenerar. Se pueden agregar varias separadas por
+            coma. Si cambiás algo mientras grabás, la próxima toma que se relea ya lo usa.</span>
+          <div class="frases-grupo" data-glosario="general" id="aj-glosario-general">
+            <div class="frases-cabeza"><span class="frases-que rotulo">General: para todas las clases</span></div>
+            <div class="frases-fichas"></div>
+            <div class="campo-fila">
+              <input type="text" maxlength="200" data-termino-nuevo aria-label="Otra palabra del glosario general"
+                     placeholder="Por ejemplo «Figma, Notion»">
+              <button class="btn" type="button" data-termino-agregar>Agregar</button>
+            </div>
           </div>
-        </div>
-        <div class="frases-lista" data-glosario="delCurso" id="aj-glosario-curso">
-          <span class="rotulo">De este curso</span>
-          <div class="frases-fichas"></div>
-          <div class="campo-fila">
-            <input type="text" maxlength="200" data-termino-nuevo aria-label="Otra palabra del glosario del curso"
-                   placeholder="Por ejemplo «Canva Pro, Magic Studio»">
-            <button class="btn" type="button" data-termino-agregar>Agregar</button>
+          <div class="frases-grupo" data-glosario="delCurso" id="aj-glosario-curso">
+            <div class="frases-cabeza"><span class="frases-que rotulo">De este curso</span></div>
+            <div class="frases-fichas"></div>
+            <div class="campo-fila">
+              <input type="text" maxlength="200" data-termino-nuevo aria-label="Otra palabra del glosario del curso"
+                     placeholder="Por ejemplo «Canva Pro, Magic Studio»">
+              <button class="btn" type="button" data-termino-agregar>Agregar</button>
+            </div>
           </div>
+          <span class="v3 glosario-dice" id="aj-glosario-dice" role="status"></span>
         </div>
-        <span class="v3 glosario-dice" id="aj-glosario-dice" role="status"></span>
-      </div>
-      <div class="campo">
-        <span class="rotulo">Cámara de referencia</span>
-        <div class="campo-fila">
-          <select id="aj-camara" class="camara-elige">
-            <option value="">Ninguna</option>
-          </select>
-          <video id="aj-camara-ve" class="camara-previa" muted playsinline hidden></video>
-        </div>
-        <span class="v3" id="aj-camara-dice">De acá sale la foto de cómo quedó la pantalla al
-          cerrarse cada toma, para verla al retomar o mandársela al profesor. No se graba vídeo:
-          es un fotograma por toma, guardado al lado de las notas y fuera del XML. Si la señal
-          llega por NDI, ponela en una cámara virtual (la de OBS, por ejemplo) y elegila acá.</span>
-      </div>
-      <!-- Plegado, y no porque estorbe: son siete renglones que se consultan
-           el primer día y nunca más, y abiertos empujaban fuera de la vista
-           todo lo que sí se cambia. El resumen dice si falta algo, que es la
-           única pregunta que uno le hace a esta sección. Se abre solo cuando
-           falta algo imprescindible (ver `dependencias.alActualizar`). -->
-      <details class="campo" id="aj-deps">
-        <summary class="rotulo">
-          Lo que la app necesita <span class="v3" id="aj-deps-dice"></span>
-        </summary>
-        <span class="v3">Si falta algo, el botón de al lado lo instala. Los modelos se
-          bajan una sola vez y quedan en tu carpeta de usuario.</span>
-        <div id="deps-ajustes"></div>
       </details>
-      <div class="campo">
-        <span class="rotulo">Actualizaciones</span>
-        <div class="campo-fila">
-          <button id="btn-buscar-update" class="btn" type="button"
-                  title="Preguntar ahora mismo si hay una versión publicada más nueva que esta">Buscar una versión nueva</button>
-          <span id="update-dice" class="v3"></span>
+
+      <!-- Se abre solo cuando falta algo imprescindible (ver
+           `dependencias.alActualizar`): el resumen dice si falta algo, que es la
+           única pregunta que uno le hace a esta sección. -->
+      <details class="aj-seccion" name="ajustes" id="aj-deps">
+        <summary><span class="aj-titulo">Lo que la app necesita</span><span class="aj-resumen" id="aj-deps-dice"></span></summary>
+        <div class="aj-contenido">
+          <span class="v3">Si falta algo, el botón de al lado lo instala. Los modelos se
+            bajan una sola vez y quedan en tu carpeta de usuario.</span>
+          <div id="deps-ajustes"></div>
         </div>
-      </div>
+      </details>
+
+      <details class="aj-seccion" name="ajustes" id="aj-actualizar">
+        <summary><span class="aj-titulo">Actualizaciones</span><span class="aj-resumen" id="update-dice"></span></summary>
+        <div class="aj-contenido">
+          <div class="campo-fila">
+            <button id="btn-buscar-update" class="btn" type="button"
+                    title="Preguntar ahora mismo si hay una versión publicada más nueva que esta">Buscar una versión nueva</button>
+          </div>
+        </div>
+      </details>
     </div>
     <div class="panel-pie">
       <button id="btn-log" class="btn btn-tenue" type="button"

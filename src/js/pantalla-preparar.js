@@ -149,6 +149,21 @@ async function releerEntradas() {
     if (!r.ok) avisar(r.error, 'error');
 }
 
+/**
+ * Elegir la entrada desde Ajustes, con Preparar delante: la misma apertura
+ * que el selector de su renglón, que es lo que la pantalla de atrás muestra.
+ */
+export async function elegirEntrada(id) {
+    await abrirEntrada(id);
+    pintar();
+    return audio.abierto ? { ok: true } : { ok: false, error: audio.error || 'No se pudo abrir esa entrada.' };
+}
+
+/** La entrada que está abierta ahora, por su nombre, o null. */
+export function entradaAbierta() {
+    return audio.abierto ? audio.dispositivo : null;
+}
+
 /** Volver a leer lo que se pudo cambiar en Ajustes, y repintar. */
 export async function refrescar() {
     if (cargando) return;
