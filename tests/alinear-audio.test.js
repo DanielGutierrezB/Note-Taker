@@ -75,7 +75,7 @@ module.exports = function (t) {
         const puente = leer('ipc', 'grabar.js');
         t.ok(/grabacion\.pcm\(chunk, 'ventana'\)/.test(puente), 'el de la ventana va marcado');
         t.ok(/alPcm: chunk => grabacion\.pcm\(chunk\)/.test(puente), 'el del ayudante no: ya se rellena allá');
-        const motor = leer('engine', 'grabacion.js');
+        const motor = leer('engine', 'audio-de-la-sesion.js');
         t.ok(/origen === 'ventana' && cap\.alinear/.test(motor), 'y el motor solo alinea el marcado');
     });
 };

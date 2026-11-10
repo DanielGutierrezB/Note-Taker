@@ -17,6 +17,7 @@ const os = require('os');
 const path = require('path');
 
 const captura = require('../engine/captura');
+const workspace = require('../engine/workspace');
 const grabacion = require('../engine/grabacion');
 const puente = require('../ipc/grabar');
 
@@ -186,6 +187,90 @@ module.exports = function (t) {
             grabacion._sesion().reintentoMs = 0;
             grabacion._reintentarAudio();
             t.ok(grabacion._sesion().captura && grabacion._sesion().captura.archivo !== antes, 'y hay otro');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('si al despertar no se puede abrir ni guardar, la clase no queda dormida ni reintenta por pedazo', () => {
+        grabando(5);
+        const abrir = captura.abrir;
+        const atomico = workspace.writeAtomic;
+        let intentos = 0;
+        try {
+            const s = grabacion._sesion();
+            s.avisar = () => {};
+            grabacion.dormir();
+            s.dormidaMs = Date.now() - 5000;
+            captura.abrir = () => { intentos++; throw new Error('ENOENT: el disco no volvió'); };
+            workspace.writeAtomic = () => { throw new Error('ENOENT: el disco no volvió'); };
+            const r = grabacion.despertar();
+            t.ok(r && !r.ok, 'no abrió, y lo dice sin tirar');
+            t.eq(s.dormida, false, 'y la clase ya no está dormida');
+            for (let i = 0; i < 12; i++) grabacion.pcm(pedazo());
+            t.eq(intentos, 1, 'los pedazos que llegan no vuelven a intentar abrir: eso es del ciclo');
+        } finally {
+            captura.abrir = abrir;
+            workspace.writeAtomic = atomico;
+            grabacion.apagar();
+        }
+    });
+
+    t.test('el reintento es con la entrada que se pidió, y solo si el audio está llegando', () => {
+        grabando(5);
+        const abrir = captura.abrir;
+        try {
+            const s = grabacion._sesion();
+            s.avisar = () => {};
+            captura.abrir = () => { throw new Error('EIO'); };
+            const r = grabacion.cambiarEntrada({ dispositivo: 'AirPods', sampleRate: 24000, canales: 1 });
+            captura.abrir = abrir;
+            t.ok(!r.ok, 'la nueva no abrió');
+            s.reintentoMs = 0;
+            grabacion._reintentarAudio();
+            t.eq(s.captura, null, 'sin audio llegando no se abre un WAV para nadie');
+            grabacion.pcm(pedazo());
+            grabacion._reintentarAudio();
+            t.ok(s.captura, 'con audio llegando, sí');
+            t.eq(s.captura.sampleRate, 24000, 'a la tasa de la entrada que se pidió, no la de antes');
+            t.eq(s.estado.dispositivo, 'AirPods');
+        } finally {
+            captura.abrir = abrir;
+            grabacion.apagar();
+        }
+    });
+
+    t.test('una clase reanudada queda con el micrófono de hoy', () => {
+        const st = grabando(5);
+        grabacion.apagar();
+        grabacion.reanudar(st.archivos.json, { fps: 30, sinReloj: true, dispositivo: 'Shure USB' });
+        try {
+            const s = grabacion._sesion();
+            t.eq(s.estado.dispositivo, 'Shure USB', 'el estado, que es con el que la ventana se reengancha');
+            t.eq(s.ultimaEntrada.dispositivo, 'Shure USB', 'y con el que se reabre al despertar');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('un cierre que quedó esperando no termina la clase que arrancó después', async () => {
+        grabando(5);
+        let seguir;
+        grabacion._sesion().pasada = new Promise(r => { seguir = r; });
+        const cerrando = grabacion.terminar();
+        grabacion.apagar();
+        let negada = null;
+        try {
+            grabando(1);
+        } catch (err) {
+            negada = err.message;
+        }
+        t.ok(/todavía se está cerrando/.test(negada || ''), 'mientras el cierre espera, no arranca otra');
+        seguir();
+        t.eq(await cerrando, null, 'y el cierre ve que su clase ya no está');
+        grabando(1);
+        try {
+            t.ok(grabacion.activa(), 'después, sí');
         } finally {
             grabacion.apagar();
         }

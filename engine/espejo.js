@@ -19,6 +19,7 @@
 
 const os = require('os');
 const ajustar = require('./ajustar-corte');
+const registro = require('./registro');
 const historial = require('./deshacer');
 const notasXml = require('./notas-xml');
 const vivo = require('./notas-vivo');
@@ -85,7 +86,7 @@ function escribir(sesion) {
     const conSesiones = {
         ...sesion.estado,
         sesiones: sesion.estado.sesiones.concat(
-            sesion.captura ? [{ ...sesion.captura }] : []),
+            sesion.captura ? [wavQueSeEscribe(sesion.captura)] : []),
         // Quién la está grabando, y cuándo dio señales por última vez: con la
         // carpeta en un Drive compartido, otra Mac que la ve «abierta» tiene que
         // saber que no quedó así sino que se está grabando en otra parte, y no
@@ -111,6 +112,40 @@ function escribir(sesion) {
     workspace.writeJson(archivos.json, notasXml.sidecar(conSesiones), { asegurar: true, conservarAnterior: true, compacto: true });
     sesion.guardadoMs = Date.now();
     return archivos;
+}
+
+/**
+ * El WAV abierto, como va al archivo de notas: los mismos campos que uno
+ * cerrado (`captura.resumen`). La captura viva lleva además lo que solo sirve
+ * mientras se graba —el alineador, los errores seguidos, el último pedazo—, y
+ * eso no es de la clase.
+ */
+function wavQueSeEscribe(c) {
+    return { id: c.id, archivo: c.archivo, desdeMs: c.desdeMs, sampleRate: c.sampleRate, canales: c.canales, segundos: c.segundos };
+}
+
+/**
+ * Escribir sin tirar, para lo que guarda de paso —el ciclo, un cambio de
+ * entrada, el idioma— y no puede quedar a medias porque la carpeta no esté. Lo
+ * dice: al diario siempre, y en pantalla una vez cada cinco minutos mientras
+ * siga fallando, porque el audio puede seguir entrando bien y las notas no
+ * estar quedando en el disco. Devuelve si pudo.
+ */
+const AVISAR_QUE_NO_GUARDA_MS = 5 * 60 * 1000;
+function guardar(sesion) {
+    try {
+        escribir(sesion);
+        sesion.noGuardoAvisadoMs = 0;
+        return true;
+    } catch (err) {
+        registro.anotar('main', 'grabacion.no-guardo', { error: err.message });
+        const ahora = Date.now();
+        if (ahora - (sesion.noGuardoAvisadoMs || 0) > AVISAR_QUE_NO_GUARDA_MS) {
+            sesion.noGuardoAvisadoMs = ahora;
+            sesion.avisar({ tipo: 'error', mensaje: `No pude guardar las notas de la clase: ${err.message}` });
+        }
+        return false;
+    }
 }
 
 /**
@@ -280,6 +315,7 @@ module.exports = {
     archivosDeLaSesion,
     archivosDeLaClase,
     escribir,
+    guardar,
     resumen,
     fijar
 };

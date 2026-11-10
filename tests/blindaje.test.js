@@ -59,7 +59,7 @@ module.exports = async function (t) {
     t.test('al despertar, el audio sigue en un WAV nuevo, en su hora', () => {
         const main = leer('main.js');
         t.ok(/powerMonitor\.on\('resume', \(\) => \{[\s\S]{0,200}grabacion\.despertar\(/.test(main));
-        t.ok(/function despertar\(\)[\s\S]{0,400}reabrirAudio\(AL_DESPERTAR\)/.test(leer('engine', 'grabacion.js')),
+        t.ok(/function despertar\(s\)[\s\S]{0,400}reabrir\(s, AL_DESPERTAR\)/.test(leer('engine', 'audio-de-la-sesion.js')),
             'que reabre el audio');
         grabacion.iniciar({ dir: carpeta(), curso: 'prueba', fps: 30, sinReloj: true, dispositivo: 'MacBook' });
         try {
