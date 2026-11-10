@@ -230,6 +230,12 @@ module.exports = async function (t) {
         t.deep(f.vista, [{ frase: 'a slides', vista: 'S' }]);
     });
 
+    t.test('«ok vamos» y «okvamos» son la misma frase para el reconocedor, y para el saneo también', () => {
+        const f = ajustes.sanear({ frases: { abrir: ['okvamos'], cerrar: ['ok vamos'] } }).frases;
+        t.deep(f.cerrar, [], 'en dos listas se pisaban: decir la de cerrar abría');
+        t.ok(/const clave = frase => palabrasDe\(frase\)\.join\(''\);/.test(leer('src', 'js', 'frases.js')), 'y Ajustes dice lo mismo');
+    });
+
     t.test('con tope de largo y de cantidad, y sin vistas que no existen', () => {
         const larga = 'palabra '.repeat(20);
         const f = ajustes.sanear({

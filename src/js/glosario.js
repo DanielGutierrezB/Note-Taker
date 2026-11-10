@@ -12,7 +12,7 @@
  * `engine/glosario.js`): acá se manda lo que se quiere y se pinta lo que volvió.
  */
 
-import { $, esc } from './chrome.js';
+import { $, esc, avisar } from './chrome.js';
 
 let carpeta = null;
 let actual = null;
@@ -65,12 +65,24 @@ function dibujar() {
     $('#aj-glosario-dice').dataset.falta = afuera.length ? 'si' : '';
 }
 
+/** Un guardado a la vez, por lo mismo que en `frases.js`: dos × seguidas se pisaban. */
+let guardando = false;
+
 async function guardar(cambio) {
-    const r = await window.nt.glosarioGuardar({ carpeta, ...cambio });
-    if (!r || !r.ok) return null;
-    actual = r;
-    dibujar();
-    return r;
+    if (guardando) return null;
+    guardando = true;
+    try {
+        const r = await window.nt.glosarioGuardar({ carpeta, ...cambio });
+        if (!r || !r.ok) {
+            avisar(`No se pudo guardar el glosario: ${(r && r.error) || 'sin respuesta'}`, 'error');
+            return null;
+        }
+        actual = r;
+        dibujar();
+        return r;
+    } finally {
+        guardando = false;
+    }
 }
 
 function sacar(cual, i) {

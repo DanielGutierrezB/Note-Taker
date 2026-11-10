@@ -231,6 +231,22 @@ function siEstaOcupada(json) {
     if (regenerando.has(json)) {
         throw new Error('Esa sesión se está regenerando: esperá a que termine para tocarla.');
     }
+    const dentro = [...generando].some(c => path.resolve(json).startsWith(path.resolve(c) + path.sep));
+    if (dentro) throw new Error('Se está armando el proyecto de Premiere de esta carpeta: esperá a que termine.');
+}
+
+/**
+ * Las carpetas cuyo .prproj se está armando.
+ *
+ * Armarlo cede el paso entre clase y clase (`prproj-carpeta.ceder`), y en ese
+ * paso entraba un «Renombrar» o un «Borrar» de una clase de la misma carpeta:
+ * el proyecto salía con la ruta vieja del WAV, que Premiere abre sin conectar.
+ */
+const generando = new Set();
+
+function marcarGenerando(carpeta, si) {
+    if (si) generando.add(carpeta);
+    else generando.delete(carpeta);
 }
 
 async function regenerar(json, avisar, enCurso, glosario) {
@@ -865,6 +881,7 @@ function borrar(json, enCurso) {
 }
 
 module.exports = {
+    marcarGenerando,
     SUFIJO_SIDECAR,
     listar,
     proximoNumero,

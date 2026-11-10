@@ -63,6 +63,27 @@ module.exports = function (t) {
         t.ok(ajustar.outAjustado(a) <= b.inMs);
     });
 
+    t.test('si la vecina se desactiva, el freno se va con ella', () => {
+        const a = tomaAjustada(1, 10000, 20000, 10000, 20450);
+        const b = tomaAjustada(2, 20300, 30000, 19900, 30000);
+        ajustar.noCruzarVecinas([a, b]);
+        t.eq(ajustar.outAjustado(a), 20150, 'frenado');
+        b.descartada = true;
+        ajustar.noCruzarVecinas([a, b]);
+        t.eq(ajustar.outAjustado(a), 20450, 'vuelve a lo que dio la onda');
+        t.eq(a.ajuste.porQueOut, 'silencio');
+    });
+
+    t.test('un borde que no se pudo mirar sigue diciéndolo, para volver a intentarlo', () => {
+        const a = tomaAjustada(1, 10000, 20000, 10000, 20000);
+        a.ajuste.porQueOut = 'sin-audio';
+        const b = tomaAjustada(2, 20100, 30000, 19900, 30000);
+        ajustar.noCruzarVecinas([a, b]);
+        t.ok(ajustar.inAjustado(b) >= ajustar.outAjustado(a), 'frenado igual');
+        t.eq(b.ajuste.porQueIn, 'vecina');
+        t.eq(a.ajuste.porQueOut, 'sin-audio');
+    });
+
     t.test('una desactivada en el medio no cuenta', () => {
         const a = tomaAjustada(1, 10000, 20000, 10000, 20450);
         const fuera = { ...tomaAjustada(2, 20100, 20200, 20100, 20200), descartada: true };
@@ -170,6 +191,25 @@ module.exports = function (t) {
         const conG = exigido(/a/g);
         t.eq('banana'.replace(conG, () => 'o'), 'bonono', 'con /g, todas');
         t.eq('banana'.replace(conG, () => 'o'), 'bonono', 'y otra vez igual: el lastIndex no queda colgado');
+    });
+
+    t.group('premiere · armar sin que otro gesto se meta en el medio');
+
+    t.test('mientras se arma el proyecto de una carpeta, sus clases no se renombran ni se borran', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-generando-'));
+        try {
+            const json = path.join(dir, 'xml', 'Datos', 'x_notas-en-vivo.json');
+            sesionesGrabadas.marcarGenerando(dir, true);
+            let error = null;
+            try { sesionesGrabadas.borrar(json, null); } catch (e) { error = e.message; }
+            t.ok(error && /armando el proyecto/.test(error), error);
+            sesionesGrabadas.marcarGenerando(dir, false);
+            t.ok(/if \(carpeta\) sesionesGrabadas\.marcarGenerando\(carpeta, false\);/.test(leer('engine', 'prproj-carpeta.js')),
+                'y se suelta aunque armar falle');
+        } finally {
+            sesionesGrabadas.marcarGenerando(dir, false);
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
     });
 
     t.group('premiere · armar sin trabar el audio');

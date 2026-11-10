@@ -108,11 +108,11 @@ module.exports = function (t) {
         t.ok(/if \(!medir\) form\.append\('no_language_probabilities', 'true'\);/.test(js));
     });
 
-    t.test('el vivo mide el idioma cada cinco segundos, y nunca con «auto»', () => {
+    t.test('el vivo mide el idioma cada cinco segundos, y siempre con «auto», hasta que se asienta', () => {
         const js = leer('engine', 'oir.js');
         t.eq(require('../engine/oir').MEDIR_IDIOMA_CADA_MS, 5000);
         const toca = js.slice(js.indexOf('function tocaMedirIdioma('), js.indexOf('async function delResidente('));
-        t.ok(/if \(pedido === 'auto'\) return false;/.test(toca));
+        t.ok(/if \(pedido === 'auto'\) return true;/.test(toca));
         t.ok(/delResidente\(recortado\.archivo, releerCon, false\)/.test(js), 'la segunda lectura en el otro idioma no mide');
     });
 

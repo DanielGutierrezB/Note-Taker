@@ -811,8 +811,11 @@ class Taller {
      */
     valorDelParametro(k, valor) {
         const p = this.proyecto;
+        // El que muestra el panel tiene que estar; el del tiempo cero, si está,
+        // también se cambia. Un parámetro sin `<StartKeyframe>` es un molde que
+        // nunca se animó, y exigirlo tiraba abajo el proyecto entero por un mute.
         p.escribir(k, p.contenido(k)
-            .replace(exigido(/<StartKeyframe>([^,]*),[^,]*,/), (_m, primero) => `<StartKeyframe>${primero},${valor},`)
+            .replace(/<StartKeyframe>([^,]*),[^,]*,/, (_m, primero) => `<StartKeyframe>${primero},${valor},`)
             .replace(exigido(/<CurrentValue>[^<]*<\/CurrentValue>/), () => `<CurrentValue>${valor}</CurrentValue>`));
     }
 

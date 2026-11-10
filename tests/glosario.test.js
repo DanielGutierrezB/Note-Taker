@@ -33,10 +33,11 @@ module.exports = function (t) {
         const general = Array.from({ length: 140 }, (_x, i) => `general${i}`);
         const delCurso = Array.from({ length: 20 }, (_x, i) => `curso${i}`);
         const r = glosario.combinar(general, delCurso);
-        t.eq(r.palabras, glosario.PALABRAS_MAX);
         t.ok(delCurso.every(x => r.entran.includes(x)), 'entra todo el del curso');
-        t.eq(r.afuera.length, 10, 'y quedan afuera diez del general');
-        t.ok(r.afuera.every(x => x.startsWith('general')));
+        t.ok(r.afuera.length > 0 && r.afuera.every(x => x.startsWith('general')), 'y lo que queda afuera es del general');
+        t.eq(r.entran.length + r.afuera.length, 160, 'nada se pierde sin decirlo');
+        t.ok(glosario.tokensEstimados(glosario.texto(r.entran)) < 223,
+            'el tope es el de tokens: cien términos sueltos pasaban los 222 sin pasar las 150 palabras');
     });
 
     t.test('el del curso va al final, que es lo que whisper.cpp guarda si tiene que cortar', () => {

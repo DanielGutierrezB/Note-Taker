@@ -152,7 +152,9 @@ function frasesSanas(crudas) {
             const texto = typeof x === 'string' ? x : (x && x.frase);
             if (typeof texto !== 'string') continue;
             const frase = texto.replace(/\s+/g, ' ').trim().slice(0, FRASE_MAX).trim();
-            const clave = vivo.palabrasDeFrase(frase).join(' ');
+            // Pegada, como la busca el reconocedor (`reglasDeFrases`): «ok vamos»
+            // y «okvamos» son la misma frase para él, y en dos listas se pisaban.
+            const clave = vivo.palabrasDeFrase(frase).join('');
             if (!clave || yaEstan.has(clave)) continue;
             if (conVista && !vistas.has(x && x.vista)) continue;
             yaEstan.add(clave);

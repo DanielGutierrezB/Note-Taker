@@ -665,7 +665,12 @@ function repasarSenales(texto, marcas) {
         if (!hijo.classList.contains('palabra')) continue;
         cual++;
         const marca = marcas.get(cual);
-        if ((hijo.dataset.senal || '') === (marca ? marca.tipo : '')) continue;
+        // Por el tipo y por la pista: la «pausa» que no cerró cambia de pista
+        // cuando llega la palabra de detrás —recién ahí se mide el hueco—, y
+        // una frase de vista cambia la suya si se le cambia la vista en Ajustes.
+        const igual = (hijo.dataset.senal || '') === (marca ? marca.tipo : '')
+            && (!marca || hijo.title === senales.pistaDe(marca));
+        if (igual) continue;
         if (marca) {
             hijo.dataset.senal = marca.tipo;
             hijo.title = senales.pistaDe(marca);

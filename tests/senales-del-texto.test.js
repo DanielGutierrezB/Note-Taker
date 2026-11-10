@@ -173,6 +173,12 @@ module.exports = async t => {
         t.ok(/s\.title = senales\.pistaDe\(senal\)/.test(codigo), 'y el hueco llega al título');
     });
 
+    t.test('la pista de una palabra marcada se pone al día aunque la marca sea la misma', () => {
+        const js = leer('src', 'js', 'grabar', 'texto-toma.js');
+        t.ok(/&& \(!marca \|\| hijo\.title === senales\.pistaDe\(marca\)\);/.test(js),
+            'la «pausa» que no cerró cambia de pista cuando se mide el hueco');
+    });
+
     t.group('señales · la ventana y el motor dicen lo mismo');
 
     t.test('las expresiones y los números son los del motor, letra por letra', () => {

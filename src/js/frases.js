@@ -30,17 +30,23 @@ export const DE_FABRICA = { cuenta: true, abrir: ['retomamos'], cerrar: ['pausa'
 
 const LISTAS = ['abrir', 'cerrar', 'vista'];
 
+/** Cuántas entran en cada lista: `ajustes.FRASES_POR_LISTA`. */
+const POR_LISTA = 20;
+
 let guardar = null;
 let actuales = DE_FABRICA;
 
-/** Lo mismo que `texto.norm`, para saber si dos frases son la misma. */
-function clave(frase) {
+/** Las palabras de una frase, como las compara el motor (`texto.norm`). */
+function palabrasDe(frase) {
     return String(frase == null ? '' : frase).split(/\s+/).map(p => p
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]/g, '')).filter(Boolean).join(' ');
+        .replace(/[^a-z0-9]/g, '')).filter(Boolean);
 }
+
+/** Si dos frases son la misma: pegadas, como las busca el reconocedor. */
+const clave = frase => palabrasDe(frase).join('');
 
 const textoDe = x => (typeof x === 'string' ? x : x.frase);
 
@@ -87,12 +93,24 @@ export function pintar(frases) {
     }
 }
 
+/**
+ * Un guardado a la vez: dos clics en × antes de que vuelva el primero
+ * filtraban la misma lista vieja, y el segundo reponía lo que sacó el primero.
+ */
+let guardando = false;
+
 async function cambiar(frases, siSale) {
-    const r = await guardar({ frases });
-    if (!r || !r.ok) return null;
-    pintar(r.ajustes.frases);
-    if (siSale) decir(siSale);
-    return r.ajustes.frases;
+    if (guardando) return null;
+    guardando = true;
+    try {
+        const r = await guardar({ frases });
+        if (!r || !r.ok) return null;
+        pintar(r.ajustes.frases);
+        if (siSale) decir(siSale);
+        return r.ajustes.frases;
+    } finally {
+        guardando = false;
+    }
 }
 
 function decir(texto) {
@@ -108,6 +126,10 @@ async function agregar(cual) {
     const campo = $(`[data-lista="${cual}"] [data-frase-nueva]`);
     const frase = campo.value.replace(/\s+/g, ' ').trim();
     if (!clave(frase)) return;
+    if ((actuales[cual] || []).length >= POR_LISTA) {
+        decir(`Esta lista ya tiene ${POR_LISTA} frases: sacá una para agregar «${frase}».`);
+        return;
+    }
     const nueva = cual === 'vista' ? { frase, vista: $('#aj-frase-vista').value } : frase;
     const quedaron = await cambiar({ ...actuales, [cual]: (actuales[cual] || []).concat([nueva]) });
     if (!quedaron) return;
@@ -122,7 +144,7 @@ async function agregar(cual) {
  * porque una sola palabra cierra solo con un segundo de silencio detrás.
  */
 export function advertencia(cual, frase) {
-    if (clave(frase).split(' ').length > 1) return '';
+    if (palabrasDe(frase).length > 1) return '';
     if (cual === 'cerrar') {
         return `«${frase}» es una sola palabra: cierra solo si después hay un segundo de silencio, como «pausa».`;
     }

@@ -14,7 +14,9 @@
  * largo del glosario: con él justo, no se arrastra nada más. Si queda corto,
  * whisper.cpp se queda con los ÚLTIMOS tokens, y por eso el del curso va al
  * final: lo que se cae es lo del general. (Leído en `vendor/whisper.cpp`,
- * `whisper_full_with_state`.)
+ * `whisper_full_with_state`.) Como la cuenta es por lo alto, pueden colarse
+ * unos pocos tokens de la ventana anterior: no los suficientes para trabar
+ * la puntuación, que es lo que se midió (`tools/banco-pasada.js --relectura`).
  *
  * El tokenizador vive en el modelo y desde acá no se puede preguntar cuántos
  * tokens son, así que se estima por lo alto: un token de más deja pasar un
@@ -32,8 +34,8 @@ const { norm } = require('./texto');
  * Cuántas palabras entran entre los dos glosarios.
  *
  * El prompt de whisper.cpp tiene la mitad del contexto de texto del modelo,
- * 224 tokens, y una palabra técnica en español son de uno a tres. Ciento
- * cincuenta palabras separadas por comas quedan por debajo.
+ * 224 tokens. Las palabras son el tope que se le dice a la persona; el que
+ * manda es el de tokens (`combinar`), que con términos cortos llega antes.
  */
 const PALABRAS_MAX = 150;
 const TERMINO_MAX = 40;
@@ -95,10 +97,16 @@ function combinar(general, delCurso) {
     const entranDelCurso = [];
     const entranDelGeneral = [];
     const afuera = [];
+    // El tope de verdad es el de tokens: las palabras son lo que se le puede
+    // decir a la persona, pero una coma ya es un token y cien términos sueltos
+    // pasaban los 222 sin pasar las 150 palabras. Lo que no entra en tokens
+    // también queda afuera, y se dice.
+    const entraEnTokens = lista => tokensEstimados(texto(lista)) < TOKENS_MAX;
     for (const [lista, destino] of [[curso, entranDelCurso], [delGeneral, entranDelGeneral]]) {
         for (const t of lista) {
             const n = palabrasDe(t);
-            if (palabras + n > PALABRAS_MAX) { afuera.push(t); continue; }
+            const conEste = entranDelGeneral.concat(entranDelCurso, [t]);
+            if (palabras + n > PALABRAS_MAX || !entraEnTokens(conEste)) { afuera.push(t); continue; }
             palabras += n;
             destino.push(t);
         }

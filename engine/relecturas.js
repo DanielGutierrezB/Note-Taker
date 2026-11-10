@@ -223,7 +223,9 @@ async function completarOrilla(sesion, toma) {
     // "lo tiene". Puesta después, una lectura que se muere dejaría a la toma
     // declarando que todavía le falta, y la siguiente que la encolara —mover un
     // borde y volverlo a su sitio, por ejemplo— pediría la misma orilla otra vez.
-    toma.releida = { ...bordes, orillaMs: quiere };
+    const leidoAntes = toma.releida && toma.releida.leidoHastaMs;
+    toma.releida = { ...bordes, orillaMs: quiere, leidoHastaMs: leidoAntes };
+    const grabadoHasta = espejo.grabadoHastaMs(sesion);
     try {
         const oido = await oirToma.tramo(espejo.archivosDeLaSesion(sesion),
             bordes.outMs - SOLAPE_DE_ORILLA_MS, bordes.outMs + quiere, false, sesion.estado.idioma);
@@ -234,6 +236,9 @@ async function completarOrilla(sesion, toma) {
         if (toma.inMs !== bordes.inMs || toma.outMs !== bordes.outMs) return;
         if (!oido || !oido.palabras) return;
         toma.despues = oido.palabras.filter(w => w.t >= bordes.outMs);
+        // Recién ahora se sabe que hay texto hasta ahí: lo que se pidió, o lo
+        // que estaba grabado cuando se pidió, lo que sea menos.
+        toma.releida.leidoHastaMs = Math.max(leidoAntes || 0, Math.min(bordes.outMs + quiere, grabadoHasta));
         registro.anotar('main', 'relectura.orilla', {
             toma: toma.id, pideMs: Math.round(quiere), palabras: toma.despues.length
         });
@@ -346,7 +351,10 @@ async function rehacer(sesion, id) {
             // Acercar el OUT le suma a la orilla lo mismo que le quitó a la toma:
             // el audio leído llega igual de lejos, solo que el borde se corrió.
             const yaTiene = orillaMs + Math.max(0, seLeyoCon.outMs - toma.outMs);
-            toma.releida = { inMs: toma.inMs, outMs: toma.outMs, orillaMs: yaTiene };
+            // `leidoHastaMs` es hasta dónde hay texto del modelo grande de
+            // verdad, que no es lo mismo que la orilla pedida: es lo que usa
+            // mover un borde para no releer (`tramoLeido` en cambios-toma.js).
+            toma.releida = { inMs: toma.inMs, outMs: toma.outMs, orillaMs: yaTiene, leidoHastaMs: seLeyoCon.outMs + orillaMs };
             // Y si le faltó contexto a la derecha, se encola la segunda pasada.
             // No al terminar: ahí el audio ya se cerró, esa orilla no va a
             // llegar nunca y la toma se encolaría sola hasta el final.

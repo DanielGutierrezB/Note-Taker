@@ -372,6 +372,16 @@ function armarPre(taller, clase, plan, fuentes, capturas, medios, bin) {
 const ceder = () => new Promise(r => setImmediate(r));
 
 async function generar(opciones) {
+    const carpeta = opciones && opciones.carpeta;
+    if (carpeta) sesionesGrabadas.marcarGenerando(carpeta, true);
+    try {
+        return await armar(opciones);
+    } finally {
+        if (carpeta) sesionesGrabadas.marcarGenerando(carpeta, false);
+    }
+}
+
+async function armar(opciones) {
     const op = opciones || {};
     const vacio = { ok: false, ruta: null, clases: 0, avisos: [], cuenta: [], error: null };
     const decir = (hecho, total, que) => {

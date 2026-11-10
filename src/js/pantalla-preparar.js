@@ -149,6 +149,13 @@ async function releerEntradas() {
     if (!r.ok) avisar(r.error, 'error');
 }
 
+/** Volver a leer lo que se pudo cambiar en Ajustes, y repintar. */
+export async function refrescar() {
+    if (cargando) return;
+    glosario = window.nt.glosarioLeer ? await window.nt.glosarioLeer(app.ajustes.carpeta) : null;
+    pintar();
+}
+
 export async function salir() {
     if (window.nt.grabarSoltarOido) window.nt.grabarSoltarOido();
     await fuente.cerrar();
@@ -168,7 +175,7 @@ function pintar() {
     const carpeta = app.ajustes.carpeta;
     const c = estados.deCarpeta(carpeta, disco);
 
-    const listo = a.listo === 'si' && w.listo === 'si' && c.listo === 'si';
+    const listo = a.listo === 'si' && w.listo === 'si' && c.listo === 'si' && !audio.abriendo;
     const boton = $('#btn-iniciar');
     boton.disabled = !listo;
     boton.textContent = reanudar ? 'Reanudar la grabación' : 'Iniciar grabación';
@@ -414,7 +421,35 @@ async function abrirEntrada(id) {
     });
     ultimoPico = 0;
     ultimoEstado = null;
-    const r = await fuente.abrir(entrada, {
+    // Mientras abre, la de antes ya se está cerrando: Iniciar se apaga hasta
+    // saber con qué entrada y a qué tasa se graba (`pintar`). Es una cuenta y
+    // no un sí o no: la que quedó reemplazada termina antes que la que la
+    // reemplazó, y no puede volver a encender Iniciar en el medio.
+    audio.abierto = false;
+    audio.abriendo = (audio.abriendo || 0) + 1;
+    pintar();
+    let r;
+    try {
+        r = await abrirLaEntrada(entrada);
+    } finally {
+        audio.abriendo--;
+    }
+    // Otra elección llegó mientras esta abría: la pantalla es de esa.
+    if (r.reemplazada) return r;
+    if (!r.ok) {
+        // El motivo va al renglón y no a un aviso que se va: es lo que hay que
+        // leer para arreglarlo, y en cuatro segundos no se lee.
+        Object.assign(audio, { abierto: false, dispositivo: entrada.nombre, error: r.error });
+        return r;
+    }
+    const nombre = entrada.nombre;
+    Object.assign(audio, { abierto: true, caido: false, dispositivo: nombre });
+    app.ajustes = (await window.nt.ajustesGuardar({ dispositivo: nombre })).ajustes;
+    return r;
+}
+
+function abrirLaEntrada(entrada) {
+    return fuente.abrir(entrada, {
         alNivel: pico => {
             ultimoPico = Math.max(pico, ultimoPico * 0.85);
             audio.pico = ultimoPico;
@@ -464,21 +499,10 @@ async function abrirEntrada(id) {
             pintar();
         }
     });
-    // Otra elección llegó mientras esta abría: la pantalla es de esa.
-    if (r.reemplazada) return;
-    if (!r.ok) {
-        // El motivo va al renglón y no a un aviso que se va: es lo que hay que
-        // leer para arreglarlo, y en cuatro segundos no se lee.
-        Object.assign(audio, { abierto: false, dispositivo: entrada.nombre, error: r.error });
-        return;
-    }
-    const nombre = entrada.nombre;
-    Object.assign(audio, { abierto: true, caido: false, dispositivo: nombre });
-    app.ajustes = (await window.nt.ajustesGuardar({ dispositivo: nombre })).ajustes;
 }
 
 async function iniciar() {
-    if (cargando) return;
+    if (cargando || audio.abriendo) return;
     const como = fuente.comoSuena();
     const payload = {
         dir: app.ajustes.carpeta,
@@ -547,7 +571,9 @@ export async function cambiarEntradaGrabando(id) {
     const antes = audio.abierto ? entradas.find(d => d.nombre === audio.dispositivo) || null : null;
     if (antes && antes.id === id) return { ok: true, estado: null };
     await fuente.dejarDeMandar();
-    await abrirEntrada(id);
+    // Reemplazada por otra elección hecha mientras abría: de esa se ocupa la
+    // otra llamada. Seguir acá le avisaba al motor de una entrada ya cerrada.
+    if ((await abrirEntrada(id) || {}).reemplazada) return { ok: true, estado: null };
     const fallo = audio.abierto ? null : (audio.error || 'No se pudo abrir esa entrada.');
     if (fallo && antes) await abrirEntrada(antes.id);
     if (!audio.abierto) {
@@ -578,7 +604,7 @@ export async function reengancharGrabando(estado) {
         return { ok: false, error: `No encontré ${estado.dispositivo || 'la entrada de la clase'}: `
             + 'elegí otra en el rótulo Audio para seguir grabando audio.' };
     }
-    await abrirEntrada(cual.id);
+    if ((await abrirEntrada(cual.id) || {}).reemplazada) return { ok: true, estado: null };
     if (!audio.abierto) {
         return { ok: false, error: `${audio.error || 'No se pudo abrir la entrada.'} `
             + 'Elegí otra en el rótulo Audio para seguir grabando audio.' };

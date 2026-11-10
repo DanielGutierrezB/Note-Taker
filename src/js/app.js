@@ -263,7 +263,11 @@ async function reportar(boton) {
  */
 function cerrarPanel(id) {
     verPanel(id, false);
-    if (id === 'telon-ajustes') ojo.soltar('ajustes');
+    if (id !== 'telon-ajustes') return;
+    ojo.soltar('ajustes');
+    // Preparar dice el fps, el idioma y el glosario, y Ajustes se abre desde
+    // sus renglones: al volver, tienen que decir lo que se acaba de guardar.
+    if ($('#vista-preparar').classList.contains('es-activa')) preparar.refrescar();
 }
 
 /* ─── Lo que falta ────────────────────────────────────────────────────── */

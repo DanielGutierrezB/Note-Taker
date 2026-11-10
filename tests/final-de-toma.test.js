@@ -56,7 +56,7 @@ function conWhisperFalso(fn) {
             // texto del ciclo puesto en su sitio.
             if (falso.colgar) await new Promise(() => {});
             return {
-                antes: [], despues: [], colapsadas: 0, relectura: null,
+                antes: [], despues: falso.despues ? falso.despues(toma) : [], colapsadas: 0, relectura: null,
                 palabras: [{ t: toma.inMs, texto: 'RELEÍDA', hasta: toma.inMs + 300 }]
             };
         };
@@ -164,6 +164,44 @@ module.exports = function (t) {
         await reposo();
         t.deep(falso.leidas, [1], 'sin otra pasada por la GPU');
         t.eq(toma.releida.outMs, toma.outMs, 'y la marca dice que está leída con los bordes de ahora');
+    }));
+
+    t.test('dentro de lo leído, lo del vivo no se suma al texto del modelo grande', conWhisperFalso(async falso => {
+        const { st } = await conUnaTomaAbierta(falso, 8);
+        const s = grabacion._sesion();
+        grabacion.cerrarToma(st.ceroMs + 3500);
+        for (let i = 0; i < 14; i++) grabacion.pcm(pedazo());
+        falso.ventana = [];
+        await grabacion.buscarSenales();
+        await reposo();
+        // Lo que dejan las dos lecturas detrás del OUT: el modelo grande escribió
+        // «Bueno,» y el vivo oyó «bueno» treinta milisegundos antes.
+        const toma = s.estado.tomas[0];
+        toma.despues = [{ t: toma.outMs + 530, texto: 'Bueno,', hasta: toma.outMs + 800 }];
+        s.estado.sueltas = [{ t: toma.outMs + 500, texto: 'bueno', hasta: toma.outMs + 780 }];
+        grabacion.editar({ tipo: 'borde', toma: 1, borde: 'out', paredMs: toma.outMs + 1000 });
+        await reposo();
+        const textos = s.estado.tomas[0].palabras.map(x => x.texto);
+        t.ok(textos.includes('Bueno,'), textos.join(' '));
+        t.ok(!textos.includes('bueno'), 'sin la palabra dos veces');
+        t.ok(!s.estado.sueltas.some(x => x.texto === 'bueno'), 'y ya no está suelta');
+    }));
+
+    t.test('una orilla pedida que no se llegó a leer no cuenta como leída', conWhisperFalso(async falso => {
+        const { st } = await conUnaTomaAbierta(falso, 8);
+        const s = grabacion._sesion();
+        grabacion.cerrarToma(st.ceroMs + 3500);
+        for (let i = 0; i < 14; i++) grabacion.pcm(pedazo());
+        falso.ventana = [];
+        await grabacion.buscarSenales();
+        await reposo();
+        const toma = s.estado.tomas[0];
+        // Como la deja la segunda pasada antes de leer, o una que falló: la
+        // orilla pedida, sin saber hasta dónde hay texto.
+        toma.releida = { inMs: toma.inMs, outMs: toma.outMs, orillaMs: 12000 };
+        grabacion.editar({ tipo: 'borde', toma: 1, borde: 'out', paredMs: st.ceroMs + 3600 });
+        await reposo();
+        t.deep(falso.leidas, [1, 1], 'se relee');
     }));
 
     /* ─── Dos pasadas, y la corta primero ─────────────────────────────────────
@@ -319,7 +357,7 @@ module.exports = function (t) {
             // La clase sigue grabando mientras Whisper trabaja.
             for (let i = 0; i < 20; i++) grabacion.pcm(pedazo());
             return {
-                antes: [], despues: [], colapsadas: 0, relectura: null,
+                antes: [], despues: falso.despues ? falso.despues(toma) : [], colapsadas: 0, relectura: null,
                 palabras: [{ t: toma.inMs + 500, texto: 'inventada', hasta: toma.inMs + 800 }]
             };
         };

@@ -95,8 +95,10 @@ const MEDIR_IDIOMA_CADA_MS = 5000;
 const medido = new WeakMap();
 
 function tocaMedirIdioma(sesion, pedido) {
-    // Con `auto` el idioma sale gratis: es el que el modelo eligió para leer.
-    if (pedido === 'auto') return false;
+    // Con `auto` se mide siempre: es solo hasta que el idioma se asienta, y sin
+    // los pesos un «nl» detectado se llevaba al español a ciegas (`entreEsEIn`)
+    // y la ventana se releía traducida.
+    if (pedido === 'auto') return true;
     const ahora = Date.now();
     if (ahora - (medido.get(sesion) || 0) < MEDIR_IDIOMA_CADA_MS) return false;
     medido.set(sesion, ahora);
@@ -136,6 +138,10 @@ async function escuchar(params) {
     if (!p.sesion) return null;
 
     const recortado = captura.recorte({
+        // La relectura va por ffmpeg aunque el tramo sea corto: el recorte de
+        // la app se midió con las ventanas del vivo, y el de la relectura es
+        // el texto que va al XML.
+        conFfmpeg: !p.liviano,
         sesion: p.sesion,
         desdeMs: p.desdeMs,
         hastaMs: p.hastaMs

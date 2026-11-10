@@ -174,6 +174,13 @@ export async function tomar(quien, nombre, avisos) {
     Object.assign(estado, { nombre, stream, video, anillo: [] });
     estado.reloj = setInterval(() => { guardarFotograma(); }, CADA_MS);
     guardarFotograma();
+    // Abrir tarda, y mientras tanto quien la pidió pudo soltarla —Ajustes
+    // cerrado enseguida—: `soltar` encontró la cámara todavía sin abrir, y
+    // nadie la iba a apagar. La luz quedaba prendida.
+    if (!estado.duenos.size) {
+        await apagar();
+        return { ok: false, error: 'Se dejó de usar mientras abría.' };
+    }
     return { ok: true, nombre };
 }
 

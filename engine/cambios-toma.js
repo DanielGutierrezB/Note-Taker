@@ -111,6 +111,23 @@ function editar(sesion, cambio) {
             if (toma.outMs == null && c.borde === 'in') {
                 vivo.moverInAbierta(sesion.estado, toma, Number(c.paredMs));
             } else if (vivo.moverBorde(toma, c.borde, Number(c.paredMs), sesion.estado.tomas)) {
+                // Dentro de lo que el modelo grande ya leyó, su texto ES el
+                // texto bueno: se reparte lo suyo y no se relee, que era cargar
+                // la GPU, peleándola con el vivo, para escribir las mismas
+                // palabras. Sin tragar las sueltas del vivo: cubren el mismo
+                // tramo con otras horas y quedaban dos veces («bueno», «Bueno,»).
+                if (leido && toma.inMs >= leido.desdeMs && toma.outMs <= leido.hastaMs) {
+                    const delModelo = (toma.antes || []).concat(toma.palabras || [], toma.despues || []);
+                    Object.assign(toma, vivo.repartir(delModelo, toma));
+                    sesion.estado.sueltas = (sesion.estado.sueltas || [])
+                        .filter(w => w.t < toma.inMs || w.t >= toma.outMs);
+                    toma.releida = {
+                        inMs: toma.inMs, outMs: toma.outMs,
+                        orillaMs: Math.max(0, leido.hastaMs - toma.outMs),
+                        leidoHastaMs: leido.hastaMs
+                    };
+                    break;
+                }
                 // Las palabras se reparten YA con lo que hay, y la relectura
                 // afina después. Sin esto el borde volvía a su palabra de antes
                 // hasta que terminaba la relectura —cargar 1,6 GB de modelo y
@@ -125,17 +142,7 @@ function editar(sesion, cambio) {
                 vivo.tragarSueltas(sesion.estado, toma);
                 const guardadas = (toma.antes || []).concat(toma.palabras || [], toma.despues || []);
                 Object.assign(toma, vivo.repartir(guardadas, toma));
-                // Dentro de lo que el modelo grande ya leyó, el reparto de
-                // recién ES el texto bueno: releer era cargar la GPU, peleándola
-                // con el vivo, para escribir las mismas palabras.
-                if (leido && toma.inMs >= leido.desdeMs && toma.outMs <= leido.hastaMs) {
-                    toma.releida = {
-                        inMs: toma.inMs, outMs: toma.outMs,
-                        orillaMs: Math.max(0, leido.hastaMs - toma.outMs)
-                    };
-                } else {
-                    relecturas.encolar(sesion, toma.id);
-                }
+                relecturas.encolar(sesion, toma.id);
             }
             break;
         }
@@ -341,17 +348,19 @@ const esVista = v => vivo.VISTAS.some(x => x.nombre === v);
  *
  * La relectura pide la toma con orillas a los dos lados y guarda lo de afuera
  * en `antes` y `despues` (`oir-toma.leer`), así que tiene escrito más que la
- * toma: desde la primera palabra de antes del IN hasta el OUT más la orilla
- * derecha que alcanzó a oír. Solo si la lectura es de los bordes de ahora y
- * salió con el modelo bueno: una degradada (`relectura`) se vuelve a leer.
+ * toma: desde la primera palabra de antes del IN hasta donde llegó de verdad
+ * el audio leído (`leidoHastaMs`, que no es la orilla pedida: la segunda pasada
+ * marca la pedida antes de leer). Solo si la lectura es de los bordes de ahora
+ * y salió con el modelo bueno: una degradada (`relectura`) se vuelve a leer.
  */
 function tramoLeido(toma) {
     const r = toma.releida;
     if (!r || toma.relectura || r.inMs !== toma.inMs || r.outMs !== toma.outMs) return null;
+    if (!Number.isFinite(r.leidoHastaMs)) return null;
     const antes = (toma.antes || []).map(w => w.t);
     return {
         desdeMs: Math.min(r.inMs, ...antes),
-        hastaMs: r.outMs + (Number(r.orillaMs) || 0)
+        hastaMs: r.leidoHastaMs
     };
 }
 

@@ -794,6 +794,15 @@ function ajustarSesion(estado, opciones) {
  * así que sale lo mismo aunque una sola se haya vuelto a ajustar.
  */
 function noCruzarVecinas(tomas) {
+    // Primero, lo que había frenado la pasada anterior vuelve a lo que dio la
+    // onda: si la vecina ya no está —se desactivó, se movió—, el freno tiene que
+    // irse con ella, y `haceFalta` no lo ve porque los bordes son los mismos.
+    for (const t of tomas || []) {
+        const a = t && t.ajuste;
+        if (!a) continue;
+        if (a.outDeLaOnda) { a.outMs = a.outDeLaOnda.ms; a.porQueOut = a.outDeLaOnda.porQue; delete a.outDeLaOnda; }
+        if (a.inDeLaOnda) { a.inMs = a.inDeLaOnda.ms; a.porQueIn = a.inDeLaOnda.porQue; delete a.inDeLaOnda; }
+    }
     const vivas = (tomas || [])
         .filter(t => t && !t.descartada && t.inMs != null)
         .sort((a, b) => a.inMs - b.inMs);
@@ -805,11 +814,16 @@ function noCruzarVecinas(tomas) {
         const inB = inAjustado(b);
         if (outA <= inB) continue;
         const medio = Math.round((Number(a.outMs) + Number(b.inMs)) / 2);
+        // Lo de la onda queda guardado al lado, para volver a él (arriba). Un
+        // borde que no se pudo mirar sigue diciéndolo: `sin-audio` es lo que
+        // hace que se vuelva a intentar cuando aparezca el WAV.
+        a.ajuste.outDeLaOnda = { ms: a.ajuste.outMs, porQue: a.ajuste.porQueOut };
         a.ajuste.outMs = Math.min(outA, medio);
-        a.ajuste.porQueOut = 'vecina';
+        if (a.ajuste.porQueOut !== 'sin-audio') a.ajuste.porQueOut = 'vecina';
         if (b.ajuste && Number(b.ajuste.deInMs) === Number(b.inMs)) {
+            b.ajuste.inDeLaOnda = { ms: b.ajuste.inMs, porQue: b.ajuste.porQueIn };
             b.ajuste.inMs = Math.max(inB, medio);
-            b.ajuste.porQueIn = 'vecina';
+            if (b.ajuste.porQueIn !== 'sin-audio') b.ajuste.porQueIn = 'vecina';
         }
     }
 }

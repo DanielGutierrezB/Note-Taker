@@ -131,6 +131,15 @@ export async function entradas() {
 let turno = Promise.resolve();
 let ultimoPedido = 0;
 
+/**
+ * Si se pidió mandar el audio al motor, aunque la entrada todavía esté abriendo.
+ *
+ * Se guarda lo pedido y no se aplica solo a la que está: un «mandar» que caía
+ * mientras abría la entrada nueva le hablaba a la vieja, ya cerrada, y la nueva
+ * abría sin mandar nada. La clase grababa sin audio con el medidor moviéndose.
+ */
+let quiereMandar = false;
+
 function enFila(hacer) {
     const pedido = ++ultimoPedido;
     const este = turno.then(async () => {
@@ -151,6 +160,12 @@ export function abrir(entrada, losAvisos) {
 }
 
 async function abrirAhora(entrada, losAvisos) {
+    const r = await abrirLaEntrada(entrada, losAvisos);
+    if (r.ok && quiereMandar) await mandar(true);
+    return r;
+}
+
+async function abrirLaEntrada(entrada, losAvisos) {
     await cerrarAhora();
     avisos = {
         alNivel: () => {}, alCaerse: () => {}, alVolver: () => {}, alRomperse: () => {},
@@ -174,14 +189,20 @@ async function abrirAhora(entrada, losAvisos) {
     return r;
 }
 
+function mandar(si) {
+    if (tipo === 'app') return window.nt.audioAppMandar(si);
+    if (tipo === 'dispositivo') return si ? oido.empezarAMandar() : oido.dejarDeMandar();
+    return undefined;
+}
+
 export function empezarAMandar() {
-    if (tipo === 'app') return window.nt.audioAppMandar(true);
-    return oido.empezarAMandar();
+    quiereMandar = true;
+    return mandar(true);
 }
 
 export function dejarDeMandar() {
-    if (tipo === 'app') return window.nt.audioAppMandar(false);
-    return oido.dejarDeMandar();
+    quiereMandar = false;
+    return mandar(false);
 }
 
 /** Con qué se está capturando, que es lo que el WAV tiene que declarar. */
@@ -190,6 +211,7 @@ export function comoSuena() {
 }
 
 export function cerrar() {
+    quiereMandar = false;
     return enFila(cerrarAhora);
 }
 

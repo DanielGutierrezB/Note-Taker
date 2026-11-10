@@ -310,9 +310,9 @@ async function transcribir(wavPath, idioma, opciones) {
     // llega tarde. La relectura de la toma, que sí puede esperar, va por
     // `whisper-cli` con los suyos.
     if (!o.reintentos) form.append('temperature_inc', '0');
-    // Medir el idioma vuelve a pasar el audio por el codificador. Con `auto` no
-    // hace falta: el idioma con el que decodificó (`language`) ya es el
-    // detectado. Con uno pedido se mide cada tanto (`oir.js`).
+    // Medir el idioma vuelve a pasar el audio por el codificador, así que se
+    // mide cada tanto (`oir.js`). Sin medir, con `auto` igual se sabe cuál
+    // eligió para decodificar (`language`), pero no cuánto se parecía a los otros.
     if (!medir) form.append('no_language_probabilities', 'true');
     if (idioma) form.append('language', idioma);
     const r = await fetch(`http://127.0.0.1:${este.puerto}/inference`, {

@@ -68,8 +68,33 @@ module.exports = async function (t) {
         }
     });
 
+    t.test('«mandar» pedido mientras abre llega a la entrada nueva, no a la vieja', async () => {
+        const mandados = [];
+        global.window = {
+            nt: {
+                audioAppAbrir: async () => { await esperar(20); return { ok: true, sampleRate: 48000, canales: 1 }; },
+                audioAppCerrar: async () => {},
+                audioAppMandar: async si => { mandados.push(si); }
+            }
+        };
+        try {
+            const fuente = await import(pathToFileURL(path.join(RAIZ, 'src', 'js', 'grabar', 'fuente.js')).href + '?mandar');
+            const abriendo = fuente.abrir({ tipo: 'app', modo: 'app', nombre: 'Zoom' });
+            await fuente.empezarAMandar();
+            t.deep(mandados, [], 'todavía no hay entrada a la que mandarle');
+            await abriendo;
+            t.deep(mandados, [true], 'y apenas abre, manda');
+            await fuente.cerrar();
+        } finally {
+            delete global.window;
+        }
+    });
+
     t.test('Preparar descarta la respuesta de una apertura reemplazada', () => {
-        t.ok(/if \(r\.reemplazada\) return;/.test(leer('src', 'js', 'pantalla-preparar.js')));
+        const js = leer('src', 'js', 'pantalla-preparar.js');
+        t.ok(/if \(r\.reemplazada\) return r;/.test(js));
+        t.eq((js.match(/\.reemplazada\) return \{ ok: true, estado: null \};/g) || []).length, 2,
+            'y un cambio de entrada grabando, reemplazado, no le avisa al motor de la que se cerró');
     });
 
     t.group('la ventana en clase · Preparar mientras carga');
@@ -81,7 +106,8 @@ module.exports = async function (t) {
         t.ok(/finally \{\s+cargando = false;\s+pintar\(\);/.test(ver));
         const pintar = js.slice(js.indexOf('function pintar() {'), js.indexOf('const a = estados.deAudio(audio);'));
         t.ok(/if \(cargando\) \{[\s\S]*boton\.disabled = true;[\s\S]*return;/.test(pintar));
-        t.ok(/async function iniciar\(\) \{\s+if \(cargando\) return;/.test(js), 'y un clic que llegue igual no arranca nada');
+        t.ok(/async function iniciar\(\) \{\s+if \(cargando \|\| audio\.abriendo\) return;/.test(js), 'y un clic que llegue igual no arranca nada');
+        t.ok(/c\.listo === 'si' && !audio\.abriendo;/.test(js), 'ni mientras abre una entrada: grababa sin audio');
     });
 
     t.group('la ventana en clase · la cámara');
