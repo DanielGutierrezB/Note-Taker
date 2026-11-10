@@ -37,6 +37,7 @@ const os = require('os');
 const path = require('path');
 
 const paths = require('./paths');
+const glosario = require('./glosario');
 
 /**
  * El nombre con el que whisper.cpp identifica la grilla de cabezas de atención
@@ -384,7 +385,7 @@ function comoMurio(code, signal) {
 
 /**
  * Corre whisper-cli sobre un WAV. Devuelve el transcript ya normalizado.
- * @param {object} options { language, onProgress, signal }
+ * @param {object} options { language, onProgress, signal, glosario }
  */
 function runWhisper(wavPath, options) {
     const opts = options || {};
@@ -436,6 +437,11 @@ function runWhisper(wavPath, options) {
         // versión con contexto no escribía.
         '-mc', '0'
     ];
+    // Con glosario, el tope de contexto pasa a ser su largo y el glosario va
+    // en cada ventana (`glosario.argumentos`): sigue sin arrastrarse el texto
+    // de la ventana anterior, que es lo que trababa la puntuación.
+    const conGlosario = glosario.argumentos(opts.glosario);
+    if (conGlosario.length) args.splice(args.indexOf('-mc'), 2, ...conGlosario);
 
     // La alineación por DTW: whisper.cpp la calcula contra el espectrograma, o
     // sea contra el sonido, en vez de deducirla de los tokens de tiempo que el

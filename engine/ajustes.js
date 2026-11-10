@@ -20,6 +20,7 @@ const os = require('os');
 
 const idiomas = require('./idiomas');
 const vivo = require('./notas-vivo');
+const glosario = require('./glosario');
 
 /**
  * Los cuadros por segundo que se pueden elegir.
@@ -115,7 +116,12 @@ const DEFAULTS = {
      * `notas-vivo.FRASES_DE_FABRICA`). Se cambian en Ajustes, también con la
      * clase andando.
      */
-    frases: vivo.FRASES_DE_FABRICA
+    frases: vivo.FRASES_DE_FABRICA,
+    /**
+     * El glosario general, para todas las clases. El de cada curso vive en su
+     * carpeta (`glosario.leerDelCurso`) y se suman al leer.
+     */
+    glosario: []
 };
 
 /** Lo más largo que puede ser una frase, y cuántas entran en cada lista. */
@@ -270,7 +276,8 @@ function sanear(crudo) {
         // la que esto era un sí o un no— se lee como «ninguna».
         camara: (typeof c.camara === 'string' && c.camara) || null,
         prproj: saneada(c.prproj),
-        frases: frasesSanas(c.frases)
+        frases: frasesSanas(c.frases),
+        glosario: glosario.sanos(c.glosario)
     };
 }
 

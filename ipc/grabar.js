@@ -17,9 +17,25 @@ const nombreDeSesion = require('../engine/nombre-de-sesion');
 const audioApp = require('../engine/audio-app');
 const disco = require('../engine/disco');
 const ajustes = require('../engine/ajustes');
+const glosario = require('../engine/glosario');
+const workspace = require('../engine/workspace');
 
 /** Cada cuánto se repite el aviso de que el audio se está perdiendo. */
 const AVISO_DE_PCM_MS = 2000;
+
+/**
+ * Los dos glosarios de una carpeta, sumados, y el texto que va a Whisper.
+ *
+ * Se arma acá, donde están los ajustes y la carpeta, y el motor recibe el
+ * texto hecho: así la clase en curso, Regenerar y la pantalla de Ajustes no
+ * pueden sumar distinto.
+ */
+function glosarioDe(carpeta) {
+    const general = ajustes.leer().glosario;
+    const delCurso = glosario.leerDelCurso(carpeta);
+    const suma = glosario.combinar(general, delCurso);
+    return { general, delCurso, ...suma, texto: glosario.texto(suma.entran) };
+}
 
 /**
  * @param {object} deps { ipcMain, app, send, anotar } de `main.js`
@@ -40,6 +56,7 @@ function registrar({ ipcMain, app, send, anotar }) {
             const estado = grabacion.iniciar({
                 ...p,
                 frases: ajustes.leer().frases,
+                glosario: glosarioDe(p.dir).texto,
                 avisar: aviso => send('grabar-aviso', aviso)
             });
             anotar('grabar.inicia', {
@@ -64,6 +81,7 @@ function registrar({ ipcMain, app, send, anotar }) {
             const estado = grabacion.reanudar(json, {
                 ...(payload || {}),
                 frases: ajustes.leer().frases,
+                glosario: glosarioDe(workspace.sesionDelSidecar(json).base).texto,
                 avisar: aviso => send('grabar-aviso', aviso)
             });
             anotar('grabar.reanuda', { json, secuencia: estado.secuencia });
@@ -236,6 +254,29 @@ function registrar({ ipcMain, app, send, anotar }) {
      * El número se vuelve a resolver al arrancar: entre ver esto y apretar
      * Iniciar puede pasar media clase.
      */
+    /**
+     * El glosario de una carpeta, para Ajustes y Preparar.
+     */
+    ipcMain.handle('glosario-leer', (event, carpeta) => glosarioDe(carpeta));
+
+    /**
+     * Guardar el general, el del curso o los dos. Con una clase grabando, la
+     * próxima relectura ya usa el nuevo: el general vale para cualquier clase,
+     * el del curso solo si es el de la que se graba.
+     */
+    ipcMain.handle('glosario-guardar', (event, cambio) => {
+        const c = cambio || {};
+        try {
+            if (Array.isArray(c.general)) ajustes.guardar({ ...ajustes.leer(), glosario: c.general });
+            if (Array.isArray(c.delCurso) && c.carpeta) glosario.guardarDelCurso(c.carpeta, c.delCurso);
+            const enCurso = grabacion.dirEnCurso();
+            if (enCurso) grabacion.cambiarGlosario(glosarioDe(enCurso).texto);
+            return { ok: true, ...glosarioDe(c.carpeta) };
+        } catch (err) {
+            return { ok: false, error: err.message };
+        }
+    });
+
     ipcMain.handle('grabar-preparar-oido', (event, idioma) => grabacion.prepararOido(idioma));
     ipcMain.handle('grabar-soltar-oido', () => grabacion.soltarOido());
 
@@ -338,7 +379,8 @@ function registrar({ ipcMain, app, send, anotar }) {
         anotar('grabar.regenerar', { json });
         try {
             const r = await grabacion.regenerar(
-                json, aviso => send('grabar-aviso', aviso), grabacion.enCurso());
+                json, aviso => send('grabar-aviso', aviso), grabacion.enCurso(),
+                glosarioDe(workspace.sesionDelSidecar(json).base).texto);
             anotar('grabar.regenerada', { json, tomas: r.tomas, sinAudio: r.sinAudio });
             return { ok: true, ...r };
         } catch (err) {

@@ -66,6 +66,9 @@ let nombre = null;
  */
 let cargando = false;
 
+/** El glosario de la carpeta, para su renglón (`glosario-leer`). */
+let glosario = null;
+
 /** El pico decae solo: sin esto, un golpe deja el medidor arriba para siempre. */
 let ultimoPico = 0;
 /** El último estado del audio que se dibujó, para repintar solo al cambiar. */
@@ -105,6 +108,7 @@ async function entrar() {
     // ofrecerle el siguiente invitaría a cambiarle el nombre a una sesión que ya
     // tiene marcadores escritos y que el editor puede haber sincronizado.
     nombre = reanudar ? null : await preguntarElNombre();
+    glosario = window.nt.glosarioLeer ? await window.nt.glosarioLeer(app.ajustes.carpeta) : null;
     await releerEntradas();
 
     // Si la entrada de la última vez sigue ahí, se abre sola. Se guarda por
@@ -250,6 +254,19 @@ function pintar() {
                         title="Abrir Ajustes para cambiar el idioma de la clase">
                 Cambiar en Ajustes</button>`
         }),
+        glosario ? check({
+            listo: 'si',
+            titulo: 'Glosario',
+            estado: { clave: 'listo', palabra: `${glosario.entran.length} término${glosario.entran.length === 1 ? '' : 's'}` },
+            dice: (glosario.entran.length
+                ? `${glosario.delCurso.length} del curso y ${glosario.general.length} generales: el modelo grande `
+                    + 'los tiene a mano al releer cada toma.'
+                : 'Vacío. Los nombres de herramientas o de personas que salgan mal escritos se agregan acá.')
+                + (glosario.afuera.length ? ` <span style="color:var(--warn)">Quedan afuera: ${esc(glosario.afuera.join(', '))}.</span>` : ''),
+            arreglo: `<button class="btn btn-tenue" type="button" data-hace="ajustes"
+                        title="Abrir Ajustes para editar el glosario general y el de este curso">
+                Editar en Ajustes</button>`
+        }) : '',
         reanudar ? avisoReanudar() : ''
     ].join('');
 }

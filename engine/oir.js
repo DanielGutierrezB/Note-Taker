@@ -176,6 +176,10 @@ async function escuchar(params) {
         // siempre —ni una señal más en toda la clase— y a «Terminar» también.
         // En vivo, una pasada de seis segundos tarda uno; una toma se da el
         // doble de su duración más un minuto.
+        // El glosario, solo en la relectura: medido en `tools/banco-pasada.js
+        // --relectura` no trabó la puntuación ni inventó términos; en el vivo
+        // no se midió, y el vivo ya va al límite.
+        if (!p.liviano && p.glosario) opciones.glosario = p.glosario;
         opciones.tiempoMaxMs = p.liviano
             ? 20000
             : 60000 + 2 * Math.max(0, p.hastaMs - p.desdeMs);

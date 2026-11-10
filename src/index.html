@@ -296,6 +296,33 @@
                   title="Abrir con la cuenta y «retomamos», cerrar con «pausa» y «pause», y ninguna de vista">Volver a las de fábrica</button>
         </div>
       </div>
+      <!-- Las palabras que el modelo grande tiene que escribir bien. Lo llena
+           `src/js/glosario.js`. -->
+      <div class="campo" id="aj-glosario">
+        <span class="rotulo">Glosario</span>
+        <span class="v3">Nombres de herramientas, personas o siglas que el modelo grande tiene que
+          escribir bien al releer cada toma y al regenerar. Se pueden agregar varias separadas por
+          coma. Si cambiás algo mientras grabás, la próxima toma que se relea ya lo usa.</span>
+        <div class="frases-lista" data-glosario="general" id="aj-glosario-general">
+          <span class="rotulo">General: para todas las clases</span>
+          <div class="frases-fichas"></div>
+          <div class="campo-fila">
+            <input type="text" maxlength="200" data-termino-nuevo aria-label="Otra palabra del glosario general"
+                   placeholder="Por ejemplo «Figma, Notion»">
+            <button class="btn" type="button" data-termino-agregar>Agregar</button>
+          </div>
+        </div>
+        <div class="frases-lista" data-glosario="delCurso" id="aj-glosario-curso">
+          <span class="rotulo">De este curso</span>
+          <div class="frases-fichas"></div>
+          <div class="campo-fila">
+            <input type="text" maxlength="200" data-termino-nuevo aria-label="Otra palabra del glosario del curso"
+                   placeholder="Por ejemplo «Canva Pro, Magic Studio»">
+            <button class="btn" type="button" data-termino-agregar>Agregar</button>
+          </div>
+        </div>
+        <span class="v3 glosario-dice" id="aj-glosario-dice" role="status"></span>
+      </div>
       <div class="campo">
         <span class="rotulo">Cámara de referencia</span>
         <div class="campo-fila">

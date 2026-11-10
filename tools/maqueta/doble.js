@@ -93,6 +93,12 @@ if (hay('preparar-microfono')) ajustes = { ...ajustes, dispositivo: 'MacBook Pro
 if (hay('preparar-zoom-falso')) ajustes = { ...ajustes, dispositivo: 'ZoomAudioDevice (Virtual)' };
 if (hay('preparar-sin-audio') || hay('sin-zoom')) ajustes = { ...ajustes, dispositivo: null };
 
+const glosarioGuardado = { general: ['Figma', 'Notion'], delCurso: ['Canva Pro', 'Magic Studio', 'kit de marca'] };
+function glosarioFalso() {
+    const entran = glosarioGuardado.general.concat(glosarioGuardado.delCurso);
+    return { ...glosarioGuardado, entran, afuera: [], palabras: entran.join(' ').split(' ').length, tope: 150 };
+}
+
 const progresoUpdate = [];
 const listaUpdate = [];
 let oyenteDependencias = null;
@@ -135,6 +141,14 @@ window.nt = {
     doctor: async () => doctor,
 
     ajustesLeer: async () => ajustes,
+    // El glosario sumado como lo suma el motor (`glosario.combinar`), sin el
+    // tope: en la maqueta no se llega.
+    glosarioLeer: async () => glosarioFalso(),
+    glosarioGuardar: async c => {
+        if (Array.isArray(c.general)) glosarioGuardado.general = c.general;
+        if (Array.isArray(c.delCurso)) glosarioGuardado.delCurso = c.delCurso;
+        return { ok: true, ...glosarioFalso() };
+    },
     ajustesGuardar: async parche => {
         ajustes = { ...ajustes, ...parche };
         return { ok: true, ajustes };

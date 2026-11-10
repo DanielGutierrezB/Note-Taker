@@ -1257,6 +1257,10 @@ select {
   flex: none;
 }
 
+.glosario-dice[data-falta='si'] {
+  color: var(--warn);
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
    8. LA LISTA DE VERIFICACIÓN DE «PREPARAR»
 

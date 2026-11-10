@@ -164,7 +164,9 @@ async function leer(archivos, toma, opciones) {
         desdeMs: Math.max(donde.desdeMs, toma.inMs - orillaIzquierda(toma, o.tomas)),
         hastaMs: Math.min(finDelArchivo, toma.outMs + orillaDerecha(toma, o.tomas)),
         liviano: false,
-        idioma: o.idioma
+        idioma: o.idioma,
+        // El glosario va en la relectura y no en el vivo (`glosario.js`).
+        glosario: o.glosario || ''
     };
 
     const bueno = paths.whisperModel();

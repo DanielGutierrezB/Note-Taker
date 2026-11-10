@@ -263,7 +263,7 @@ async function rehacer(sesion, id) {
         // que es lo que deja el tramo entre dos tomas escrito en las dos y no
         // solo en las sueltas, que no se guardan (ver `orillaIzquierda`).
         const leido = await oirToma.leer(espejo.archivosDeLaSesion(sesion), toma,
-            { idioma: sesion.estado.idioma, tomas: sesion.estado.tomas });
+            { idioma: sesion.estado.idioma, tomas: sesion.estado.tomas, glosario: sesion.glosario });
         if (!sesion.viva || !leido) return;
         // Mientras se leía, la toma pudo irse (descartada) o reabrirse: sin OUT,
         // `repartir` mandaba todo el texto a `despues` y la toma quedaba vacía.

@@ -152,6 +152,9 @@ function iniciar(params) {
         // Las frases que abren, cierran y cambian de vista, las de Ajustes
         // (`cambiarFrases`). Sin ellas, las de fábrica.
         frases: p.frases || null,
+        // El glosario de esta clase, el general y el del curso sumados y ya
+        // armados para Whisper (`glosario.texto`). Lo usa la relectura.
+        glosario: p.glosario || '',
         // Las tomas que esperan que se les rehaga el texto, de a una; y la
         // promesa de la pasada que las está atendiendo, si hay una
         // (`engine/relecturas.js`).
@@ -589,6 +592,21 @@ function soltarOido() {
     return true;
 }
 
+/**
+ * El glosario nuevo, con la clase andando: la próxima relectura ya lo usa.
+ */
+/** La carpeta de la clase que se está grabando, o null. */
+function dirEnCurso() {
+    return sesion && sesion.viva ? sesion.dir : null;
+}
+
+function cambiarGlosario(texto) {
+    if (!sesion || !sesion.viva) return false;
+    sesion.glosario = texto || '';
+    registro.anotar('main', 'grabar.glosario', { largo: sesion.glosario.length });
+    return true;
+}
+
 /* ─── El cierre ───────────────────────────────────────────────────────────*/
 
 /**
@@ -838,6 +856,8 @@ module.exports = {
     reabrirAudio,
     cambiarIdioma,
     cambiarFrases,
+    cambiarGlosario,
+    dirEnCurso,
     prepararOido,
     soltarOido,
     editar,

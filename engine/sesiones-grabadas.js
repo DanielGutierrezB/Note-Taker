@@ -233,7 +233,7 @@ function siEstaOcupada(json) {
     }
 }
 
-async function regenerar(json, avisar, enCurso) {
+async function regenerar(json, avisar, enCurso, glosario) {
     const sitio = workspace.sesionDelSidecar(json);
     const estado = leerSidecar(json);
     if (estado.secuencia && estado.secuencia === enCurso) {
@@ -255,7 +255,7 @@ async function regenerar(json, avisar, enCurso) {
         let degradadas = 0;
         let sinLeer = 0;
         for (const [i, toma] of tomas.entries()) {
-            const leido = await oirToma.leer(archivos, toma, { idioma: estado.idioma, tomas });
+            const leido = await oirToma.leer(archivos, toma, { idioma: estado.idioma, tomas, glosario });
             // **Y acá es donde la marca se limpia sola.** `leer` devuelve
             // `relectura: null` cuando la toma salió con el modelo bueno, así
             // que el `Object.assign` borra la marca que le había quedado de la

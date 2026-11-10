@@ -65,6 +65,8 @@ contextBridge.exposeInMainWorld('nt', {
     grabarListar: dirs => ipcRenderer.invoke('grabar-listar', dirs),
     grabarNombreSiguiente: (dir, que) => ipcRenderer.invoke('grabar-nombre-siguiente', dir, que),
     grabarPrepararOido: idioma => ipcRenderer.invoke('grabar-preparar-oido', idioma),
+    glosarioLeer: carpeta => ipcRenderer.invoke('glosario-leer', carpeta),
+    glosarioGuardar: cambio => ipcRenderer.invoke('glosario-guardar', cambio),
     grabarSoltarOido: () => ipcRenderer.invoke('grabar-soltar-oido'),
     grabarRenombrar: (json, cambio) => ipcRenderer.invoke('grabar-renombrar', json, cambio),
     grabarBorrar: json => ipcRenderer.invoke('grabar-borrar', json),

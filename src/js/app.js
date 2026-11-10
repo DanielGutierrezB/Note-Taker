@@ -29,6 +29,7 @@ import * as rotuloBarra from './grabar/rotulo-barra.js';
 import * as fotos from './fotos.js';
 import { anotarLosGestos } from './acciones.js';
 import * as frases from './frases.js';
+import * as glosario from './glosario.js';
 
 const app = {
     ajustes: null,
@@ -354,6 +355,7 @@ function conectarAjustes() {
     $('#aj-camara').addEventListener('change', e => ponerCamara(e.target.value));
     $('#btn-log').addEventListener('click', e => reportar(e.currentTarget));
     frases.conectar(guardar);
+    glosario.conectar();
 }
 
 function esNtsc(f) {
@@ -364,6 +366,7 @@ async function pintarAjustes() {
     $('#aj-fps').value = String(app.ajustes.fps);
     pintarIdioma();
     frases.pintar(app.ajustes.frases);
+    await glosario.pintar(app.ajustes.carpeta);
     pintarCamaras();
 }
 

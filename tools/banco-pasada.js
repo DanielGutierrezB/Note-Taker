@@ -6,6 +6,8 @@
  *
  *   node tools/banco-pasada.js <clase.wav> [--ventanas=40] [--idioma=es] [--glosario="Canva, Figma"]
  *   node tools/banco-pasada.js <clase.wav> --recorte     el recorte de la app contra el de ffmpeg
+ *   node tools/banco-pasada.js <clase.wav> --relectura --glosario="Canva, …" [--tramos=5]
+ *                                                       el glosario en la relectura, con whisper-cli
  *
  * Corta ventanas de seis segundos repartidas por la clase, levanta el mismo
  * `whisper-server` que usa el ciclo (`oido-residente.js`) y lee cada ventana
@@ -25,6 +27,7 @@ const { execFileSync } = require('child_process');
 const paths = require('../engine/paths');
 const residente = require('../engine/oido-residente');
 const captura = require('../engine/captura');
+const transcribe = require('../engine/transcribe');
 
 const VENTANA_SEC = 6;
 
@@ -57,6 +60,50 @@ const mediana = xs => { const o = xs.slice().sort((a, b) => a - b); return o[Mat
 const p90 = xs => { const o = xs.slice().sort((a, b) => a - b); return o[Math.min(o.length - 1, Math.floor(o.length * 0.9))]; };
 const textoDe = r => (r.words || []).map(w => w.text).join(' ').replace(/\s+/g, ' ').trim();
 
+/**
+ * El glosario en la relectura: tramos largos por `whisper-cli`, con y sin él.
+ *
+ * Largos porque es donde se trababa la puntuación cuando se arrastraba el
+ * texto entre ventanas de 30 s, que es lo que el glosario no puede volver a
+ * hacer. Dice cuántas veces salió cada término, cuántas frases cerraron, el
+ * tramo más largo sin un punto y cuánto tardó. Un término del glosario que
+ * nadie dijo —ponerlo a propósito— dice si lo inventa en los silencios.
+ */
+async function relectura(wav, largo, idioma, glosario, cuantos, dir) {
+    const terminos = String(glosario || '').split(',').map(x => x.trim()).filter(Boolean);
+    const conGlosario = terminos.length ? `${terminos.join(', ')}.` : '';
+    const TRAMO_SEC = 180;
+    const cuenta = { sin: { ms: 0, cierres: 0, peor: 0, hits: {} }, con: { ms: 0, cierres: 0, peor: 0, hits: {} } };
+    const clave = x => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    for (let i = 0; i < cuantos; i++) {
+        const desde = Math.floor(((i + 0.5) / cuantos) * Math.max(0, largo - TRAMO_SEC));
+        const archivo = path.join(dir, `t${i}.wav`);
+        execFileSync(paths.ffmpeg().path, ['-v', 'error', '-y', '-ss', String(desde), '-t', String(TRAMO_SEC),
+            '-i', wav, '-ar', '16000', '-ac', '1', archivo]);
+        for (const [cual, g] of [['sin', ''], ['con', conGlosario]]) {
+            const t0 = Date.now();
+            const r = await transcribe.runWhisper(archivo, { language: idioma, glosario: g });
+            cuenta[cual].ms += Date.now() - t0;
+            const palabras = (r.words || []).map(w => w.text);
+            let corrida = 0;
+            for (const w of palabras) {
+                if (/[.?!…]$/.test(w)) { cuenta[cual].cierres++; corrida = 0; } else { corrida++; cuenta[cual].peor = Math.max(cuenta[cual].peor, corrida); }
+            }
+            const todo = clave(palabras.join(' '));
+            for (const term of terminos) {
+                const n = todo.split(clave(term)).length - 1;
+                cuenta[cual].hits[term] = (cuenta[cual].hits[term] || 0) + n;
+            }
+        }
+        console.log(`  tramo ${i + 1} de ${cuantos} (${Math.round(desde / 60)} min)`);
+    }
+    for (const cual of ['sin', 'con']) {
+        const c = cuenta[cual];
+        console.log(`  ${cual} glosario: ${Math.round(c.ms / 1000)} s, ${c.cierres} frases cerradas, `
+            + `el tramo más largo sin cerrar ${c.peor} palabras; términos ${JSON.stringify(c.hits)}`);
+    }
+}
+
 async function main() {
     const wav = process.argv[2];
     if (!wav || !fs.existsSync(wav)) {
@@ -77,6 +124,12 @@ async function main() {
 
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-banco-'));
     try {
+        // Sin el servidor del vivo: la relectura va por whisper-cli, y con el
+        // servidor cargado los dos se pelearían la GPU y el tiempo no diría nada.
+        if (process.argv.includes('--relectura')) {
+            await relectura(wav, largo, idioma, glosario, Number(arg('tramos', 5)), dir);
+            return;
+        }
         const ventanas = [];
         for (let i = 0; i < cuantas; i++) {
             const desde = Math.floor(((i + 0.5) / cuantas) * Math.max(0, largo - VENTANA_SEC));
