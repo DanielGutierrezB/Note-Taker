@@ -1278,6 +1278,12 @@ function aplicarSenales(estado, palabras, opciones) {
     const inicioNuevo = dondeSigue(estado, nuevas);
     const eventos = [];
     let cursor = 0;
+    // Hasta dónde cuenta como oído. Las firmes, y además las palabras de una
+    // señal aceptada aunque no estén firmes: un «1» estirado se acepta por su
+    // comienzo, y si no se anotaba como oído volvía en la pasada siguiente
+    // como palabra nueva, se llevaba el IN provisional de la toma que acababa
+    // de abrir y quedaba suelto en el gris.
+    let hastaOido = cuantasFirmes;
 
     const guardar = (hasta) => {
         const toma = tomaAbierta(estado);
@@ -1285,10 +1291,15 @@ function aplicarSenales(estado, palabras, opciones) {
         for (let i = Math.max(cursor, inicioNuevo); i < tope; i++) {
             const w = nuevas[i];
             // El IN que puso el conteo sobre su propio «1», porque no se había
-            // oído nada detrás: la primera palabra que llega es donde empieza.
-            if (toma && toma.inProvisional) {
-                toma.inMs = Math.max(toma.inMs, w.t);
+            // oído nada detrás: la primera palabra que llega después del «1» es
+            // donde empieza. Puede llegar antes de ese IN y no solo después: un
+            // «1» con el final estirado hasta el borde de la ventana lo dejaba
+            // segundos más tarde que la primera palabra de la clase, y con un
+            // `max` esa palabra no lo corregía y quedaba suelta.
+            if (toma && toma.inProvisional && w.t > (toma.unoMs != null ? toma.unoMs : -Infinity)) {
+                toma.inMs = w.t;
                 delete toma.inProvisional;
+                delete toma.unoMs;
             }
             // La palabra es de la toma en cuyos bordes cae, esté abierta o
             // recién cerrada; si no cae en ninguna queda en el colchón, por si
@@ -1344,6 +1355,21 @@ function aplicarSenales(estado, palabras, opciones) {
             // quedaba adentro de la toma.
             const sigue = nuevas[marca.hasta + 1];
             const uno = nuevas[marca.hasta];
+            // **Un conteo dicho dentro de una toma que ya cerró no abre otra.**
+            // Pasa con el ciclo atrasado y una toma cerrada a mano: el «3, 2, 1»
+            // llega después del OUT del botón, con su hora por delante, y abría
+            // una toma fantasma pegada a ese OUT. La rama de «cierra» ya ignora
+            // así las señales de antes. Si ese OUT lo puso el botón y es
+            // provisional, el conteo dice dónde terminó de verdad: se corre ahí.
+            const piso = pisoDeLasSueltas(estado);
+            if (nuevas[marca.desde].t < piso) {
+                const previa = (estado.tomas || []).find(t => t.outMs === piso && !t.descartada);
+                if (!previa || !previa.outProvisional || nuevas[marca.desde].t <= previa.inMs) continue;
+                previa.outMs = finDeToma(previa, nuevas[marca.desde].t);
+                delete previa.outProvisional;
+                eventos.push({ tipo: 'cerrada', toma: previa.id });
+            }
+            hastaOido = Math.max(hastaOido, marca.hasta + 1);
             // Y nunca antes del OUT de la última cerrada: el ciclo oye con
             // atraso, así que un «3, 2, 1» dicho justo al cerrar a mano puede
             // llegar con su hora por detrás del OUT que puso el botón, y la
@@ -1353,7 +1379,10 @@ function aplicarSenales(estado, palabras, opciones) {
                 estado,
                 Math.max(arranque, pisoDeLasSueltas(estado)),
                 textoDe(nuevas, marca.desde, marca.hasta));
-            if (!sigue) toma.inProvisional = true;
+            if (!sigue) {
+                toma.inProvisional = true;
+                toma.unoMs = uno.t;
+            }
             // **Lo que se dijo antes del conteo se queda.** Antes acá se vaciaba
             // el colchón entero, y con él desaparecía de la pantalla todo lo
             // hablado entre la toma anterior y el «3, 2, 1»: ni se veía en el
@@ -1403,10 +1432,10 @@ function aplicarSenales(estado, palabras, opciones) {
     // ventana como si fuera nueva. Hasta la última FIRME: lo de después vuelve.
     // Las señales cuentan como oídas aunque no se guarden: son lo que la pasada
     // siguiente va a encontrar al principio de su ventana.
-    if (cuantasFirmes > inicioNuevo) {
-        estado.ultimaPalabraMs = Math.max(estado.ultimaPalabraMs || -Infinity, nuevas[cuantasFirmes - 1].t);
+    if (hastaOido > inicioNuevo) {
+        estado.ultimaPalabraMs = Math.max(estado.ultimaPalabraMs || -Infinity, nuevas[hastaOido - 1].t);
         estado.recientes = (estado.recientes || [])
-            .concat(nuevas.slice(inicioNuevo, cuantasFirmes).map(w => ({ n: norm(w.texto), t: w.t })))
+            .concat(nuevas.slice(inicioNuevo, hastaOido).map(w => ({ n: norm(w.texto), t: w.t })))
             .filter(r => r.n)
             .slice(-RECIENTES);
     }
@@ -1819,14 +1848,27 @@ function aplicar(toma, cambio, tomas) {
     const c = cambio || {};
     switch (c.tipo) {
         case 'vista':
+            // Una vista que no existe llegaba hasta el nombre del marcador.
+            if (!VISTAS.some(v => v.nombre === c.vista)) return;
             toma.vista = c.vista;
             return;
         case 'nota':
             toma.comentario = String(c.texto || '');
             return;
-        case 'descartar':
+        case 'descartar': {
+            // Una toma que vuelve a contar tiene que caber: mientras no
+            // contaba, otra pudo quedar sobre su tramo, y activarla dejaría dos
+            // bloques encimados en el XML. Acá y no solo en la clase en vivo,
+            // que era la única puerta que lo miraba: una clase grabada entra
+            // directo por acá.
+            const pisada = !c.descartada && toma.descartada && laQuePisa(tomas || [], toma);
+            if (pisada) {
+                throw new Error(`No puedo volver a activar la toma ${toma.id}: la toma ${pisada.id} quedó `
+                    + `sobre su tramo. Desactivá o corré la ${pisada.id} primero.`);
+            }
             toma.descartada = Boolean(c.descartada);
             return;
+        }
         case 'comentar':
             comentar(toma, c);
             return;
@@ -1837,6 +1879,8 @@ function aplicar(toma, cambio, tomas) {
             descomentar(toma, c.indice);
             return;
         case 'borde':
+            // Solo los dos que hay: cualquier otra cosa movía el OUT.
+            if (c.borde !== 'in' && c.borde !== 'out') return;
             moverBordeGuardado(toma, c.borde, Number(c.paredMs), tomas);
             return;
         case 'reabrir':

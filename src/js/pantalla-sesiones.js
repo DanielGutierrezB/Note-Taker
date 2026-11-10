@@ -111,7 +111,12 @@ function vacio(carpeta) {
  */
 function fila(s) {
     const r = s.resumen || {};
-    const est = estados.deSesionGuardada(r);
+    // Mientras se regenera, la fila entera se apaga: el motor tampoco deja
+    // tocarla (`siEstaOcupada` en sesiones-grabadas.js), y un botón que se
+    // aprieta y contesta que no es peor que uno apagado.
+    const ocupada = regenerandoAhora.has(s.archivos.json);
+    const apagado = ocupada ? 'disabled' : '';
+    const est = ocupada ? { clave: 'releyendo', palabra: 'regenerando' } : estados.deSesionGuardada(r);
     const puedeReanudar = r.estado === 'abierta';
     const editando = renombrando === s.archivos.json;
     return `<div class="fila guarda ${editando ? 'es-renombrando' : ''}" data-estado="${est.clave}" data-json="${esc(s.archivos.json)}"
@@ -123,22 +128,22 @@ function fila(s) {
       <span class="pastilla" data-estado="${est.clave}">${esc(est.palabra)}</span>
       <span class="crece"></span>
       ${puedeReanudar
-        ? `<button class="btn" type="button" data-hace="reanudar"
+        ? `<button class="btn" type="button" data-hace="reanudar" ${apagado}
                    title="Seguir grabando esta clase, que quedó abierta: el audio y las tomas nuevas se suman a las que ya tiene">
              Reanudar</button>` : ''}
-      <button class="btn" type="button" data-hace="notas"
+      <button class="btn" type="button" data-hace="notas" ${apagado}
               title="Abrir las notas de esta clase en la misma vista de cuando se tomaron.
 No se graba nada: lo que ajustes se escribe en su XML en el acto.">Notas</button>
       <button class="btn btn-tenue btn-ico" type="button" data-hace="xml"
               title="Mostrar el XML en el Finder">${icono('finder')}</button>
-      <button class="btn btn-tenue btn-ico" type="button" data-hace="rehacer-xml"
+      <button class="btn btn-tenue btn-ico" type="button" data-hace="rehacer-xml" ${apagado}
               title="Rehacer el XML con el formato de esta versión, sin releer el audio ni tocar las notas">${icono('xml')}</button>
-      <button class="btn btn-tenue btn-ico" type="button" data-hace="regenerar"
+      <button class="btn btn-tenue btn-ico" type="button" data-hace="regenerar" ${apagado}
               title="Volver a leer todas las tomas con el modelo grande">${icono('regenerar')}</button>
-      <button class="btn btn-tenue btn-ico" type="button" data-hace="renombrar"
+      <button class="btn btn-tenue btn-ico" type="button" data-hace="renombrar" ${apagado}
               aria-pressed="${editando}"
               title="${editando ? 'Dejar el número como estaba' : 'Cambiarle el número de clase'}">${icono('renombrar')}</button>
-      <button class="btn btn-tenue btn-ico btn-peligro" type="button" data-hace="borrar"
+      <button class="btn btn-tenue btn-ico btn-peligro" type="button" data-hace="borrar" ${apagado}
               title="Borrar el XML, el audio y los datos">${icono('borrar')}</button>
     </div>`;
 }
@@ -214,7 +219,7 @@ async function alClic(e) {
             await verNotas(json);
             break;
         case 'regenerar':
-            await regenerar(json, boton);
+            await regenerar(json);
             break;
         case 'rehacer-xml':
             await rehacerXml(json, boton);
@@ -267,12 +272,20 @@ async function rehacerXml(json, boton) {
     avisar(`XML rehecho: ${r.tomas} toma${r.tomas === 1 ? '' : 's'}.`, 'ok');
 }
 
-async function regenerar(json, boton) {
-    boton.disabled = true;
+/** Las sesiones que se están regenerando ahora, para dibujar su fila apagada. */
+const regenerandoAhora = new Set();
+
+async function regenerar(json) {
+    regenerandoAhora.add(json);
+    await pintar();
     avisar('Releyendo las tomas con el modelo grande…');
-    const r = await window.nt.grabarRegenerar(json);
-    boton.disabled = false;
-    if (!r.ok) { avisar(r.error, 'error'); return; }
+    let r;
+    try {
+        r = await window.nt.grabarRegenerar(json);
+    } finally {
+        regenerandoAhora.delete(json);
+    }
+    if (!r.ok) { avisar(r.error, 'error'); await pintar(); return; }
     // Se dice lo que NO se pudo además de lo que sí: «8 tomas releídas» cuando
     // tres quedaron sin leer es la misma pérdida silenciosa que este botón
     // vino a arreglar.

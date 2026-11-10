@@ -207,9 +207,16 @@ function iniciar(params) {
         // Al reanudar, la toma que quedó abierta cuando la app murió viene
         // cerrada donde llegó el audio y provisional (`paraReanudar`): se relee,
         // para que su OUT caiga en la última palabra y su texto sea el del
-        // modelo grande.
+        // modelo grande. Y las cerradas que no llegaron a releerse antes de la
+        // caída, por lo mismo. Un archivo de antes de que se guardara la marca
+        // no dice cuáles son, y releerlas todas grabando le quitaría la GPU al
+        // vivo: esas se dejan para «Regenerar».
         if (previa) {
-            for (const t of sesion.estado.tomas) if (t.outProvisional) relecturas.encolar(sesion, t.id);
+            const sabeCuales = sesion.estado.tomas.some(t => 'releida' in t);
+            for (const t of sesion.estado.tomas) {
+                const sinReleer = sabeCuales && t.outMs != null && !t.descartada && !t.releida;
+                if (t.outProvisional || sinReleer) relecturas.encolar(sesion, t.id);
+            }
         }
         espejo.escribir(sesion);
     } catch (err) {
@@ -789,7 +796,7 @@ module.exports = {
     reabrirAudio,
     cambiarIdioma,
     editar,
-    editarGrabada: sesionesGrabadas.editarGrabada,
+    editarGrabada: (json, cambio) => sesionesGrabadas.editarGrabada(json, cambio, enCurso()),
     // Con la secuencia en curso, para que la que se está grabando no se abra por
     // acá: esa ya tiene su pantalla, con el reloj andando.
     paraMirar: json => sesionesGrabadas.paraMirar(json, enCurso()),

@@ -315,6 +315,10 @@ function alAviso(aviso) {
         return;
     }
     if (aviso.tipo === 'error') avisar(aviso.mensaje, 'error');
+    // El motor se negó a algo que se le pidió —volver a activar una toma que
+    // quedó debajo de otra, reabrir una que no es la última—. Sin esto el botón
+    // parecía no hacer nada.
+    if (aviso.tipo === 'aviso') avisar(aviso.mensaje);
 }
 
 /** Lo que pasó solo se dice; lo que el editor hizo ya lo vio hacer. */

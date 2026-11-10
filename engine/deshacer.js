@@ -232,6 +232,18 @@ function proximo(historia, hacia) {
 }
 
 /**
+ * Tira el paso de arriba de una pila sin pasarlo a la otra.
+ *
+ * Es para el paso que ya no se puede dar —su toma quedó debajo de otra, o ya
+ * no está como estaba—: dejarlo arriba trababa la pila entera, porque cada ⌘Z
+ * volvía a chocar contra él y los pasos de abajo no se alcanzaban nunca.
+ */
+function tirar(historia, hacia) {
+    const pila = hacia === 'adelante' ? historia.adelante : historia.atras;
+    return pila.pop() || null;
+}
+
+/**
  * Saca el paso de una pila y lo pone en la otra, ya dado vuelta.
  *
  * @param {'atras'|'adelante'} hacia de qué pila se saca
@@ -285,6 +297,7 @@ function pasos(historia) {
 }
 
 module.exports = {
+    tirar,
     TOPE,
     nueva,
     foto,

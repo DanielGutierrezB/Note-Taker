@@ -458,6 +458,11 @@ function sidecar(estado) {
             // a querer regenerar con calma, y viviendo solo en memoria se
             // perdería al cerrar la app, que es cuando termina un día de rodaje.
             relectura: t.relectura || null,
+            // Con qué bordes quedó releída con el modelo grande, si ya se releyó
+            // (`relecturas.js`). Viviendo solo en memoria, una clase reanudada
+            // no sabía cuáles quedaron con el texto del ciclo, que es el
+            // descartable.
+            releida: t.releida || null,
             // Lo que se dijo pegado a cada borde. Se guarda para que mover un IN
             // o un OUT en una sesión ya cerrada se siga haciendo mirando el
             // texto, sin tener que releer el audio para saber qué hay del otro

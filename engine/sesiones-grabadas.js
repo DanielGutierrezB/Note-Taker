@@ -219,6 +219,20 @@ function resumirParaLaLista(estado) {
  */
 const regenerando = new Set();
 
+/**
+ * Que nadie toque una sesión mientras se regenera.
+ *
+ * Regenerar lee el archivo de notas una vez, espera a Whisper toma por toma
+ * durante minutos, y al final escribe esa copia: un cambio, un renombre o un
+ * borrado hechos en el medio se perdían, o la clase borrada volvía sin audio.
+ * Todas las puertas que escriben una sesión grabada preguntan acá.
+ */
+function siEstaOcupada(json) {
+    if (regenerando.has(json)) {
+        throw new Error('Esa sesión se está regenerando: esperá a que termine para tocarla.');
+    }
+}
+
 async function regenerar(json, avisar, enCurso) {
     const sitio = workspace.sesionDelSidecar(json);
     const estado = leerSidecar(json);
@@ -255,6 +269,9 @@ async function regenerar(json, avisar, enCurso) {
             aviso({ tipo: 'regenerando', json, hechas: i + 1, total: tomas.length });
         }
 
+        // Si mientras tanto el archivo dejó de estar —la carpeta se movió, el
+        // disco se desenchufó—, escribir acá haría aparecer una sesión sin audio.
+        if (!fs.existsSync(sitio.json)) throw new Error('La sesión ya no está donde estaba: no la regeneré.');
         // Releer mueve los bordes —el modelo grande oye la palabra en otro
         // sitio—, así que el ajuste se vuelve a hacer con los tiempos nuevos.
         ajustarBordes(estado, sitio);
@@ -376,9 +393,13 @@ function paraMirar(json, enCurso) {
  * @param {string} json el sidecar de la sesión
  * @param {object} cambio uno de los que no necesiten el audio
  */
-function editarGrabada(json, cambio) {
+function editarGrabada(json, cambio, enCurso) {
     const c = cambio || {};
+    siEstaOcupada(json);
     const estado = leerSidecar(json);
+    if (estado.secuencia && estado.secuencia === enCurso) {
+        throw new Error('Esa sesión se está grabando: se edita desde su pantalla.');
+    }
     const sitio = workspace.sesionDelSidecar(json);
 
     if (c.tipo === 'dividir') {
@@ -447,6 +468,7 @@ function editarGrabada(json, cambio) {
  * puede empeorar.
  */
 function rehacerXml(json, enCurso) {
+    siEstaOcupada(json);
     const estado = leerSidecar(json);
     const sitio = workspace.sesionDelSidecar(json);
     if (estado.secuencia && estado.secuencia === enCurso) {
@@ -510,6 +532,7 @@ function segundosEnElDisco(archivo, wav) {
 }
 
 function paraReanudar(json, enCurso) {
+    siEstaOcupada(json);
     const sitio = workspace.sesionDelSidecar(json);
     const estado = leerSidecar(json);
 
@@ -705,6 +728,7 @@ function wavRenombrado(ruta, viejo, nuevo) {
  * @param {string} [enCurso] la secuencia que se está grabando ahora
  */
 function renombrar(json, cambio, enCurso) {
+    siEstaOcupada(json);
     const c = cambio || {};
     const sitio = workspace.sesionDelSidecar(json);
     const estado = leerSidecar(json);
@@ -808,6 +832,7 @@ function renombrar(json, cambio, enCurso) {
  * @param {string} [enCurso] la secuencia que se está grabando ahora
  */
 function borrar(json, enCurso) {
+    siEstaOcupada(json);
     const sitio = workspace.sesionDelSidecar(json);
     const estado = leerSidecar(json);
 

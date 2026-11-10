@@ -422,7 +422,10 @@ function volverDivision(sesion, paso, hacia) {
     // mismo gesto. Pasa cuando el conteo abrió otra toma después de partir
     // —el conteo no deja paso en el historial, así que la división sigue
     // arriba de la pila—, y deshacerla dejaría dos abiertas.
-    if ((paso.antes || {}).outMs == null) {
+    //
+    // Vuelve abierta solo si la segunda mitad sigue abierta: el final de la
+    // junta es el de la segunda tal como está ahora (ver más abajo).
+    if (segunda.outMs == null) {
         const estorba = tomas.some(t => t !== primera && t !== segunda && !t.descartada
             && (t.outMs == null || t.inMs > primera.inMs));
         if (estorba) return false;
@@ -437,7 +440,22 @@ function volverDivision(sesion, paso, hacia) {
     const foto = paso.antes || {};
     const ultimaDeLaFoto = (foto.palabras || []).reduce((m, w) => Math.max(m, w.t), -Infinity);
     const nuevas = (segunda.palabras || []).filter(w => w.t > ultimaDeLaFoto + 1000);
+    // **El final de la junta es el de la segunda mitad como está ahora**, y no
+    // el de la foto. Partida la toma abierta, la foto es de una toma sin OUT;
+    // si después «Pausa» cerró la segunda mitad, reponer la foto la reabría y
+    // se tragaba lo que se dijo entre tomas, y el «3, 2, 1» siguiente caía
+    // adentro.
+    const fin = {
+        outMs: segunda.outMs,
+        outISO: segunda.outISO || null,
+        despues: segunda.despues || [],
+        cerradaSola: Boolean(segunda.cerradaSola),
+        outProvisional: segunda.outProvisional
+    };
     historial.poner(tomas, paso.id, paso.antes, null);
+    Object.assign(primera, { outMs: fin.outMs, outISO: fin.outISO, despues: fin.despues, cerradaSola: fin.cerradaSola });
+    if (fin.outProvisional) primera.outProvisional = true;
+    else delete primera.outProvisional;
     primera.palabras = vivo.juntas(primera.palabras, nuevas);
     // La toma junta vuelve con el texto de antes de partirla, que no es un
     // texto leído con estos bordes (ver `volver`).
@@ -503,6 +521,23 @@ function reabrir(sesion, toma) {
  */
 
 /**
+ * Un paso que ya no se puede dar: se tira, y se dice.
+ *
+ * Quedarse arriba de la pila lo dejaba trabado para siempre, con los pasos de
+ * abajo inalcanzables. Se tira de la pila de la que se quiso sacar, así el
+ * próximo ⌘Z sigue con el anterior.
+ */
+function sinPoder(sesion, paso, hacia, porque) {
+    historial.tirar(sesion.historia, hacia);
+    const verbo = hacia === 'adelante' ? 'rehacer' : 'deshacer';
+    return {
+        ok: false,
+        error: `No puedo ${verbo} «${paso.que}»: ${porque}. Lo saqué del historial: ⌘Z sigue con lo anterior.`,
+        estado: espejo.resumen(sesion)
+    };
+}
+
+/**
  * @param {'atras'|'adelante'} hacia
  * @returns {{ok:boolean, que?:string, error?:string, estado:object|null}}
  */
@@ -527,14 +562,7 @@ function volver(sesion, hacia) {
             : { ...foto };
         const pisada = quedaria.descartada ? null
             : vivo.laQuePisa(sesion.estado.tomas, { ...quedaria, id: paso.id });
-        if (pisada) {
-            return {
-                ok: false,
-                error: `No puedo ${hacia === 'adelante' ? 'rehacer' : 'deshacer'} «${paso.que}»: ` +
-                    `la toma ${pisada.id} quedó sobre el tramo de la ${paso.id}.`,
-                estado: espejo.resumen(sesion)
-            };
-        }
+        if (pisada) return sinPoder(sesion, paso, hacia, `la toma ${pisada.id} quedó sobre el tramo de la ${paso.id}`);
     }
     // Tampoco a la división: deshacerla saca la segunda mitad en el mismo
     // gesto, así que la abierta que esta guarda vería es justamente la que se
@@ -542,13 +570,7 @@ function volver(sesion, hacia) {
     // existe dividir— no se podía deshacer nunca.
     if (paso.tipo !== 'dividir'
         && historial.dejariaDosAbiertas(sesion.estado.tomas, paso.id, foto, paso.campos)) {
-        return {
-            ok: false,
-            error: `No puedo ${hacia === 'adelante' ? 'rehacer' : 'deshacer'} «${paso.que}»: ` +
-                'mientras tanto hubo otra toma detrás, y una toma reabierta con otra detrás ' +
-                'las deja pisándose. Descartá o desactivá la de después y volvé a intentar.',
-            estado: espejo.resumen(sesion)
-        };
+        return sinPoder(sesion, paso, hacia, 'mientras tanto hubo otra toma detrás, y reabrirla las dejaría pisándose');
     }
 
     // Partir y juntar no se reponen con una foto: hay una toma que aparece o
@@ -556,14 +578,7 @@ function volver(sesion, hacia) {
     // `volverDivision`). Se mira ANTES de sacar el paso del historial, para que
     // uno que no se puede dar no se gaste.
     if (paso.tipo === 'dividir') {
-        if (!volverDivision(sesion, paso, hacia)) {
-            return {
-                ok: false,
-                error: `No puedo ${hacia === 'adelante' ? 'rehacer' : 'deshacer'} «${paso.que}»: ` +
-                    'esa toma ya no está como estaba.',
-                estado: espejo.resumen(sesion)
-            };
-        }
+        if (!volverDivision(sesion, paso, hacia)) return sinPoder(sesion, paso, hacia, 'esa toma ya no está como estaba');
         historial.sacar(sesion.historia, hacia);
         // Las dos mitades juntas o separadas cambian qué tramo es de quién, y
         // las sueltas son de la sesión: se cuadran igual que en el camino de
@@ -574,6 +589,14 @@ function volver(sesion, hacia) {
         return { ok: true, que: paso.que, estado: espejo.resumen(sesion) };
     }
 
+    // Deshacer una creación —abrir, partir— saca la toma; rehacerla la vuelve a
+    // poner. Lo que vuelve tiene que ser la toma como estaba al sacarla, y no
+    // como nació: un ⌘Z de un «abrir» viejo sacaba una toma ya cerrada y el
+    // rehacer la devolvía abierta, o ni la devolvía.
+    if (hacia === 'atras' && paso.antes == null) {
+        const actual = sesion.estado.tomas.find(t => t.id === paso.id);
+        if (actual) paso.despues = historial.foto(actual);
+    }
     const dado = historial.sacar(sesion.historia, hacia);
     // Lo que la toma tiene ANTES de que la foto vuelva: si la foto no se lo
     // devuelve, es porque esa palabra pasa a estar fuera de toda toma otra vez.

@@ -37,6 +37,7 @@
  */
 
 const fs = require('fs');
+const conClaseMuda = require('./fixtures/clase-muda');
 const os = require('os');
 const path = require('path');
 
@@ -352,38 +353,6 @@ module.exports = function (t) {
      */
     t.group('el martillo · deshacer deja la toma cuadrada');
 
-    /**
-     * Una clase con Whisper de mentira. Por defecto no relee nada —solo el
-     * ciclo—; con `o.relee` la relectura contesta esas palabras, repartidas.
-     */
-    async function conClaseMuda(fn, o) {
-        const guardado = { tramo: oirToma.tramo, leer: oirToma.leer };
-        const falso = { ventana: [] };
-        oirToma.tramo = async (_a, desde, hasta) => ({ palabras: falso.ventana.filter(w => w.t >= desde && w.t <= hasta) });
-        oirToma.leer = o && o.relee
-            ? async (_a, toma) => ({ ...vivo.repartir(o.relee(), toma), colapsadas: 0, relectura: null })
-            : async () => null;
-        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-martillo-'));
-        try {
-            const st = grabacion.iniciar({ dir, curso: 'm', fps: 30, sinReloj: true, sampleRate: 48000 });
-            const s = grabacion._sesion();
-            const w = (dt, texto) => ({ t: st.ceroMs + dt, texto, hasta: st.ceroMs + dt + 250 });
-            // Tres pasadas y no dos: a la última palabra de una ventana el ciclo
-            // no se la cree hasta la pasada siguiente (`firmeHastaMs`).
-            const oir = async (...palabras) => {
-                falso.ventana = falso.ventana.concat(palabras);
-                for (let i = 0; i < 3; i++) { grabacion.pcm(Buffer.alloc(48000 * 2)); await grabacion.buscarSenales(); }
-            };
-            for (let i = 0; i < 4; i++) grabacion.pcm(Buffer.alloc(48000 * 2));
-            await fn({ st, s, w, oir });
-        } finally {
-            oirToma.tramo = guardado.tramo;
-            oirToma.leer = guardado.leer;
-            grabacion.apagar();
-            fs.rmSync(dir, { recursive: true, force: true });
-        }
-    }
-
     t.test('deshacer un «reabrir» manda a la orilla lo que el ciclo metió mientras estuvo abierta', async () => {
         await conClaseMuda(async ({ st, s, w, oir }) => {
             grabacion.abrirToma(st.ceroMs + 1000);
@@ -424,7 +393,7 @@ module.exports = function (t) {
         });
     });
 
-    t.test('deshacer la división se niega si el conteo ya abrió otra toma detrás', async () => {
+    t.test('deshacer la división con la segunda mitad cerrada la junta cerrada, aunque haya otra detrás', async () => {
         await conClaseMuda(async ({ st, s, w, oir }) => {
             grabacion.abrirToma(st.ceroMs + 1000);
             await oir(w(2000, 'uno'), w(3000, 'dos'));
@@ -441,9 +410,15 @@ module.exports = function (t) {
             t.eq(s.estado.tomas.length, 3, 'y el conteo abrió la 3');
             t.eq(s.estado.tomas[2].outMs, null, 'que está abierta');
 
+            const finDeLaSegunda = s.estado.tomas[1].outMs;
             const r = grabacion.deshacer();
-            t.ok(!r.ok, 'deshacer la división se niega: dejaría la junta abierta con la 3 abierta detrás');
-            t.eq(s.estado.tomas.length, 3, 'y no tocó nada');
+            // Antes la junta volvía con la foto de cuando se partió, que era
+            // de una toma abierta: reabría lo que «Pausa» había cerrado, se
+            // tragaba lo dicho entre tomas y por eso había que negarse.
+            t.ok(r.ok, r.error);
+            t.eq(s.estado.tomas.length, 2, 'las dos mitades vuelven a ser una');
+            t.eq(s.estado.tomas[0].outMs, finDeLaSegunda, 'cerrada donde la cerró la «Pausa»');
+            t.eq(s.estado.tomas[1].outMs, null, 'y la del conteo sigue abierta, con su número corrido');
         });
     });
 
