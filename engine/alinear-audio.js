@@ -20,7 +20,11 @@
  * ve lo perdido, que levanta todos los valores.
  *
  * Contra qué: el mínimo de la primera ventana, que es lo que tarda el audio en
- * llegar con esa entrada. Si después baja, esa es la nueva referencia.
+ * llegar con esa entrada, pero nunca más de `BASE_MAX_MS`. Sin ese tope, lo
+ * perdido en los primeros segundos —el micrófono Bluetooth que tarda en
+ * asentarse— pasaba a ser la referencia y no se rellenaba nunca: tres pruebas
+ * del 10 de noviembre terminaron 2,4 s atrás así. Si después baja, esa es la
+ * nueva referencia.
  */
 
 /** De cuánto es cada ventana en la que se busca el mínimo. */
@@ -28,6 +32,9 @@ const VENTANA_MS = 5000;
 
 /** Lo que tiene que faltar para rellenar: menos es el ir y venir de los pedazos. */
 const HUECO_MIN_MS = 150;
+
+/** Lo más que tarda en llegar el audio de una entrada sana: más ya es audio perdido. */
+const BASE_MAX_MS = 300;
 
 function nuevo() {
     return { base: null, minimo: Infinity, desdeMs: null };
@@ -48,7 +55,9 @@ function mirar(a, derivaMs, ahoraMs) {
     const minimo = a.minimo;
     a.minimo = Infinity;
     a.desdeMs = ahoraMs;
-    if (a.base == null || minimo < a.base) {
+    if (a.base == null) {
+        a.base = Math.min(minimo, BASE_MAX_MS);
+    } else if (minimo < a.base) {
         a.base = minimo;
         return 0;
     }
@@ -56,4 +65,4 @@ function mirar(a, derivaMs, ahoraMs) {
     return falta > HUECO_MIN_MS ? Math.round(falta) : 0;
 }
 
-module.exports = { nuevo, mirar, VENTANA_MS, HUECO_MIN_MS };
+module.exports = { nuevo, mirar, VENTANA_MS, HUECO_MIN_MS, BASE_MAX_MS };

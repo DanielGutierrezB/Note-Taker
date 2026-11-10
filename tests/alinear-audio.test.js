@@ -54,6 +54,16 @@ module.exports = function (t) {
         t.deep(correr(60, tiempo => (tiempo > 20000 ? 220 : 120)).rellenos, []);
     });
 
+    t.test('lo perdido al arrancar también se rellena: no pasa a ser la referencia', () => {
+        const r = correr(60, () => 2520);
+        t.eq(r.rellenos.length, 1, 'una vez, al cerrar la primera ventana');
+        t.ok(Math.abs(r.agregado - (2520 - alinear.BASE_MAX_MS)) <= 1, `${r.agregado} ms`);
+    });
+
+    t.test('una entrada que tarda un poco más de lo normal desde el arranque no se rellena', () => {
+        t.deep(correr(60, () => 380 + Math.random() * 40).rellenos, []);
+    });
+
     t.test('si la deriva baja, esa es la nueva referencia', () => {
         const r = correr(60, tiempo => (tiempo > 10000 ? 40 : 300));
         t.deep(r.rellenos, [], 'bajar no es perder');
