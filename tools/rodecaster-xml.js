@@ -33,7 +33,7 @@
 
 const fs = require('fs');
 
-const vivo = require('./notas-vivo');
+const vivo = require('../engine/notas-vivo');
 
 // El conteo con el que arranca cada toma. Escrito de oído, así que aparece como
 // "3, 2, 1.", "3. 2, 1.", "3 2 1.", "Ok, 3 2 1." y hasta "3 2 3 2 1." (un falso

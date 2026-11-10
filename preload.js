@@ -20,11 +20,9 @@ contextBridge.exposeInMainWorld('nt', {
     ajustesLeer: () => ipcRenderer.invoke('ajustes-leer'),
     ajustesGuardar: datos => ipcRenderer.invoke('ajustes-guardar', datos),
     carpetaRecordar: ruta => ipcRenderer.invoke('carpeta-recordar', ruta),
-    carpetasEnDisco: rutas => ipcRenderer.invoke('carpetas-en-disco', rutas),
 
     updateCheck: () => ipcRenderer.invoke('update-check'),
     updateDownload: payload => ipcRenderer.invoke('update-download', payload),
-    updateCancel: () => ipcRenderer.invoke('update-cancel'),
     updateInstall: target => ipcRenderer.invoke('update-install', target),
 
     pickFolder: opciones => ipcRenderer.invoke('pick-folder', opciones),
@@ -75,7 +73,6 @@ contextBridge.exposeInMainWorld('nt', {
     // El proyecto de Premiere de la carpeta (`ipc/prproj.js`): leer y guardar la
     // configuración del menú, y generar.
     prprojConfig: carpeta => ipcRenderer.invoke('prproj-config', carpeta),
-    prprojGuardarConfig: (carpeta, config) => ipcRenderer.invoke('prproj-guardar-config', carpeta, config),
     prprojGenerar: (carpeta, config) => ipcRenderer.invoke('prproj-generar', carpeta, config),
     onPrprojAviso: callback => {
         ipcRenderer.on('prproj-aviso', (_event, payload) => callback(payload));

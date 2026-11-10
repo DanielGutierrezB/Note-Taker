@@ -64,14 +64,6 @@ function registrar({ ipcMain, dialog, ventana, send, anotar }) {
         }
     });
 
-    ipcMain.handle('prproj-guardar-config', (event, carpeta, config) => {
-        try {
-            return { ok: true, config: recordar(carpeta, config) };
-        } catch (err) {
-            return { ok: false, error: err.message };
-        }
-    });
-
     ipcMain.handle('prproj-generar', async (event, carpeta, config) => {
         anotar('prproj.generar', { carpeta, config });
         const plantilla = paths.plantillaPrproj();

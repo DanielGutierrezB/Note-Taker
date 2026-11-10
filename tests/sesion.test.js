@@ -20,7 +20,7 @@ const grabacion = require('../engine/grabacion');
 const vivo = require('../engine/notas-vivo');
 const workspace = require('../engine/workspace');
 const notasXml = require('../engine/notas-xml');
-const rodecaster = require('../engine/rodecaster-xml');
+const rodecaster = require('../tools/rodecaster-xml');
 
 function carpeta() {
     return fs.mkdtempSync(path.join(os.tmpdir(), 'nt-sesion-'));

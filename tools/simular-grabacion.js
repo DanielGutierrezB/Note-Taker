@@ -31,7 +31,7 @@ const { spawnSync } = require('child_process');
 const paths = require('../engine/paths');
 const grabacion = require('../engine/grabacion');
 const residente = require('../engine/oido-residente');
-const rodecaster = require('../engine/rodecaster-xml');
+const rodecaster = require('./rodecaster-xml');
 const { arg, horaDelDia: hhmmss, mmss } = require('./lib/cli');
 
 /** El mismo tamaño de pedazo que manda el capturador de la ventana. */

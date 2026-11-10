@@ -199,9 +199,9 @@ function estadoNuevo(params) {
 /**
  * Las palabras con las que el profesor abre y cierra.
  *
- * El conteo no se busca con la expresión de `rodecaster-xml.COUNT_RUN` porque esa
- * está anclada al principio de un comentario ya escrito; acá hay que encontrarlo
- * en el medio de un río de palabras. Tampoco con `speech-edges.conteosEn`, que
+ * El conteo no se busca con `COUNT_RUN` de `tools/rodecaster-xml.js` porque esa
+ * expresión está anclada al principio de un comentario ya escrito; acá hay que
+ * encontrarlo en el medio de un río de palabras. Tampoco con `speech-edges.conteosEn`, que
  * también busca conteos sueltos, porque en vivo hacen falta dos cosas que en post
  * no: que la cuenta TERMINE en uno (ver `senales`) y tolerar los puntos
  * suspensivos con que Whisper cierra un "1...". Lo que se busca es lo mismo: dos

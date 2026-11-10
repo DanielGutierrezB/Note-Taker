@@ -135,8 +135,8 @@ function colorDeVista(nombre) {
  * decisiones tienen el mismo motivo detrás y no son de gusto.
  *
  * En el comentario, porque el nombre de este marcador es lo único por lo que se
- * lo reconoce después. `rodecaster-xml.js` clasifica un marcador como claqueta
- * buscando "claqueta" o "clapperboard" en su COMENTARIO (`isClapMarker`), y
+ * lo reconoce después. `tools/rodecaster-xml.js` clasifica un marcador como
+ * claqueta buscando "claqueta" o "clapperboard" en su COMENTARIO (`isClapMarker`), y
  * "Claqueta N" a secas es lo que la herramienta del CD espera leer en el
  * nombre; una nota libre metida ahí rompe el viaje de vuelta de un XML que esta
  * app escribió. El comentario, en cambio, ya es texto compuesto, y la nota

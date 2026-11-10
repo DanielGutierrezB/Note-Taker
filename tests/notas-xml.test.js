@@ -11,7 +11,7 @@
 const vivo = require('../engine/notas-vivo');
 const claquetaVieja = require('./fixtures/claqueta-vieja');
 const notasXml = require('../engine/notas-xml');
-const rodecaster = require('../engine/rodecaster-xml');
+const rodecaster = require('../tools/rodecaster-xml');
 
 const T0 = Date.parse('2026-09-29T10:00:00');
 

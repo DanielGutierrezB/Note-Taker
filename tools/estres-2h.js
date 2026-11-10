@@ -20,7 +20,7 @@ const path = require('path');
 
 const grabacion = require('../engine/grabacion');
 const oirToma = require('../engine/oir-toma');
-const rodecaster = require('../engine/rodecaster-xml');
+const rodecaster = require('./rodecaster-xml');
 
 const horas = Number((process.argv.find(a => a.startsWith('--horas=')) || '--horas=2').split('=')[1]);
 const PASADAS = Math.round(horas * 3600);

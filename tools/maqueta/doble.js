@@ -143,7 +143,6 @@ window.nt = {
         ajustes = { ...ajustes, carpeta: ruta, carpetas: [ruta] };
         return ajustes;
     },
-    carpetasEnDisco: async rutas => Object.fromEntries((rutas || []).map(r => [r, true])),
 
     // Lo que falta. `?e=faltan-modelos` es la Mac del compañero: el instalador
     // publicado no trae los modelos. La descarga es de mentira y avanza sola.
@@ -172,7 +171,6 @@ window.nt = {
         for (const cb of listaUpdate) cb({ path: '/Users/x/Downloads/NoteTaker-0.1.1-arm64.pkg' });
         return { ok: true, path: '/Users/x/Downloads/NoteTaker-0.1.1-arm64.pkg' };
     },
-    updateCancel: async () => ({ ok: true }),
     updateInstall: async () => ({ ok: true, cerrando: true }),
 
     pickFolder: async () => '/Volumes/Rodaje/Curso de automatizaciones',
@@ -289,7 +287,6 @@ window.nt = {
         destino: `${carpeta}/Proyecto/${String(carpeta).split('/').pop()}.prproj`,
         plantilla: true
     }),
-    prprojGuardarConfig: async (carpeta, config) => ({ ok: true, config }),
     prprojGenerar: async carpeta => ({
         ok: true,
         ruta: `${carpeta}/Proyecto/${String(carpeta).split('/').pop()}.prproj`,

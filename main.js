@@ -218,21 +218,6 @@ ipc.handle('ajustes-guardar', (event, datos) => {
 
 ipc.handle('carpeta-recordar', (event, ruta) => ajustes.recordarCarpeta(ruta));
 
-/**
- * Cuáles de las carpetas recordadas siguen en el disco.
- *
- * Se pregunta cada vez que la pantalla se abre en vez de guardarse: un disco
- * externo se enchufa y se desenchufa, así que un "no está" escrito hoy sería
- * mentira mañana.
- */
-ipc.handle('carpetas-en-disco', (event, rutas) => {
-    const salida = {};
-    for (const ruta of rutas || []) {
-        salida[ruta] = fs.existsSync(ruta);
-    }
-    return salida;
-});
-
 // ─── Actualizaciones ──────────────────────────────────────────────────
 
 ipc.handle('update-check', async () => {
@@ -275,11 +260,6 @@ ipc.handle('update-download', async (event, payload) => {
     } finally {
         descargaEnCurso = null;
     }
-});
-
-ipc.handle('update-cancel', () => {
-    if (descargaEnCurso) descargaEnCurso.abort();
-    return { ok: true };
 });
 
 ipc.handle('update-install', async (event, target) => {
