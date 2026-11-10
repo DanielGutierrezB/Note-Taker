@@ -255,7 +255,7 @@ window.nt = {
     grabarBorrar: async () => ({ ok: true, secuencia: 'borrada', audios: 1 }),
     grabarRegenerar: async () => ({ ok: true, tomas: 6, sinAudio: 0, degradadas: 0, sinLeer: 0 }),
     grabarRehacerXml: async () => ({ ok: true, tomas: 6 }),
-    grabarTerminar: async () => estadoEnVivo(),
+    grabarTerminar: async () => cerrada(),
     onGrabarAviso: cb => avisos.push(cb),
 
     // El menú del .prproj: dos capturas, una vista anidada y otra suelta —los
@@ -502,7 +502,7 @@ async function aplicar() {
     }
 
     if (hay('terminada')) {
-        app.irACierre(estadoEnVivo());
+        app.irACierre(cerrada());
         return;
     }
 
@@ -531,6 +531,14 @@ async function aplicar() {
  * el estado tal cual, porque ahí lo que se mira es la pantalla, no el motor.
  */
 let vivo = null;
+
+/**
+ * Lo que devuelve «Terminar»: la sesión, con los segundos del audio y lo que
+ * encontró la comprobación del final (`engine/comprobar-clase.js`).
+ */
+function cerrada() {
+    return { ...estadoEnVivo(), grabando: false, segundos: 1043, comprobacion: { ok: true, problemas: [] } };
+}
 
 /** La sesión que el motor devolvería. */
 function laSesion() {

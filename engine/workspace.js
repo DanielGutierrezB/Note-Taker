@@ -174,17 +174,39 @@ function ensureDir(dir) {
 /**
  * Escritura atómica: primero un temporal al lado (mismo volumen, para que el
  * rename sea instantáneo y no una copia), después el rename.
+ *
+ * Con `asegurar`, el temporal se asegura en el disco antes del rename. Sin eso,
+ * un corte de luz justo después podía dejar el nombre apuntando a un archivo
+ * que todavía no había bajado: vacío o a medias, en lugar del de antes. Cuesta
+ * unos 5 ms para el archivo de notas de una clase de tres horas, así que se
+ * pide para lo que no se puede rehacer y no para todo.
+ *
+ * Con `conservarAnterior`, el que había queda al lado como `.anterior`: es lo
+ * que se lee si el nuevo resultara roto (`leerSidecar`).
  */
-function writeAtomic(filePath, contents) {
+function writeAtomic(filePath, contents, opciones) {
+    const o = opciones || {};
     ensureDir(path.dirname(filePath));
     const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-    fs.writeFileSync(tmp, contents);
+    const fd = fs.openSync(tmp, 'w');
+    try {
+        fs.writeSync(fd, contents);
+        if (o.asegurar) fs.fsyncSync(fd);
+    } finally {
+        fs.closeSync(fd);
+    }
+    if (o.conservarAnterior && fs.existsSync(filePath)) {
+        fs.copyFileSync(filePath, `${filePath}${ANTERIOR}`);
+    }
     fs.renameSync(tmp, filePath);
     return filePath;
 }
 
-function writeJson(filePath, value) {
-    return writeAtomic(filePath, JSON.stringify(value, null, 2));
+/** Cómo termina la copia del archivo de antes, que se guarda al reemplazarlo. */
+const ANTERIOR = '.anterior';
+
+function writeJson(filePath, value, opciones) {
+    return writeAtomic(filePath, JSON.stringify(value, null, 2), opciones);
 }
 
 function readJson(filePath) {
@@ -239,6 +261,7 @@ module.exports = {
     dentroDe,
     safeName,
     ensureDir,
+    ANTERIOR,
     writeAtomic,
     writeJson,
     readJson,

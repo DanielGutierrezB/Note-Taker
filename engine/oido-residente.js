@@ -184,9 +184,15 @@ function arrancar(opciones) {
             const hijo = este.hijo;
             vivos.add(hijo);
             if (hijo.pid) anotarPid(hijo.pid);
-            hijo.on('exit', () => {
+            hijo.on('exit', (codigo, senal) => {
                 vivos.delete(hijo);
                 if (hijo.pid) borrarPid(hijo.pid);
+                // Que se muera solo, con el modelo cargado, no se veía en ningún
+                // lado: el ciclo pasaba a whisper-cli y el texto en vivo se
+                // atrasaba sin que quedara rastro de por qué.
+                if (servidor === este && este.listo) {
+                    registro.anotar('main', 'residente.se-cayo', { codigo, senal: senal || null });
+                }
                 este.listo = false;
                 if (servidor === este) servidor = null;
             });

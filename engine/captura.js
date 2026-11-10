@@ -36,6 +36,7 @@ const os = require('os');
 const { spawnSync } = require('child_process');
 
 const paths = require('./paths');
+const registro = require('./registro');
 const workspace = require('./workspace');
 
 const BITS = 16;
@@ -137,11 +138,34 @@ function escribir(id, pcm) {
     if (!s) throw new Error(`No hay sesión de captura ${id}.`);
     const buf = Buffer.isBuffer(pcm) ? pcm : Buffer.from(pcm.buffer || pcm);
     if (buf.length) {
-        fs.writeSync(s.fd, buf, 0, buf.length, 44 + s.bytes);
+        const donde = 44 + s.bytes;
+        // **El lugar del pedazo se cuenta aunque no se haya podido escribir.**
+        // Si no, el siguiente caía donde iba este y todo lo de después quedaba
+        // corrido contra la cámara. Así queda un hueco en silencio del tamaño
+        // de lo que se perdió, en su sitio, y el error sale igual para que
+        // quien escribe lo diga.
         s.bytes += buf.length;
+        fs.writeSync(s.fd, buf, 0, buf.length, donde);
         fs.writeSync(s.fd, cabecera(s.bytes, s.sampleRate, s.canales), 0, 44, 0);
+        asegurar(s);
     }
     return { bytes: s.bytes, segundos: segundosDe(s) };
+}
+
+/**
+ * Cada cuánto se le pide al sistema que el WAV quede de verdad en el disco.
+ *
+ * Escribir deja los datos en la memoria del sistema; un corte de luz se lleva
+ * lo que no bajó. Cinco segundos es lo que se arriesga, contra pedírselo con
+ * cada pedazo, que haría esperar al disco doce veces por segundo.
+ */
+const ASEGURAR_CADA_MS = 5000;
+
+function asegurar(s) {
+    const ahora = Date.now();
+    if (ahora - (s.aseguradoMs || 0) < ASEGURAR_CADA_MS) return;
+    s.aseguradoMs = ahora;
+    fs.fsyncSync(s.fd);
 }
 
 function segundosDe(s) {
@@ -256,12 +280,27 @@ function recorte(params) {
         destino
     ], { encoding: 'utf8' });
 
-    if (r.status !== 0 || !fs.existsSync(destino)) return null;
+    if (r.status !== 0 || !fs.existsSync(destino)) {
+        // Sin esto el ciclo en vivo se quedaba sin oír ese tramo y no lo decía
+        // en ningún lado. De a uno cada treinta segundos: si falla, falla en
+        // cada pasada.
+        const ahora = Date.now();
+        if (ahora - ultimoRecorteFallido > 30000) {
+            ultimoRecorteFallido = ahora;
+            registro.anotar('main', 'captura.recorte-falla', {
+                estado: r.status, error: r.error ? r.error.message : String(r.stderr || '').slice(0, 300)
+            });
+        }
+        tirar({ archivo: destino });
+        return null;
+    }
     // `desdeSec` es qué momento del archivo quedó en el segundo 0 del recorte:
     // sin eso, los tiempos que devuelve Whisper no se pueden llevar a la hora del
     // día y todo el reloj se cae.
     return { archivo: destino, desdeSec: ini };
 }
+
+let ultimoRecorteFallido = 0;
 
 function tirar(recortado) {
     if (!recortado || !recortado.archivo) return;

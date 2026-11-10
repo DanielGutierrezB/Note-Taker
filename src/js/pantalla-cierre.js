@@ -39,13 +39,14 @@ function pintar() {
     const vivas = salida.tomas.filter(t => !t.descartada);
     const sinReleer = salida.tomas.filter(t => t.relectura && t.relectura.estado === 'sin-leer');
     const chicas = salida.tomas.filter(t => t.relectura && t.relectura.estado === 'degradada');
+    const problemas = (salida.comprobacion && salida.comprobacion.problemas) || [];
 
     $('#cierre-resumen').innerHTML = `
       <div class="tarjeta guarda" data-estado="terminada">
         <div class="tarjeta-cabeza">
-          <span class="hp-ico" style="color:var(--ok)">${icono('ok')}</span>
+          <span class="hp-ico" style="color:var(${problemas.length ? '--warn' : '--ok'})">${icono(problemas.length ? 'atencion' : 'ok')}</span>
           <span class="v1">${esc(salida.secuencia)}</span>
-          <span class="pastilla" data-estado="terminada">terminada</span>
+          <span class="pastilla" data-estado="${problemas.length ? 'en silencio' : 'terminada'}">${problemas.length ? 'revisar' : 'terminada'}</span>
         </div>
         <div class="tarjeta-cuerpo">
           <div class="contadores" style="margin-bottom:16px">
@@ -54,6 +55,7 @@ function pintar() {
             ${contador(fmt.relojCorto(cortados()), 'la clase cortada')}
           </div>
 
+          ${problemas.length ? avisoDeComprobacion(problemas) : ''}
           ${sinReleer.length || chicas.length ? aviso(sinReleer, chicas) : ''}
 
           <p class="v3" style="margin-bottom:4px">El XML, listo para importar en Premiere:</p>
@@ -96,6 +98,17 @@ function contador(valor, rotulo) {
     return `<div class="contador">
       <span class="contador-num">${esc(valor)}</span>
       <span class="rotulo">${esc(rotulo)}</span></div>`;
+}
+
+/**
+ * Lo que la comprobación del motor encontró al terminar (`comprobar-clase.js`).
+ * Va primero: un audio al que le faltan segundos es más grave que un texto
+ * leído con el modelo chico.
+ */
+function avisoDeComprobacion(problemas) {
+    return `<div class="aviso" style="margin-bottom:16px">${icono('atencion')}
+      <span>Al terminar se revisó la clase, y hay algo que mirar antes de entregarla:
+      ${problemas.map(p => esc(p)).join(' ')}</span></div>`;
 }
 
 function aviso(sinReleer, chicas) {

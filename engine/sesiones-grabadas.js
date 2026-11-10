@@ -25,6 +25,7 @@ const historial = require('./deshacer');
 const notasXml = require('./notas-xml');
 const nombreDeSesion = require('./nombre-de-sesion');
 const referencias = require('./referencias');
+const registro = require('./registro');
 const workspace = require('./workspace');
 const oirToma = require('./oir-toma');
 const vivo = require('./notas-vivo');
@@ -598,7 +599,17 @@ function leerSidecar(json) {
     try {
         return notasXml.estadoLeido(JSON.parse(fs.readFileSync(json, 'utf8'))) || {};
     } catch (e) {
-        throw new Error('No pude leer esa sesión: su archivo de datos está roto.');
+        // El de antes del último guardado, que se conserva justo para esto
+        // (`workspace.writeAtomic`): se pierde a lo sumo el último cambio, y
+        // no la clase.
+        try {
+            const anterior = notasXml.estadoLeido(
+                JSON.parse(fs.readFileSync(`${json}${workspace.ANTERIOR}`, 'utf8'))) || {};
+            registro.anotar('main', 'sesion.leida-la-anterior', { json, error: e.message });
+            return anterior;
+        } catch (e2) {
+            throw new Error('No pude leer esa sesión: su archivo de datos está roto.');
+        }
     }
 }
 

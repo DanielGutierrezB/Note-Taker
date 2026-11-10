@@ -96,7 +96,9 @@ function escribir(sesion) {
     ajustar.ajustarSesion(conSesiones);
 
     workspace.writeAtomic(archivos.xml, notasXml.xmlDeNotas(conSesiones));
-    workspace.writeJson(archivos.json, notasXml.sidecar(conSesiones));
+    // El archivo de notas es lo que no se puede rehacer: de él sale el XML
+    // («Rehacer XML») y la clase que se reanuda.
+    workspace.writeJson(archivos.json, notasXml.sidecar(conSesiones), { asegurar: true, conservarAnterior: true });
     sesion.guardadoMs = Date.now();
     return archivos;
 }

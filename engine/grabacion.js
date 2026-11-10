@@ -58,6 +58,7 @@ const relecturas = require('./relecturas');
 const cambiosToma = require('./cambios-toma');
 const sesionesGrabadas = require('./sesiones-grabadas');
 const ciclo = require('./ciclo-senales');
+const comprobarClase = require('./comprobar-clase');
 const { CICLO_MS, CONTEXTO_MS } = ciclo;
 
 let sesion = null;
@@ -422,6 +423,21 @@ function cambiarEntrada(params) {
 }
 
 /**
+ * Cierra el WAV y abre otro con la misma entrada, desde ahora.
+ *
+ * Es lo que hace falta después de que la Mac durmió: el reloj siguió y el
+ * archivo no, y seguir en el mismo correría contra la cámara todo lo que se
+ * grabe después. Es un cambio de entrada a la misma entrada.
+ */
+function reabrirAudio(motivo) {
+    if (!sesion || !sesion.captura || sesion.terminando) return null;
+    const c = sesion.captura;
+    const r = cambiarEntrada({ dispositivo: sesion.estado.dispositivo, sampleRate: c.sampleRate, canales: c.canales });
+    if (r.ok && motivo) sesion.avisar({ tipo: 'error', mensaje: motivo });
+    return r;
+}
+
+/**
  * Cambia el idioma de la clase que se está grabando, y si se lo piden relee lo
  * que ya pasó.
  *
@@ -537,7 +553,12 @@ async function cerrarSesion() {
     // que quedó abierta se puede reanudar (`sesiones-grabadas.reanudar`).
     sesion.estado.terminada = Date.now();
     const final = espejo.escribir(sesion);
-    const salida = { ...espejo.resumen(sesion), archivos: final };
+    // Lo que se descubre en la mesa de edición se puede descubrir acá, con la
+    // clase todavía delante (`comprobar-clase.js`). Y los segundos del audio
+    // salen de los WAV: con el audio ya cerrado, el resumen decía cero.
+    const comprobacion = comprobarClase.comprobar(sesion.estado, final);
+    if (!comprobacion.ok) registro.anotar('main', 'grabacion.comprobacion', { problemas: comprobacion.problemas });
+    const salida = { ...espejo.resumen(sesion), archivos: final, segundos: comprobacion.segundos, comprobacion };
     soltar();
     return salida;
 }
@@ -727,6 +748,7 @@ module.exports = {
     iniciar,
     pcm,
     cambiarEntrada,
+    reabrirAudio,
     cambiarIdioma,
     editar,
     editarGrabada: sesionesGrabadas.editarGrabada,

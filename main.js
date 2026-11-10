@@ -13,7 +13,7 @@
  */
 
 const { app, BrowserWindow, Menu, ipcMain, dialog, shell, nativeImage, clipboard,
-    screen, systemPreferences } = require('electron');
+    screen, systemPreferences, powerSaveBlocker, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -76,7 +76,10 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
-            sandbox: true
+            sandbox: true,
+            // Con la ventana tapada o en otro escritorio, Chromium frena sus
+            // relojes, y de ellos dependen el envío del micrófono y la barra.
+            backgroundThrottling: false
         }
     });
 
@@ -90,6 +93,12 @@ function createWindow() {
         terminarAntesDe(() => { if (mainWindow) mainWindow.close(); });
     });
     mainWindow.on('closed', () => { mainWindow = null; });
+    // La ventana se cayó (se quedó sin memoria, la mató el sistema): se vuelve
+    // a cargar, y al arrancar vuelve sola a la clase en curso (`app.js`).
+    mainWindow.webContents.on('render-process-gone', (event, detalle) => {
+        anotar('ventana.se-cayo', { motivo: detalle && detalle.reason, codigo: detalle && detalle.exitCode });
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.reload();
+    });
     mainWindow.loadFile('src/index.html');
     // El arnés de desarrollo (capturas, JS inyectado) vive en `dev-shot.js` y
     // sin sus flags no hace nada.
@@ -141,6 +150,51 @@ async function terminarAntesDe(seguir) {
     } finally {
         preguntando = false;
     }
+}
+
+/**
+ * La Mac despierta mientras se graba.
+ *
+ * Nada lo impedía: una clase de tres horas con el portátil sin tocar terminaba
+ * con la Mac dormida y el audio cortado. Se mira cada dos segundos en vez de
+ * enganchar cada forma de empezar y terminar —el botón, cerrar la ventana,
+ * reanudar, una sesión que no arrancó—: así no hay una que se olvide.
+ */
+let bloqueoDelSueno = null;
+function vigilarElSueno() {
+    const grabando = grabacion.activa();
+    if (grabando && bloqueoDelSueno == null) {
+        bloqueoDelSueno = powerSaveBlocker.start('prevent-app-suspension');
+        anotar('sueno.bloqueado', {});
+    } else if (!grabando && bloqueoDelSueno != null) {
+        powerSaveBlocker.stop(bloqueoDelSueno);
+        bloqueoDelSueno = null;
+        anotar('sueno.suelto', {});
+    }
+}
+
+/**
+ * Cuánto se atrasa el proceso principal, que es donde se escribe el audio.
+ *
+ * El 4 de noviembre se atrasó lo bastante como para que el audio de Zoom se
+ * rellenara con silencio, y en el diario no quedó nada que lo dijera. Esto mide
+ * cuánto tarda en volver un reloj de medio segundo, y si se pasa, lo anota con
+ * lo último que se había anotado antes, que es la pista de qué lo frenó.
+ */
+const ATRASO_QUE_SE_ANOTA_MS = 400;
+let esperadoMs = 0;
+let ultimoAtrasoAnotado = 0;
+function vigilarElAtraso() {
+    const ahora = Date.now();
+    const atraso = esperadoMs ? ahora - esperadoMs : 0;
+    esperadoMs = ahora + 500;
+    if (atraso < ATRASO_QUE_SE_ANOTA_MS || ahora - ultimoAtrasoAnotado < 10000) return;
+    ultimoAtrasoAnotado = ahora;
+    anotar('main.atrasado', {
+        ms: atraso,
+        grabando: grabacion.activa(),
+        antes: registro.todo().slice(-4, -1).map(l => l.evento)
+    });
 }
 
 /**
@@ -216,6 +270,16 @@ if (!app.requestSingleInstanceLock()) {
         ponerElMenu();
         createWindow();
         app.on('activate', traerLaVentana);
+        setInterval(vigilarElSueno, 2000).unref();
+        setInterval(vigilarElAtraso, 500).unref();
+        // Al despertar, lo que se grabe va a un WAV nuevo en su hora: el rato
+        // dormido no está en el archivo, y seguir en el mismo correría todo lo
+        // de después contra la cámara.
+        powerMonitor.on('suspend', () => anotar('mac.se-durmio', { grabando: grabacion.activa() }));
+        powerMonitor.on('resume', () => {
+            anotar('mac.desperto', { grabando: grabacion.activa() });
+            if (grabacion.activa()) grabacion.reabrirAudio('La Mac se durmió: lo de ese rato no se grabó. El audio sigue en un WAV nuevo, en su hora.');
+        });
     });
 }
 

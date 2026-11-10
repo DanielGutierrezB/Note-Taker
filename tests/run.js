@@ -37,6 +37,7 @@ const FILES = [
     'sesion.test.js',
     'reanudar-y-cierre.test.js',
     'ventana-perdida.test.js',
+    'blindaje.test.js',
     'reloj-del-audio.test.js',
     'revision-motor.test.js',
     'final-de-toma.test.js',
