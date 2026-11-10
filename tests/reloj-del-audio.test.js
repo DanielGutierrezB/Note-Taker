@@ -118,8 +118,8 @@ module.exports = function (t) {
         const codigo = leer('src', 'js', 'pantalla-vivo.js');
         const cuerpo = codigo.slice(codigo.indexOf("if (aviso.tipo === 'reloj')"),
             codigo.indexOf("if (aviso.tipo === 'golpe')"));
-        t.ok(/aviso\.segundos > estado\.segundos\) ultimoAvisoMs/.test(cuerpo),
-            'solo el reloj que avanzó refresca `ultimoAvisoMs`');
+        t.ok(/if \(aviso\.segundos > estado\.segundos \|\| \(aviso\.grabadoHastaMs \|\| 0\) > \(estado\.grabadoHastaMs \|\| 0\)\) \{\s*ultimoAvisoMs = Date\.now\(\);/.test(cuerpo),
+            'solo el reloj que avanzó —el del WAV o el de la clase— refresca `ultimoAvisoMs`');
     });
 
     t.test('«Clase cortada» también corre con el audio', () => {

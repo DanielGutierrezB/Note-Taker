@@ -311,8 +311,11 @@ function alAviso(aviso) {
         // antes; tomarlo como vida sin más dejaba la pantalla diciendo
         // «escuchando» con el timecode clavado, que es justo lo que
         // `MOTOR_CALLADO_MS` existe para no dejar pasar.
-        if (aviso.segundos > estado.segundos) ultimoAvisoMs = Date.now();
+        if (aviso.segundos > estado.segundos || (aviso.grabadoHastaMs || 0) > (estado.grabadoHastaMs || 0)) {
+            ultimoAvisoMs = Date.now();
+        }
         estado.segundos = aviso.segundos;
+        if (aviso.grabadoHastaMs) estado.grabadoHastaMs = aviso.grabadoHastaMs;
         // Solo la barra: el resto de la pantalla no cambia porque pase un segundo,
         // y repintarla entera le rompería la selección a quien está seleccionando.
         if ($('#vista-vivo').classList.contains('es-activa')) pintarBarra();
@@ -369,7 +372,7 @@ const MOTOR_CALLADO_MS = 6000;
  * diferencia entre las dos cosas que la barra muestra.
  */
 function segundosCortados() {
-    const hasta = estado.ceroMs + (estado.segundos || 0) * 1000;
+    const hasta = estado.grabadoHastaMs || estado.ceroMs + (estado.segundos || 0) * 1000;
     let ms = 0;
     for (const t of estado.tomas) {
         if (t.descartada || t.inMs == null) continue;
@@ -377,6 +380,16 @@ function segundosCortados() {
         if (fin > t.inMs) ms += fin - t.inMs;
     }
     return ms / 1000;
+}
+
+/**
+ * Cuánto lleva la clase: desde el cero hasta donde hay audio. Con un solo WAV
+ * es lo mismo que sus segundos; con varios, los del WAV de ahora volvían el
+ * timecode a cero cada vez que se cambiaba la entrada o la Mac despertaba.
+ */
+function segundosDeLaClase() {
+    if (!estado.grabadoHastaMs) return estado.segundos || 0;
+    return Math.max(0, (estado.grabadoHastaMs - estado.ceroMs) / 1000);
 }
 
 /** Lo de arriba: timecode, estado de la sesión y nivel. Barato: va seguido. */
@@ -398,7 +411,7 @@ function pintarBarra() {
     const est = estados.deSesion(estado, conAudio);
     // Sin cuadros: son dos dígitos que cambian treinta veces por segundo al
     // lado de los que se quieren leer. El cuadro sigue en cada fila y en el XML.
-    $('#vivo-tc').textContent = fmt.relojCorto(estado.segundos);
+    $('#vivo-tc').textContent = fmt.relojCorto(segundosDeLaClase());
     $('#vivo-cortada').textContent = fmt.relojCorto(segundosCortados());
     if (!terminando) {
         $('#vivo-estado').textContent = est.palabra;

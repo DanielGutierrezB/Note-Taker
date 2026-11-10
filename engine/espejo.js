@@ -197,6 +197,10 @@ function resumen(sesion) {
         // su cuenta: dos relojes que arrancan juntos se separan, y el que el
         // editor mira tiene que ser el mismo que el que escribe el XML.
         segundos: sesion.captura ? sesion.captura.segundos : 0,
+        // Hasta qué hora del día hay audio escrito: con varios WAV —se cambió la
+        // entrada, la Mac durmió— es lo que dice cuánto lleva la clase, y no los
+        // segundos del WAV de ahora, que vuelven a cero con cada uno.
+        grabadoHastaMs: grabadoHastaMs(sesion) || null,
         // Qué hay en la cola de relecturas, para que la barra pueda decir
         // «releyendo 2» en vez de no decir nada mientras Whisper trabaja.
         releyendo: sesion.cola.length + (sesion.rehaciendo ? 1 : 0),
