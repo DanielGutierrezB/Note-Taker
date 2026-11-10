@@ -119,6 +119,101 @@ module.exports = function (t) {
         }
     });
 
+    t.group('cambiar de entrada · dormir, despertar y quedarse sin WAV');
+
+    t.test('lo que llega con la Mac yéndose a dormir no entra, y al despertar hay un WAV nuevo', () => {
+        grabando(10);
+        try {
+            const antes = grabacion._sesion().captura.archivo;
+            const segundos = grabacion._sesion().captura.segundos;
+            grabacion.dormir();
+            grabacion.pcm(pedazo());
+            t.eq(grabacion._sesion().captura.segundos, segundos, 'el pedazo de después de dormirse no se escribió');
+            t.ok(grabacion.despertar().ok, 'despertar abre');
+            t.ok(grabacion._sesion().captura.archivo !== antes, 'otro WAV');
+            t.eq(grabacion.despertar(), null, 'y el segundo aviso de despertar no abre otro');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('si el aviso de despertar no llega, el audio que vuelve despierta la clase', () => {
+        grabando(5);
+        try {
+            const antes = grabacion._sesion().captura.archivo;
+            grabacion.dormir();
+            grabacion._sesion().dormidaMs = Date.now() - 4000;
+            grabacion.pcm(pedazo());
+            t.eq(grabacion._sesion().dormida, false);
+            t.ok(grabacion._sesion().captura.archivo !== antes, 'con un WAV nuevo');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('sin WAV, lo que llega se dice una vez y se vuelve a intentar abrir', () => {
+        grabando(5);
+        const avisos = [];
+        try {
+            const s = grabacion._sesion();
+            s.avisar = a => avisos.push(a);
+            s.estado.sesiones.push({ ...s.captura });
+            s.captura = null;
+            grabacion.pcm(pedazo());
+            grabacion.pcm(pedazo());
+            t.eq(avisos.filter(a => /no se está guardando/.test(a.mensaje)).length, 1, 'un aviso, no uno por pedazo');
+            grabacion._reintentarAudio();
+            t.ok(grabacion._sesion().captura, 'y volvió a haber dónde escribir');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('el WAV nuevo se ancla donde la ventana empezó a capturar, si es creíble', () => {
+        grabando(5);
+        try {
+            const fin = () => { const c = grabacion._sesion().captura; return c.desdeMs + c.segundos * 1000; };
+            const ancla = Math.round(Math.max(Date.now(), fin()) + 3000);
+            grabacion.cambiarEntrada({ dispositivo: 'B', sampleRate: 48000, canales: 1, desdeMs: ancla });
+            t.eq(grabacion._sesion().captura.desdeMs, ancla);
+            const finDelSegundo = fin();
+            grabacion.cambiarEntrada({ dispositivo: 'C', sampleRate: 48000, canales: 1, desdeMs: Date.now() + 60000 });
+            t.ok(grabacion._sesion().captura.desdeMs < Date.now() + 10000, 'una hora a un minuto de ahora no es un ancla');
+            t.ok(grabacion._sesion().captura.desdeMs >= finDelSegundo, 'y no se encima al anterior');
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('cada WAV termina donde llegó su último pedazo, no cuando se lo cierra', () => {
+        grabando(5);
+        try {
+            const ultimo = grabacion._sesion().captura.ultimoPcmMs;
+            t.ok(ultimo, 'se anota');
+            grabacion._sesion().captura.ultimoPcmMs = ultimo - 5000;
+            grabacion.cambiarEntrada({ dispositivo: 'B', sampleRate: 48000, canales: 1 });
+            t.eq(grabacion._sesion().estado.sesiones[0].hastaMs, ultimo - 5000);
+        } finally {
+            grabacion.apagar();
+        }
+    });
+
+    t.test('si escribir por última vez falla, la clase igual se suelta y el cierre lo dice', async () => {
+        grabando(5);
+        const espejo = require('../engine/espejo');
+        const escribir = espejo.escribir;
+        espejo.escribir = () => { throw new Error('No queda espacio en el disco'); };
+        try {
+            const salida = await grabacion.terminar();
+            t.eq(grabacion.activa(), false, 'no queda una sesión en pie que nadie puede terminar');
+            t.eq(salida.comprobacion.ok, false);
+            t.ok(/No pude escribir las notas por última vez: No queda espacio/.test(salida.comprobacion.problemas[0]));
+        } finally {
+            espejo.escribir = escribir;
+            grabacion.apagar();
+        }
+    });
+
     t.test('el canal existe de punta a punta', () => {
         const canales = new Map();
         puente.registrar({

@@ -191,7 +191,10 @@ function iniciar(params) {
         ultimoSalteoMs: 0,
         ultimaLentaMs: 0,
         timer: null,
-        avisar: typeof p.avisar === 'function' ? p.avisar : () => {}
+        avisar: typeof p.avisar === 'function' ? p.avisar : () => {},
+        // Con qué se abrió el último WAV, para volver a abrir uno si se pierde.
+        ultimaEntrada: { dispositivo: p.dispositivo || null, sampleRate: p.sampleRate, canales: p.canales },
+        dormida: false
     };
 
     // Si algo de lo que sigue falla —el disco desenchufado al abrir el WAV, la
@@ -214,6 +217,7 @@ function iniciar(params) {
                 avisarReloj();
                 ciclo.buscarSenales(sesion);
                 vigilarDeriva();
+                reintentarAudio();
                 guardarLaAbierta();
                 vigilarDisco();
             }, CICLO_MS);
@@ -326,6 +330,9 @@ function abrirEscucha(params) {
     // La simulación lleva su tiempo a golpes de `pcm`, no con el reloj: ahí no
     // hay nada que alinear.
     sesion.captura = { ...info, segundos: 0, alinear: p.sinReloj ? null : alinearAudio.nuevo() };
+    sesion.ultimaEntrada = {
+        dispositivo: sesion.estado.dispositivo || null, sampleRate: info.sampleRate, canales: info.canales
+    };
     sesion.escuchadoHastaMs = info.desdeMs;
     return info;
 }
@@ -350,7 +357,20 @@ function anclaDe(p) {
  *   mismo hueco dos veces.
  */
 function pcm(buffer, origen) {
-    if (!sesion || !sesion.captura) return null;
+    if (!sesion) return null;
+    // Sin WAV —abrir el de después de dormir falló— o con la Mac yéndose a
+    // dormir: lo que llega no tiene dónde ir. Antes se tiraba callado; ahora se
+    // cuenta y se dice, y el ciclo vuelve a intentar abrir (`reintentarAudio`).
+    if (sesion.dormida && Date.now() - sesion.dormidaMs > 3000) {
+        // Llega audio con la Mac despierta y el aviso de despertar no vino (o
+        // todavía no): se despierta desde acá, que si no la clase quedaría
+        // tirando el audio para siempre.
+        despertar();
+    }
+    if (!sesion.captura || sesion.dormida) {
+        if (!sesion.terminando && !sesion.dormida) sinDondeEscribir();
+        return null;
+    }
     const cap = sesion.captura;
     let r = captura.escribir(cap.id, buffer);
     cap.segundos = r.segundos;
@@ -364,6 +384,59 @@ function pcm(buffer, origen) {
         if (faltaMs > 0) r = rellenar(cap, faltaMs);
     }
     return r;
+}
+
+/** Lo que llega sin WAV abierto: se avisa una vez cada medio minuto. */
+function sinDondeEscribir() {
+    sesion.tiradosSinWav = (sesion.tiradosSinWav || 0) + 1;
+    const ahora = Date.now();
+    if (sesion.dormida || ahora - (sesion.avisoSinWavMs || 0) < 30000) return;
+    sesion.avisoSinWavMs = ahora;
+    registro.anotar('main', 'grabacion.sin-wav', { tirados: sesion.tiradosSinWav });
+    sesion.avisar({
+        tipo: 'error',
+        mensaje: 'El audio no se está guardando: no se pudo abrir el archivo de audio de la clase. '
+            + 'Se sigue intentando; si la carpeta está en un disco externo o en un Drive, revisá que esté.'
+    });
+}
+
+/**
+ * Sin WAV y con la clase en pie, se vuelve a intentar abrir uno cada cinco
+ * segundos con la misma entrada. Pasa cuando abrir el de después de dormir
+ * falló porque el disco de la carpeta todavía no había vuelto: sin esto, el
+ * resto de la clase quedaba sin audio hasta que alguien eligiera otra entrada.
+ */
+function reintentarAudio() {
+    if (!sesion || sesion.captura || sesion.terminando || !sesion.ultimaEntrada) return;
+    const ahora = Date.now();
+    if (ahora - (sesion.reintentoMs || 0) < 5000) return;
+    sesion.reintentoMs = ahora;
+    const r = cambiarEntrada(sesion.ultimaEntrada);
+    if (r.ok) {
+        registro.anotar('main', 'grabacion.audio-volvio', { tirados: sesion.tiradosSinWav || 0 });
+        sesion.avisar({ tipo: 'error', mensaje: 'El audio se vuelve a guardar, en un WAV nuevo desde ahora.' });
+    }
+}
+
+/** La Mac se va a dormir: lo que llegue hasta despertar no es de la clase. */
+function dormir() {
+    if (!sesion || sesion.terminando) return;
+    sesion.dormida = true;
+    sesion.dormidaMs = Date.now();
+}
+
+const AL_DESPERTAR = 'La Mac se durmió: lo de ese rato no se grabó. El audio sigue en un WAV nuevo, en su hora.';
+
+/**
+ * La Mac despertó: lo que se grabe va a un WAV nuevo en su hora. Lo llaman el
+ * aviso de despertar y el primer audio que llega después de dormir, el que
+ * llegue antes; el segundo no vuelve a abrir otro.
+ */
+function despertar() {
+    if (!sesion || sesion.terminando) return null;
+    if (!sesion.dormida && sesion.despertoMs && Date.now() - sesion.despertoMs < 10000) return null;
+    sesion.despertoMs = Date.now();
+    return reabrirAudio(AL_DESPERTAR);
 }
 
 /** Escribe `ms` de silencio donde va el próximo pedazo, y lo deja dicho. */
@@ -438,7 +511,14 @@ function avisarReloj() {
  * y se queda es un hueco.
  */
 function vigilarDeriva() {
-    if (!sesion || !sesion.captura) return;
+    if (!sesion || !sesion.captura || sesion.terminando) return;
+    // Una vuelta que llega tarde es un proceso que estuvo trabado, y el audio de
+    // ese rato está todavía en camino: medir ahora es ver un atraso que en un
+    // momento se pone al día. Se mide en la vuelta siguiente.
+    const ahoraMs = Date.now();
+    const tarde = sesion.ultimaVueltaMs && ahoraMs - sesion.ultimaVueltaMs > CICLO_MS * 2;
+    sesion.ultimaVueltaMs = ahoraMs;
+    if (tarde) return;
     const deriva = (Date.now() - sesion.captura.desdeMs) - sesion.captura.segundos * 1000;
     const escalon = Math.floor(deriva / DERIVA_AVISO_MS);
     if (!tocaAvisarDeriva(escalon, sesion.derivaAvisada || 0)) return;
@@ -523,6 +603,8 @@ function cambiarEntrada(params) {
     }
     const toma = cambiosToma.pasarAOtroAudio(sesion, finDelViejo, nueva.desdeMs);
     sesion.estado.dispositivo = p.dispositivo || null;
+    sesion.ultimaEntrada = { dispositivo: p.dispositivo || null, sampleRate: tasa, canales: Number(p.canales) || 1 };
+    sesion.dormida = false;
     // El atraso se mide desde el WAV nuevo: el viejo ya no corre.
     sesion.derivaAvisada = 0;
     registro.anotar('main', 'grabacion.otra-entrada', {
@@ -544,10 +626,17 @@ function cambiarEntrada(params) {
  * grabe después. Es un cambio de entrada a la misma entrada.
  */
 function reabrirAudio(motivo) {
-    if (!sesion || !sesion.captura || sesion.terminando) return null;
-    const c = sesion.captura;
+    if (!sesion || sesion.terminando) return null;
+    const c = sesion.captura || sesion.ultimaEntrada || {};
     const r = cambiarEntrada({ dispositivo: sesion.estado.dispositivo, sampleRate: c.sampleRate, canales: c.canales });
     if (r.ok && motivo) sesion.avisar({ tipo: 'error', mensaje: motivo });
+    // Si no abrió, se dice: antes la falla era callada y el resto de la clase
+    // quedaba sin audio. El ciclo lo vuelve a intentar (`reintentarAudio`).
+    if (!r.ok) {
+        sesion.dormida = false;
+        registro.anotar('main', 'grabacion.no-reabrio', { motivo, error: r.error });
+        sesion.avisar({ tipo: 'error', mensaje: `${r.error} Se vuelve a intentar en unos segundos.` });
+    }
     return r;
 }
 
@@ -719,19 +808,42 @@ async function cerrarSesion() {
     // La sesión queda dicha como terminada, que es lo que distingue en la lista
     // una que se cerró de una que quedó abierta porque la app se fue al piso. La
     // que quedó abierta se puede reanudar (`sesiones-grabadas.reanudar`).
-    sesion.estado.terminada = Date.now();
-    const final = espejo.escribir(sesion);
-    // Lo que se descubre en la mesa de edición se puede descubrir acá, con la
-    // clase todavía delante (`comprobar-clase.js`). Y los segundos del audio
-    // salen de los WAV: con el audio ya cerrado, el resumen decía cero.
-    const comprobacion = comprobarClase.comprobar(sesion.estado, final);
-    if (!comprobacion.ok) registro.anotar('main', 'grabacion.comprobacion', { problemas: comprobacion.problemas });
-    const salida = {
-        ...espejo.resumen(sesion), corto: nombreDeSesion.sinFecha(sesion.estado.secuencia),
-        archivos: final, segundos: comprobacion.segundos, comprobacion
-    };
-    soltar();
-    return salida;
+    // **La sesión se suelta pase lo que pase.** Si escribir por última vez
+    // fallaba —el disco lleno, la carpeta desenchufada—, la sesión quedaba en
+    // pie con el audio ya cerrado: nada se podía terminar, cada ⌘Q volvía a
+    // fallar y decía que la clase seguía grabando, y solo salía forzando la
+    // salida. Lo que quedó en el disco es la última escritura, que la deja como
+    // abierta y por lo tanto reanudable; el cierre lo dice.
+    try {
+        sesion.estado.terminada = Date.now();
+        let final;
+        let comprobacion;
+        try {
+            final = espejo.escribir(sesion);
+            // Lo que se descubre en la mesa de edición se puede descubrir acá,
+            // con la clase todavía delante (`comprobar-clase.js`). Y los segundos
+            // del audio salen de los WAV: con el audio ya cerrado, el resumen
+            // decía cero.
+            comprobacion = comprobarClase.comprobar(sesion.estado, final);
+        } catch (err) {
+            registro.anotar('main', 'grabacion.no-cerro', { error: err.message });
+            final = espejo.resumen(sesion).archivos;
+            comprobacion = {
+                ok: false,
+                problemas: [`No pude escribir las notas por última vez: ${err.message}. `
+                    + 'La clase quedó como abierta, con lo guardado hasta la última escritura: '
+                    + 'cuando la carpeta vuelva, se puede reanudar o «Volver a armar el XML».'],
+                segundos: (sesion.estado.sesiones || []).reduce((n, w) => n + (w.segundos || 0), 0)
+            };
+        }
+        if (!comprobacion.ok) registro.anotar('main', 'grabacion.comprobacion', { problemas: comprobacion.problemas });
+        return {
+            ...espejo.resumen(sesion), corto: nombreDeSesion.sinFecha(sesion.estado.secuencia),
+            archivos: final, segundos: comprobacion.segundos, comprobacion
+        };
+    } finally {
+        soltar();
+    }
 }
 
 /**
@@ -920,6 +1032,8 @@ module.exports = {
     pcm,
     cambiarEntrada,
     reabrirAudio,
+    dormir,
+    despertar,
     cambiarIdioma,
     cambiarFrases,
     cambiarGlosario,
@@ -955,5 +1069,6 @@ module.exports = {
     avisarReloj,
     // Para las pruebas que necesitan poner palabras a mano en una toma, que es
     // lo que en vivo hace el ciclo de señales con Whisper.
-    _sesion: () => sesion
+    _sesion: () => sesion,
+    _reintentarAudio: () => reintentarAudio()
 };

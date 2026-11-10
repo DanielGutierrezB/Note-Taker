@@ -163,7 +163,23 @@ async function terminarAntesDe(seguir) {
         seguir();
     } catch (err) {
         anotar('app.no-termino-para-cerrar', { error: err.message });
-        dialog.showErrorBox('No se pudo terminar la clase', `${err.message}\n\nLa clase sigue grabando.`);
+        // No es un cartel que solo se cierra: si terminar falla, quedarse sin
+        // poder salir es peor. `apagar` cierra el audio y deja la clase como
+        // abierta, reanudable la próxima vez.
+        const { response } = await dialog.showMessageBox(mainWindow, {
+            type: 'error',
+            buttons: ['Seguir en la app', 'Cerrar igual'],
+            defaultId: 0,
+            cancelId: 0,
+            message: 'No se pudo terminar la clase',
+            detail: `${err.message}\n\n«Cerrar igual» cierra el audio y deja la clase como abierta: `
+                + 'la próxima vez se puede reanudar.'
+        });
+        if (response === 1) {
+            try { grabacion.apagar(); } catch (e) { anotar('app.no-apago', { error: e.message }); }
+            cerrarYa = true;
+            seguir();
+        }
     } finally {
         preguntando = false;
     }
@@ -296,10 +312,15 @@ if (!app.requestSingleInstanceLock()) {
         // Al despertar, lo que se grabe va a un WAV nuevo en su hora: el rato
         // dormido no está en el archivo, y seguir en el mismo correría todo lo
         // de después contra la cámara.
-        powerMonitor.on('suspend', () => anotar('mac.se-durmio', { grabando: grabacion.activa() }));
+        powerMonitor.on('suspend', () => {
+            anotar('mac.se-durmio', { grabando: grabacion.activa() });
+            // Lo que la ventana mande entre dormirse y despertar no es de la
+            // clase: escrito en el WAV de antes, caería en la hora de antes.
+            grabacion.dormir();
+        });
         powerMonitor.on('resume', () => {
             anotar('mac.desperto', { grabando: grabacion.activa() });
-            if (grabacion.activa()) grabacion.reabrirAudio('La Mac se durmió: lo de ese rato no se grabó. El audio sigue en un WAV nuevo, en su hora.');
+            if (grabacion.activa()) grabacion.despertar();
         });
     });
 }
