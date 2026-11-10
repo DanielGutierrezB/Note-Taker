@@ -536,6 +536,7 @@ function pintar() {
     }
     pendiente = false;
     const fps = estado.fps;
+    acomodarAtajos();
     pintarBarra();
     pintarAtajos();
 
@@ -741,6 +742,30 @@ retrocede solo hasta donde empezó la frase. Tecla: Enter">
         ${comentariosDe(abierta)}
       </div>
     </div>`;
+}
+
+/**
+ * Dónde van los atajos según el tema.
+ *
+ * En el clásico, debajo del timecode. En el nuevo, a la derecha de «Ahora», en
+ * su misma fila: son los controles de la clase —Enter, la vista que viene,
+ * deshacer, buscar— y ahí quedan al lado de lo que se está diciendo. La ruta
+ * del XML no va con ellos: se queda arriba, en la barra. Se mueven los mismos
+ * elementos, con sus escuchas, así que hacen exactamente lo mismo en los dos.
+ */
+function acomodarAtajos() {
+    const atajos = $('#vivo-atajos');
+    const donde = $('#vivo-donde');
+    if (tema.esNuevo()) {
+        const fila = $('#vivo-titulo-ahora').parentElement;
+        if (atajos.parentElement !== fila) fila.append(atajos);
+        const barra = $('.barra-sesion');
+        if (donde.parentElement !== barra) barra.append(donde);
+    } else {
+        const barra = $('.barra-sesion');
+        if (atajos.parentElement !== barra) barra.append(atajos);
+        if (donde.parentElement !== atajos) atajos.append(donde);
+    }
 }
 
 /** El tamaño del texto (tema nuevo): dos pasos para abajo o para arriba. */

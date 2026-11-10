@@ -228,3 +228,32 @@
 
 /* La vista de una toma desplegada se cambia arriba, en su fila: abajo sobra. */
 .tema-nuevo .cuerpo-toma .campo-fila > .selector-vista { display: none; }
+
+/* Los atajos, a la derecha de «Ahora» y en su misma fila. */
+.tema-nuevo .seccion-titulo #vivo-atajos {
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  font-weight: 400;
+}
+
+.tema-nuevo .seccion-titulo { align-items: center; }
+.tema-nuevo .seccion-titulo #vivo-atajos .crece { display: none; }
+
+/* La ruta del XML se queda en la barra, chica y a la derecha. */
+.tema-nuevo .barra-sesion > #vivo-donde {
+  display: block;
+  padding: 0 var(--sp-5) var(--sp-2);
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Horizontal: la columna es angosta. Las vistas de los atajos van con su letra
+   y su color —el nombre está en el hover— y la cabeza de las tomas puede
+   partirse en dos renglones. */
+.tema-nuevo.es-horizontal .atajo-vistas .atajo span { display: none; }
+.tema-nuevo.es-horizontal .seccion-titulo { flex-wrap: wrap; row-gap: var(--sp-2); }
