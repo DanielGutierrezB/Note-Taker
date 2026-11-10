@@ -33,7 +33,7 @@
 .tema-nuevo #ahora .transcript.es-inactiva { max-height: calc(var(--letra-vivo, 19px) * 1.6 * 4 + var(--sp-3) * 2); }
 
 .tema-nuevo .cuerpo-toma .transcript {
-  font-size: calc(var(--letra-vivo, 19px) * 0.82);
+  font-size: calc(var(--letra-tomas, 13px) * 1.2);
   line-height: 1.6;
   max-width: 112ch;
   max-height: none;
@@ -213,3 +213,18 @@
 .tema-barra .distribuciones button { display: inline-flex; align-items: center; padding: 3px 6px; }
 .tema-barra svg { width: 20px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.2; }
 .tema-barra svg .es-tomas { fill: currentColor; fill-opacity: 0.35; }
+
+/* Las tomas, con su propio tamaño (A− / A+ de la lista): la letra de la fila y
+   lo que ocupa crecen juntas, y el texto desplegado un poco más. */
+.tema-nuevo #lista-vivo .fila {
+  min-height: calc(var(--letra-tomas, 13px) * 2.5);
+  font-size: var(--letra-tomas, 13px);
+}
+
+.tema-nuevo #lista-vivo .fila-nombre,
+.tema-nuevo #lista-vivo .fila-nota { font-size: var(--letra-tomas, 13px); }
+.tema-nuevo #lista-vivo .fila-dato { font-size: calc(var(--letra-tomas, 13px) * 0.9); }
+.tema-nuevo #lista-vivo .cuerpo-toma input[data-campo='nota'] { font-size: var(--letra-tomas, 13px); }
+
+/* La vista de una toma desplegada se cambia arriba, en su fila: abajo sobra. */
+.tema-nuevo .cuerpo-toma .campo-fila > .selector-vista { display: none; }

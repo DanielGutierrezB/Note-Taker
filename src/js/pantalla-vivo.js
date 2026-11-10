@@ -165,6 +165,8 @@ export function conectar(contexto) {
         if (boton && !boton.closest('.telon')) $('#vista-vivo').focus({ preventScroll: true });
     }, true);
 
+    $('#letra-tomas-menos').addEventListener('click', () => tema.cambiarLetraTomas(-1));
+    $('#letra-tomas-mas').addEventListener('click', () => tema.cambiarLetraTomas(1));
     const buscar = $('#buscar-tomas');
     buscar.addEventListener('input', () => { vista.busqueda = buscar.value; pintar(); });
 

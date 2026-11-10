@@ -30,6 +30,18 @@ export function letra() {
     return Math.max(LETRA_MIN, Math.min(LETRA_MAX, Number(pref.leer('tema.letra', 19)) || 19));
 }
 
+/** La letra de las tomas, aparte de la de lo que se está diciendo: agranda la lista sola. */
+const TOMAS_MIN = 11;
+const TOMAS_MAX = 24;
+export function letraTomas() {
+    return Math.max(TOMAS_MIN, Math.min(TOMAS_MAX, Number(pref.leer('tema.letraTomas', 13)) || 13));
+}
+
+export function cambiarLetraTomas(paso) {
+    pref.guardar('tema.letraTomas', Math.max(TOMAS_MIN, Math.min(TOMAS_MAX, letraTomas() + paso)));
+    aplicar();
+}
+
 /** Pone en el documento lo que el CSS mira: la clase del tema, la distribución y la letra. */
 export function aplicar() {
     const nuevo = esNuevo();
@@ -38,6 +50,7 @@ export function aplicar() {
     document.body.classList.toggle('es-horizontal', nuevo && d !== 'vertical');
     document.body.classList.toggle('es-texto-izquierda', nuevo && d === 'horizontal-izquierda');
     document.body.style.setProperty('--letra-vivo', `${letra()}px`);
+    document.body.style.setProperty('--letra-tomas', `${letraTomas()}px`);
     for (const b of document.querySelectorAll('[data-tema]')) b.setAttribute('aria-pressed', String(b.dataset.tema === (nuevo ? 'nuevo' : 'clasico')));
     for (const b of document.querySelectorAll('[data-distribucion]')) b.setAttribute('aria-pressed', String(b.dataset.distribucion === distribucion()));
     const distribuciones = $('#distribuciones');
