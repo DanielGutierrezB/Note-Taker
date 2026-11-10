@@ -96,6 +96,17 @@ module.exports = async t => {
 
     t.group('audio roto · el del micrófono, que no pasa por Zoom');
 
+    t.test('listar las entradas no abre el micrófono si ya hay permiso', () => {
+        // Abrirlo para leer los nombres le costaba muestras a la entrada que
+        // estaba grabando: 2,4 s en una prueba de tres minutos con un micrófono
+        // Bluetooth, por abrir el menú del rótulo Audio y Ajustes.
+        const oido = leer('src', 'js', 'grabar', 'oido.js');
+        const cuerpo = oido.slice(oido.indexOf('export async function entradas('), oido.indexOf('export async function abrir('));
+        t.ok(cuerpo.indexOf('enumerateDevices') < cuerpo.indexOf('getUserMedia'), 'primero se mira la lista');
+        t.ok(/if \(!todas\.length \|\| todas\.every\(d => !d\.label\)\)/.test(cuerpo),
+            'y se pide permiso solo si vienen sin nombre');
+    });
+
     t.test('el puente lo cuenta y lo dice en vez de tragárselo', () => {
         const puente = leer('ipc', 'grabar.js');
         const desde = puente.indexOf('function pcmRoto(');

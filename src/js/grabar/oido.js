@@ -38,20 +38,33 @@ const estado = {
 /**
  * Las entradas que hay.
  *
- * Hace falta pedir permiso antes: sin permiso, `enumerateDevices` devuelve los
- * dispositivos sin nombre y el selector queda con tres "Micrófono" iguales.
+ * Sin permiso, `enumerateDevices` devuelve los dispositivos sin nombre y el
+ * selector queda con tres "Micrófono" iguales, así que entonces hay que pedirlo.
+ *
+ * **Primero se mira, y solo si hace falta se pide**, como con las cámaras
+ * (`ojo.camaras`). Pedir `audio: true` abre un momento la entrada por defecto,
+ * y con una clase grabando eso le cuesta muestras a la que está abierta: el
+ * dispositivo se reacomoda y lo que entra en ese rato no llega al WAV. Medido
+ * en esta Mac, unos 0,2 s por vez con el micrófono de la Mac; en una prueba con
+ * un micrófono Bluetooth que era también el de por defecto, 2,4 s en cuatro
+ * veces —abrir el menú del rótulo Audio y abrir Ajustes—, y todo lo de después
+ * quedó corrido contra el reloj. Con el permiso ya dado, que es lo normal
+ * después de la primera vez, la lista trae los nombres sin abrir nada.
  */
 export async function entradas() {
-    try {
-        const previo = await navigator.mediaDevices.getUserMedia({ audio: true });
-        for (const track of previo.getTracks()) track.stop();
-    } catch (e) {
-        return { ok: false, error: 'No se pudo acceder al audio: ' + e.message, lista: [] };
+    const mirar = async () => (await navigator.mediaDevices.enumerateDevices())
+        .filter(d => d.kind === 'audioinput');
+    let todas = await mirar();
+    if (!todas.length || todas.every(d => !d.label)) {
+        try {
+            const previo = await navigator.mediaDevices.getUserMedia({ audio: true });
+            for (const track of previo.getTracks()) track.stop();
+        } catch (e) {
+            return { ok: false, error: 'No se pudo acceder al audio: ' + e.message, lista: [] };
+        }
+        todas = await mirar();
     }
-    const todos = await navigator.mediaDevices.enumerateDevices();
-    const lista = todos
-        .filter(d => d.kind === 'audioinput')
-        .map(d => ({ id: d.deviceId, nombre: d.label || 'Entrada sin nombre' }));
+    const lista = todas.map(d => ({ id: d.deviceId, nombre: d.label || 'Entrada sin nombre' }));
     return { ok: true, lista };
 }
 
