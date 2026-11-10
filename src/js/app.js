@@ -409,7 +409,10 @@ async function ponerCamara(cual) {
     await fotos.cambiarCamara(app.ajustes.camara);
     const select = $('#aj-camara');
     if (select) select.value = app.ajustes.camara || '';
-    await verLaCamara();
+    // La vista previa es de Ajustes, y la suelta cerrar Ajustes. Pedida desde
+    // la barra, con Ajustes cerrado, nadie la soltaba: la cámara seguía
+    // encendida después de la clase.
+    if ($('#telon-ajustes').classList.contains('es-activa')) await verLaCamara();
 }
 
 /**

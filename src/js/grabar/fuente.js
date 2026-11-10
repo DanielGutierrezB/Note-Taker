@@ -118,11 +118,40 @@ export async function entradas() {
 }
 
 /**
+ * Las aperturas y los cierres, de a uno y en el orden en que se pidieron.
+ *
+ * Dos aperturas solapadas —elegir una entrada y otra enseguida, o el «Buscar de
+ * nuevo» de Zoom cayendo encima de una elección— pasaban las dos por el
+ * `cerrar` del principio cuando todavía no había nada abierto, y las dos
+ * abrían: un micrófono quedaba prendido sin dueño, mandando su PCM al mismo
+ * WAV que el otro. En fila, cada una cierra la anterior. Y la que ya quedó
+ * vieja contesta `reemplazada`, para que quien la pidió no pinte una entrada
+ * que ya no es la elegida.
+ */
+let turno = Promise.resolve();
+let ultimoPedido = 0;
+
+function enFila(hacer) {
+    const pedido = ++ultimoPedido;
+    const este = turno.then(async () => {
+        if (pedido !== ultimoPedido) return { ok: false, reemplazada: true };
+        const r = await hacer();
+        return pedido === ultimoPedido ? r : { ok: false, reemplazada: true };
+    });
+    turno = este.catch(() => {});
+    return este;
+}
+
+/**
  * Abre una entrada y empieza a medir. Todavía no graba: el audio se manda
  * recién con `empezarAMandar`, que es el botón de Iniciar.
  */
-export async function abrir(entrada, losAvisos) {
-    await cerrar();
+export function abrir(entrada, losAvisos) {
+    return enFila(() => abrirAhora(entrada, losAvisos));
+}
+
+async function abrirAhora(entrada, losAvisos) {
+    await cerrarAhora();
     avisos = {
         alNivel: () => {}, alCaerse: () => {}, alVolver: () => {}, alRomperse: () => {},
         ...(losAvisos || {})
@@ -160,7 +189,11 @@ export function comoSuena() {
     return { ...info };
 }
 
-export async function cerrar() {
+export function cerrar() {
+    return enFila(cerrarAhora);
+}
+
+async function cerrarAhora() {
     if (tipo === 'app') {
         escuchandoZoom = false;
         await window.nt.audioAppCerrar();

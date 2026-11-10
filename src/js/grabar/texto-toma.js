@@ -603,6 +603,10 @@ function crecer(previo, p) {
     // A mitad de un arrastre la línea ya se movió en la pantalla y el motor
     // todavía no lo sabe, así que lo dibujado no coincide con `p` a propósito.
     if (agarrado === previo) return false;
+    // Y después de soltarla, tampoco: si el motor no aceptó el borde, el texto
+    // que contesta es el mismo de antes y se lo daba por bueno, con la línea
+    // dibujada donde se soltó y no donde está.
+    if (previo.querySelector('.es-guardando')) return false;
     const antes = dibujado.get(previo);
     if (!antes) return false;
     if (antes.modo !== p.modo) return false;

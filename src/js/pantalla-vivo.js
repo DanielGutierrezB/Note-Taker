@@ -132,8 +132,8 @@ export function conectar(contexto) {
     $('#lista-vivo').addEventListener('click', alClic);
     $('#vivo-atajos').addEventListener('click', alClic);
     $('.barra-arriba').addEventListener('click', alClic);
-    $('#ahora').addEventListener('change', alCambiar);
-    $('#lista-vivo').addEventListener('change', alCambiar);
+    $('#ahora').addEventListener('focusout', alSalirDeLaNota);
+    $('#lista-vivo').addEventListener('focusout', alSalirDeLaNota);
     // Seleccionar un pedazo del texto de una toma abre el campo para comentarlo.
     $('#ahora').addEventListener('mouseup', alSeleccionar);
     $('#lista-vivo').addEventListener('mouseup', alSeleccionar);
@@ -148,6 +148,19 @@ export function conectar(contexto) {
         // el mismo cambio.
         alElegir: q => ponerBorde(q.cual, q.toma, q.borde, q.ms)
     });
+
+    // Un botón tocado con el mouse no se queda con el foco: se lo devuelve a
+    // la pantalla. Si se lo quedaba, el Enter siguiente lo volvía a apretar en
+    // vez de abrir o cerrar la toma —un segundo deshacer que nadie pidió—.
+    // Con el teclado (`detail` en 0) el foco se queda donde lo llevó quien
+    // navega con Tab. En la captura, para llegar antes que el botón cambie de
+    // estado, y en el documento porque deshacer y Compacto viven en barras
+    // distintas.
+    document.addEventListener('click', e => {
+        if (!$('#vista-vivo').classList.contains('es-activa') || e.detail === 0) return;
+        const boton = e.target.closest && e.target.closest('button');
+        if (boton && !boton.closest('.telon')) $('#vista-vivo').focus({ preventScroll: true });
+    }, true);
 
     $('#btn-compacto').addEventListener('click', () => {
         vista.compacto = !vista.compacto;
@@ -1165,9 +1178,6 @@ function devolverFoco(f) {
 async function alClic(e) {
     const boton = e.target.closest('[data-hace]');
     if (!boton) return;
-    // El foco vuelve a la pantalla: con el botón enfocado, el Enter siguiente
-    // lo volvía a apretar en vez de abrir o cerrar la toma.
-    if (e.detail > 0) $('#vista-vivo').focus({ preventScroll: true });
 
     const toma = boton.dataset.toma ? Number(boton.dataset.toma) : null;
     switch (boton.dataset.hace) {
@@ -1352,10 +1362,28 @@ async function guardarComentario() {
     await editar({ tipo: 'comentar', toma: c.toma, desdeMs: c.desdeMs, hastaMs: c.hastaMs, texto: c.texto, comentario });
 }
 
-async function alCambiar(e) {
-    const campo = e.target.closest('[data-campo="nota"]');
+/**
+ * La nota se guarda al salir del campo —con Enter, con Tab o con un clic en
+ * otro lado— si no es la que el motor ya tiene.
+ *
+ * Antes se guardaba con `change`, y `change` solo salta si el valor cambió
+ * desde que el campo tomó el foco. El repintado de cada segundo reemplaza el
+ * campo y le devuelve el foco con el texto ya puesto (`devolverFoco`), así que
+ * quien escribía, esperaba un segundo y salía, salía sin `change`: la nota no
+ * se guardaba. Comparar con la del motor es la misma pregunta sin depender de
+ * cuándo se enfocó el campo.
+ */
+async function alSalirDeLaNota(e) {
+    const campo = e.target.closest && e.target.closest('[data-campo="nota"]');
     if (!campo) return;
-    await editar({ tipo: 'nota', toma: Number(campo.dataset.toma), texto: campo.value });
+    // Si el que se fue es el campo y no el foco —el repintado lo reemplazó—,
+    // no es salir: el foco vuelve al campo nuevo (`devolverFoco`).
+    await Promise.resolve();
+    if (!campo.isConnected) return;
+    const id = Number(campo.dataset.toma);
+    const toma = estado && estado.tomas.find(t => t.id === id);
+    if (!toma || (toma.comentario || '') === campo.value) return;
+    await editar({ tipo: 'nota', toma: id, texto: campo.value });
 }
 
 /**

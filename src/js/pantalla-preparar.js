@@ -56,6 +56,16 @@ const audio = {
  */
 let nombre = null;
 
+/**
+ * Mientras se entra: desde que se ve la pantalla hasta que el disco, los
+ * modelos, el nombre y la entrada están medidos.
+ *
+ * Sin esto se veía la pantalla de la visita anterior con Iniciar habilitado
+ * durante esos segundos, y una clase podía arrancar con el número de la
+ * anterior y con una entrada que ya no estaba abierta.
+ */
+let cargando = false;
+
 /** El pico decae solo: sin esto, un golpe deja el medidor arriba para siempre. */
 let ultimoPico = 0;
 /** El último estado del audio que se dibujó, para repintar solo al cambiar. */
@@ -74,7 +84,18 @@ export function conectar(contexto) {
  */
 export async function ver(opciones) {
     reanudar = (opciones && opciones.reanudar) || null;
+    cargando = true;
+    pintar();
     verVista('vista-preparar');
+    try {
+        await entrar();
+    } finally {
+        cargando = false;
+        pintar();
+    }
+}
+
+async function entrar() {
     doctor = await window.nt.doctor();
     disco = app.ajustes.carpeta ? await window.nt.grabarDisco(app.ajustes.carpeta) : null;
     // Al reanudar no se pregunta: esa clase ya tiene su número y su nombre, y
@@ -100,8 +121,6 @@ export async function ver(opciones) {
         const porDefecto = previo || delSistema || null;
         if (porDefecto) await abrirEntrada(porDefecto.id);
     }
-
-    pintar();
 }
 
 /**
@@ -129,6 +148,13 @@ export async function salir() {
 }
 
 function pintar() {
+    if (cargando) {
+        const boton = $('#btn-iniciar');
+        boton.disabled = true;
+        boton.title = 'Revisando el audio, la carpeta y los modelos';
+        $('#checklist').innerHTML = '<p class="v3">Revisando el audio, la carpeta y los modelos…</p>';
+        return;
+    }
     const a = estados.deAudio(audio);
     const w = estados.deWhisper(doctor);
     const carpeta = app.ajustes.carpeta;
@@ -417,6 +443,8 @@ async function abrirEntrada(id) {
             pintar();
         }
     });
+    // Otra elección llegó mientras esta abría: la pantalla es de esa.
+    if (r.reemplazada) return;
     if (!r.ok) {
         // El motivo va al renglón y no a un aviso que se va: es lo que hay que
         // leer para arreglarlo, y en cuatro segundos no se lee.
@@ -429,6 +457,7 @@ async function abrirEntrada(id) {
 }
 
 async function iniciar() {
+    if (cargando) return;
     const como = fuente.comoSuena();
     const payload = {
         dir: app.ajustes.carpeta,
