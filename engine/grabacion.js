@@ -304,8 +304,16 @@ function guardarLaAbierta() {
     if (Date.now() - (sesion.guardadoMs || 0) < GUARDAR_LA_ABIERTA_MS) return;
     try {
         espejo.escribir(sesion);
+        sesion.noGuardoAvisadoMs = 0;
     } catch (err) {
         registro.anotar('main', 'grabacion.no-guardo', { error: err.message });
+        // Se dice, una vez cada cinco minutos mientras siga fallando: el audio
+        // puede seguir entrando bien y las notas no estar quedando en el disco.
+        const ahora = Date.now();
+        if (ahora - (sesion.noGuardoAvisadoMs || 0) > 5 * 60 * 1000) {
+            sesion.noGuardoAvisadoMs = ahora;
+            sesion.avisar({ tipo: 'error', mensaje: `No pude guardar las notas de la clase: ${err.message}` });
+        }
     }
 }
 

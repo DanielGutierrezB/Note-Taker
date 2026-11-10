@@ -159,6 +159,28 @@ module.exports = async function (t) {
         t.ok(r.avisos.some(a => a.tipo === 'caido'), 'habiéndolo dicho antes');
     });
 
+    t.test('un ayudante que se fue y no volvió se sigue reintentando, y el hueco se rellena', () => {
+        // Se murió antes del minuto del último relanzado: el cierre no lo
+        // relanza, `hijo` queda vacío, y antes `revisar` volvía sin hacer nada
+        // para siempre —sin relleno, sin otro intento—.
+        const avisos = [];
+        const relanzados = [];
+        let ahora = 1000;
+        audioApp._fingirHijo(true);
+        audioApp._conectar({
+            alPcm: () => {}, avisar: a => avisos.push(a), mandando: true,
+            tasa: 48000, reloj: () => ahora, relanzar: () => relanzados.push(ahora)
+        });
+        for (let ms = 0; ms < 90000; ms += 10) {
+            ahora += 10;
+            if (ms < 5000) audioApp.recibir(Buffer.alloc(480 * 2));
+            if (ms === 5000) audioApp._fingirHijo(false);
+            if (ms % 250 === 0) audioApp._revisar();
+        }
+        t.ok(relanzados.length >= 1, `se reintentó (${relanzados.length})`);
+        t.near(audioApp._mandadas() / 48000, 90, 1.5, 'y el WAV siguió a la par del reloj, en silencio');
+    });
+
     t.test('y no insiste en bucle: uno por minuto', () => {
         // Si no se arregla, insistir tampoco lo arregla, y cada intento es un
         // tap y un dispositivo agregado más que crear y destruir.

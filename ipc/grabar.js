@@ -118,6 +118,14 @@ function registrar({ ipcMain, app, send, anotar }) {
      */
     ipcMain.on('grabar-pcm', (event, chunk) => {
         try {
+            // Dos fuentes en el mismo WAV es audio inservible al doble de datos.
+            // Pasa si la ventana se recargó con Zoom grabando y volvió con un
+            // micrófono: la ventana nueva no sabe que el ayudante sigue
+            // mandando. La que manda ahora es la que vale.
+            if (audioApp.estaMandando()) {
+                audioApp.dejarDeMandar();
+                anotar('grabar.dos-fuentes', { queda: 'ventana' });
+            }
             grabacion.pcm(chunk, 'ventana');
         } catch (err) {
             pcmRoto(err.message);

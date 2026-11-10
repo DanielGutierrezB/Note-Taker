@@ -145,7 +145,11 @@ function escribir(id, pcm) {
         // de lo que se perdió, en su sitio, y el error sale igual para que
         // quien escribe lo diga.
         s.bytes += buf.length;
-        fs.writeSync(s.fd, buf, 0, buf.length, donde);
+        // Escrito a medias —el disco que se llena justo en este pedazo— es una
+        // falla igual que no escribirlo: lo que faltó queda en silencio en su
+        // lugar (`cerrar`), y quien escribe tiene que decirlo.
+        const escritos = fs.writeSync(s.fd, buf, 0, buf.length, donde);
+        if (escritos < buf.length) throw new Error(`Se escribieron ${escritos} de ${buf.length} bytes: ¿el disco está lleno?`);
         fs.writeSync(s.fd, cabecera(s.bytes, s.sampleRate, s.canales), 0, 44, 0);
         asegurar(s);
     }

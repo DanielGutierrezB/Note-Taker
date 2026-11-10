@@ -436,7 +436,11 @@ function esperadas() {
  * contra el reloj.
  */
 function revisar() {
-    if (!hijo || !tasa) return;
+    // Sin `hijo` también: un ayudante que se fue y no se pudo volver a lanzar
+    // —se murió antes del minuto del último relanzado— dejaba esto mudo para
+    // siempre, sin relleno y sin otro intento, y el WAV dejaba de crecer. Con
+    // `tasa` puesta la escucha sigue pedida: se rellena y se reintenta.
+    if (!tasa) return;
     const ahora = reloj();
     anotarFreno(ahora);
     ultimaRevision = ahora;
@@ -523,6 +527,7 @@ function empezarAMandar() {
     relleno = 0;
 }
 function dejarDeMandar() { mandando = false; }
+function estaMandando() { return mandando; }
 
 function abierto() { return Boolean(hijo); }
 
@@ -551,6 +556,7 @@ module.exports = {
     recibir,
     empezarAMandar,
     dejarDeMandar,
+    estaMandando,
     abierto,
     cerrar,
     // Para las pruebas, que reemplazan el ayudante por uno de mentira y el reloj
