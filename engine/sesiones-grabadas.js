@@ -16,6 +16,7 @@
  * `workspace` y se comprueban antes de tocar nada (`dentroDe`).
  */
 
+const os = require('os');
 const fs = require('fs');
 const path = require('path');
 
@@ -198,6 +199,12 @@ function sidecaresDe(donde, base) {
  *   `terminada`   cerró bien y todas sus tomas tienen su texto.
  */
 function resumirParaLaLista(estado) {
+    const otra = grabandoEnOtraMac(estado);
+    if (otra) return { ...resumirSinMirarOtras(estado), estado: 'grabando en otra mac', grabandoEn: otra };
+    return resumirSinMirarOtras(estado);
+}
+
+function resumirSinMirarOtras(estado) {
     const tomas = estado.tomas || [];
     const sinReleer = tomas.filter(t => t.relectura && t.relectura.estado === 'sin-leer').length;
     const segundos = (estado.sesiones || []).reduce((n, s) => n + (s.segundos || 0), 0);
@@ -228,11 +235,44 @@ const regenerando = new Set();
  * Todas las puertas que escriben una sesión grabada preguntan acá.
  */
 function siEstaOcupada(json) {
+    const otra = grabandoEnOtraMac(leerSinFallar(json));
+    if (otra) {
+        throw new Error(`Esa clase se está grabando ahora en «${otra}». Esperá a que la terminen allá para tocarla.`);
+    }
     if (regenerando.has(json)) {
         throw new Error('Esa sesión se está regenerando: esperá a que termine para tocarla.');
     }
     const dentro = [...generando].some(c => path.resolve(json).startsWith(path.resolve(c) + path.sep));
     if (dentro) throw new Error('Se está armando el proyecto de Premiere de esta carpeta: esperá a que termine.');
+}
+
+/**
+ * Cuánto vale la señal de otra Mac. Esa Mac la renueva cada minuto
+ * (`latir` en `grabacion.js`), y el Drive tarda en traerla: tres minutos sin
+ * noticias es una clase que quedó abierta porque esa app se cerró o se murió, y
+ * entonces sí se puede reanudar.
+ */
+const LATIDO_VIGENTE_MS = 3 * 60 * 1000;
+
+/**
+ * La Mac que está grabando esta clase ahora mismo, si no es esta.
+ *
+ * Esta Mac se cuida sola con `enCurso`; lo que no veía es otra Mac grabando en
+ * la misma carpeta compartida: le ofrecía reanudar esa clase, y reanudarla eran
+ * dos Macs escribiendo el mismo XML; borrarla le borraba el WAV a la otra.
+ */
+function grabandoEnOtraMac(estado) {
+    const g = estado && estado.grabandoEn;
+    if (!g || estado.terminada || !g.equipo || g.equipo === os.hostname()) return null;
+    return Date.now() - Number(g.latidoMs || 0) < LATIDO_VIGENTE_MS ? String(g.equipo) : null;
+}
+
+function leerSinFallar(json) {
+    try {
+        return JSON.parse(fs.readFileSync(json, 'utf8'));
+    } catch (e) {
+        return null;
+    }
 }
 
 /**

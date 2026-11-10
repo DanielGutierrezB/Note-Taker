@@ -420,6 +420,7 @@ function sidecar(estado) {
         // quedó abierta porque la app se fue al piso se ven iguales, y la
         // segunda es la única que se puede reanudar.
         terminada: estado.terminada || null,
+        grabandoEn: estado.grabandoEn || null,
         claquetas: (estado.claquetas || []).map(c => ({
             ...c,
             msISO: c.ms ? new Date(c.ms).toISOString() : null,

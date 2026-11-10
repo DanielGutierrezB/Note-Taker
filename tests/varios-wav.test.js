@@ -20,6 +20,19 @@ const workspace = require('../engine/workspace');
 
 const T0 = Date.parse('2026-11-10T10:00:00');
 
+/** Una clase que quedó abierta en la carpeta, con la señal de quien la graba. */
+function abiertaCon(grabandoEn) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-otra-'));
+    grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true, dispositivo: 'MacBook' });
+    const json = grabacion._sesion().estado && require('../engine/espejo').resumen(grabacion._sesion()).archivos.json;
+    grabacion.apagar();
+    const datos = JSON.parse(fs.readFileSync(json, 'utf8'));
+    datos.terminada = null;
+    datos.grabandoEn = grabandoEn;
+    fs.writeFileSync(json, JSON.stringify(datos));
+    return { dir, json };
+}
+
 module.exports = function (t) {
     t.group('varios WAV · cuál tiene cada momento');
 
@@ -61,5 +74,51 @@ module.exports = function (t) {
         } finally {
             grabacion.apagar();
         }
+    });
+
+    t.group('varios WAV · una clase que se está grabando en otra Mac');
+
+    t.test('mientras graba, el archivo de notas dice quién y cuándo; terminada, ya no', async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-latido-'));
+        grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true, dispositivo: 'MacBook' });
+        const json = require('../engine/espejo').resumen(grabacion._sesion()).archivos.json;
+        const grabando = JSON.parse(fs.readFileSync(json, 'utf8')).grabandoEn;
+        t.eq(grabando && grabando.equipo, os.hostname());
+        t.ok(Date.now() - grabando.latidoMs < 5000, 'con la hora de ahora');
+        await grabacion.terminar();
+        t.eq(JSON.parse(fs.readFileSync(json, 'utf8')).grabandoEn, null);
+    });
+
+    t.test('con una señal reciente de otra Mac, no se reanuda ni se borra, y la lista lo dice', () => {
+        const { dir, json } = abiertaCon({ equipo: 'Mac-del-estudio', pid: 1, latidoMs: Date.now() - 30000 });
+        let error = '';
+        try { sesionesGrabadas.paraReanudar(json, null); } catch (e) { error = e.message; }
+        t.ok(/se está grabando ahora en «Mac-del-estudio»/.test(error), error);
+        error = '';
+        try { sesionesGrabadas.borrar(json, null); } catch (e) { error = e.message; }
+        t.ok(/Mac-del-estudio/.test(error), 'borrar tampoco');
+        t.ok(fs.existsSync(json), 'y sigue en el disco');
+        const lista = sesionesGrabadas.sidecaresDe(workspace.datosDir(dir), dir);
+        t.eq(lista[0].resumen.estado, 'grabando en otra mac');
+    });
+
+    t.test('sin señal hace más de tres minutos, quedó abierta y se puede reanudar', () => {
+        const { dir } = abiertaCon({ equipo: 'Mac-del-estudio', pid: 1, latidoMs: Date.now() - 4 * 60 * 1000 });
+        const lista = sesionesGrabadas.sidecaresDe(workspace.datosDir(dir), dir);
+        t.eq(lista[0].resumen.estado, 'abierta');
+    });
+
+    t.test('cerrar la app grabando deja la clase sin señal: otra Mac la puede reanudar ya', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-apagar-'));
+        grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true, dispositivo: 'MacBook' });
+        const json = require('../engine/espejo').resumen(grabacion._sesion()).archivos.json;
+        grabacion.apagar();
+        t.eq(JSON.parse(fs.readFileSync(json, 'utf8')).grabandoEn, null);
+    });
+
+    t.test('la señal de esta misma Mac no la bloquea: es una que se murió acá', () => {
+        const { dir } = abiertaCon({ equipo: os.hostname(), pid: 1, latidoMs: Date.now() });
+        const lista = sesionesGrabadas.sidecaresDe(workspace.datosDir(dir), dir);
+        t.eq(lista[0].resumen.estado, 'abierta');
     });
 };

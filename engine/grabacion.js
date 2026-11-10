@@ -219,6 +219,7 @@ function iniciar(params) {
                 vigilarDeriva();
                 reintentarAudio();
                 guardarLaAbierta();
+                latir();
                 vigilarDisco();
             }, CICLO_MS);
             // El modelo grande cargado para el texto en vivo. No se espera:
@@ -392,6 +393,21 @@ function pcm(buffer, origen) {
         if (faltaMs > 0) r = rellenar(cap, faltaMs);
     }
     return r;
+}
+
+/**
+ * Que el archivo de notas diga, al menos una vez por minuto, que esta clase se
+ * sigue grabando acá (`grabandoEn` en `espejo.escribir`). Entre toma y toma no
+ * se escribe nada más, y otra Mac la daría por abandonada.
+ */
+const LATIDO_MS = 60 * 1000;
+function latir() {
+    if (!sesion || sesion.terminando || Date.now() - (sesion.guardadoMs || 0) < LATIDO_MS) return;
+    try {
+        espejo.escribir(sesion);
+    } catch (err) {
+        registro.anotar('main', 'grabacion.no-latio', { error: err.message });
+    }
 }
 
 /** Lo que llega sin WAV abierto: se avisa una vez cada medio minuto. */
@@ -909,6 +925,9 @@ function apagar() {
         // grabación en curso» y sin manera de sacarla.
         try {
             cerrarLoAbierto();
+            // Ya no se graba acá: sin la señal, otra Mac con la misma carpeta
+            // la ve abierta y la puede reanudar enseguida.
+            sesion.apagando = true;
             espejo.escribir(sesion);
         } finally {
             soltar();

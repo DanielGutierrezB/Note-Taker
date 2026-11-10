@@ -17,6 +17,7 @@
  * el disco exactamente el estado que las otras cuatro cuentan.
  */
 
+const os = require('os');
 const ajustar = require('./ajustar-corte');
 const historial = require('./deshacer');
 const notasXml = require('./notas-xml');
@@ -84,7 +85,14 @@ function escribir(sesion) {
     const conSesiones = {
         ...sesion.estado,
         sesiones: sesion.estado.sesiones.concat(
-            sesion.captura ? [{ ...sesion.captura }] : [])
+            sesion.captura ? [{ ...sesion.captura }] : []),
+        // Quién la está grabando, y cuándo dio señales por última vez: con la
+        // carpeta en un Drive compartido, otra Mac que la ve «abierta» tiene que
+        // saber que no quedó así sino que se está grabando en otra parte, y no
+        // ofrecer reanudarla, renombrarla ni borrarla (`grabandoEnOtraMac`).
+        grabandoEn: sesion.viva && !sesion.apagando && !sesion.estado.terminada
+            ? { equipo: os.hostname(), pid: process.pid, latidoMs: Date.now() }
+            : null
     };
 
     // Los bordes de las tomas, corridos al silencio de al lado mirando el WAV

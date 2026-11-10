@@ -181,13 +181,16 @@ function datosDeFila(s) {
     // tocarla (`siEstaOcupada` en sesiones-grabadas.js), y un botón que se
     // aprieta y contesta que no es peor que uno apagado.
     const ocupada = regenerandoAhora.has(s.archivos.json);
+    // Grabándose en otra Mac de la misma carpeta: tampoco se toca, y el motor
+    // lo rechaza igual si se intenta desde el menú.
+    const enOtra = r.estado === 'grabando en otra mac';
     const est = ocupada
         ? { clave: 'releyendo', palabra: 'releyendo', porque: 'Se está releyendo con el modelo grande.' }
         : estados.deSesionGuardada(r);
     return {
         r,
         ocupada,
-        apagado: ocupada ? 'disabled' : '',
+        apagado: ocupada || enOtra ? 'disabled' : '',
         est,
         numero: s.numero != null ? String(s.numero).padStart(2, '0') : '—',
         vez: s.vez > 1 ? s.vez : null,

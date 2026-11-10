@@ -171,6 +171,14 @@ export function deSesionGuardada(resumen) {
                 '«Reanudar» sigue grabando en el mismo XML.'
         };
     }
+    if (e === 'grabando en otra mac') {
+        return {
+            clave: 'releyendo',
+            palabra: 'grabando en otra Mac',
+            porque: `Se está grabando ahora en «${resumen.grabandoEn}», con esta misma carpeta. `
+                + 'Hasta que la terminen allá no se puede reanudar, renombrar ni borrar desde acá.'
+        };
+    }
     if (e === 'sin releer') {
         return {
             clave: 'sin releer',
