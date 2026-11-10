@@ -12,11 +12,10 @@
  * MISMA pantalla de En vivo, para mirarla y ajustarle las notas (`irANotas`). No
  * es una pantalla más: es la misma con otro estado.
  *
- * **Y hay un segundo recorrido que no se cruza con este.** Con el modo
- * `semanal` en Ajustes, la app abre una sola pantalla —grabarse explicando la
- * semana y salir con un MP4 cortado— y ninguna de las cuatro de arriba se
- * monta. Son dos usos distintos de la misma máquina: el editor nunca ve el
- * modo semanal y quien se graba la semana nunca ve una lista de clases.
+ * **Había un segundo recorrido, el modo `semanal`**: grabarse explicando la
+ * semana y salir con un MP4 cortado. Ya no se puede elegir (`MODOS` en
+ * `engine/ajustes.js`) porque pasó a un proyecto aparte, y su código sigue acá
+ * como base de ese proyecto (`docs/guia-video-para-claude.md`).
  *
  * Ajustes y Diagnóstico son paneles y no pantallas: se abren encima de
  * cualquiera de las cuatro, porque la pregunta que contestan —«¿a cuántos
@@ -310,31 +309,6 @@ function conectarAjustes() {
     $('#aj-fps').innerHTML = FPS.map(f =>
         `<option value="${f}">${f} ${esNtsc(f) ? '(NTSC)' : ''}</option>`).join('');
 
-    // Cambiar de modo lleva a su pantalla en el acto, con el panel abierto por
-    // encima: así se ve que el cambio hizo algo. Grabando no se cambia, que
-    // sería dejar una grabación en una pantalla que ya no está.
-    $('#aj-modo').addEventListener('change', async e => {
-        const modo = e.target.value;
-        // La defensa, por si el campo se ve igual: `pintarAjustes` lo esconde
-        // grabando, pero una clase puede haber arrancado desde que el panel se
-        // pintó —el conteo abre tomas solo— y este `change` es lo último que
-        // puede impedir que una grabación se quede sin su pantalla.
-        if (await hayAlgoGrabando()) {
-            e.target.value = app.ajustes.modo;
-            avisar('Estás grabando: terminá antes de cambiar de modo.', 'error');
-            return;
-        }
-        await guardar({ modo });
-        await pintarAjustes();
-        if (modo === 'semanal') {
-            preparar.salir();
-            vivo.salir();
-            await app.irASemanal();
-        } else {
-            await semanal.salir();
-            await app.irASesiones();
-        }
-    });
     $('#aj-fps').addEventListener('change', e => guardar({ fps: Number(e.target.value) }));
     // Al idioma del modo en que se está, no siempre al de la clase: son dos
     // ajustes porque son dos preguntas distintas (ver `idiomaDelModo`).
@@ -349,31 +323,7 @@ function esNtsc(f) {
     return [23.976, 29.97, 59.94].includes(f);
 }
 
-/**
- * Si hay algo grabando ahora mismo. Se le pregunta al motor y no a la pantalla:
- * `grabar-estado` contesta null cuando no hay sesión viva, mientras que la
- * pantalla guarda el último estado que vio, que no es lo mismo.
- */
-async function hayAlgoGrabando() {
-    return Boolean(await window.nt.grabarEstado()) || semanal.grabando();
-}
-
 async function pintarAjustes() {
-    // El modo no se muestra mientras se graba. No es que no se pueda cambiar
-    // —el `change` de abajo ya se planta, y se queda como defensa—: es que
-    // ofrecerlo en medio de una clase es ofrecer tirar la pantalla donde está
-    // esa clase, y la respuesta siempre va a ser que no. Lo que se esconde es
-    // la pregunta, no la respuesta.
-    $('#aj-modo-campo').hidden = await hayAlgoGrabando();
-    $('#aj-modo').value = app.ajustes.modo;
-    $('#aj-modo-dice').textContent = app.ajustes.modo === 'semanal'
-        ? 'Grabás cámara, pantalla y voz; abrís cada toma diciendo «3, 2, 1» y la cerrás con '
-          + '«Pausa», y al terminar sale un MP4 ya cortado con tu cámara en la esquina. '
-          + (app.ajustes.semanal && app.ajustes.semanal.carpeta
-              ? `Los vídeos van a ${app.ajustes.semanal.carpeta}.`
-              : 'La primera vez te va a preguntar dónde guardarlos.')
-        : 'Tomás notas de un rodaje en vivo y la app escribe el XML que el editor importa '
-          + 'en Premiere. Lo de abajo es de este modo.';
     // En el modo semanal no hay secuencia: el fps lo fija el modo. Se deja a la
     // vista pero apagado, que dice más que esconderlo.
     $('#aj-fps').disabled = app.ajustes.modo === 'semanal';

@@ -149,7 +149,8 @@ module.exports = function (t) {
     t.test('el modo se guarda, y uno inventado abre la app como siempre', () => {
         // Que un ajuste roto no pueda dejar a nadie en una pantalla que no
         // entiende: `clase` es el modo que no graba vídeo ni exporta nada.
-        t.eq(ajustes.sanear({ modo: 'semanal' }).modo, 'semanal');
+        // El semanal pasó a otro proyecto: quien lo tenía guardado vuelve acá.
+        t.eq(ajustes.sanear({ modo: 'semanal' }).modo, 'clase');
         t.eq(ajustes.sanear({ modo: 'clase' }).modo, 'clase');
         t.eq(ajustes.sanear({ modo: 'cualquiera' }).modo, 'clase');
         t.eq(ajustes.sanear({ modo: 7 }).modo, 'clase');

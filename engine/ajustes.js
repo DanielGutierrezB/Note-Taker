@@ -138,8 +138,16 @@ const DEFAULTS = {
     semanal: { carpeta: null, idioma: 'auto' }
 };
 
-/** Los dos modos. Cualquier otra cosa escrita en el archivo es `clase`. */
-const MODOS = ['clase', 'semanal'];
+/**
+ * Los modos que se pueden elegir. Cualquier otra cosa escrita en el archivo es
+ * `clase`.
+ *
+ * `semanal` ya no está: el vídeo de la semana pasó a editarse en Claude, y la
+ * herramienta para eso es un proyecto aparte (`docs/guia-video-para-claude.md`).
+ * Su código sigue en este repo porque es la base de ese proyecto; quien lo
+ * tenía guardado vuelve a la lista de clases.
+ */
+const MODOS = ['clase'];
 
 /**
  * Uno de los idiomas que la app oye, o lo de fábrica.

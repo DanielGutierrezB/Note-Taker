@@ -604,15 +604,10 @@ module.exports = function (t) {
         t.ok(/está todo/.test(fn), 'cuando no falta nada, lo dice');
     });
 
-    t.test('«Para qué usás Note Taker» no se ofrece mientras se graba', () => {
-        const app = leer('src', 'js', 'app.js');
-        t.ok(/\$\('#aj-modo-campo'\)\.hidden = await hayAlgoGrabando\(\);/.test(app),
-            'se esconde la pregunta, porque la respuesta siempre iba a ser que no');
-        const quien = app.slice(app.indexOf('async function hayAlgoGrabando'), app.indexOf('\n}', app.indexOf('async function hayAlgoGrabando')));
-        t.ok(/window\.nt\.grabarEstado\(\)/.test(quien) && /semanal\.grabando\(\)/.test(quien),
-            'y quien sabe si hay algo grabando es el motor, no la pantalla');
-        const cambio = app.slice(app.indexOf("$('#aj-modo').addEventListener"), app.indexOf('\n    });', app.indexOf("$('#aj-modo').addEventListener")));
-        t.ok(/if \(await hayAlgoGrabando\(\)\)/.test(cambio),
-            'y la guarda del cambio se queda: una clase puede arrancar sola desde que el panel se pintó');
+    t.test('el modo ya no se elige en Ajustes', () => {
+        // El vídeo de la semana pasó a un proyecto aparte: no queda la pregunta.
+        t.ok(!/id="aj-modo/.test(leer('src', 'index.html')), 'ni el campo');
+        t.ok(!/#aj-modo/.test(leer('src', 'js', 'app.js')), 'ni quien lo pintaba');
     });
+
 };

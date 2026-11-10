@@ -14,15 +14,11 @@ Zoom / interfaz ──► Note Taker ──► xml/clase.xml ──► Premiere
                        └─► xml/Audio/clase-1.wav
 ```
 
-Y tiene un segundo modo, para otra persona y otro trabajo: **grabarse
-explicando lo que se hizo en la semana y salir con el vídeo ya cortado**, con
-la pantalla de fondo y la cámara en la esquina. Las mismas palabras abren y
-cierran las tomas; lo que cambia es que no hay editor al final del camino, sino
-un MP4 (ver **El otro modo**).
-
-```
-cámara + pantalla + voz ──► Note Taker ──► semana.mp4
-```
+Tuvo un segundo modo, **grabarse explicando lo que se hizo en la semana y salir
+con el vídeo ya cortado** (ver **El otro modo**). Ya no se puede elegir: esos
+vídeos pasaron a editarse en Claude, y la herramienta para eso es un proyecto
+aparte que parte de este código. Cómo construirlo está en
+[`docs/guia-video-para-claude.md`](docs/guia-video-para-claude.md).
 
 ---
 
@@ -126,7 +122,11 @@ a la carpeta rompería ese emparejamiento sin avisar.
 
 ## El otro modo: un vídeo por semana
 
-Hay un segundo uso de la misma máquina, y se elige en Ajustes
+> **Desactivado.** Ya no se elige en Ajustes (`MODOS` en `engine/ajustes.js`
+> solo deja `clase`). Lo de esta sección describe el código que sigue en el
+> repo como base del proyecto nuevo: [`docs/guia-video-para-claude.md`](docs/guia-video-para-claude.md).
+
+Era un segundo uso de la misma máquina, y se elegía en Ajustes
 (**Para qué usás Note Taker**). En vez de tomar notas de un rodaje para que
 otro lo corte, acá una persona **se graba explicando lo que hizo en la semana y
 sale con el vídeo cortado**. Sin editor, sin XML, sin Premiere.
