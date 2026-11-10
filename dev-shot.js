@@ -28,7 +28,16 @@ const os = require('os');
 const path = require('path');
 const { app, ipcMain } = require('electron');
 
+/**
+ * Una bandera del arnés, o null.
+ *
+ * En la app instalada, siempre null: `--js=` y `--guion=` corren código con el
+ * puente entero y con los permisos de micrófono y cámara que la persona le dio
+ * a Note Taker, y cualquier programa que la abriera con esas banderas los
+ * tendría. El arnés es para trabajar en la app, no para la que se usa.
+ */
 function argValue(flag) {
+    if (app.isPackaged) return null;
     const hit = process.argv.find(a => a.startsWith(`--${flag}=`));
     return hit ? hit.slice(flag.length + 3) : null;
 }

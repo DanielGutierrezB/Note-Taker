@@ -148,10 +148,42 @@ async function check(params) {
     };
 }
 
+/**
+ * Los sitios de donde se acepta bajar un instalador: GitHub y los dos dominios
+ * a los que redirige la descarga de un release.
+ *
+ * El instalador es lo único que esta app abre sin preguntar qué es, así que la
+ * dirección no puede venir de cualquier lado: ni de la ventana ni de una
+ * redirección a otro sitio. Lo pide quien baja el instalador (`sitios` en
+ * `download`); los modelos no, porque se verifican por su huella al llegar.
+ */
+const GITHUB = ['github.com', 'objects.githubusercontent.com', 'release-assets.githubusercontent.com'];
+
+/** Si la dirección es https y de uno de estos sitios. */
+function deEstosSitios(url, sitios) {
+    try {
+        const u = new URL(url);
+        return u.protocol === 'https:' && sitios.includes(u.hostname);
+    } catch (e) {
+        return false;
+    }
+}
+
+/** El nombre del instalador, sin carpetas y terminado en `.pkg`, o null. */
+function nombreSano(nombre) {
+    const base = path.basename(String(nombre || ''));
+    return /^[\w.\- ]+\.pkg$/i.test(base) ? base : null;
+}
+
 /** Sigue las redirecciones de GitHub hasta el archivo de verdad. */
 function openStream(url, options, saltos) {
     const restantes = saltos == null ? 5 : saltos;
     return new Promise((resolve, reject) => {
+        const sitios = options && options.sitios;
+        if (sitios && !deEstosSitios(url, sitios)) {
+            reject(new Error(`la descarga no viene de ${sitios[0]} (${String(url).slice(0, 80)})`));
+            return;
+        }
         const request = agente(url).get(url, {
             headers: { 'User-Agent': 'Note-Taker' },
             timeout: opt(options, 'timeoutMs')
@@ -182,12 +214,13 @@ function openStream(url, options, saltos) {
  * conexión a mitad, lo que queda no es un PKG a medias que el editor pueda
  * abrir por error.
  *
- * @param {object} params { url, destDir, nombre, onProgress, signal }
+ * @param {object} params { url, destDir, nombre, onProgress, signal, sitios?, tamañoBytes? }
  * @returns {Promise<{ok:boolean, path?:string, error?:string}>}
  */
 async function download(params) {
     const { url, destDir, onProgress, signal } = params;
-    const nombre = params.nombre || 'NoteTaker-update.pkg';
+    // Sin carpetas: el nombre puede venir de afuera, y `../` lo sacaría de destDir.
+    const nombre = path.basename(String(params.nombre || '')) || 'NoteTaker-update.pkg';
     const destino = path.join(destDir, nombre);
     const parcial = `${destino}.parcial`;
 
@@ -237,7 +270,10 @@ async function download(params) {
         return { ok: false, error: err.message === 'cancelado' ? 'Descarga cancelada.' : `No se pudo descargar: ${err.message}` };
     }
 
-    if (total && bajado !== total) {
+    // El tamaño que GitHub dijo al buscar, además del que dice la descarga: si
+    // los dos no coinciden, lo que llegó no es lo que se publicó.
+    const esperado = Number(params.tamañoBytes) || 0;
+    if ((total && bajado !== total) || (esperado && bajado !== esperado)) {
         try { fs.unlinkSync(parcial); } catch (e) { /* ya no está */ }
         return { ok: false, error: 'La descarga llegó incompleta.' };
     }
@@ -250,4 +286,4 @@ async function download(params) {
     return { ok: true, path: destino };
 }
 
-module.exports = { check, download, compare, updateAsset, DEFAULTS };
+module.exports = { check, download, compare, updateAsset, deEstosSitios, nombreSano, GITHUB, DEFAULTS };

@@ -49,6 +49,7 @@ const FILES = [
     'frases-de-senal.test.js',
     'ventana-en-clase.test.js',
     'lo-que-va-a-premiere.test.js',
+    'seguridad.test.js',
     'idioma-en-vivo.test.js',
     'rotulos-de-la-barra.test.js',
     'puente-grabar.test.js',

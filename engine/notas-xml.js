@@ -494,10 +494,18 @@ function sidecar(estado) {
  */
 function estadoLeido(estado) {
     if (!estado) return estado;
+    // Lo que la pantalla escribe tal cual en el HTML —el número de cada toma va
+    // en `data-toma="…"`, el de la clase en su nombre— tiene que ser un número.
+    // Un archivo de notas es algo que llega en una carpeta compartida, y un
+    // `id` que fuera texto entraba a la ventana como HTML.
+    const entero = v => (Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : null);
     return {
         ...estado,
+        numero: entero(estado.numero),
+        vez: entero(estado.vez),
         claquetas: estado.claquetas || [],
-        tomas: (estado.tomas || []).map(t => ({ ...t, vista: vivo.vistaLeida(t.vista) }))
+        tomas: (estado.tomas || []).filter(t => t && typeof t === 'object')
+            .map((t, i) => ({ ...t, id: entero(t.id) || i + 1, vista: vivo.vistaLeida(t.vista) }))
     };
 }
 

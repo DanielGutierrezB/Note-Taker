@@ -15,6 +15,7 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog, shell, nativeImage, clipboard,
     screen, systemPreferences, powerSaveBlocker, powerMonitor } = require('electron');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const fs = require('fs');
 
 const paths = require('./engine/paths');
@@ -99,6 +100,19 @@ function createWindow() {
         anotar('ventana.se-cayo', { motivo: detalle && detalle.reason, codigo: detalle && detalle.exitCode });
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.reload();
     });
+    // La ventana es la app y nada más: no navega a otra página ni abre otra.
+    // Con el puente entero colgado de `window.nt`, una página ajena cargada acá
+    // tendría el micrófono, el disco y el diario, y para llevarla bastaba un
+    // enlace escrito en un archivo de notas de una carpeta compartida.
+    const propia = pathToFileURL(path.join(__dirname, 'src', 'index.html')).href;
+    const frenar = (e, url) => {
+        if (String(url).split('#')[0] === propia) return;
+        e.preventDefault();
+        anotar('ventana.navegacion-frenada', { url: String(url).slice(0, 200) });
+    };
+    mainWindow.webContents.on('will-navigate', frenar);
+    mainWindow.webContents.on('will-redirect', frenar);
+    mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     mainWindow.loadFile('src/index.html');
     // El arnés de desarrollo (capturas, JS inyectado) vive en `dev-shot.js` y
     // sin sus flags no hace nada.
@@ -381,8 +395,20 @@ ipc.handle('carpeta-recordar', (event, ruta) => ajustes.recordarCarpeta(ruta));
 
 // ─── Actualizaciones ──────────────────────────────────────────────────
 
+/**
+ * Lo que contestó GitHub la última vez que se buscó, y lo que se bajó.
+ *
+ * Son del proceso principal y no de la ventana: la ventana pide «bajala» e
+ * «instalala», y de dónde, con qué nombre y qué archivo se abre lo decide esto.
+ * Antes la ventana mandaba la URL, el nombre y la ruta, y una ventana
+ * comprometida podía hacer bajar y abrir cualquier cosa.
+ */
+let novedad = null;
+let instalador = null;
+
 ipc.handle('update-check', async () => {
     const res = await updates.check({ currentVersion: appVersion() });
+    novedad = res && res.hay ? res : null;
     anotar('update.buscada', {
         hay: Boolean(res && res.hay),
         version: (res && res.version) || null,
@@ -398,17 +424,21 @@ ipc.handle('update-check', async () => {
  * ad-hoc, y el instalador silencioso de macOS valida firmas que no tenemos (ver
  * `engine/updates.js`). Abrir el PKG deja al editor a un clic de Continuar.
  */
-ipc.handle('update-download', async (event, payload) => {
+ipc.handle('update-download', async () => {
     if (descargaEnCurso) return { ok: false, error: 'Ya se está descargando.' };
-    const { url, nombre } = payload || {};
-    if (!url) return { ok: false, error: 'No llegó de dónde bajarla.' };
+    if (!novedad || !novedad.url) return { ok: false, error: 'Primero hay que buscar si hay una versión nueva.' };
+    const { url, nombre, tamañoBytes } = novedad;
 
     const controller = new AbortController();
     descargaEnCurso = controller;
     try {
         const result = await updates.download({
             url,
-            nombre,
+            nombre: updates.nombreSano(nombre) || 'NoteTaker-update.pkg',
+            tamañoBytes,
+            // Solo de GitHub, también después de cada redirección. Con el
+            // servidor local de las pruebas (`NOTETAKER_UPDATE_BASE`), de ahí.
+            sitios: process.env.NOTETAKER_UPDATE_BASE ? null : updates.GITHUB,
             // A Descargas y no a una carpeta temporal: si algo sale mal a mitad
             // de la instalación, el editor todavía tiene el instalador a mano.
             destDir: app.getPath('downloads'),
@@ -416,6 +446,7 @@ ipc.handle('update-download', async (event, payload) => {
             onProgress: info => send('update-progress', info)
         });
         anotar('update.descargada', { ok: Boolean(result.ok), error: result.error || null });
+        instalador = result.ok ? result.path : null;
         if (result.ok) send('update-ready', { path: result.path });
         return result;
     } finally {
@@ -423,7 +454,8 @@ ipc.handle('update-download', async (event, payload) => {
     }
 });
 
-ipc.handle('update-install', async (event, target) => {
+ipc.handle('update-install', async () => {
+    const target = instalador;
     if (!target || !fs.existsSync(target)) {
         return { ok: false, error: 'El instalador ya no está donde se bajó.' };
     }
@@ -434,6 +466,11 @@ ipc.handle('update-install', async (event, target) => {
     }
 
     anotar('update.instalando', {});
+    // La marca que el instalador busca para volver a abrir la app al terminar
+    // (el `postinstall` de `tools/build-pkg.sh`): «Instalar y reabrir».
+    try {
+        fs.writeFileSync(path.join(app.getPath('userData'), 'reabrir-al-instalar'), String(Date.now()));
+    } catch (e) { /* sin la marca, instala igual y hay que abrirla a mano */ }
     const error = await shell.openPath(target);
     if (error) return { ok: false, error };
 

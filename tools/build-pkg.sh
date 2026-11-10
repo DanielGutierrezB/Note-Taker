@@ -69,7 +69,11 @@ rm -rf "$APP/Contents/Resources/bin/models"
 # correr después del primer "Abrir igual", y es lo que hay hasta que exista un
 # Developer ID.
 echo "→ firmando ad-hoc"
-codesign --force --deep --sign - "$APP" 2>/dev/null || true
+# Una firma que falla tiene que parar la compilación. Antes el error se tiraba
+# (`2>/dev/null || true`) y salía un instalador con la app sin firmar o a medio
+# firmar, que macOS rechaza recién en la Mac del editor.
+codesign --force --deep --sign - "$APP" || { echo "No se pudo firmar $APP"; exit 1; }
+codesign --verify --deep --strict "$APP" || { echo "La firma de $APP no verifica"; exit 1; }
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
@@ -134,8 +138,26 @@ fi
 
 # ── 3. Los componentes ───────────────────────────────────────────────
 echo "→ armando los componentes"
+# «Instalar y reabrir»: la app deja una marca en la carpeta del usuario antes de
+# cerrarse para que la instalen (`update-install` en main.js), y esto la reabre
+# al terminar. Sin la marca —una instalación a mano— no abre nada.
+mkdir -p "$STAGE/scripts"
+cat > "$STAGE/scripts/postinstall" <<'POSTINSTALL'
+#!/bin/sh
+USUARIO=$(stat -f %Su /dev/console)
+[ -n "$USUARIO" ] && [ "$USUARIO" != root ] || exit 0
+CASA=$(dscl . -read "/Users/$USUARIO" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+MARCA="$CASA/Library/Application Support/Note Taker/reabrir-al-instalar"
+if [ -n "$CASA" ] && [ -f "$MARCA" ]; then
+    rm -f "$MARCA"
+    sudo -u "$USUARIO" open "/Applications/Note Taker.app" || true
+fi
+exit 0
+POSTINSTALL
+chmod +x "$STAGE/scripts/postinstall"
 pkgbuild --quiet \
     --component "$APP" \
+    --scripts "$STAGE/scripts" \
     --install-location "/Applications" \
     --identifier "${IDENT}" \
     --version "$VERSION" \
@@ -151,6 +173,9 @@ if [ "$CON_MODELOS" = 1 ]; then
 fi
 
 # ── 4. Los instaladores ──────────────────────────────────────────────
+# macOS 12 es lo mínimo de Electron 43: con 11 el instalador dejaba instalar una
+# app que no abre. El ayudante del audio de Zoom pide 14.2, y debajo de eso la
+# app anda igual con un micrófono (`audio-app.estado` contesta `soportado: false`).
 distribution() {
     local title="$1"; shift
     {
@@ -158,7 +183,7 @@ distribution() {
         echo '<installer-gui-script minSpecVersion="2">'
         echo "  <title>${title}</title>"
         echo '  <options customize="never" require-scripts="false" hostArchitectures="arm64"/>'
-        echo '  <volume-check><allowed-os-versions><os-version min="11.0"/></allowed-os-versions></volume-check>'
+        echo '  <volume-check><allowed-os-versions><os-version min="12.0"/></allowed-os-versions></volume-check>'
         echo '  <choices-outline>'
         for pkg in "$@"; do echo "    <line choice=\"${pkg}\"/>"; done
         echo '  </choices-outline>'

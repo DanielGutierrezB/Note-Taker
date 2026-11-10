@@ -115,7 +115,12 @@ function sanearTexto(texto) {
     // sistema; sacarla es lo que hace que el archivo se pueda mandar sin leerlo.
     const casa = os.homedir();
     if (casa && casa.length > 3) limpio = limpio.split(casa).join('~');
-    if (pareceRuta(limpio) && !limpio.includes(' ')) limpio = acortarRuta(limpio);
+    // Una ruta sola se acorta aunque tenga espacios —«/Volumes/Rodaje/Curso de
+    // Canva/Audio/clase.wav» también dice de quién es el disco—; un mensaje que
+    // lleva una ruta adentro («ENOENT: no such file, open '/…'») no, porque
+    // cortarlo por la barra se llevaría el mensaje.
+    const rutaSola = /^(~\/|\/)/.test(limpio) && !/[:;]\s|\n|'|"/.test(limpio);
+    if (pareceRuta(limpio) && (rutaSola || !limpio.includes(' '))) limpio = acortarRuta(limpio);
     return limpio.length > MAX_TEXTO ? `${limpio.slice(0, MAX_TEXTO)}…` : limpio;
 }
 
@@ -161,12 +166,21 @@ function sanear(valor, nivel, tope) {
  * @returns {object} la línea, ya saneada
  */
 function anotar(origen, evento, datos) {
+    const ts = Date.now();
+    const nombre = String(evento || '?');
+    const paso = dejaPasar(nombre, ts);
+    const limpios = datos == null ? null : sanear(datos, 0);
     const linea = {
-        ts: Date.now(),
+        ts,
         origen: String(origen || '?'),
-        evento: String(evento || '?'),
-        datos: datos == null ? null : sanear(datos, 0)
+        evento: nombre,
+        datos: paso && paso.callados
+            ? { ...(limpios && typeof limpios === 'object' ? limpios : { valor: limpios }), callados: paso.callados }
+            : limpios
     };
+    // Una ráfaga del mismo evento no se escribe entera: se cuenta, y la primera
+    // línea que pasa después dice cuántas se callaron.
+    if (!paso) return linea;
     lineas.push(linea);
     // Se recorta de a una y no de golpe: así el tope es un techo de verdad y no
     // "el techo más lo que se acumule hasta la próxima limpieza".
@@ -181,6 +195,39 @@ function anotar(origen, evento, datos) {
         else programarVolcado();
     }
     return linea;
+}
+
+/**
+ * Cuántas veces por minuto se escribe un mismo evento, como mucho.
+ *
+ * Uno solo para todo el diario, y no un freno por cada sitio que anota: el de
+ * octubre lo mostró. Una instancia fantasma anotó `grabacion.deriva` cada
+ * segundo durante días y llenó el 96 % del archivo —28.811 de 30.038 líneas—,
+ * y con el tope del disco eso echó todo lo demás. Cada sitio que anotaba
+ * seguido tenía su propio freno; el que no lo tenía, se llevó el diario.
+ *
+ * Veinte por minuto dejan ver una ráfaga de verdad —un pedazo de PCM roto doce
+ * veces por segundo se ve, y se cuenta— sin que una sola cosa tape a las demás.
+ */
+const RAFAGA = 20;
+const VENTANA_DE_RAFAGA_MS = 60000;
+const rafagas = new Map();
+
+/** Si este evento se escribe; con cuántos se callaron desde el último que pasó. */
+function dejaPasar(evento, ahora) {
+    let r = rafagas.get(evento);
+    if (!r || ahora - r.desde >= VENTANA_DE_RAFAGA_MS) {
+        r = { desde: ahora, n: 0, callados: r ? r.callados : 0 };
+        rafagas.set(evento, r);
+    }
+    r.n++;
+    if (r.n > RAFAGA) {
+        r.callados++;
+        return null;
+    }
+    const callados = r.callados;
+    r.callados = 0;
+    return { callados };
 }
 
 // ─── El diario en disco ──────────────────────────────────────────────
@@ -305,6 +352,7 @@ function limpiar() {
     if (temporizador) { clearTimeout(temporizador); temporizador = null; }
     archivoDiario = null;
     fallaAlVolcar = null;
+    rafagas.clear();
 }
 
 /**

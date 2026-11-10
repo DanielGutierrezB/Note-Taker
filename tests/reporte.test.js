@@ -120,13 +120,18 @@ module.exports = async function (t) {
     t.test('un clic dice qué hace, sobre qué, y lo que dice el botón', async () => {
         const acciones = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'js', 'acciones.js')).href);
         const boton = {
-            id: '', dataset: { hace: 'dividir-aca', toma: '3' },
+            tagName: 'BUTTON', id: '', dataset: { hace: 'dividir-aca', toma: '3' },
             getAttribute: () => null, textContent: '\n   Dividir    acá  '
         };
         t.deep(acciones.describir(boton), { que: 'dividir-aca', dice: 'Dividir acá', datos: { hace: 'dividir-aca', toma: '3' } });
         const sinNada = { id: 'btn-reporte', dataset: {}, getAttribute: () => 'Report', textContent: '' };
         t.deep(acciones.describir(sinNada), { que: 'btn-reporte', dice: 'Report', datos: null },
             'sin data-hace, su id; y lo que dice para un lector de pantalla');
+        const fila = {
+            tagName: 'DIV', id: '', dataset: { hace: 'plegar', toma: '4' },
+            getAttribute: () => null, textContent: 'La nota que escribió el editor y lo que dijo el profesor'
+        };
+        t.eq(acciones.describir(fila).dice, null, 'de lo que no es un botón no se copia el texto: puede ser de alguien');
     });
 
     t.test('la ventana empieza a anotar apenas arranca', () => {
@@ -258,7 +263,7 @@ module.exports = async function (t) {
         registro.abrirDiario(dir);
         const archivo = path.join(dir, 'diario.ndjson');
         const muchas = Math.ceil(registro.TOPE_EN_DISCO * 1.5) + 50;
-        for (let i = 0; i < muchas; i++) registro.anotar('main', 'prueba.linea', { i });
+        for (let i = 0; i < muchas; i++) registro.anotar('main', `prueba.linea-${i}`, { i });
         registro.volcar();
         const lineas = fs.readFileSync(archivo, 'utf8').trim().split('\n');
         t.ok(lineas.length <= registro.TOPE_EN_DISCO, `quedan ${lineas.length}, el tope es ${registro.TOPE_EN_DISCO}`);

@@ -34,11 +34,12 @@
     ],
     "mac": {
       "category": "public.app-category.video",
+      "minimumSystemVersion": "12.0",
       "hardenedRuntime": true,
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Note Taker escucha la entrada de audio de la clase para medir el nivel y para reconocer el conteo y la pausa mientras se toman las notas.",
         "NSCameraUsageDescription": "Note Taker muestra en pantalla lo que está entrando por una cámara y saca una foto al cerrarse cada toma. No graba video.",
-        "NSAudioCaptureUsageDescription": "Note Taker escucha el sonido de Zoom para grabar la clase que llega por la llamada y reconocer el conteo y la pausa. Solo escucha a Zoom: no graba nada más de la Mac."
+        "NSAudioCaptureUsageDescription": "Note Taker escucha el sonido de la Mac mientras preparás o grabás una clase: el de Zoom, o todo lo que salga por los altavoces si elegís «Audio del sistema». Lo graba para guardar la clase y reconocer el conteo y la pausa."
       },
       "target": [
         {
@@ -75,11 +76,11 @@
     }
   },
   "devDependencies": {
-    "electron": "^43.4.1",
+    "electron": "^43.8.7",
     "electron-builder": "^26.15.3",
-    "puppeteer-core": "^25.12.0"
+    "puppeteer-core": "^25.16.0"
   },
   "allowScripts": {
-    "electron@43.7.5": true
+    "electron@43.8.7": true
   }
 }
