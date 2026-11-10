@@ -28,6 +28,7 @@ const registro = require('./engine/registro');
 const dependencias = require('./engine/dependencias');
 const grabacion = require('./engine/grabacion');
 const residente = require('./engine/oido-residente');
+const audioApp = require('./engine/audio-app');
 const ipcGrabar = require('./ipc/grabar');
 const ipcPrproj = require('./ipc/prproj');
 const ipcReferencias = require('./ipc/referencias');
@@ -102,6 +103,29 @@ function createWindow() {
     mainWindow.webContents.on('render-process-gone', (event, detalle) => {
         anotar('ventana.se-cayo', { motivo: detalle && detalle.reason, codigo: detalle && detalle.exitCode });
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.reload();
+    });
+    // La ventana trabada. El micrófono lo abre ella, así que trabada no manda
+    // audio, y los avisos del atraso van a esa misma ventana: nadie los ve. Con
+    // una clase grabando por micrófono se la deja diez segundos —una ventana
+    // ocupada se recupera sola— y después se la reinicia: vuelve sola a la
+    // clase y reabre la entrada en un WAV nuevo (`app.js`). Con Zoom el audio no
+    // pasa por la ventana y sigue entrando: ahí se anota y nada más.
+    let trabadaDesde = null;
+    mainWindow.on('unresponsive', () => {
+        trabadaDesde = Date.now();
+        const porMicrofono = grabacion.activa() && !audioApp.estaMandando();
+        anotar('ventana.no-responde', { grabando: grabacion.activa(), porMicrofono });
+        if (!porMicrofono) return;
+        const desde = trabadaDesde;
+        setTimeout(() => {
+            if (trabadaDesde !== desde || !mainWindow || mainWindow.isDestroyed()) return;
+            anotar('ventana.reiniciada', { trabadaMs: Date.now() - desde });
+            mainWindow.webContents.forcefullyCrashRenderer();
+        }, 10000).unref();
+    });
+    mainWindow.on('responsive', () => {
+        if (trabadaDesde) anotar('ventana.responde', { trabadaMs: Date.now() - trabadaDesde });
+        trabadaDesde = null;
     });
     // La ventana es la app y nada más: no navega a otra página ni abre otra.
     // Con el puente entero colgado de `window.nt`, una página ajena cargada acá

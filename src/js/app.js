@@ -317,6 +317,10 @@ async function revisarDependencias() {
 
     const { requeridas, otras } = dependencias.faltan();
     const yaAvisado = pref.leer('dependencias.avisadas', false);
+    // Con una clase grabando —la ventana se recargó en medio— no se tapa la
+    // clase: con el aviso abierto, Enter no abre ni cierra tomas. Lo que falte
+    // está en Ajustes.
+    if (await window.nt.grabarEstado()) return;
     if (requeridas.length || (otras.length && !yaAvisado)) {
         verPanel('telon-dependencias', true);
         pref.guardar('dependencias.avisadas', true);
