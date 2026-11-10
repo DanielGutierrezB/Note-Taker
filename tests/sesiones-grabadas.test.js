@@ -16,6 +16,7 @@ const sesiones = require('../engine/sesiones-grabadas');
 const workspace = require('../engine/workspace');
 const notasXml = require('../engine/notas-xml');
 const vivo = require('../engine/notas-vivo');
+const claquetaVieja = require('./fixtures/claqueta-vieja');
 const nombre = require('../engine/nombre-de-sesion');
 
 const T0 = Date.parse('2026-09-29T10:00:00');
@@ -48,7 +49,7 @@ function sembrar(dir, opciones) {
         palabras: [{ t: cero + 20000, texto: 'Hola' }], comentarios: []
     }];
     if (o.claquetas !== false) {
-        vivo.anotarClaqueta(estado, { ms: cero + 12000, confirmada: true, origen: 'golpe' });
+        claquetaVieja(estado, { ms: cero + 12000, confirmada: true, origen: 'golpe' });
     }
     if (o.terminada !== false) estado.terminada = cero + 600000;
 

@@ -20,29 +20,6 @@
  * repuesta cinco minutos después, borraría las tres tomas que entraron mientras
  * tanto. Así que la foto es de LA TOMA que el cambio tocó, y nada más. Deshacer
  * algo viejo no puede tocar lo que pasó después porque no lo tiene en la mano.
- *
- * ─── Dos clases de paso en una sola pila ──────────────────────────────────
- *
- * Hay gestos del editor que no son de ninguna toma, como pegar el temario del
- * CD. También reescriben el XML y el sidecar en el acto, así que también tienen
- * que poder volver — si no, el Cmd-Z que se da después de uno de ellos se lleva
- * puesto el cambio ANTERIOR, que es el mismo defecto que
- * un paso fantasma pero al revés y peor: el editor ve moverse algo que no había
- * pedido tocar.
- *
- * **Y eso no rompe la regla de arriba, porque la regla no era "no fotografiar la
- * sesión": era no fotografiar nada que se llene solo.** Lo único que crece sin
- * que nadie lo toque es la lista de tomas —el ciclo de señales le agrega una cada
- * vez que el profesor cuenta hasta uno—, y eso es exactamente lo que estos
- * pasos NO tienen en la mano. `estado.temario` es la lista pegada con su última
- * medición. Reponerla cinco minutos después deja las tomas donde estén, porque
- * no las toca.
- *
- * Por eso el paso lleva `id` —de qué toma es— o `campo` —de qué campo de la
- * sesión—, y nunca los dos. Van en la MISMA pila y no en una segunda, que es lo
- * que hace que el orden de deshacer sea el orden real de los gestos: con dos
- * pilas habría que inventar cuál de las dos toca primero, y la respuesta correcta
- * ("la que se tocó al final") es justamente lo que una sola pila ya sabe.
  */
 
 /**
@@ -81,34 +58,6 @@ function foto(toma) {
 }
 
 /**
- * La copia de un campo de la sesión —el temario— que se guarda.
- *
- * Es `foto` para lo que no es una toma, y con el mismo criterio: se copia el
- * objeto y sus listas, y lo que hay dentro de las listas no. Hace falta copiar y
- * no guardar la referencia porque estos campos SÍ se escriben en su sitio
- * mientras la foto espera: la medición de cobertura le deja el resultado encima
- * al mismo objeto de temario (`atender` en `temario-sesion.js`), así que una foto
- * por referencia cambiaría sola y deshacer no devolvería nada.
- *
- * Y por eso mismo la foto de un temario es lo que hace falta y nada más: la lista
- * pegada, y lo que ya se midió CONTRA esa lista. No hay nada de las tomas ahí
- * adentro.
- *
- * **Una LISTA se copia hasta el fondo, y un objeto no**: una lista de objetos
- * que se modifican en su sitio, copiada por arriba, tendría los mismos objetos
- * adentro, y la foto cambiaría sola.
- */
-function fotoDeCampo(valor) {
-    if (!valor) return null;
-    if (Array.isArray(valor)) return valor.map(x => (x && typeof x === 'object' ? { ...x } : x));
-    const copia = { ...valor };
-    for (const clave of Object.keys(copia)) {
-        if (Array.isArray(copia[clave])) copia[clave] = copia[clave].slice();
-    }
-    return copia;
-}
-
-/**
  * Si dos fotos de la misma toma dicen lo mismo, o sea: si el cambio cambió algo.
  *
  * Vive acá y no en quien edita porque se contesta sobre las fotos, que es lo que
@@ -141,10 +90,9 @@ function mismaFoto(a, b) {
             return Array.isArray(x) && Array.isArray(y) &&
                 x.length === y.length && x.every((cosa, i) => cosa === y[i]);
         }
-        // Los objetos sueltos se comparan por dentro y no por referencia: una
-        // foto de campo puede ser una lista de objetos copiados (ver
-        // `fotoDeCampo`), y por referencia dos fotos idénticas nunca serían
-        // iguales y cada gesto dejaría un paso fantasma.
+        // Los objetos sueltos se comparan por dentro y no por referencia: por
+        // referencia dos fotos idénticas nunca serían iguales y cada gesto
+        // dejaría un paso fantasma.
         if (x && y && typeof x === 'object' && typeof y === 'object') return mismaFoto(x, y);
         return x === y;
     });
@@ -155,24 +103,21 @@ function mismaFoto(a, b) {
  *
  * **El portero está acá y no en quien edita**, y esa es toda la diferencia: así
  * no hay forma de que un gesto nuevo se olvide de preguntar. Cuando la pregunta
- * estaba del otro lado, el borde la hacía y reabrir no; el día que entró el
- * temario habría sido un sitio más donde acordarse.
+ * estaba del otro lado, el borde la hacía y reabrir no.
  *
  * Lo que no entra es un paso que al deshacerse no se ve: hace apretar de nuevo
  * pensando que el botón no funciona, y encima se come el Cmd-Z que iba para el
  * cambio de verdad.
  *
  * @param {object} historia de `nueva()`
- * @param {{que:string, tipo:string, id?:number, campo?:string,
- *   antes:object|null, despues:object|null}} paso — `id` si es de una toma,
- *   `campo` si es de un campo de la sesión. Uno de los dos, nunca los dos.
+ * @param {{que:string, tipo:string, id:number,
+ *   antes:object|null, despues:object|null}} paso — `id` es la toma
  */
 function anotar(historia, paso) {
     if (mismaFoto(paso.antes, paso.despues)) return;
     // Qué campos cambió el gesto, para reponer esos y nada más (ver `poner`):
     // la toma sigue viva mientras la foto espera, y se rompe si se la repone
-    // entera. `ponerCampo` —el temario— no lo mira, porque ahí la foto ES el
-    // campo.
+    // entera.
     if (paso.antes && paso.despues && paso.id != null) {
         paso.campos = camposQueCambian(paso.antes, paso.despues);
     }
@@ -247,23 +192,6 @@ function poner(tomas, id, cual, campos) {
 }
 
 /**
- * Deja un campo de la sesión como dice la foto. `poner` para lo que no es toma.
- *
- * **Toca el campo y nada más**, que es lo que hace que estos pasos convivan con
- * una clase que se sigue grabando: la lista de tomas ni se nombra acá, así que
- * deshacer un gesto de hace cinco minutos no puede llevarse por delante las
- * tomas que entraron mientras tanto.
- *
- * Se copia al salir por lo mismo que se copió al entrar: quien reciba el objeto
- * le va a escribir encima —la cobertura del temario se deja ahí— y la foto tiene
- * que poder reponerse dos veces, que es lo que pasa al deshacer, rehacer y volver
- * a deshacer.
- */
-function ponerCampo(estado, campo, cual) {
-    estado[campo] = fotoDeCampo(cual);
-}
-
-/**
  * Si reponer esta foto dejaría dos tomas abiertas a la vez.
  *
  * Es el caso que aparece por grabar mientras se deshace, y no es raro: se cierra
@@ -307,8 +235,8 @@ function proximo(historia, hacia) {
  * Saca el paso de una pila y lo pone en la otra, ya dado vuelta.
  *
  * @param {'atras'|'adelante'} hacia de qué pila se saca
- * @returns {{que:string, id:number, campo:string, foto:object|null}|null} qué hay
- *   que reponer, y dónde: en la toma `id` o en el campo `campo` de la sesión
+ * @returns {{que:string, id:number, campos:string[], foto:object|null}|null} qué
+ *   hay que reponer en la toma `id`
  */
 function sacar(historia, hacia) {
     const desde = hacia === 'adelante' ? historia.adelante : historia.atras;
@@ -322,7 +250,6 @@ function sacar(historia, hacia) {
     return {
         que: paso.que,
         id: paso.id,
-        campo: paso.campo,
         campos: paso.campos,
         foto: hacia === 'adelante' ? paso.despues : paso.antes,
         // Lo que está ahora, que es lo que hay que sacar en un paso de lista.
@@ -361,11 +288,9 @@ module.exports = {
     TOPE,
     nueva,
     foto,
-    fotoDeCampo,
     mismaFoto,
     anotar,
     poner,
-    ponerCampo,
     camposQueCambian,
     dondeEntra,
     dejariaDosAbiertas,

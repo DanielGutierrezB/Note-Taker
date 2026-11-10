@@ -474,7 +474,7 @@ function reabrir(sesion, toma) {
  * El historial es del motor porque la verdad es del motor: cada cambio reescribe
  * el XML y el sidecar en el mismo gesto, así que volver atrás también tiene que
  * reescribirlos. El por qué está entero en `engine/deshacer.js`, junto con el
- * motivo de que la foto sea de una toma —o de un campo— y nunca de la sesión.
+ * motivo de que la foto sea de una toma y nunca de la sesión.
  */
 
 /**
@@ -487,17 +487,13 @@ function volver(sesion, hacia) {
     if (!paso) return { ok: false, estado: espejo.resumen(sesion) };
 
     const foto = hacia === 'adelante' ? paso.despues : paso.antes;
-    // La única cosa que no se puede deshacer, y es de las tomas: un paso de la
-    // sesión no repone ninguna, así que no puede dejar dos abiertas. Preguntarle
-    // igual lo plantaría siempre, porque su `id` es undefined y entonces
-    // cualquier toma abierta contaría como "la otra".
-    // Ni puede reponer una toma que ya no cabe: mientras estuvo desactivada
+    // No se puede reponer una toma que ya no cabe: mientras estuvo desactivada
     // —o fuera, si el paso es un «eliminar»— su tramo quedó libre y otra pudo
     // ocuparlo. Es la misma regla que «Mantener» y «Reabrir» (`laQuePisa`).
     // La división no: repone la primera mitad sobre el tramo de la segunda a
     // propósito, porque en el mismo gesto la segunda se va (`volverDivision`,
     // que tiene sus propias comprobaciones).
-    if (!paso.campo && foto && paso.tipo !== 'dividir') {
+    if (foto && paso.tipo !== 'dividir') {
         // Como va a quedar la toma, no como está en la foto: el paso repone solo
         // los campos que cambió (`poner`), y el resto se queda como está hoy.
         const actual = sesion.estado.tomas.find(t => t.id === paso.id) || {};
@@ -519,7 +515,7 @@ function volver(sesion, hacia) {
     // gesto, así que la abierta que esta guarda vería es justamente la que se
     // va. Con la guarda puesta, dividir la toma abierta —el caso para el que
     // existe dividir— no se podía deshacer nunca.
-    if (!paso.campo && paso.tipo !== 'dividir'
+    if (paso.tipo !== 'dividir'
         && historial.dejariaDosAbiertas(sesion.estado.tomas, paso.id, foto, paso.campos)) {
         return {
             ok: false,
@@ -556,66 +552,59 @@ function volver(sesion, hacia) {
     const dado = historial.sacar(sesion.historia, hacia);
     // Lo que la toma tiene ANTES de que la foto vuelva: si la foto no se lo
     // devuelve, es porque esa palabra pasa a estar fuera de toda toma otra vez.
-    const tenia = paso.campo ? null
-        : ((sesion.estado.tomas.find(t => t.id === paso.id) || {}).palabras || []).slice();
-    if (paso.campo) {
-        historial.ponerCampo(sesion.estado, paso.campo, foto);
-    } else {
-        historial.poner(sesion.estado.tomas, paso.id, foto, dado.campos);
+    const tenia = ((sesion.estado.tomas.find(t => t.id === paso.id) || {}).palabras || []).slice();
+    historial.poner(sesion.estado.tomas, paso.id, foto, dado.campos);
+    // La foto repone los campos que el gesto cambió, y las palabras pueden
+    // no estar entre ellos: deshacer un «reabrir» devuelve el OUT viejo y
+    // deja en la toma todo lo que el ciclo le metió mientras estuvo abierta,
+    // o sea palabras fuera de sus propios bordes. Se vuelve a repartir por
+    // los bordes repuestos, y lo que cae fuera pasa a orilla.
+    const vuelta = sesion.estado.tomas.find(t => t.id === paso.id);
+    if (vuelta && vuelta.inMs != null) {
+        // Solo hacia afuera: lo que quedó fuera de los bordes sale a la
+        // orilla. No al revés —meter la orilla dentro— porque la orilla es
+        // texto del modelo grande y las palabras repuestas son del ciclo:
+        // juntarlas dejaba la misma palabra dos veces con dos ortografías.
+        const fin = vuelta.outMs == null ? Infinity : vuelta.outMs;
+        const dentroDe = w => w.t >= vuelta.inMs && w.t < fin;
+        const fuera = (vuelta.palabras || []).filter(w => !dentroDe(w));
+        vuelta.palabras = (vuelta.palabras || []).filter(dentroDe);
+        // Y la orilla se recorta a lo que es orilla con estos bordes: lo que
+        // ahora cae dentro no se mete —sería la lectura grande junto a la
+        // del ciclo— y lo repone la relectura, que vuelve a correr.
+        vuelta.antes = vivo.juntas(vuelta.antes, fuera).filter(w => w.t < vuelta.inMs);
+        vuelta.despues = vuelta.outMs == null ? [] : vivo.juntas(vuelta.despues, fuera).filter(w => w.t >= fin);
+        // Un texto repuesto no es un texto leído. La foto devuelve las
+        // palabras de entonces —las del ciclo, si la relectura aterrizó
+        // después—, y la marca de «ya releída con estos bordes» se quedaba
+        // puesta: la cola la veía leída y no la volvía a leer nunca, así
+        // que el texto descartable quedaba en el archivo para siempre.
+        delete vuelta.releida;
     }
-    if (!paso.campo) {
-        // La foto repone los campos que el gesto cambió, y las palabras pueden
-        // no estar entre ellos: deshacer un «reabrir» devuelve el OUT viejo y
-        // deja en la toma todo lo que el ciclo le metió mientras estuvo abierta,
-        // o sea palabras fuera de sus propios bordes. Se vuelve a repartir por
-        // los bordes repuestos, y lo que cae fuera pasa a orilla.
-        const vuelta = sesion.estado.tomas.find(t => t.id === paso.id);
-        if (vuelta && vuelta.inMs != null) {
-            // Solo hacia afuera: lo que quedó fuera de los bordes sale a la
-            // orilla. No al revés —meter la orilla dentro— porque la orilla es
-            // texto del modelo grande y las palabras repuestas son del ciclo:
-            // juntarlas dejaba la misma palabra dos veces con dos ortografías.
-            const fin = vuelta.outMs == null ? Infinity : vuelta.outMs;
-            const dentroDe = w => w.t >= vuelta.inMs && w.t < fin;
-            const fuera = (vuelta.palabras || []).filter(w => !dentroDe(w));
-            vuelta.palabras = (vuelta.palabras || []).filter(dentroDe);
-            // Y la orilla se recorta a lo que es orilla con estos bordes: lo que
-            // ahora cae dentro no se mete —sería la lectura grande junto a la
-            // del ciclo— y lo repone la relectura, que vuelve a correr.
-            vuelta.antes = vivo.juntas(vuelta.antes, fuera).filter(w => w.t < vuelta.inMs);
-            vuelta.despues = vuelta.outMs == null ? [] : vivo.juntas(vuelta.despues, fuera).filter(w => w.t >= fin);
-            // Un texto repuesto no es un texto leído. La foto devuelve las
-            // palabras de entonces —las del ciclo, si la relectura aterrizó
-            // después—, y la marca de «ya releída con estos bordes» se quedaba
-            // puesta: la cola la veía leída y no la volvía a leer nunca, así
-            // que el texto descartable quedaba en el archivo para siempre.
-            delete vuelta.releida;
-        }
-        // La foto es de una toma y las sueltas son de la sesión: hay que
-        // cuadrarlas a mano, o un borde repuesto deja la misma palabra adentro
-        // y afuera. Vuelve al colchón lo que la toma PERDIÓ: lo que tenía en
-        // `palabras` y ya no tiene. Lo que sigue en `palabras` no —y eso cubre
-        // a la toma desactivada, que se queda con sus palabras y mandarlas
-        // además al colchón las mostraba dos veces, gris entre tomas y dentro
-        // de su fila—. Las orillas no cuentan: una palabra en `despues` está
-        // fuera de la toma, y que además esté suelta es lo normal.
-        //
-        // **Y solo lo que quedó FUERA de sus bordes.** Lo que la toma tenía y
-        // sigue cayendo dentro de ellos no se perdió: se reemplazó. Es el caso
-        // de deshacer un «cerrar» cuando la relectura ya aterrizó: la foto
-        // devuelve el texto del ciclo, y las palabras del modelo grande que
-        // no coinciden letra por letra —«funcion» y «funcionando»— no son
-        // sueltas que haya que devolver, son la otra lectura del mismo tramo.
-        // Soltarlas las metía otra vez en la toma reabierta, y el texto salía
-        // con las dos lecturas pegadas.
-        const sigueEn = new Set(((vuelta && vuelta.palabras) || []).map(w => `${w.t}|${w.texto}`));
-        const dentro = w => vuelta && vuelta.inMs != null && w.t >= vuelta.inMs
-            && (vuelta.outMs == null || w.t < vuelta.outMs);
-        vivo.limpiarSueltas(sesion.estado,
-            (tenia || []).filter(w => !sigueEn.has(`${w.t}|${w.texto}`) && !dentro(w)));
-        // Y la cola no apunta a una toma que el paso acaba de sacar.
-        if (!vuelta) sesion.cola = (sesion.cola || []).filter(id => id !== paso.id);
-    }
+    // La foto es de una toma y las sueltas son de la sesión: hay que
+    // cuadrarlas a mano, o un borde repuesto deja la misma palabra adentro
+    // y afuera. Vuelve al colchón lo que la toma PERDIÓ: lo que tenía en
+    // `palabras` y ya no tiene. Lo que sigue en `palabras` no —y eso cubre
+    // a la toma desactivada, que se queda con sus palabras y mandarlas
+    // además al colchón las mostraba dos veces, gris entre tomas y dentro
+    // de su fila—. Las orillas no cuentan: una palabra en `despues` está
+    // fuera de la toma, y que además esté suelta es lo normal.
+    //
+    // **Y solo lo que quedó FUERA de sus bordes.** Lo que la toma tenía y
+    // sigue cayendo dentro de ellos no se perdió: se reemplazó. Es el caso
+    // de deshacer un «cerrar» cuando la relectura ya aterrizó: la foto
+    // devuelve el texto del ciclo, y las palabras del modelo grande que
+    // no coinciden letra por letra —«funcion» y «funcionando»— no son
+    // sueltas que haya que devolver, son la otra lectura del mismo tramo.
+    // Soltarlas las metía otra vez en la toma reabierta, y el texto salía
+    // con las dos lecturas pegadas.
+    const sigueEn = new Set(((vuelta && vuelta.palabras) || []).map(w => `${w.t}|${w.texto}`));
+    const dentro = w => vuelta && vuelta.inMs != null && w.t >= vuelta.inMs
+        && (vuelta.outMs == null || w.t < vuelta.outMs);
+    vivo.limpiarSueltas(sesion.estado,
+        (tenia || []).filter(w => !sigueEn.has(`${w.t}|${w.texto}`) && !dentro(w)));
+    // Y la cola no apunta a una toma que el paso acaba de sacar.
+    if (!vuelta) sesion.cola = (sesion.cola || []).filter(id => id !== paso.id);
     // Un borde repuesto pide el mismo texto que pidió el gesto original: acá el
     // reparto de palabras lo hace la relectura, no el borde (ver `editar`).
     if (paso.tipo === 'borde' || paso.tipo === 'cerrar') relecturas.encolar(sesion, paso.id);

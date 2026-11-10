@@ -492,7 +492,6 @@ function estadoLeido(estado) {
     return {
         ...estado,
         claquetas: estado.claquetas || [],
-        proximaClaqueta: (estado.claquetas || []).length,
         tomas: (estado.tomas || []).map(t => ({ ...t, vista: vivo.vistaLeida(t.vista) }))
     };
 }

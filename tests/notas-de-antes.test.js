@@ -22,6 +22,7 @@ const sesiones = require('../engine/sesiones-grabadas');
 const workspace = require('../engine/workspace');
 const notasXml = require('../engine/notas-xml');
 const vivo = require('../engine/notas-vivo');
+const claquetaVieja = require('./fixtures/claqueta-vieja');
 
 const T0 = Date.parse('2026-09-29T10:00:00');
 const SRC = path.join(__dirname, '..', 'src', 'js');
@@ -64,7 +65,7 @@ function sembrar(opciones) {
     // el que se decide dónde mover un borde, y hasta que el sidecar lo guardó
     // desaparecía al cerrar la app.
     estado.sueltas = palabras(T0 + 45000, 6);
-    vivo.anotarClaqueta(estado, { ms: T0 + 12000, confirmada: true, origen: 'golpe' });
+    claquetaVieja(estado, { ms: T0 + 12000, confirmada: true, origen: 'golpe' });
     if (o.terminada !== false) estado.terminada = T0 + 600000;
 
     const archivos = workspace.archivosDeSesion(dir, secuencia);

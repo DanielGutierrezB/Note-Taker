@@ -9,6 +9,7 @@
  */
 
 const vivo = require('../engine/notas-vivo');
+const claquetaVieja = require('./fixtures/claqueta-vieja');
 const notasXml = require('../engine/notas-xml');
 const rodecaster = require('../engine/rodecaster-xml');
 
@@ -77,7 +78,7 @@ module.exports = function (t) {
 
     t.test('una claqueta da un marcador blanco con su número', () => {
         const e = conUnaToma();
-        vivo.anotarClaqueta(e, {
+        claquetaVieja(e, {
             ms: T0 + 12000, paredMs: T0 + 12000, frase: 'Claqueta 1, clase 1',
             confirmada: true, origen: 'golpe'
         });
@@ -90,15 +91,15 @@ module.exports = function (t) {
 
     t.test('una claqueta sin confirmar lo dice en el comentario', () => {
         const e = conUnaToma();
-        vivo.anotarClaqueta(e, { ms: T0 + 12000, confirmada: false, origen: 'golpe' });
+        claquetaVieja(e, { ms: T0 + 12000, confirmada: false, origen: 'golpe' });
         const marca = notasXml.marcadores(e).find(m => m.name === 'Claqueta 1');
         t.ok(marca.comment.includes('sin confirmar'));
     });
 
     t.test('solo la primera claqueta es la referencia', () => {
         const e = conUnaToma();
-        vivo.anotarClaqueta(e, { ms: T0 + 12000, confirmada: true, origen: 'golpe' });
-        vivo.anotarClaqueta(e, { ms: T0 + 300000, confirmada: true, origen: 'golpe' });
+        claquetaVieja(e, { ms: T0 + 12000, confirmada: true, origen: 'golpe' });
+        claquetaVieja(e, { ms: T0 + 300000, confirmada: true, origen: 'golpe' });
         const marcas = notasXml.marcadores(e);
         const ref = marcas.filter(m => (m.comment || '').includes('referencia de sincronía'));
         t.eq(ref.length, 1);
@@ -210,7 +211,7 @@ module.exports = function (t) {
 
     t.test('lo que se escribe se vuelve a leer igual', () => {
         const e = conUnaToma();
-        vivo.anotarClaqueta(e, {
+        claquetaVieja(e, {
             ms: T0 + 12000, frase: 'Claqueta 1, clase 1', confirmada: true, origen: 'golpe'
         });
         const leido = rodecaster.parseXml(notasXml.xmlDeNotas(e));
@@ -252,7 +253,7 @@ module.exports = function (t) {
 
     t.test('guarda las claquetas con sus dos relojes', () => {
         const e = conUnaToma();
-        vivo.anotarClaqueta(e, {
+        claquetaVieja(e, {
             ms: T0 + 12000, paredMs: T0 + 12500, confirmada: true, origen: 'golpe'
         });
         const c = notasXml.sidecar(e).claquetas[0];
@@ -263,12 +264,5 @@ module.exports = function (t) {
 
     t.test('una sesión sin cerrar no dice `terminada`', () => {
         t.eq(notasXml.sidecar(conUnaToma()).terminada, null);
-    });
-
-    t.test('estadoLeido deja los contadores donde iban', () => {
-        const e = conUnaToma();
-        vivo.anotarClaqueta(e, { ms: T0 + 1000, confirmada: true, origen: 'golpe' });
-        const vuelto = notasXml.estadoLeido(JSON.parse(JSON.stringify(notasXml.sidecar(e))));
-        t.eq(vuelto.proximaClaqueta, 1);
     });
 };

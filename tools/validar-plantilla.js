@@ -57,7 +57,7 @@ function carpetaDePrueba(fps) {
         { id: 1, vista: 'PV', comentario: '', inMs: T0 + 5000, outMs: T0 + 20000, descartada: false, palabras: [], comentarios: [] },
         { id: 2, vista: 'R', comentario: '', inMs: T0 + 25000, outMs: T0 + 50000, descartada: false, palabras: [], comentarios: [] }
     ];
-    vivo.anotarClaqueta(estado, { ms: T0 + 2000, confirmada: true, origen: 'golpe' });
+    estado.claquetas.push({ n: 1, ms: T0 + 2000, paredMs: null, frase: '', comentario: '', confirmada: true, origen: 'golpe' });
     estado.terminada = T0 + 60000;
     const archivos = workspace.archivosDeSesion(dir, secuencia);
     workspace.writeAtomic(archivos.xml, notasXml.xmlDeNotas(estado));

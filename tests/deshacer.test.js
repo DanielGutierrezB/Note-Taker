@@ -108,15 +108,6 @@ module.exports = function (t) {
         t.deep(tomas.map(x => x.id), [1]);
     });
 
-    t.test('un campo del estado se repone entero', () => {
-        // La foto de las claquetas es de la LISTA y no de una: anotar puede
-        // fundir dos y renumerar las de atrás.
-        const estado = { claquetas: [{ n: 1, ms: 5 }, { n: 2, ms: 9 }] };
-        const antes = historial.fotoDeCampo([{ n: 1, ms: 5 }]);
-        historial.ponerCampo(estado, 'claquetas', antes);
-        t.eq(estado.claquetas.length, 1);
-    });
-
     t.group('deshacer · lo que no se puede');
 
     t.test('no se repone una toma abierta si ya hay otra', () => {

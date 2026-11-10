@@ -25,7 +25,7 @@
  *
  * **Sin estado y sin DOM**: todo lo de acá se prueba solo (`tests/notas-vivo.test.js`).
  * Los números que deciden —cuántos segundos de silencio confirman un "Pausa",
- * cuánto tienen que parecerse dos arranques, cuándo dos claquetas son la misma—
+ * cuánto tienen que parecerse dos arranques—
  * salen de medir clases reales con `tools/simular-grabacion.js`, no de estimarlos.
  */
 
@@ -162,7 +162,6 @@ function estadoNuevo(params) {
          * de un archivo de cámara.
          */
         claquetas: [],
-        proximaClaqueta: 0,
         // Los archivos de audio que la sesión fue cerrando. Una sesión puede
         // tener más de uno: si el dispositivo se cae y se reabre, el WAV nuevo
         // entra como otro clip en su offset (`captura.laQueContiene`).
@@ -1054,150 +1053,6 @@ function cerrarProvisional(toma, ms) {
     toma.outProvisional = true;
 }
 
-/* ─── Las claquetas ──────────────────────────────────────────────────────
- *
- * La app ya no las anota: cada clase se sincroniza por forma de onda, el WAV de
- * las notas contra el audio de las cámaras. Lo que queda acá es la lista que
- * traen las clases grabadas antes, que siguen llevando sus marcadores al XML.
- * Entonces llegaban por tres puertas —el aplauso en el PCM, la palabra
- * «claqueta» y la tecla K— y de ahí sale la fusión: la misma claqueta oída dos
- * veces queda una sola.
- */
-
-/**
- * Cuánto tienen que separarse dos claquetas para ser dos y no la misma.
- *
- * Cinco segundos: las tres puertas llegaban dentro de ese margen, y dos
- * claquetas de verdad nunca están tan cerca, porque entre una y la siguiente
- * hay una toma, o por lo menos el tiempo de reacomodar una cámara.
- */
-const MISMA_CLAQUETA_MS = 5000;
-
-/**
- * ¿Esta claqueta la vio la palmada?
- *
- * Se pregunta por el pedazo y no por el `origen` entero, y esa es la
- * corrección: ninguna claqueta tiene `origen` «golpe» a secas —la que sale del
- * PCM confirmada por el texto se anota «golpe,voz», y una fundida puede decir
- * «editor,golpe,voz»—, así que comparar por igualdad nunca daba cierto y
- * `fundir` terminaba tomando el `ms` más temprano de los dos. Al juntar la
- * claqueta del botón con la que encontró la palmada, el más temprano suele ser
- * el del botón, o sea el dedo: justo el dato que no se quiere.
- */
-function porGolpe(c) {
-    return String((c && c.origen) || '').split(',').includes('golpe');
-}
-
-/**
- * Cuál de dos orígenes manda para cada cosa.
- *
- * No es "gana uno entero", porque cada puerta sabe algo distinto y ninguna sabe
- * todo:
- *
- * - **El `ms` lo pone el golpe.** Es un pico en la onda, medido sobre la
- *   posición en el WAV: cae exactamente donde suena. Lo que diga el editor está
- *   a su tiempo de reacción, y lo que diga la voz está al arranque de una
- *   palabra que se dijo antes o después del aplauso.
- * - **La frase la pone la voz.** El golpe no sabe qué se dijo; el número de la
- *   claqueta ("claqueta 3, clase 3") solo aparece en el texto, y es lo que deja
- *   emparejarla con lo que el editor escribió en la pizarra.
- * - **`confirmada` es un o-lógico.** Cada puerta confirma por su cuenta: el
- *   editor por haber estado mirando, la voz por haber dicho la palabra, el golpe
- *   por las dos cosas juntas. Que una no confirme no desconfirma a la otra.
- */
-function fundir(vieja, nueva) {
-    const deGolpe = porGolpe(nueva) ? nueva : (porGolpe(vieja) ? vieja : null);
-    return {
-        ...vieja,
-        ms: deGolpe ? deGolpe.ms : Math.min(vieja.ms, nueva.ms),
-        paredMs: deGolpe ? deGolpe.paredMs : (vieja.paredMs || nueva.paredMs),
-        frase: limpio(nueva.frase) || limpio(vieja.frase),
-        // La nota del editor sobrevive a la fusión, y va explícita aunque el
-        // `...vieja` de arriba ya la traiga: la que se comenta es siempre una
-        // que está en la lista —o sea `vieja`—, y la que llega detrás es una
-        // detección, que nunca trae nota. Escribirlo deja dicho cuál gana el
-        // día que dos con nota se junten, y que perderla no es una opción: es
-        // lo único de la claqueta que alguien escribió a mano.
-        comentario: limpio(vieja.comentario) || limpio(nueva.comentario),
-        confirmada: Boolean(vieja.confirmada || nueva.confirmada),
-        // Los dos, separados por coma, porque saberlo cambia cuánto se le cree:
-        // una claqueta que solo vio el editor no tiene aplauso con el que
-        // alinear la onda, y una que solo oyó la voz tampoco.
-        origen: vieja.origen === nueva.origen
-            ? vieja.origen
-            : [...new Set(vieja.origen.split(',').concat(nueva.origen))].sort().join(',')
-    };
-}
-
-/**
- * Anota una claqueta, fundiéndola con la que ya esté a menos de cinco segundos.
- *
- * Devuelve la que quedó en la lista y si fue nueva.
- *
- * La lista se mantiene ORDENADA por `ms` y se renumera después de cada cambio:
- * `n` es el número con el que la claqueta se nombra en el XML y en la pantalla,
- * y tiene que decir el orden en que sonaron, no el orden en que la app se enteró.
- * Un golpe cuyo texto tarda tres segundos en leerse puede entrar después de uno
- * posterior.
- *
- * @param {object} estado el de la sesión, se muta
- * @param {object} claqueta { ms, paredMs, frase, comentario, confirmada, origen }
- * @returns {{claqueta: object, nueva: boolean}}
- */
-function anotarClaqueta(estado, claqueta) {
-    const lista = estado.claquetas || (estado.claquetas = []);
-    const entra = {
-        ms: Number(claqueta.ms),
-        paredMs: claqueta.paredMs != null ? Number(claqueta.paredMs) : null,
-        frase: limpio(claqueta.frase),
-        comentario: limpio(claqueta.comentario),
-        confirmada: Boolean(claqueta.confirmada),
-        origen: claqueta.origen || 'editor'
-    };
-
-    const cerca = lista.find(c => mismaClaqueta(c, entra));
-    if (cerca) {
-        Object.assign(cerca, fundir(cerca, entra));
-        renumerar(estado);
-        return { claqueta: cerca, nueva: false };
-    }
-
-    entra.n = ++estado.proximaClaqueta;
-    lista.push(entra);
-    renumerar(estado);
-    return { claqueta: entra, nueva: true };
-}
-
-/**
- * Si dos entradas son la misma claqueta: a menos de cinco segundos una de otra.
- *
- * Es la regla con que `anotarClaqueta` funde lo que llega con lo que ya está.
- */
-function mismaClaqueta(a, b) {
-    return Boolean(a) && Boolean(b) && Math.abs(Number(a.ms) - Number(b.ms)) < MISMA_CLAQUETA_MS;
-}
-
-/** Las claquetas por orden de reloj, con su número puesto de nuevo. */
-function renumerar(estado) {
-    const lista = estado.claquetas || [];
-    lista.sort((a, b) => a.ms - b.ms);
-    lista.forEach((c, i) => { c.n = i + 1; });
-    estado.proximaClaqueta = lista.length;
-    return lista;
-}
-
-/**
- * La claqueta de referencia: la primera, que es contra la que el editor
- * correlaciona los archivos de Premiere.
- *
- * Es una función y no un campo guardado porque puede cambiar: un golpe que se
- * lee tarde y cae antes que todas pasa a ser la referencia, y un campo escrito
- * al arrancar diría lo de antes.
- */
-function claquetaDeReferencia(estado) {
-    return (estado.claquetas || [])[0] || null;
-}
-
 /** Cuántas de las últimas palabras oídas se recuerdan para encontrarlas en la pasada siguiente. */
 const RECIENTES = 12;
 
@@ -2022,12 +1877,6 @@ module.exports = {
     MARGEN_DE_SUELTAS_SEC,
     FRESCURA_MAX_SEC,
     finDeToma,
-    anotarClaqueta,
-    mismaClaqueta,
-    renumerar,
-    claquetaDeReferencia,
-    fundir,
-    MISMA_CLAQUETA_MS,
     SILENCIO_TRAS_PAUSA_SEC,
     vistaHeredada,
     vistaDeLaProxima,

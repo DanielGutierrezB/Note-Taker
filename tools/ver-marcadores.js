@@ -74,16 +74,11 @@ function inventada(wav, duracionSec) {
 
     // Las tres claquetas que hay que poder distinguir de un vistazo: la
     // referencia, una sin confirmar y una puesta a mano.
-    vivo.anotarClaqueta(estado, {
-        ms: seg(12), paredMs: seg(12), frase: 'Claqueta 1, clase 1',
-        confirmada: true, origen: 'golpe,voz'
-    });
-    vivo.anotarClaqueta(estado, {
-        ms: seg(420), paredMs: seg(420), frase: '', confirmada: false, origen: 'golpe'
-    });
-    vivo.anotarClaqueta(estado, {
-        ms: seg(900), paredMs: seg(900), frase: '', confirmada: true, origen: 'editor'
-    });
+    estado.claquetas.push(
+        { n: 1, ms: seg(12), paredMs: seg(12), frase: 'Claqueta 1, clase 1', comentario: '', confirmada: true, origen: 'golpe,voz' },
+        { n: 2, ms: seg(420), paredMs: seg(420), frase: '', comentario: '', confirmada: false, origen: 'golpe' },
+        { n: 3, ms: seg(900), paredMs: seg(900), frase: '', comentario: '', confirmada: true, origen: 'editor' }
+    );
 
     // Una toma de cada vista, para ver los cinco colores de marcador juntos, y
     // una descartada que NO tiene que aparecer.
