@@ -33,7 +33,7 @@ export const SE_HACEN = [
     'preparar', 'preparar-clase-repetida', 'preparar-sin-audio', 'preparar-microfono',
     'preparar-zoom-falso', 'disco-lleno',
     'sin-whisper', 'sin-zoom', 'faltan-modelos', 'update',
-    'en-vivo', 'desplegada', 'toma-abierta', 'releyendo',
+    'en-vivo', 'desplegada', 'toma-abierta', 'releyendo', 'muchas-clases',
     'sin-audio', 'terminada', 'notas-de-antes', 'foto', 'foto-cien',
     'prproj', 'prproj-lleno', 'prproj-listo',
     'ajustes', 'diagnostico', 'iconos'
@@ -87,8 +87,16 @@ const PANTALLA_FALSA = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
 /* ─── El puente ───────────────────────────────────────────────────────── */
 
 const avisos = [];
+/** Las recientes, como las contesta el motor (`grabar-carpetas`). */
+const RECIENTES = [
+    ['/Volumes/Rodaje/Curso de automatizaciones', 3, '2026-09-28T09:02:11'],
+    ['/Users/editor/Movies/Render/Curso Canva', 2, '2026-11-10T08:23:38'],
+    ['/Users/editor/Movies/CUR/2610_ia-abogados/Material/LUISA_curso-ia-abogados', 6, '2026-11-07T10:00:00'],
+    ['/Volumes/P_CONF_2/2610_NemoClaw_Course/note taker uli', 15, '2026-10-22T19:01:08']
+];
+
 let ajustes = { ...AJUSTES };
-if (hay('sin-carpeta')) ajustes = { ...ajustes, carpeta: null, carpetas: [] };
+if (hay('sin-carpeta')) ajustes = { ...ajustes, carpeta: null, carpetas: RECIENTES.map(r => r[0]) };
 if (hay('preparar-microfono')) ajustes = { ...ajustes, dispositivo: 'MacBook Pro Microphone (Built-in)' };
 if (hay('preparar-zoom-falso')) ajustes = { ...ajustes, dispositivo: 'ZoomAudioDevice (Virtual)' };
 if (hay('preparar-sin-audio') || hay('sin-zoom')) ajustes = { ...ajustes, dispositivo: null };
@@ -133,8 +141,23 @@ const doctor = hay('sin-whisper')
 /** Lo que hay grabado en una carpeta. */
 function sesiones() {
     if (hay('vacio') || hay('sin-carpeta')) return [];
+    // Un curso entero, para ver la lista compacta: es como se ve con 80.
+    if (hay('muchas-clases')) {
+        return Array.from({ length: 24 }, (_x, i) => {
+            const n = 24 - i;
+            const cero = new Date(2026, 8, 1 + n, 9, n % 60).getTime();
+            const estado = n === 20 ? 'abierta' : (n % 7 === 3 ? 'sin releer' : 'terminada');
+            return {
+                secuencia: `${String(n).padStart(2, '0')}_curso-de-automatizaciones_2026-09-${String(1 + n).padStart(2, '0')}_09-${String(n % 60).padStart(2, '0')}-00`,
+                curso: 'Curso de automatizaciones', numero: n, vez: 1, ceroMs: cero,
+                archivos: { xml: `/x/${n}.xml`, json: `/x/${n}_notas-en-vivo.json` },
+                resumen: { tomas: 8 + (n * 7) % 11, descartadas: 0, segundos: 5000 + (n * 613) % 5200, sinReleer: estado === 'sin releer' ? 2 : 0, estado }
+            };
+        });
+    }
     return SESIONES;
 }
+
 
 window.nt = {
     appInfo: async () => ({ version: '0.1.0', arch: 'arm64', electron: '43.7.5', platform: 'darwin' }),
@@ -236,6 +259,11 @@ window.nt = {
         : { escribible: true, libre: 300e9, minutos: 52000 }),
     grabarCambiarEntrada: async como => ({ ok: true, toma: null, estado: { ...laSesion(), dispositivo: como.dispositivo } }),
     grabarListar: async () => sesiones(),
+    grabarCarpetas: async dirs => (dirs || []).map(ruta => {
+        const r = RECIENTES.find(x => x[0] === ruta);
+        return { ruta, nombre: ruta.split('/').pop(), existe: true, clases: r ? r[1] : sesiones().length,
+            ultimaMs: r ? new Date(r[2]).getTime() : null };
+    }),
     grabarRenombrar: async () => ({ ok: true, secuencia: 'renombrada', movida: true, audios: 1 }),
 
     /**
@@ -266,7 +294,8 @@ window.nt = {
             numero,
             vez,
             cuandoMs: Date.now(),
-            nombre: `${dosDigitos}_${vez > 1 ? `V${vez}_` : ''}${curso}_2026-09-29_10-15-00`
+            nombre: `${dosDigitos}_${vez > 1 ? `V${vez}_` : ''}${curso}_2026-09-29_10-15-00`,
+            corto: `${dosDigitos}_${vez > 1 ? `V${vez}_` : ''}${curso}`
         };
     },
     grabarBorrar: async () => ({ ok: true, secuencia: 'borrada', audios: 1 }),

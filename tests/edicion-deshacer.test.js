@@ -220,7 +220,9 @@ module.exports = function (t) {
     t.test('la fila de la lista se apaga mientras tanto', () => {
         const js = leer('src', 'js', 'pantalla-sesiones.js');
         t.ok(/const ocupada = regenerandoAhora\.has\(s\.archivos\.json\);/.test(js));
-        t.ok(/data-hace="borrar" \$\{apagado\}/.test(js), 'borrar incluido');
+        t.ok(/data-hace="notas" \$\{d\.apagado\}/.test(js), 'abrir las notas también');
+        t.ok(/data-hace="\$\{a\[0\]\}" \$\{ocupada && a\[0\] !== 'xml' \? 'disabled' : ''\}/.test(js),
+            'en el menú, todo menos mostrarla en Finder (borrar incluido)');
     });
 
     t.group('relecturas · lo releído queda en el archivo de notas');

@@ -166,20 +166,20 @@ export function deSesionGuardada(resumen) {
     if (e === 'abierta') {
         return {
             clave: 'sin cerrar',
-            palabra: 'abierta',
-            porque: 'Esta sesión no se cerró: la app se fue antes de apretar Terminar. ' +
-                'Se puede reanudar y seguir grabando en el mismo XML.'
+            palabra: 'quedó abierta',
+            porque: 'Esta clase no se cerró: la app se fue antes de apretar Terminar. ' +
+                '«Reanudar» sigue grabando en el mismo XML.'
         };
     }
     if (e === 'sin releer') {
         return {
             clave: 'sin releer',
-            palabra: 'sin releer',
-            porque: `${resumen.sinReleer} toma(s) se quedaron con el texto del ciclo ` +
-                'rápido. «Regenerar» las vuelve a leer.'
+            palabra: 'falta releer',
+            porque: `${resumen.sinReleer} toma(s) se quedaron con el texto rápido del vivo. ` +
+                '«Releer todo con el modelo grande», en el menú ···, las vuelve a leer.'
         };
     }
-    return { clave: 'terminada', palabra: 'terminada' };
+    return { clave: 'terminada', palabra: 'lista', porque: 'Terminada y releída con el modelo grande: el XML está listo para Premiere.' };
 }
 
 /**

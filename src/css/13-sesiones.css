@@ -1,0 +1,485 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   13. SESIONES: el curso y sus clases
+
+   Sin tarjetas: el curso es el título de la pantalla, y lo que se hace va
+   arriba de la lista. La lista tiene dos vistas —cómoda y compacta— y la
+   compacta es una fila de 34 px por clase, en columnas, para cursos largos.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.ses {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-5);
+}
+
+.btn.btn-grande {
+  min-height: 38px;
+  padding: 0 var(--sp-6);
+  font-size: 14px;
+}
+
+/* Elegir el curso: un botón, y las recientes debajo. */
+.ses-elegir {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.ses-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-6) 0;
+  text-align: center;
+}
+
+.ses-hero-icono {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: var(--accent);
+  background: var(--accent-14);
+}
+
+.ses-hero-titulo {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.ses-hero-dice {
+  margin: 0 0 var(--sp-2);
+  max-width: 46ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.ses-recientes-titulo {
+  margin: var(--sp-3) 0 var(--sp-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.ses-recientes {
+  padding: var(--sp-1);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.ses-reciente {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.ses-reciente + .ses-reciente {
+  border-top: 1px solid var(--hairline);
+}
+
+.ses-reciente:hover:not(:disabled),
+.ses-reciente:focus-visible {
+  background: var(--layer-hover);
+}
+
+.ses-reciente:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ses-reciente-icono {
+  color: var(--text-muted);
+}
+
+.ses-reciente-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ses-reciente-nombre {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ses-reciente-ruta {
+  overflow: hidden;
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ses-reciente-dato {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* El curso, como título. */
+.ses-cabeza {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.ses-sobre {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ses-titulo {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.ses-ruta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ses-ruta code {
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+}
+
+.ses-barra {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-5) 0 var(--sp-4);
+}
+
+.ses-barra code {
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  color: var(--text-secondary);
+}
+
+/* «Crear proyecto»: con el logo de Premiere, y con borde y texto claros para
+   que se lea como un botón al lado del primario. */
+.btn.btn-premiere {
+  gap: var(--sp-2);
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-field);
+}
+
+.btn.btn-premiere:hover:not(:disabled) {
+  background: var(--bg-surface-hover);
+}
+
+.logo-premiere {
+  width: 21px;
+  height: 20px;
+  flex: none;
+}
+
+.ses-lista-cabeza {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.ses-lista-titulo {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Un interruptor de dos: el elegido, relleno. */
+.alternar {
+  display: inline-flex;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.alternar button {
+  padding: 3px var(--sp-3);
+  font-size: 11px;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.alternar button[aria-pressed='true'] {
+  color: var(--text-primary);
+  background: var(--layer-press);
+}
+
+/* Cómoda: una fila alta por clase. */
+.ses-lista.es-comoda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.ses-fila {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.ses-num {
+  font-size: 19px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.ses-fila-texto {
+  min-width: 0;
+}
+
+.ses-fila-titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ses-fila-meta {
+  display: flex;
+  gap: var(--sp-4);
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.ses-archivo {
+  min-width: 0;
+  overflow: hidden;
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ses-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
+.ses-mas {
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+/* Compacta: una tabla de 34 px por fila. */
+.ses-lista.es-compacta {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.ses-tabla-cabeza,
+.ses-fila-c {
+  display: grid;
+  grid-template-columns: 52px 104px 84px 56px 120px minmax(0, 1fr) 210px;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-4);
+  font-size: 12px;
+}
+
+.ses-tabla-cabeza {
+  height: 28px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.ses-fila-c {
+  min-height: 34px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.ses-fila-c:last-child {
+  border-bottom: 0;
+}
+
+.ses-fila-c:hover,
+.ses-fila-c:focus-within {
+  background: var(--layer-hover);
+}
+
+.ses-num-c {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ses-num-c small {
+  font-size: 10px;
+  color: var(--warn);
+}
+
+.ses-fila-c .ses-acciones .btn {
+  min-height: 24px;
+  padding: 0 var(--sp-3);
+  font-size: 12px;
+}
+
+/* En la compacta las acciones aparecen al pasar por la fila; «Reanudar», que
+   es lo que hay que ver de una clase que quedó abierta, se ve siempre. */
+.ses-fila-c .ses-acciones > * {
+  visibility: hidden;
+}
+
+.ses-fila-c:hover .ses-acciones > *,
+.ses-fila-c:focus-within .ses-acciones > *,
+.ses-fila-c .ses-acciones > [data-hace='reanudar'],
+.ses-fila-c .ses-acciones > [aria-expanded='true'] {
+  visibility: visible;
+}
+
+.ses-renombre-c {
+  grid-column: 2 / 7;
+}
+
+/* Sin clases: la acción en el centro. */
+.ses-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 56px 0;
+  text-align: center;
+}
+
+.ses-vacio-titulo {
+  margin-top: var(--sp-2);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ses-vacio-dice {
+  max-width: 48ch;
+  margin-bottom: var(--sp-2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.ses-proxima {
+  margin-top: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+}
+
+.ses-proxima code {
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  color: var(--text-primary);
+}
+
+/* El menú «···». */
+#vista-sesiones {
+  position: relative;
+}
+
+.ses-menu {
+  position: absolute;
+  z-index: 30;
+  width: 300px;
+  padding: var(--sp-2);
+  background: var(--bg-overlay);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+}
+
+.ses-menu-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  text-align: left;
+  color: var(--text-primary);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.ses-menu-item:hover:not(:disabled),
+.ses-menu-item:focus-visible {
+  background: var(--layer-hover);
+}
+
+.ses-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ses-menu-item b {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ses-menu-item span span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ses-menu-icono {
+  color: var(--text-secondary);
+}
+
+.ses-menu-item.es-peligro b,
+.ses-menu-item.es-peligro .ses-menu-icono {
+  color: var(--error);
+}
+
+.ses-menu-sep {
+  height: 1px;
+  margin: var(--sp-2) var(--sp-1);
+  background: var(--hairline);
+}
+
+.ses-hero-icono svg { width: 22px; height: 22px; }
+.ses-reciente-icono svg,
+.ses-menu-icono svg { width: 16px; height: 16px; }

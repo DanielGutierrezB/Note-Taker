@@ -39,48 +39,61 @@
        su acción principal es empezar una clase. -->
   <section class="vista es-activa" id="vista-sesiones">
     <div class="scroll">
-      <div class="seccion">
-        <div class="seccion-titulo">
-          <span>Carpeta del curso</span>
-        </div>
-        <div class="tarjeta">
-          <div class="tarjeta-cabeza">
-            <span id="carpeta-ruta" class="fila-nombre">Todavía no elegiste ninguna</span>
-            <span class="crece"></span>
-            <button id="btn-abrir-carpeta" class="btn" type="button" hidden
-                    title="Abrir esta carpeta en el Finder">Mostrar en Finder</button>
-            <button id="btn-elegir-carpeta" class="btn" type="button"
-                    title="Elegir en qué carpeta del disco van el XML, el audio y los datos de este curso">Elegir carpeta…</button>
+      <div class="ses">
+        <!-- Sin carpeta, o cambiando de curso: un solo botón para elegirla y,
+             debajo, las que se usaron hace poco. Una carpeta es un curso. -->
+        <div class="ses-elegir" id="ses-elegir" hidden>
+          <div class="ses-hero">
+            <div class="ses-hero-icono" id="ses-hero-icono"></div>
+            <h1 class="ses-hero-titulo">¿En qué curso vas a grabar?</h1>
+            <p class="ses-hero-dice">Cada curso es una carpeta: ahí quedan el XML para Premiere, el audio y las notas de cada clase.</p>
+            <button id="btn-elegir-carpeta" class="btn btn-primario btn-grande" type="button"
+                    title="Elegir en qué carpeta del disco van el XML, el audio y los datos de este curso">Elegir carpeta del curso…</button>
+            <button id="btn-cancelar-elegir" class="btn-enlace" type="button" hidden>Volver al curso</button>
           </div>
-          <!-- Acá hubo un campo para ponerle nombre al curso. No hay nada que
-               escribir: el curso ES esta carpeta, así que su nombre sale del de
-               ella. Lo que queda es el nombre completo que va a tener la clase
-               siguiente, que es lo que de verdad se quería ver al escribirlo. -->
-          <div class="tarjeta-cuerpo">
-            <span class="v3">La clase que sigue se va a llamar
-              <code id="curso-ejemplo">—</code></span>
-          </div>
+          <div id="ses-recientes"></div>
         </div>
-        <p class="v3" style="margin-top:8px">
-          Adentro se crean <code>xml/</code> con el archivo que importás en Premiere,
-          <code>xml/Audio/</code> con el WAV y <code>xml/Datos/</code> con lo que la app
-          se guarda para sí misma.
-        </p>
-      </div>
 
-      <div class="seccion">
-        <div class="seccion-titulo">
-          <span>Sesiones</span>
-          <span id="sesiones-cuantas" class="v3"></span>
-          <span class="crece"></span>
-          <button id="btn-prproj" class="btn" type="button"
-                  title="Un proyecto de Premiere con todas las clases de esta carpeta: las capturas para sincronizar y cada clase precortada">Generar .prproj</button>
-          <button id="btn-nueva" class="btn btn-primario" type="button"
-                  title="Empezar una clase nueva en esta carpeta: primero las comprobaciones y de ahí a grabar">Nueva sesión</button>
+        <!-- Con carpeta: el curso es el título, y la acción principal está
+             arriba de la lista. Sin clases, «Nueva sesión» va al centro. -->
+        <div id="ses-curso" hidden>
+          <div class="ses-cabeza">
+            <span class="ses-sobre">Curso</span>
+            <h1 class="ses-titulo" id="curso-titulo"></h1>
+            <div class="ses-ruta">
+              <code id="carpeta-ruta"></code>
+              <button id="btn-abrir-carpeta" class="btn-enlace" type="button"
+                      title="Abrir esta carpeta en el Finder">Mostrar en Finder</button>
+              <button id="btn-cambiar-carpeta" class="btn-enlace" type="button"
+                      title="Elegir otra carpeta, o una de las recientes">Cambiar de curso</button>
+            </div>
+          </div>
+          <div class="ses-barra" id="ses-barra">
+            <button id="btn-nueva" class="btn btn-primario" type="button"
+                    title="Empezar una clase nueva en este curso: primero se elige el audio y se revisa el nombre">Nueva sesión</button>
+            <span class="v3">La próxima es la <code id="curso-ejemplo">—</code></span>
+            <span class="crece"></span>
+            <button id="btn-prproj" class="btn btn-premiere" type="button"
+                    title="Un proyecto de Premiere con todas las clases de este curso: las capturas para sincronizar y cada clase precortada">
+              <svg class="logo-premiere" viewBox="0 0 24 23" aria-hidden="true"><rect width="24" height="23" rx="5.4" fill="#00005b"/><text x="12" y="16.4" text-anchor="middle" font-size="12.5" font-weight="700" fill="#9999ff" font-family="-apple-system, Helvetica, Arial, sans-serif">Pr</text></svg>
+              Crear proyecto</button>
+          </div>
+          <div class="ses-lista-cabeza" id="ses-lista-cabeza">
+            <span class="ses-lista-titulo">Clases</span>
+            <span id="sesiones-cuantas" class="v3"></span>
+            <span class="crece"></span>
+            <span class="v3">Vista</span>
+            <span class="alternar" role="group" aria-label="Cómo se ve la lista">
+              <button type="button" data-vista-lista="compacta">Compacta</button>
+              <button type="button" data-vista-lista="comoda">Cómoda</button>
+            </span>
+          </div>
+          <div id="lista-sesiones" class="ses-lista"></div>
         </div>
-        <div id="lista-sesiones" class="lista"></div>
       </div>
     </div>
+    <!-- El menú «···» de una clase: uno solo, que se pone al lado de la fila. -->
+    <div class="ses-menu" id="ses-menu" role="menu" hidden></div>
   </section>
 
   <!-- ── 2 · Preparar ─────────────────────────────────────────────────

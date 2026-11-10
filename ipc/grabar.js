@@ -12,6 +12,9 @@
  * con lo que es de la app entera: la ventana, los diálogos y los ajustes.
  */
 
+const fs = require('fs');
+const path = require('path');
+
 const grabacion = require('../engine/grabacion');
 const nombreDeSesion = require('../engine/nombre-de-sesion');
 const audioApp = require('../engine/audio-app');
@@ -241,6 +244,23 @@ function registrar({ ipcMain, app, send, anotar }) {
     ipcMain.handle('grabar-listar', (event, dirs) => grabacion.listar(dirs));
 
     /**
+     * Las carpetas recientes, para elegir una: su nombre, si sigue en el disco,
+     * cuántas clases tiene y cuándo se grabó la última. El nombre lo dice el
+     * motor, igual que el curso (`nombre-de-sesion.cursoPorDefecto`).
+     */
+    ipcMain.handle('grabar-carpetas', (event, dirs) => (Array.isArray(dirs) ? dirs : []).map(ruta => {
+        const existe = fs.existsSync(ruta);
+        const clases = existe ? grabacion.listar([ruta]) : [];
+        return {
+            ruta,
+            nombre: path.basename(ruta),
+            existe,
+            clases: clases.length,
+            ultimaMs: clases.reduce((m, s) => Math.max(m, s.ceroMs || 0), 0) || null
+        };
+    }));
+
+    /**
      * Cómo se llamaría la clase siguiente en esa carpeta.
      *
      * Contesta el nombre ARMADO y no solo el número, y por eso existe: la
@@ -291,11 +311,16 @@ function registrar({ ipcMain, app, send, anotar }) {
         // es lo que impide que el nombre que se ve de ejemplo y el que se graba
         // se separen.
         const curso = nombreDeSesion.cursoPorDefecto(dir);
+        const nombre = nombreDeSesion.armar({ curso, cuandoMs, numero, vez });
         return {
             numero,
             vez,
             cuandoMs,
-            nombre: nombreDeSesion.armar({ curso, cuandoMs, numero, vez })
+            nombre,
+            // El número y el curso, sin la fecha ni la hora: lo que se le
+            // muestra a la persona antes de grabar («la primera va a ser la
+            // 01_pruebas»). La fecha la pone el motor al arrancar.
+            corto: nombre.replace(/_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/, '')
         };
     });
 

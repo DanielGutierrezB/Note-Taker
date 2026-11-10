@@ -1,13 +1,21 @@
 /**
- * pantalla-sesiones.js — La carpeta del curso y lo que hay adentro.
+ * pantalla-sesiones.js — El curso y sus clases.
  *
  * Es la primera pantalla y la que más se ve la primera vez que alguien abre la
- * app, así que su trabajo no es listar: es decir qué hacer. Sin carpeta
- * elegida, lo único encendido es «Elegir carpeta…»; con carpeta y sin sesiones,
- * el vacío dice qué va a pasar cuando se apriete «Nueva sesión».
+ * app, así que su trabajo no es listar: es decir qué hacer.
+ *
+ *   · Sin carpeta —o cambiando de curso—, un solo botón para elegirla, y debajo
+ *     las que se usaron hace poco, con su nombre y su ruta.
+ *   · Con carpeta, el curso es el título. Sin clases, «Nueva sesión» va al
+ *     centro; con clases, va arriba de la lista, y «Crear proyecto» al borde
+ *     derecho.
+ *   · La lista tiene dos vistas: cómoda, con filas altas, y compacta, una fila
+ *     por clase en columnas, que es la que se pone sola con muchas clases (un
+ *     curso llega a 80). Lo que se hace con una clase está en el menú «···»,
+ *     cada cosa con su nombre y lo que hace.
  */
 
-import { $, esc, avisar, verVista } from './chrome.js';
+import { $, $$, esc, avisar, verVista, pref } from './chrome.js';
 import { icono } from './iconos.js';
 import { duracion, cuando } from './formato.js';
 import * as estados from './estados.js';
@@ -17,25 +25,50 @@ let app = null;
 let sesiones = [];
 /** El sidecar de la sesión cuyo nombre se está editando, o null. */
 let renombrando = null;
+/** Si se está eligiendo otro curso con uno ya elegido («Cambiar de curso»). */
+let eligiendo = false;
+
+/** Desde cuántas clases la lista pasa sola a la vista compacta. */
+const PARA_COMPACTA = 8;
 
 export function conectar(contexto) {
     app = contexto;
 
+    $('#ses-hero-icono').innerHTML = icono('carpeta');
     $('#btn-elegir-carpeta').addEventListener('click', elegirCarpeta);
+    $('#btn-cancelar-elegir').addEventListener('click', () => { eligiendo = false; pintar(); });
+    $('#btn-cambiar-carpeta').addEventListener('click', () => { eligiendo = true; pintar(); });
     $('#btn-abrir-carpeta').addEventListener('click', () => {
         if (app.ajustes.carpeta) window.nt.reveal(app.ajustes.carpeta);
     });
-    $('#btn-nueva').addEventListener('click', () => {
-        if (!app.ajustes.carpeta) {
-            avisar('Primero elegí la carpeta donde van a caer las notas.');
-            return;
-        }
-        app.irAPreparar();
+    $('#btn-nueva').addEventListener('click', nueva);
+    $('#ses-recientes').addEventListener('click', e => {
+        const fila = e.target.closest('[data-carpeta]');
+        if (fila && !fila.disabled) usarCarpeta(fila.dataset.carpeta);
     });
+    for (const b of $$('[data-vista-lista]')) {
+        b.addEventListener('click', () => {
+            pref.guardar('sesiones.vista', b.dataset.vistaLista);
+            pintarLista();
+        });
+    }
     $('#lista-sesiones').addEventListener('click', alClic);
     $('#lista-sesiones').addEventListener('keydown', alTecla);
+    $('#ses-menu').addEventListener('click', e => { cerrarMenu(); alClic(e); });
+    document.addEventListener('click', e => {
+        if (!e.target.closest('#ses-menu, [data-hace="menu"]')) cerrarMenu();
+    }, true);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarMenu(); });
     $('#btn-prproj').addEventListener('click', () => panelPrproj.abrir(app.ajustes.carpeta));
     panelPrproj.conectar();
+}
+
+function nueva() {
+    if (!app.ajustes.carpeta) {
+        avisar('Primero elegí la carpeta del curso.');
+        return;
+    }
+    app.irAPreparar();
 }
 
 async function elegirCarpeta() {
@@ -43,25 +76,86 @@ async function elegirCarpeta() {
         titulo: 'Elegí la carpeta del curso, donde van a caer las notas',
         boton: 'Usar esta carpeta'
     });
-    if (!ruta) return;
+    if (ruta) await usarCarpeta(ruta);
+}
+
+async function usarCarpeta(ruta) {
     app.ajustes = await window.nt.carpetaRecordar(ruta);
+    eligiendo = false;
     await pintar();
 }
 
 export async function pintar() {
+    cerrarMenu();
     const carpeta = app.ajustes.carpeta;
-    $('#carpeta-ruta').textContent = carpeta || 'Todavía no elegiste ninguna';
-    $('#btn-abrir-carpeta').hidden = !carpeta;
-    $('#btn-nueva').disabled = !carpeta;
-    await pintarLaQueSigue(carpeta);
+    const elegir = !carpeta || eligiendo;
+    $('#ses-elegir').hidden = !elegir;
+    $('#ses-curso').hidden = elegir;
+    $('#btn-cancelar-elegir').hidden = !carpeta;
+    if (elegir) return pintarRecientes();
 
-    sesiones = carpeta ? await window.nt.grabarListar([carpeta]) : [];
-    $('#sesiones-cuantas').textContent = sesiones.length
-        ? `${sesiones.length} en esta carpeta` : '';
-    // Sin clases no hay nada que precortar.
-    $('#btn-prproj').hidden = !sesiones.length;
+    const [info] = await window.nt.grabarCarpetas([carpeta]);
+    $('#curso-titulo').textContent = (info && info.nombre) || carpeta;
+    $('#carpeta-ruta').textContent = carpeta;
+    const siguiente = await window.nt.grabarNombreSiguiente(carpeta);
+    $('#curso-ejemplo').textContent = (siguiente && siguiente.corto) || '—';
+
+    sesiones = await window.nt.grabarListar([carpeta]);
+    const hay = sesiones.length > 0;
+    $('#sesiones-cuantas').textContent = `${sesiones.length} en este curso`;
+    $('#ses-barra').hidden = !hay;
+    $('#ses-lista-cabeza').hidden = !hay;
     if (renombrando && !sesiones.some(s => s.archivos.json === renombrando)) renombrando = null;
-    $('#lista-sesiones').innerHTML = sesiones.length ? sesiones.map(fila).join('') : vacio(carpeta);
+    pintarLista(siguiente);
+}
+
+/**
+ * Las carpetas que se usaron hace poco: el nombre en grande y la ruta en chico,
+ * para poder ir a buscarla. Una que ya no está en el disco se ve, apagada.
+ */
+async function pintarRecientes() {
+    const caja = $('#ses-recientes');
+    const rutas = app.ajustes.carpetas || [];
+    if (!rutas.length) {
+        caja.innerHTML = '';
+        return;
+    }
+    const lista = await window.nt.grabarCarpetas(rutas);
+    caja.innerHTML = `<div class="ses-recientes-titulo">Abiertas hace poco</div>
+      <div class="ses-recientes">${lista.map(c => `
+        <button class="ses-reciente" type="button" data-carpeta="${esc(c.ruta)}" ${c.existe ? '' : 'disabled'}
+                title="${esc(c.existe ? `Abrir ${c.ruta}` : `${c.ruta} no está: puede ser un disco desconectado`)}">
+          <span class="ses-reciente-icono">${icono('carpeta')}</span>
+          <span class="ses-reciente-texto">
+            <span class="ses-reciente-nombre">${esc(c.nombre)}${c.ruta === app.ajustes.carpeta ? ' <span class="v3">· el actual</span>' : ''}</span>
+            <span class="ses-reciente-ruta">${esc(c.ruta)}</span>
+          </span>
+          <span class="ses-reciente-dato">${!c.existe ? 'no está en el disco'
+            : `${c.ultimaMs ? `${esc(cuando(c.ultimaMs))} · ` : ''}${c.clases} clase${c.clases === 1 ? '' : 's'}`}</span>
+        </button>`).join('')}</div>`;
+}
+
+/** Cómoda o compacta: la elegida a mano, o la que toca por cuántas clases hay. */
+function vistaDeLaLista() {
+    const elegida = pref.leer('sesiones.vista', null);
+    if (elegida === 'compacta' || elegida === 'comoda') return elegida;
+    return sesiones.length > PARA_COMPACTA ? 'compacta' : 'comoda';
+}
+
+function pintarLista(siguiente) {
+    const lista = $('#lista-sesiones');
+    if (!sesiones.length) {
+        lista.className = 'ses-lista';
+        lista.innerHTML = vacio(siguiente);
+        return;
+    }
+    const vista = vistaDeLaLista();
+    for (const b of $$('[data-vista-lista]')) b.setAttribute('aria-pressed', String(b.dataset.vistaLista === vista));
+    lista.className = `ses-lista es-${vista}`;
+    lista.innerHTML = vista === 'compacta'
+        ? `<div class="ses-tabla-cabeza"><span>N.º</span><span>Fecha</span><span>Duración</span><span>Tomas</span>
+             <span>Estado</span><span>Archivo</span><span></span></div>${sesiones.map(filaCompacta).join('')}`
+        : sesiones.map(filaComoda).join('');
     const campo = $('#lista-sesiones [data-campo="numero"]');
     if (campo) {
         campo.focus();
@@ -69,83 +163,120 @@ export async function pintar() {
     }
 }
 
-/**
- * Cómo se va a llamar la clase siguiente, al lado de la carpeta.
- *
- * Acá había un campo para escribir el nombre del curso. Se fue: el curso es la
- * carpeta, así que no hay nada que escribir, y lo único que quedaba de ese campo
- * era esto —ver el nombre antes de que exista—.
- *
- * Lo arma el motor (`grabarNombreSiguiente`) y no esta pantalla. Es la única
- * forma de que la convención de nombres viva en un solo archivo, porque la
- * ventana no puede `require` el del motor; y es lo que hace que el número
- * automático se vea ANTES de grabar, que es cuando sirve para corregirlo.
- */
-async function pintarLaQueSigue(carpeta) {
-    const ejemplo = $('#curso-ejemplo');
-    if (!carpeta) {
-        ejemplo.textContent = '—';
-        return;
-    }
-    const r = await window.nt.grabarNombreSiguiente(carpeta);
-    ejemplo.textContent = r && r.nombre ? `${r.nombre}.xml` : '—';
+function vacio(siguiente) {
+    return `<div class="ses-vacio">
+        <div class="ses-hero-icono">${icono('claqueta')}</div>
+        <span class="ses-vacio-titulo">Todavía no grabaste ninguna clase en este curso</span>
+        <span class="ses-vacio-dice">Antes de grabar elegís el audio y la cámara y revisás el nombre de la clase.
+          Nada se graba hasta que aprietes Iniciar.</span>
+        <button class="btn btn-primario btn-grande" type="button" data-hace="nueva">Nueva sesión</button>
+        ${siguiente && siguiente.corto ? `<span class="ses-proxima">La primera va a ser la <code>${esc(siguiente.corto)}</code></span>` : ''}
+      </div>`;
 }
 
-function vacio(carpeta) {
-    if (!carpeta) {
-        return `<div class="vacio">${icono('carpeta')}
-            <span class="vacio-titulo">Elegí una carpeta para empezar</span>
-            <span class="v3">Una carpeta es un curso: todas las clases que grabes van a
-              caer ahí, y el editor abre siempre el mismo sitio.</span></div>`;
-    }
-    return `<div class="vacio">${icono('claqueta')}
-        <span class="vacio-titulo">Todavía no hay ninguna clase grabada acá</span>
-        <span class="v3">«Nueva sesión» abre la lista de verificación: la entrada de
-          audio, Whisper y el nombre. Nada se graba hasta que aprietes Iniciar.</span></div>`;
-}
-
-/**
- * Una fila de sesión: 32 px, con lo que se necesita para elegir cuál abrir y
- * nada más. El estado va en palabras, que es lo que distingue una sesión que
- * se puede reanudar de una que ya está lista.
- */
-function fila(s) {
+/** Lo que se repite en las dos vistas de una fila. */
+function datosDeFila(s) {
     const r = s.resumen || {};
     // Mientras se regenera, la fila entera se apaga: el motor tampoco deja
     // tocarla (`siEstaOcupada` en sesiones-grabadas.js), y un botón que se
     // aprieta y contesta que no es peor que uno apagado.
     const ocupada = regenerandoAhora.has(s.archivos.json);
-    const apagado = ocupada ? 'disabled' : '';
-    const est = ocupada ? { clave: 'releyendo', palabra: 'regenerando' } : estados.deSesionGuardada(r);
-    const puedeReanudar = r.estado === 'abierta';
-    const editando = renombrando === s.archivos.json;
-    return `<div class="fila guarda ${editando ? 'es-renombrando' : ''}" data-estado="${est.clave}" data-json="${esc(s.archivos.json)}"
-        ${est.porque && !editando ? `title="${esc(est.porque)}"` : ''}>
-      ${editando ? campoDeNombre(s) : `<span class="fila-nombre">${esc(s.secuencia)}</span>`}
-      <span class="fila-dato ses-dato">${esc(cuando(s.ceroMs))}</span>
-      <span class="fila-dato ses-dato">${esc(duracion(r.segundos))}</span>
-      <span class="fila-dato ses-dato">${r.tomas || 0} toma${r.tomas === 1 ? '' : 's'}</span>
-      <span class="pastilla" data-estado="${est.clave}">${esc(est.palabra)}</span>
-      <span class="crece"></span>
-      ${puedeReanudar
-        ? `<button class="btn" type="button" data-hace="reanudar" ${apagado}
-                   title="Seguir grabando esta clase, que quedó abierta: el audio y las tomas nuevas se suman a las que ya tiene">
-             Reanudar</button>` : ''}
-      <button class="btn" type="button" data-hace="notas" ${apagado}
-              title="Abrir las notas de esta clase en la misma vista de cuando se tomaron.
-No se graba nada: lo que ajustes se escribe en su XML en el acto.">Notas</button>
-      <button class="btn btn-tenue btn-ico" type="button" data-hace="xml"
-              title="Mostrar el XML en el Finder">${icono('finder')}</button>
-      <button class="btn btn-tenue btn-ico" type="button" data-hace="rehacer-xml" ${apagado}
-              title="Rehacer el XML con el formato de esta versión, sin releer el audio ni tocar las notas">${icono('xml')}</button>
-      <button class="btn btn-tenue btn-ico" type="button" data-hace="regenerar" ${apagado}
-              title="Volver a leer todas las tomas con el modelo grande">${icono('regenerar')}</button>
-      <button class="btn btn-tenue btn-ico" type="button" data-hace="renombrar" ${apagado}
-              aria-pressed="${editando}"
-              title="${editando ? 'Dejar el número como estaba' : 'Cambiarle el número de clase'}">${icono('renombrar')}</button>
-      <button class="btn btn-tenue btn-ico btn-peligro" type="button" data-hace="borrar" ${apagado}
-              title="Borrar el XML, el audio y los datos">${icono('borrar')}</button>
+    const est = ocupada
+        ? { clave: 'releyendo', palabra: 'releyendo', porque: 'Se está releyendo con el modelo grande.' }
+        : estados.deSesionGuardada(r);
+    return {
+        r,
+        ocupada,
+        apagado: ocupada ? 'disabled' : '',
+        est,
+        numero: s.numero != null ? String(s.numero).padStart(2, '0') : '—',
+        vez: s.vez > 1 ? s.vez : null,
+        editando: renombrando === s.archivos.json,
+        reanudar: r.estado === 'abierta'
+    };
+}
+
+const pastilla = est => `<span class="pastilla" data-estado="${est.clave}" ${est.porque ? `title="${esc(est.porque)}"` : ''}>${esc(est.palabra)}</span>`;
+
+function acciones(s, d) {
+    return `${d.reanudar
+        ? `<button class="btn btn-primario" type="button" data-hace="reanudar" ${d.apagado}
+                 title="Seguir grabando esta clase, que quedó abierta: el audio y las tomas nuevas se suman a las que ya tiene">Reanudar</button>` : ''}
+      <button class="btn" type="button" data-hace="notas" ${d.apagado}
+              title="Abrir las notas de esta clase en la misma vista de cuando se tomaron. No se graba nada: lo que ajustes se escribe en su XML en el acto.">Abrir notas</button>
+      <button class="btn btn-tenue btn-ico ses-mas" type="button" data-hace="menu" aria-haspopup="menu"
+              aria-label="Más acciones" title="Mostrar en Finder, volver a armar el XML, releer, cambiar el número o borrar">···</button>`;
+}
+
+/** Una fila alta: el número grande, la fecha y el estado, y el archivo en chico. */
+function filaComoda(s) {
+    const d = datosDeFila(s);
+    return `<div class="ses-fila" data-json="${esc(s.archivos.json)}" data-estado="${d.est.clave}">
+      <span class="ses-num">${d.numero}</span>
+      <div class="ses-fila-texto">
+        ${d.editando ? campoDeNombre(s) : `<div class="ses-fila-titulo">${esc(cuando(s.ceroMs))} ${pastilla(d.est)}
+          ${d.vez ? `<span class="v3">vez ${d.vez} (V${d.vez})</span>` : ''}</div>
+        <div class="ses-fila-meta"><span>${esc(duracion(d.r.segundos))}</span>
+          <span>${d.r.tomas || 0} toma${d.r.tomas === 1 ? '' : 's'}</span>
+          <span class="ses-archivo">${esc(s.secuencia)}</span></div>`}
+      </div>
+      <div class="ses-acciones">${acciones(s, d)}</div>
     </div>`;
+}
+
+/** Una fila de 34 px, en columnas: la que se usa con muchas clases. */
+function filaCompacta(s) {
+    const d = datosDeFila(s);
+    return `<div class="ses-fila-c ${d.reanudar ? 'es-abierta' : ''}" data-json="${esc(s.archivos.json)}" data-estado="${d.est.clave}">
+      <span class="ses-num-c">${d.numero}${d.vez ? `<small>V${d.vez}</small>` : ''}</span>
+      ${d.editando ? `<span class="ses-renombre-c">${campoDeNombre(s)}</span>` : `
+      <span>${esc(cuando(s.ceroMs))}</span>
+      <span>${esc(duracion(d.r.segundos))}</span>
+      <span>${d.r.tomas || 0}</span>
+      <span>${pastilla(d.est)}</span>
+      <span class="ses-archivo" title="${esc(s.secuencia)}">${esc(s.secuencia)}</span>`}
+      <span class="ses-acciones">${acciones(s, d)}</span>
+    </div>`;
+}
+
+/* ─── El menú «···» ───────────────────────────────────────────────────── */
+
+const ACCIONES_DEL_MENU = [
+    ['xml', 'finder', 'Mostrar en Finder', 'El XML de esta clase, en su carpeta.'],
+    ['rehacer-xml', 'xml', 'Volver a armar el XML', 'Con las notas como están. Para reimportar en Premiere.'],
+    ['regenerar', 'regenerar', 'Releer todo con el modelo grande', 'Rehace el texto de cada toma. Tarda unos minutos.'],
+    ['renombrar', 'renombrar', 'Cambiar el número de clase', 'Renombra el XML, el audio y las fotos.'],
+    null,
+    ['borrar', 'borrar', 'Borrar la clase', 'Pregunta antes de borrar el XML, el audio y las notas.']
+];
+
+function abrirMenu(boton, json) {
+    const menu = $('#ses-menu');
+    if (!menu.hidden && menu.dataset.json === json) return cerrarMenu();
+    const ocupada = regenerandoAhora.has(json);
+    menu.dataset.json = json;
+    menu.innerHTML = ACCIONES_DEL_MENU.map(a => (a ? `
+      <button class="ses-menu-item ${a[0] === 'borrar' ? 'es-peligro' : ''}" type="button" role="menuitem"
+              data-hace="${a[0]}" ${ocupada && a[0] !== 'xml' ? 'disabled' : ''}>
+        <span class="ses-menu-icono">${icono(a[1])}</span>
+        <span><b>${a[2]}</b><span>${a[3]}</span></span>
+      </button>` : '<div class="ses-menu-sep"></div>')).join('');
+    const caja = boton.getBoundingClientRect();
+    const vista = $('#vista-sesiones').getBoundingClientRect();
+    menu.hidden = false;
+    const alto = menu.offsetHeight;
+    const abajo = caja.bottom + 4 + alto < window.innerHeight;
+    menu.style.top = `${(abajo ? caja.bottom + 4 : caja.top - 4 - alto) - vista.top}px`;
+    menu.style.left = `${Math.max(8, caja.right - menu.offsetWidth - vista.left)}px`;
+    boton.setAttribute('aria-expanded', 'true');
+    menu.querySelector('button:not([disabled])').focus({ preventScroll: true });
+}
+
+function cerrarMenu() {
+    const menu = $('#ses-menu');
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    for (const b of $$('[data-hace="menu"][aria-expanded="true"]')) b.setAttribute('aria-expanded', 'false');
 }
 
 /**
@@ -202,6 +333,7 @@ function alTecla(e) {
 
 async function alClic(e) {
     const boton = e.target.closest('[data-hace]');
+    if (boton && boton.dataset.hace === 'nueva') return nueva();
     const fila = e.target.closest('[data-json]');
     if (!boton || !fila) return;
     const json = fila.dataset.json;
@@ -209,6 +341,9 @@ async function alClic(e) {
     if (!sesion) return;
 
     switch (boton.dataset.hace) {
+        case 'menu':
+            abrirMenu(boton, json);
+            break;
         case 'xml':
             window.nt.reveal(sesion.archivos.xml);
             break;
