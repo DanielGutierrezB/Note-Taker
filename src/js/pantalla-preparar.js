@@ -105,7 +105,9 @@ export function estadoDelAudio() {
 export async function escucharParaAjustes(otra) {
     if (audio.abriendo || (audio.abierto && !(otra && soloParaAjustes))) return;
     await releerEntradas();
-    const elegida = entradas.find(d => d.nombre === app.ajustes.dispositivo);
+    const guardada = app.ajustes.dispositivo;
+    const elegida = entradas.find(d => d.nombre === guardada)
+        || entradas.find(d => d.nombre === fuente.sinPrefijoDelSistema(guardada));
     if (!elegida) return;
     soloParaAjustes = true;
     await abrirEntrada(elegida.id);
@@ -184,7 +186,11 @@ async function entrar() {
     // encontrar entre seis micrófonos. No hace falta que ninguna app esté
     // abierta: el tap global graba lo que salga por los altavoces.
     if (!audio.abierto) {
-        const previo = entradas.find(d => d.nombre === app.ajustes.dispositivo);
+        // Una guardada como «Default - X», de antes de que esas no se ofrecieran,
+        // vuelve como el aparato X.
+        const guardada = app.ajustes.dispositivo;
+        const previo = entradas.find(d => d.nombre === guardada)
+            || entradas.find(d => d.nombre === fuente.sinPrefijoDelSistema(guardada));
         const delSistema = entradas.find(d => d.id === fuente.SISTEMA.id);
         const porDefecto = previo || delSistema || null;
         if (porDefecto) await abrirEntrada(porDefecto.id);

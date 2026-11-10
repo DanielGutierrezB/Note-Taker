@@ -20,6 +20,21 @@
 
 const CANAL_UNICO = 1;
 
+/**
+ * Las entradas que no son un aparato sino «la que macOS tenga elegida»: la de
+ * por defecto y la de comunicaciones. No se ofrecen, porque grabar con una de
+ * ellas es grabar con lo que el sistema decida a mitad de la clase: unos
+ * AirPods que se conectan pasan a ser la de por defecto, y la clase sigue con
+ * ellos —y con el corte de cambiar de aparato— sin que nadie lo haya pedido. El
+ * aparato de verdad está en la lista igual, con su nombre.
+ */
+const DEL_SISTEMA = new Set(['default', 'communications']);
+
+/** «Default - DJI Mic Mini» → «DJI Mic Mini»: el aparato que había detrás. */
+export function sinPrefijoDelSistema(nombre) {
+    return String(nombre || '').replace(/^(Default|Communications|Predeterminado|Por defecto|Comunicaciones) - /, '');
+}
+
 const estado = {
     contexto: null,
     stream: null,
@@ -64,7 +79,9 @@ export async function entradas() {
         }
         todas = await mirar();
     }
-    const lista = todas.map(d => ({ id: d.deviceId, nombre: d.label || 'Entrada sin nombre' }));
+    const lista = todas
+        .filter(d => !DEL_SISTEMA.has(d.deviceId))
+        .map(d => ({ id: d.deviceId, nombre: d.label || 'Entrada sin nombre' }));
     return { ok: true, lista };
 }
 

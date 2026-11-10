@@ -15,6 +15,8 @@
  */
 
 import * as oido from './oido.js';
+
+export const sinPrefijoDelSistema = oido.sinPrefijoDelSistema;
 import { avisar } from '../chrome.js';
 
 /**

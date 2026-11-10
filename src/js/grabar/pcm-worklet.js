@@ -24,6 +24,9 @@
  */
 const PEDAZO = 4096;
 
+/** Lo que dura un bloque del hilo de audio, en muestras: el de la Web Audio. */
+const RENDER_QUANTUM = 128;
+
 class PcmProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
@@ -35,12 +38,16 @@ class PcmProcessor extends AudioWorkletProcessor {
         const canal = inputs[0] && inputs[0][0];
         // Sin entrada el nodo sigue vivo: el dispositivo puede estar arrancando,
         // o desconectarse y volver. Devolver `false` acá lo mataría para siempre.
-        if (!canal) return true;
+        //
+        // Y el bloque se cuenta igual, en silencio: saltearlo dejaba el WAV más
+        // corto que el reloj, y todo marcador de ahí en adelante caía corrido.
+        // El tiempo que pasó tiene que estar en el archivo aunque no haya sonado.
+        const largo = canal ? canal.length : RENDER_QUANTUM;
 
-        for (let i = 0; i < canal.length; i++) {
+        for (let i = 0; i < largo; i++) {
             // Recortado a mano: una muestra por encima de 1 daría la vuelta y un
             // pico se oiría como un chasquido en el otro extremo de la escala.
-            const v = Math.max(-1, Math.min(1, canal[i]));
+            const v = canal ? Math.max(-1, Math.min(1, canal[i])) : 0;
             this.buffer[this.escritas++] = v < 0 ? v * 0x8000 : v * 0x7fff;
 
             if (this.escritas === PEDAZO) {

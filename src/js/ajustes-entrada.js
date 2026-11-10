@@ -23,6 +23,7 @@ import { $, esc, avisar } from './chrome.js';
 import { icono } from './iconos.js';
 import * as preparar from './pantalla-preparar.js';
 import * as vivo from './pantalla-vivo.js';
+import { sinPrefijoDelSistema } from './grabar/fuente.js';
 
 let app = null;
 let lista = [];
@@ -76,8 +77,10 @@ export async function pintar(aMano) {
     } finally {
         boton.disabled = false;
     }
-    const elegida = laElegida();
+    const guardada = laElegida();
     const nombres = lista.map(d => d.dice);
+    const elegida = nombres.includes(guardada) ? guardada : (nombres.includes(sinPrefijoDelSistema(guardada))
+        ? sinPrefijoDelSistema(guardada) : guardada);
     const falta = elegida && !nombres.includes(elegida);
     select.innerHTML = (elegida ? '' : '<option value="">Elegí una entrada…</option>')
         + lista.map(d => `<option value="${esc(d.valor)}" ${d.dice === elegida ? 'selected' : ''}>${esc(d.dice)}</option>`).join('')
