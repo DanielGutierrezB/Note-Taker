@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Propuesta · En vivo</title>
+<link rel="stylesheet" href="../../../src/css/style.css">
+<link rel="stylesheet" href="vivo.css">
+</head>
+<body>
+<!-- Solo del prototipo: para probar, no es parte de la propuesta. -->
+<div class="pv-control">
+  <span class="pv-control-titulo">Prototipo</span>
+  <div class="alternar" role="group" aria-label="Tomas">
+    <button type="button" data-cuantas="6" aria-pressed="false">6 tomas</button>
+    <button type="button" data-cuantas="60" aria-pressed="true">60 tomas</button>
+  </div>
+  <button class="btn btn-tenue" type="button" id="pv-pausar">⏸ Pausar al profesor</button>
+  <span class="pv-control-dice">Que diga:</span>
+  <button class="btn btn-tenue" type="button" data-dice="3, 2, 1.">«3, 2, 1»</button>
+  <button class="btn btn-tenue" type="button" data-dice="Vamos a la pantalla.">«Vamos a la pantalla»</button>
+  <button class="btn btn-tenue" type="button" data-dice="Pausa.">«Pausa»</button>
+  <span class="crece"></span>
+  <button class="btn btn-tenue" type="button" id="pv-ver-explica">Qué está y dónde</button>
+</div>
+
+<section class="pv-app" id="pv-app">
+  <!-- La barra de la app, igual que hoy. -->
+  <header class="pv-barra">
+    <div class="pv-cifra es-grande"><span>Timecode</span><b id="pv-tc">00:00:00</b></div>
+    <div class="pv-cifra"><span>Clase cortada</span><b id="pv-cortada">00:00:00</b></div>
+    <div class="pv-cifra"><span>Sesión</span><b id="pv-estado" class="pv-estado">escuchando</b></div>
+    <div class="pv-cifra"><span>tomas</span><b id="pv-cuantas-barra">0</b></div>
+    <span class="crece"></span>
+    <span class="pv-grupo-rotulo">
+      <button class="pv-rotulo" type="button" data-menu="audio" title="Audio: por dónde entra la clase. Clic para cambiarla sin parar.">🎙 DJI Mic Mini</button>
+      <button class="pv-recargar" type="button" data-recargar="audio" title="Buscar de nuevo las entradas de audio">↻</button>
+    </span>
+    <button class="pv-rotulo" type="button" data-menu="idioma" title="El idioma de la clase">Auto · ES</button>
+    <span class="pv-grupo-rotulo">
+      <button class="pv-rotulo" type="button" data-menu="camara" title="La cámara de la foto del OUT">📷 OBSBOT</button>
+      <button class="pv-recargar" type="button" data-recargar="camara" title="Buscar de nuevo las cámaras">↻</button>
+    </span>
+    <span class="pv-nivel" title="Nivel del audio que entra"><i id="pv-nivel"></i></span>
+    <button class="btn btn-tenue btn-ico" type="button" data-hace="deshacer" title="Deshacer (⌘Z)">↶</button>
+    <button class="btn btn-tenue btn-ico" type="button" data-hace="rehacer" title="Rehacer (⇧⌘Z)">↷</button>
+    <button class="btn" type="button" data-hace="terminar">Terminar</button>
+  </header>
+
+  <!-- Los atajos: el de Enter grande y diciendo qué va a hacer. -->
+  <div class="pv-atajos">
+    <button class="pv-enter" type="button" id="pv-enter" data-hace="borde"><kbd>⏎ Enter</kbd><span id="pv-enter-dice">abre una toma</span></button>
+    <span class="pv-atajo-de" id="pv-vistas-de">la que viene:</span>
+    <span id="pv-vistas-barra"></span>
+    <button class="pv-atajo" type="button" data-hace="deshacer"><kbd>⌘Z</kbd>deshacer</button>
+    <button class="pv-atajo" type="button" data-hace="buscar"><kbd>⌘F</kbd>buscar</button>
+    <span class="crece"></span>
+    <span class="pv-donde">/Users/daniel/Movies/Render/Pruebas/xml/07_pruebas.xml</span>
+  </div>
+
+  <main class="pv-scroll" id="pv-scroll">
+    <section class="pv-ahora" id="pv-ahora">
+      <div class="pv-ahora-cabeza" id="pv-ahora-cabeza"></div>
+      <div class="pv-texto" id="pv-texto"><div class="pv-texto-cuerpo" id="pv-texto-cuerpo" data-donde="ahora"></div></div>
+      <div class="pv-ahora-pie" id="pv-ahora-pie"></div>
+    </section>
+
+    <section class="pv-tomas">
+      <div class="pv-lista-cabeza">
+        <b>Tomas</b><span class="v3" id="pv-cuantas"></span>
+        <span class="crece"></span>
+        <label class="pv-buscar"><span>⌘F</span><input type="search" id="pv-buscar" placeholder="Buscar en lo que se dijo, en las notas y en los comentarios"></label>
+        <span class="v3" id="pv-encontradas"></span>
+        <button class="btn btn-tenue btn-interruptor" type="button" id="pv-desactivadas" aria-pressed="true" title="Mostrar u ocultar las desactivadas">Desactivadas</button>
+        <button class="btn btn-tenue btn-interruptor" type="button" id="pv-compacto" aria-pressed="false" title="Esconde lo gris de antes del IN y de después del OUT">Compacto</button>
+      </div>
+      <div class="pv-lista" id="pv-lista"></div>
+    </section>
+  </main>
+</section>
+
+<div class="pv-menu" id="pv-menu" hidden></div>
+<div class="pv-burbuja" id="pv-burbuja" hidden></div>
+<div class="pv-tostada" id="pv-tostada" hidden></div>
+<aside class="pv-nota-propuesta" id="pv-explica"></aside>
+
+<script type="module" src="vivo.js"></script>
+</body>
+</html>
