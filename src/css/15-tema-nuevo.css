@@ -190,6 +190,11 @@
 
 .tema-nuevo.es-horizontal #vista-vivo .scroll > .seccion:first-child { order: 2; }
 .tema-nuevo.es-horizontal #vista-vivo .scroll > .seccion:last-child { order: 1; }
+
+/* Con el texto a la izquierda: el texto primero, y las tomas en la columna angosta. */
+.tema-nuevo.es-horizontal.es-texto-izquierda #vista-vivo .scroll { grid-template-columns: minmax(0, 1fr) minmax(420px, 42%); }
+.tema-nuevo.es-horizontal.es-texto-izquierda #vista-vivo .scroll > .seccion:first-child { order: 1; }
+.tema-nuevo.es-horizontal.es-texto-izquierda #vista-vivo .scroll > .seccion:last-child { order: 2; }
 .tema-nuevo.es-horizontal .seccion + .seccion { margin-top: 0; }
 .tema-nuevo.es-horizontal #ahora .transcript.es-abierta { max-height: calc(100vh - 360px); }
 .tema-nuevo.es-horizontal .buscar-tomas input { width: 200px; }
@@ -200,3 +205,11 @@
 /* El nombre de la toma no se corta: se achica la frase. */
 .tema-nuevo #lista-vivo .fila-nombre { flex: none; white-space: nowrap; }
 .tema-nuevo #lista-vivo .fila-nota { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* El tema y la distribución, en la barra de arriba al lado de la versión. */
+.tema-barra { display: inline-flex; align-items: center; gap: var(--sp-2); -webkit-app-region: no-drag; }
+.tema-barra .alternar button { padding: 3px var(--sp-2); font-size: 11px; }
+.tema-barra .distribuciones[hidden] { display: none; }
+.tema-barra .distribuciones button { display: inline-flex; align-items: center; padding: 3px 6px; }
+.tema-barra svg { width: 20px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+.tema-barra svg .es-tomas { fill: currentColor; fill-opacity: 0.35; }
