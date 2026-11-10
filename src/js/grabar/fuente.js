@@ -207,6 +207,24 @@ export function dejarDeMandar() {
     return mandar(false);
 }
 
+/**
+ * Para abrir un WAV: empieza a capturar, retiene lo capturado y devuelve desde
+ * cuándo es, para que el motor ancle el WAV ahí. Va con `liberarEnvio`, después
+ * de pedirle al motor que lo abra (ver `prepararEnvio` en `oido.js`).
+ *
+ * Con el audio de Zoom devuelve null: ese lo abre y lo ancla Node solo
+ * (`audio-app.js`), y se manda con `empezarAMandar` cuando el motor contestó.
+ */
+export async function prepararEnvio() {
+    if (tipo !== 'dispositivo') return null;
+    quiereMandar = true;
+    return oido.prepararEnvio();
+}
+
+export function liberarEnvio() {
+    if (tipo === 'dispositivo') oido.liberarEnvio();
+}
+
 /** Con qué se está capturando, que es lo que el WAV tiene que declarar. */
 export function comoSuena() {
     return { ...info };

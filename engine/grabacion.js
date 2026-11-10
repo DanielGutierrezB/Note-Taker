@@ -113,7 +113,12 @@ function iniciar(params) {
     // él y el editor puede haber sincronizado contra ellos (ver `reanudar` en
     // `sesiones-grabadas.js`).
     const previa = p.reanudar || null;
-    const ceroMs = previa ? previa.ceroMs : Date.now();
+    // El cero es el instante en que la ventana empezó a capturar para esta
+    // clase, si lo dijo (`anclaDe`): desde ahí viene el audio que va a llegar, y
+    // lo que el motor tarde acá —la carpeta en un Drive, por ejemplo— no lo
+    // corre. Sin eso, ahora.
+    const ancla = anclaDe(p);
+    const ceroMs = previa ? previa.ceroMs : (ancla != null ? ancla : Date.now());
 
     const dir = p.dir;
 
@@ -194,7 +199,13 @@ function iniciar(params) {
     // nadie podría terminarla y cada «Iniciar» siguiente diría que ya hay una
     // grabación en curso, hasta reiniciar la app.
     try {
-        abrirEscucha({ sampleRate: p.sampleRate, canales: p.canales, sinReloj: p.sinReloj, desdeMs: p.desdeMs });
+        // Al reanudar, el WAV nuevo no puede empezar antes de donde terminó el
+        // último: dos WAV encimados en A1 dirían dos veces el mismo instante.
+        const ultimo = previa ? (sesion.estado.sesiones || []).slice(-1)[0] : null;
+        abrirEscucha({
+            sampleRate: p.sampleRate, canales: p.canales, sinReloj: p.sinReloj, desdeMs: p.desdeMs,
+            noAntesDe: ultimo ? ultimo.desdeMs + (ultimo.segundos || 0) * 1000 : undefined
+        });
         // `sinReloj` es para la simulación, que empuja el ciclo a mano después
         // de cada pedazo: con el reloj andando las dos pasadas se pisarían y la
         // que llegara segunda no vería nada.
@@ -309,7 +320,7 @@ function abrirEscucha(params) {
         // `noAntesDe` es donde terminó el WAV anterior de esta misma sesión:
         // dos WAV encimados en A1 dirían dos veces el mismo instante.
         desdeMs: Math.max(
-            p.sinReloj && Number.isFinite(p.desdeMs) ? p.desdeMs : Date.now(),
+            p.sinReloj && Number.isFinite(p.desdeMs) ? p.desdeMs : (anclaDe(p) != null ? anclaDe(p) : Date.now()),
             Number.isFinite(p.noAntesDe) ? p.noAntesDe : 0)
     });
     // La simulación lleva su tiempo a golpes de `pcm`, no con el reloj: ahí no
@@ -317,6 +328,17 @@ function abrirEscucha(params) {
     sesion.captura = { ...info, segundos: 0, alinear: p.sinReloj ? null : alinearAudio.nuevo() };
     sesion.escuchadoHastaMs = info.desdeMs;
     return info;
+}
+
+/**
+ * El instante en que la ventana empezó a capturar para este WAV, si lo mandó y
+ * es creíble: el reloj es el mismo de este lado, así que algo a más de cinco
+ * segundos de ahora no es eso. Ver `prepararEnvio` en `oido.js`.
+ */
+function anclaDe(p) {
+    const ms = Number(p && p.desdeMs);
+    if (!Number.isFinite(ms) || (p && p.sinReloj)) return null;
+    return Math.abs(Date.now() - ms) <= 5000 ? ms : null;
 }
 
 /**
@@ -332,6 +354,10 @@ function pcm(buffer, origen) {
     const cap = sesion.captura;
     let r = captura.escribir(cap.id, buffer);
     cap.segundos = r.segundos;
+    // Hasta cuándo llegó audio a este WAV: es su final, no la hora en que se
+    // cierra, que puede ser segundos después —una entrada nueva que tarda en
+    // abrir, una relectura que se espera al terminar—.
+    cap.ultimoPcmMs = Date.now();
     if (origen === 'ventana' && cap.alinear) {
         const ahora = Date.now();
         const faltaMs = alinearAudio.mirar(cap.alinear, (ahora - cap.desdeMs) - cap.segundos * 1000, ahora);
@@ -475,7 +501,7 @@ function cambiarEntrada(params) {
     }
     const vieja = sesion.captura;
     if (vieja) {
-        const cerrada = captura.cerrar(vieja.id, Date.now());
+        const cerrada = captura.cerrar(vieja.id, vieja.ultimoPcmMs || Date.now());
         if (cerrada) {
             const { error, ...wav } = cerrada;
             if (error) registro.anotar('main', 'captura.no-cerro', { archivo: wav.archivo, error });
@@ -487,7 +513,9 @@ function cambiarEntrada(params) {
     const finDelViejo = ultimo ? ultimo.desdeMs + (ultimo.segundos || 0) * 1000 : sesion.estado.ceroMs;
     let nueva;
     try {
-        nueva = abrirEscucha({ sampleRate: tasa, canales: Number(p.canales) || 1, noAntesDe: finDelViejo });
+        nueva = abrirEscucha({
+            sampleRate: tasa, canales: Number(p.canales) || 1, noAntesDe: finDelViejo, desdeMs: p.desdeMs
+        });
     } catch (err) {
         registro.anotar('main', 'grabacion.otra-entrada-falla', { error: err.message });
         espejo.escribir(sesion);
@@ -731,7 +759,7 @@ function cerrarLoAbierto() {
         abierta.cerradaSola = true;
     }
     if (sesion.captura) {
-        const cerrada = captura.cerrar(sesion.captura.id, Date.now());
+        const cerrada = captura.cerrar(sesion.captura.id, sesion.captura.ultimoPcmMs || Date.now());
         if (cerrada) {
             const { error, ...wav } = cerrada;
             if (error) registro.anotar('main', 'captura.no-cerro', { archivo: wav.archivo, error });

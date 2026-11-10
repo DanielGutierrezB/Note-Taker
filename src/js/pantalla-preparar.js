@@ -532,7 +532,11 @@ async function abrirEntrada(id) {
     }
     const nombre = entrada.nombre;
     Object.assign(audio, { abierto: true, caido: false, dispositivo: nombre });
-    app.ajustes = (await window.nt.ajustesGuardar({ dispositivo: nombre })).ajustes;
+    // Si guardar falla (el disco de arranque lleno), los ajustes de la ventana
+    // siguen siendo los que había: pisarlos con `undefined` rompía Ajustes y la
+    // barra en medio de la clase.
+    const guardado = await window.nt.ajustesGuardar({ dispositivo: nombre });
+    if (guardado && guardado.ok) app.ajustes = guardado.ajustes;
     avisarCambio();
     return r;
 }
@@ -602,13 +606,20 @@ async function iniciar() {
         canales: como.canales
     };
 
-    const r = reanudar
-        ? await window.nt.grabarReanudar(reanudar, payload)
-        : await window.nt.grabarIniciar(payload);
-    if (!r.ok) { avisar(r.error, 'error'); return; }
+    // El micrófono empieza a capturar para la clase ya, y el motor ancla el cero
+    // en ese instante (`desdeMs`). Lo capturado se retiene hasta que el pedido
+    // salió, así llega detrás de él: lo que el motor tarde en arrancar queda
+    // esperando en el puente y entra al WAV, en vez de perderse el «3, 2, 1».
+    payload.desdeMs = await fuente.prepararEnvio();
+    const pedido = reanudar
+        ? window.nt.grabarReanudar(reanudar, payload)
+        : window.nt.grabarIniciar(payload);
+    fuente.liberarEnvio();
+    const r = await pedido;
+    if (!r.ok) { await fuente.dejarDeMandar(); avisar(r.error, 'error'); return; }
 
-    // El audio empieza a viajar DESPUÉS de que el motor dijo que sí: mandar
-    // antes sería escribir pedazos en una sesión que no arrancó.
+    // El de Zoom empieza a viajar DESPUÉS de que el motor dijo que sí: lo abre y
+    // lo ancla Node. El micrófono ya está mandando y esto no lo toca.
     await fuente.empezarAMandar();
     app.irAVivo(r.estado, audio);
 }
@@ -654,7 +665,10 @@ export async function entradasParaElegir() {
  */
 export async function cambiarEntradaGrabando(id) {
     const antes = audio.abierto ? entradas.find(d => d.nombre === audio.dispositivo) || null : null;
-    if (antes && antes.id === id) return { ok: true, estado: null };
+    // La misma que ya está no se reabre, salvo que se haya caído o esté
+    // perdiendo audio: elegirla otra vez es justo lo que la pantalla le pide a
+    // quien la ve en rojo, y volver sin hacer nada dejaba la clase sin audio.
+    if (antes && antes.id === id && !audio.caido && !audio.roto) return { ok: true, estado: null };
     await fuente.dejarDeMandar();
     // Reemplazada por otra elección hecha mientras abría: de esa se ocupa la
     // otra llamada. Seguir acá le avisaba al motor de una entrada ya cerrada.
@@ -683,6 +697,7 @@ export async function cambiarEntradaGrabando(id) {
 export async function reengancharGrabando(estado) {
     await releerEntradas();
     const cual = entradas.find(d => d.nombre === estado.dispositivo)
+        || entradas.find(d => d.nombre === fuente.sinPrefijoDelSistema(estado.dispositivo))
         || entradas.find(d => d.nombre === app.ajustes.dispositivo)
         || null;
     if (!cual) {
@@ -700,10 +715,18 @@ export async function reengancharGrabando(estado) {
 /** Le dice al motor con qué suena la entrada que quedó abierta, y empieza a mandar. */
 async function mandarAlMotor() {
     const como = fuente.comoSuena();
-    const r = await window.nt.grabarCambiarEntrada({
-        dispositivo: como.dispositivo, sampleRate: como.sampleRate, canales: como.canales
+    // Como en `iniciar`: el WAV nuevo se ancla donde empezó a capturar la
+    // entrada nueva, y su audio cruza detrás del pedido.
+    const desdeMs = await fuente.prepararEnvio();
+    const pedido = window.nt.grabarCambiarEntrada({
+        dispositivo: como.dispositivo, sampleRate: como.sampleRate, canales: como.canales, desdeMs
     });
-    if (!r || !r.ok) return { ok: false, error: (r && r.error) || 'El motor no aceptó la entrada nueva.' };
+    fuente.liberarEnvio();
+    const r = await pedido;
+    if (!r || !r.ok) {
+        await fuente.dejarDeMandar();
+        return { ok: false, error: (r && r.error) || 'El motor no aceptó la entrada nueva.' };
+    }
     await fuente.empezarAMandar();
     return { ok: true, estado: r.estado, toma: r.toma };
 }

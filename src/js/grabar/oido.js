@@ -49,7 +49,10 @@ const estado = {
     // antes, para que el medidor ya se mueva en Preparar.
     mandando: false,
     // Esperando que el worklet confirme que tiró lo de antes de Iniciar.
-    vaciando: false
+    vaciando: false,
+    alVaciar: null,
+    // Lo capturado desde `prepararEnvio` hasta que el motor tiene dónde escribirlo.
+    retenidos: null
 };
 
 /**
@@ -200,8 +203,11 @@ function contextoSinSalida() {
 function recibir(muestras) {
     // La respuesta del worklet a «vaciar»: lo que llegue de acá en adelante se
     // capturó después de apretar Iniciar.
-    if (muestras === 'vaciado') { estado.vaciando = false; return; }
-    if (estado.mandando && !estado.vaciando) window.nt.grabarPcm(muestras);
+    if (muestras === 'vaciado') { vaciado(); return; }
+    if (estado.mandando && !estado.vaciando) {
+        if (estado.retenidos) estado.retenidos.push(muestras);
+        else window.nt.grabarPcm(muestras);
+    }
 
     let pico = 0;
     for (let i = 0; i < muestras.length; i++) {
@@ -220,15 +226,53 @@ function recibir(muestras) {
  * contra los marcadores. Se le pide que vacíe, y hasta que contesta no se manda
  * nada: los mensajes del puerto llegan en orden, así que lo que viene antes de
  * la respuesta es de antes.
+ *
+ * Devuelve el instante de esa respuesta, que es desde cuándo es el audio que
+ * sigue: el motor ancla el WAV ahí (`anclaDe` en `grabacion.js`). Y lo que
+ * llega se guarda (`retenidos`) hasta `liberarEnvio`, que va después de avisarle
+ * al motor: así el pedido de abrir el WAV cruza el puente antes que el audio, y
+ * ningún pedazo llega a un motor que todavía no tiene dónde escribirlo. Lo que
+ * el motor tarde en abrirlo —una carpeta en un Drive— queda esperando en el
+ * puente y entra igual.
  */
-export function empezarAMandar() {
+export function prepararEnvio() {
     estado.mandando = true;
-    if (estado.nodo) {
-        estado.vaciando = true;
+    estado.retenidos = [];
+    if (!estado.nodo) return Promise.resolve(Date.now());
+    estado.vaciando = true;
+    return new Promise(resolver => {
+        estado.alVaciar = resolver;
         estado.nodo.port.postMessage('vaciar');
-    }
+        // Un worklet que no contesta no puede dejar la clase sin audio.
+        setTimeout(vaciado, 300);
+    });
 }
-export function dejarDeMandar() { estado.mandando = false; }
+
+function vaciado() {
+    if (!estado.vaciando) return;
+    estado.vaciando = false;
+    const resolver = estado.alVaciar;
+    estado.alVaciar = null;
+    if (resolver) resolver(Date.now());
+}
+
+/** Manda lo retenido desde `prepararEnvio`, en orden, y sigue mandando. */
+export function liberarEnvio() {
+    const retenidos = estado.retenidos || [];
+    estado.retenidos = null;
+    if (estado.mandando) for (const m of retenidos) window.nt.grabarPcm(m);
+}
+
+/** Empezar a mandar sin anclar nada: la misma clase sigue en el mismo WAV. */
+export async function empezarAMandar() {
+    if (estado.mandando && !estado.vaciando && !estado.retenidos) return;
+    await prepararEnvio();
+    liberarEnvio();
+}
+export function dejarDeMandar() {
+    estado.mandando = false;
+    estado.retenidos = null;
+}
 
 /** Con qué se está capturando, que es lo que el WAV tiene que declarar. */
 export function comoSuena() {
