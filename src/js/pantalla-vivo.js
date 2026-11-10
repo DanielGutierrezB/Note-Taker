@@ -43,6 +43,7 @@ import { estiloDeVista } from './colores.js';
 import * as alrededor from './grabar/alrededor-de-la-toma.js';
 import * as fotos from './fotos.js';
 import * as panelFoto from './panel-foto.js';
+import * as tema from './tema.js';
 
 let app = null;
 let estado = null;
@@ -105,7 +106,9 @@ const vista = {
     // { toma, indice, borrador }: un comentario ya guardado que se está corrigiendo.
     // Uno solo a la vez, y nunca junto con `comentando`: dos campos abiertos al
     // mismo tiempo son dos sitios donde escribir y uno que se pierde al repintar.
-    editando: null
+    editando: null,
+    // Lo que se busca en las tomas (tema nuevo, ⌘F): filtra la lista.
+    busqueda: ''
 };
 
 /** Descarta las respuestas que llegan tarde (`turnos.js`). */
@@ -161,6 +164,9 @@ export function conectar(contexto) {
         const boton = e.target.closest && e.target.closest('button');
         if (boton && !boton.closest('.telon')) $('#vista-vivo').focus({ preventScroll: true });
     }, true);
+
+    const buscar = $('#buscar-tomas');
+    buscar.addEventListener('input', () => { vista.busqueda = buscar.value; pintar(); });
 
     $('#btn-compacto').addEventListener('click', () => {
         vista.compacto = !vista.compacto;
@@ -450,6 +456,9 @@ function pintarRotulos() {
         idiomas.rotulo('vivo-idioma', estado.idioma, estado.idiomaOido || null),
         rotuloDeCamara()
     ]);
+    // Tema nuevo: el medidor va debajo del rótulo del audio, de su mismo ancho.
+    const delAudio = caja.firstElementChild;
+    if (delAudio) $('#vivo-nivel').style.setProperty('--ancho-audio', `${delAudio.offsetWidth}px`);
 }
 
 /** Lo que dice el rótulo angosto de cada clase de entrada (`estados.claseDeEntrada`). */
@@ -565,6 +574,9 @@ function pintar() {
     const quedan = textosQueSeQuedan();
     const lienzo = pantalla.querySelector('.scroll');
     const arriba = lienzo ? lienzo.scrollTop : 0;
+    // En la distribución horizontal cada columna tiene su scroll: el repintado
+    // no puede llevárselos arriba cada segundo.
+    const columnas = [...pantalla.querySelectorAll('.scroll > .seccion')].map(c => c.scrollTop);
 
     $('#ahora').innerHTML = ahora(fps);
     const tomas = laLista();
@@ -578,6 +590,9 @@ function pintar() {
     devolverRollos(rollos, quedan);
     devolverSeleccion(eligiendo);
     if (lienzo) lienzo.scrollTop = arriba;
+    pantalla.querySelectorAll('.scroll > .seccion').forEach((c, i) => { c.scrollTop = columnas[i] || 0; });
+    const hallados = vista.busqueda.trim().length >= 2 && tema.esNuevo() ? tomas.length : null;
+    $('#buscar-cuantas').textContent = hallados == null ? '' : `${hallados} toma${hallados === 1 ? '' : 's'}`;
     devolverFoco(foco);
     // El foco estaba en algo de esta pantalla que ya no existe (un botón que se
     // repintó, el campo de una toma que se cerró): vuelve a la pantalla y no al
@@ -684,10 +699,11 @@ function ahora(fps) {
             <span class="v1">Sin toma abierta</span>
             <span class="pastilla" data-estado="escuchando">escuchando</span>
             <span class="crece"></span>
+            ${botonesDeLetra()}
             <button class="btn btn-primario" type="button" data-hace="abrir"
                     title="Abre una toma acá. Si el profesor ya venía hablando, el IN
 retrocede solo hasta donde empezó la frase. Tecla: Enter">
-              ${icono('abrirToma')} Abrir toma</button>
+              ${icono('abrirToma')} Abrir toma <kbd class="tecla-enter solo-tema-nuevo">⏎ Enter</kbd></button>
           </div>
           <div class="tarjeta-cuerpo">
             <div data-texto="espera"></div>
@@ -707,9 +723,10 @@ retrocede solo hasta donde empezó la frase. Tecla: Enter">
         <time class="fila-dato tc">${fmt.timecodeDe(abierta.inMs, estado.ceroMs, fps)}</time>
         <span class="crece"></span>
         ${vistas(abierta)}
+        ${botonesDeLetra()}
         <button class="btn btn-primario" type="button" data-hace="cerrar"
                 title="Cierra la toma en la última palabra dicha. Tecla: Enter">
-          ${icono('cerrarToma')} Cerrar toma</button>
+          ${icono('cerrarToma')} Cerrar toma <kbd class="tecla-enter solo-tema-nuevo">⏎ Enter</kbd></button>
       </div>
       <div class="tarjeta-cuerpo">
         <input type="text" data-campo="nota" data-toma="${abierta.id}"
@@ -722,6 +739,13 @@ retrocede solo hasta donde empezó la frase. Tecla: Enter">
         ${comentariosDe(abierta)}
       </div>
     </div>`;
+}
+
+/** El tamaño del texto (tema nuevo): dos pasos para abajo o para arriba. */
+function botonesDeLetra() {
+    return `<span class="letra-vivo solo-tema-nuevo">
+        <button class="btn btn-tenue" type="button" data-hace="letra-menos" title="Texto más chico">A−</button>
+        <button class="btn btn-tenue" type="button" data-hace="letra-mas" title="Texto más grande">A+</button></span>`;
 }
 
 /**
@@ -748,7 +772,11 @@ function filaToma(t, fps) {
         vistas: estado.vistas,
         tc: toma => fmt.timecodeDe(toma.inMs, estado.ceroMs, fps),
         alAbrir: 'su nota, su texto con el IN y el OUT para mover, y su vista',
-        cuerpo: cuerpoToma
+        cuerpo: cuerpoToma,
+        // Tema nuevo: la vista se cambia desde la fila, sin desplegarla, y lo
+        // que se busca se marca en la frase de la fila.
+        miniVistas: tema.esNuevo() && !t.descartada,
+        resaltar: tema.esNuevo() ? vista.busqueda : ''
     });
 }
 
@@ -879,7 +907,33 @@ function comentariosDe(t) {
 function laLista() {
     return estado.tomas
         .filter(t => !(vista.sinDesactivadas && t.descartada))
+        .filter(t => !tema.esNuevo() || coincide(t, vista.busqueda))
         .sort((a, b) => b.inMs - a.inMs);
+}
+
+/** Si la toma dice lo que se busca: en su texto, en su nota o en sus comentarios. */
+function coincide(t, busqueda) {
+    const q = sinTildes(busqueda).trim();
+    if (q.length < 2) return true;
+    if (String(t.id) === q) return true;
+    const dicho = (t.palabras || []).map(w => w.texto).join(' ');
+    return [dicho, t.comentario || '', ...(t.comentarios || []).map(c => `${c.texto} ${c.comentario}`)]
+        .some(x => sinTildes(x).includes(q));
+}
+
+function sinTildes(x) {
+    return String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/** Enter en la búsqueda: despliega la primera que la dice y la trae a la vista. */
+function abrirLaPrimera() {
+    const primera = laLista().find(t => t.outMs != null);
+    if (!primera) return;
+    vista.abierta = `t${primera.id}`;
+    vista.elegida = primera.id;
+    pintar();
+    const fila = document.querySelector(`#lista-vivo .bloque-toma[data-toma="${primera.id}"]`);
+    if (fila) fila.scrollIntoView({ block: 'start' });
 }
 
 /**
@@ -907,6 +961,7 @@ function pintarAtajos() {
     // signo cambiado, y leer «abrir / cerrar» obliga a decidir cuál toca.
     const abierta = estado.abierta != null;
     $('#atajo-borde-dice').textContent = abierta ? 'cerrar toma' : 'abrir toma';
+    $('#atajo-borde').classList.toggle('es-cerrar', abierta);
     $('#atajo-borde').title = abierta
         ? 'Cerrar la toma en la última palabra dicha. Tecla: Enter'
         : 'Abrir una toma acá. Si el profesor ya venía hablando, el IN retrocede hasta donde arrancó la frase. Tecla: Enter';
@@ -1249,6 +1304,9 @@ async function alClic(e) {
         case 'vista':
             await editar({ tipo: 'vista', toma, vista: boton.dataset.vista });
             break;
+        case 'letra-mas': tema.cambiarLetra(2); break;
+        case 'letra-menos': tema.cambiarLetra(-2); break;
+        case 'buscar-tomas': $('#buscar-tomas').focus(); break;
         case 'mantener':
         case 'desactivar':
             await editar({ ...estadosToma.cambioDe(boton.dataset.hace), toma });
@@ -1640,8 +1698,20 @@ async function alTeclado(e) {
     if (document.querySelector('.telon.es-activa')) return;
     // Con el menú de una palabra abierto, el teclado es del menú.
     if (menuPalabra.alTeclado(e)) return;
+    // ⌘F lleva a la búsqueda de las tomas (tema nuevo), escribiendo o no.
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && tema.esNuevo()) {
+        e.preventDefault();
+        $('#buscar-tomas').focus();
+        $('#buscar-tomas').select();
+        return;
+    }
     if (escribiendo()) {
         const campo = document.activeElement;
+        if (campo.id === 'buscar-tomas') {
+            if (e.key === 'Enter') { e.preventDefault(); abrirLaPrimera(); }
+            if (e.key === 'Escape') { campo.value = ''; vista.busqueda = ''; campo.blur(); pintar(); }
+            return;
+        }
         if (campo.dataset.campo === 'comentario') {
             if (e.key === 'Enter') { e.preventDefault(); return guardarComentario(); }
             if (e.key === 'Escape') { vista.comentando = null; return pintar(); }
@@ -1759,6 +1829,11 @@ async function terminar() {
 }
 
 /** El nivel lo sigue midiendo la fuente (`grabar/fuente.js`), y la barra lo dibuja acá. */
+/** Repintar con lo que haya: lo pide Ajustes al cambiar el tema. */
+export function repintar() {
+    if (estado) pintar();
+}
+
 export function alNivel(pico) {
     if (!audio) return;
     audio.pico = Math.max(pico, (audio.pico || 0) * 0.85);

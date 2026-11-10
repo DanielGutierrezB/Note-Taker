@@ -1,0 +1,202 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   15. TEMA NUEVO de la pantalla de la clase
+
+   Todo va debajo de `.tema-nuevo` (lo pone `tema.js` en el body), así que con
+   el clásico no cambia nada. Es la misma pantalla con:
+
+     · el texto grande y centrado, con su tamaño a mano (A− / A+, --letra-vivo);
+     · cada toma del color de su vista, el bloque entero y no una rayita;
+     · la vista de cada fila al alcance, sin desplegarla;
+     · el medidor debajo del rótulo del micrófono;
+     · Enter dicho en el botón que lo hace;
+     · la búsqueda en las tomas (⌘F);
+     · la distribución vertical u horizontal (`.es-horizontal`).
+   ────────────────────────────────────────────────────────────────────────── */
+
+.solo-tema-nuevo { display: none !important; }
+.tema-nuevo .solo-tema-nuevo { display: inline-flex !important; }
+.tema-nuevo kbd.solo-tema-nuevo { display: inline-block !important; }
+
+.alternar.alternar-grande { display: inline-flex; width: auto; align-self: flex-start; }
+.alternar-grande button { padding: 6px var(--sp-4); font-size: 12px; }
+
+/* ── El texto: grande, centrado y a lo ancho ───────────────────────────── */
+.tema-nuevo #ahora .transcript {
+  font-size: var(--letra-vivo, 19px);
+  line-height: 1.6;
+  max-width: 96ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.tema-nuevo #ahora .transcript.es-abierta { max-height: min(46vh, 520px); }
+.tema-nuevo #ahora .transcript.es-inactiva { max-height: calc(var(--letra-vivo, 19px) * 1.6 * 4 + var(--sp-3) * 2); }
+
+.tema-nuevo .cuerpo-toma .transcript {
+  font-size: calc(var(--letra-vivo, 19px) * 0.82);
+  line-height: 1.6;
+  max-width: 112ch;
+  max-height: none;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.tema-nuevo #ahora .pista,
+.tema-nuevo .cuerpo-toma .pista { text-align: center; }
+
+.tema-nuevo .transcript .palabra.es-comentada {
+  text-decoration-color: #f5c54a;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.letra-vivo { gap: 2px; }
+.letra-vivo .btn { min-height: 26px; padding: 0 8px; font-size: 11px; }
+
+.tecla-enter {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font: 600 10px 'SF Mono', ui-monospace, Menlo, monospace;
+  color: inherit;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 4px;
+}
+
+/* Comentar un pedazo: la caja se ve como lo que es, una nota sobre ese pedazo. */
+.tema-nuevo .comentar {
+  padding: var(--sp-2) var(--sp-3);
+  background: color-mix(in srgb, #f5c54a 10%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, #f5c54a 45%, var(--hairline));
+  border-radius: var(--radius-sm);
+}
+
+.tema-nuevo .comentarios .comentario q { color: var(--text-primary); }
+.tema-nuevo .comentarios .comentario .hp-ico { color: #f5c54a; }
+
+/* ── Enter, grande y diciendo qué hace ─────────────────────────────────── */
+.tema-nuevo #atajo-borde {
+  min-height: 30px;
+  padding: 0 var(--sp-3) 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-8);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.tema-nuevo #atajo-borde kbd { color: #0b1a2e; background: var(--accent); border-color: transparent; }
+.tema-nuevo #atajo-borde.es-cerrar { color: #ff9a9a; background: color-mix(in srgb, var(--error) 10%, transparent); border-color: color-mix(in srgb, var(--error) 55%, transparent); }
+.tema-nuevo #atajo-borde.es-cerrar kbd { color: var(--on-error); background: var(--error); }
+.tema-nuevo .atajos { font-size: 12px; }
+.tema-nuevo .atajo-vistas .atajo { min-height: 26px; font-size: 12px; }
+
+/* ── El medidor, debajo del rótulo del micrófono ───────────────────────── */
+.barra-entrada { display: contents; }
+
+.tema-nuevo .barra-entrada {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tema-nuevo #vivo-nivel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  width: var(--ancho-audio, 160px);
+  min-width: 0;
+  max-width: none;
+  height: 4px;
+}
+
+/* ── Cada toma, del color de su vista ──────────────────────────────────── */
+.tema-nuevo .con-vista {
+  --tinte: color-mix(in srgb, var(--vista) 26%, var(--bg-inset));
+}
+
+.tema-nuevo .con-vista > .fila,
+.tema-nuevo .con-vista > .cuerpo-toma,
+.tema-nuevo .tarjeta.con-vista {
+  --borde-vista: color-mix(in srgb, var(--vista) 55%, var(--hairline));
+  border-left: 1px solid var(--borde-vista);
+}
+
+.tema-nuevo .con-vista > .fila { color: var(--text-primary); }
+.tema-nuevo .con-vista > .fila .fila-nota,
+.tema-nuevo .con-vista > .fila .fila-dato { color: color-mix(in srgb, var(--text-primary) 82%, transparent); }
+.tema-nuevo .con-vista > .fila:hover { background: color-mix(in srgb, var(--vista) 34%, var(--bg-inset)); }
+.tema-nuevo .con-vista > .cuerpo-toma { background: color-mix(in srgb, var(--vista) 12%, var(--bg-inset)); }
+
+.tema-nuevo .fila-nota mark { color: var(--text-primary); background: rgba(245, 197, 74, 0.38); border-radius: 2px; }
+
+/* La vista en la fila: la puesta siempre, las otras al pasar o con la fila elegida. */
+.mini-vistas { display: inline-flex; gap: 2px; flex: 0 0 auto; }
+
+.mini-vista {
+  min-width: 26px;
+  height: 20px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--vista) 55%, var(--hairline));
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  visibility: hidden;
+}
+
+.mini-vista[aria-pressed='true'] {
+  color: var(--vista-tinta);
+  background: var(--vista);
+  border-color: var(--vista);
+}
+
+.mini-vista:hover { color: var(--text-primary); background: color-mix(in srgb, var(--vista) 30%, transparent); }
+.fila:hover .mini-vista,
+.fila.es-elegida .mini-vista,
+.bloque-toma.es-abierta .mini-vista { visibility: visible; }
+
+/* La foto del OUT, chica: se abre en grande con un clic. */
+.tema-nuevo .foto-mini img { width: 72px; }
+.tema-nuevo .foto-toma .v3 { font-size: 11px; }
+
+/* La búsqueda, en la cabeza de la lista y con el aspecto de los campos. */
+.buscar-tomas { align-items: center; gap: var(--sp-2); }
+.buscar-tomas kbd {
+  padding: 2px 6px;
+  font: 600 10px 'SF Mono', ui-monospace, Menlo, monospace;
+  color: var(--text-secondary);
+  background: var(--layer-hover);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+.buscar-tomas input { width: 320px; min-height: 28px; padding: 4px var(--sp-3); font-size: 12px; }
+
+/* ── Horizontal: las tomas a la izquierda, lo que se dice a la derecha ──── */
+.tema-nuevo.es-horizontal #vista-vivo .scroll {
+  display: grid;
+  grid-template-columns: minmax(420px, 42%) minmax(0, 1fr);
+  gap: var(--sp-5);
+  overflow: hidden;
+}
+
+.tema-nuevo.es-horizontal #vista-vivo .scroll > .seccion {
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding-right: var(--sp-2);
+}
+
+.tema-nuevo.es-horizontal #vista-vivo .scroll > .seccion:first-child { order: 2; }
+.tema-nuevo.es-horizontal #vista-vivo .scroll > .seccion:last-child { order: 1; }
+.tema-nuevo.es-horizontal .seccion + .seccion { margin-top: 0; }
+.tema-nuevo.es-horizontal #ahora .transcript.es-abierta { max-height: calc(100vh - 360px); }
+.tema-nuevo.es-horizontal .buscar-tomas input { width: 200px; }
+.tema-nuevo.es-horizontal .buscar-tomas kbd,
+.tema-nuevo.es-horizontal #vivo-cuantas { display: none; }
+.tema-nuevo.es-horizontal #lista-vivo .fila-dato.tc { display: none; }
+
+/* El nombre de la toma no se corta: se achica la frase. */
+.tema-nuevo #lista-vivo .fila-nombre { flex: none; white-space: nowrap; }
+.tema-nuevo #lista-vivo .fila-nota { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

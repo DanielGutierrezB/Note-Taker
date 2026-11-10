@@ -31,6 +31,7 @@ import { anotarLosGestos } from './acciones.js';
 import * as frases from './frases.js';
 import * as glosario from './glosario.js';
 import * as ajustesEntrada from './ajustes-entrada.js';
+import * as tema from './tema.js';
 
 const app = {
     ajustes: null,
@@ -393,6 +394,8 @@ function conectarAjustes() {
     frases.conectar(guardar);
     glosario.conectar();
     ajustesEntrada.conectar(app);
+    // El tema se elige en Ajustes y se ve en la clase: cambiarlo la repinta.
+    tema.conectar(() => vivo.repintar());
     $('#aj-camara-buscar').innerHTML = icono('regenerar');
     $('#aj-camara-buscar').addEventListener('click', () => pintarCamaras(true));
     // Una sección abierta a la vez lo hace el `name` de los <details>; esto

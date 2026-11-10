@@ -25,6 +25,9 @@ import { estiloDeVista } from '../colores.js';
  *   tc         cómo se escribe el momento de la toma (timecode o reloj)
  *   cuerpo     lo que va dentro al abrirla, sin la caja
  *   alAbrir    qué se va a ver al abrirla, para el hover de la fila
+ *   miniVistas si la fila lleva su selector de vista (tema nuevo): la vista se
+ *              cambia sin desplegar
+ *   resaltar   lo que se está buscando, para marcarlo en la frase de la fila
  */
 export function ficha(t, o) {
     const est = estados.deToma(t, o.sesion);
@@ -56,13 +59,44 @@ function fila(t, o, est) {
         <span class="fila-nombre">Toma ${t.id}</span>
         <time class="fila-dato tc">${esc(o.tc(t))}</time>
         ${dur != null ? `<span class="fila-dato">${fmt.duracion(dur)}</span>` : ''}
-        <span class="fila-nota">${esc(t.comentario || primeras(t))}</span>
+        <span class="fila-nota">${o.resaltar ? conLoBuscado(t, o.resaltar) : esc(t.comentario || primeras(t))}</span>
         <span class="crece"></span>
+        ${o.vistas && o.miniVistas ? miniVistas(t, o.vistas) : ''}
         ${t.repiteA ? `<span class="pastilla" data-estado="por confirmar"
           title="Empieza diciendo casi lo mismo que la toma ${t.repiteA}: puede ser un
           intento repetido">repite la ${t.repiteA}</span>` : ''}
         <span class="pastilla" data-estado="${est.clave}">${esc(est.palabra)}</span>
       </div>`;
+}
+
+/**
+ * Las vistas, para cambiar la de la toma desde la fila: aparecen al pasar por
+ * ella o con la fila elegida (CSS), a la derecha, y la sigla de la izquierda
+ * sigue diciendo cuál tiene.
+ */
+function miniVistas(t, vistas) {
+    return `<span class="mini-vistas">${vistas.map(v => `
+        <button type="button" class="mini-vista" data-hace="vista" data-vista="${esc(v.nombre)}" data-toma="${t.id}"
+                aria-pressed="${t.vista === v.nombre}" style="${estiloDeVista(vistas, v.nombre)}"
+                title="Poner la toma ${t.id} en ${esc(v.nombre)} (${esc(v.titulo || '')})">${esc(v.nombre)}</button>`).join('')}</span>`;
+}
+
+/** La frase de la fila con lo buscado marcado: el pedazo del texto donde aparece. */
+function conLoBuscado(t, q) {
+    const nota = t.comentario || '';
+    const dicho = (t.palabras || []).map(w => w.texto).join(' ');
+    const base = q && sinTildes(nota).includes(sinTildes(q)) ? nota : dicho;
+    const donde = sinTildes(base).indexOf(sinTildes(q).trim());
+    const trozo = donde > 40 ? `…${base.slice(donde - 30, donde + 140)}` : base.slice(0, 170);
+    const marcado = esc(trozo);
+    const qq = esc(q.trim());
+    if (qq.length < 2) return marcado;
+    const re = new RegExp(qq.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig');
+    return marcado.replace(re, m => `<mark>${m}</mark>`);
+}
+
+function sinTildes(x) {
+    return String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 /** Lo que la toma empieza diciendo, que es con lo que se la reconoce. */

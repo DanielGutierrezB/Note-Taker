@@ -179,8 +179,12 @@
         <!-- Lo que estaba enterrado en Ajustes y se mira mientras se graba: en
              qué idioma oye y de qué cámara sale la foto del OUT. Los dos se
              cambian acá mismo, y los llena `pantalla-vivo.js`. -->
-        <span class="rotulos-barra" id="vivo-rotulos"></span>
-        <div class="nivel" id="vivo-nivel"><div class="nivel-barra"></div></div>
+        <!-- El medidor va con el audio: en el tema nuevo, justo debajo del rótulo
+             del micrófono, que es de quien dice si llega señal. -->
+        <span class="barra-entrada">
+          <span class="rotulos-barra" id="vivo-rotulos"></span>
+          <div class="nivel" id="vivo-nivel"><div class="nivel-barra"></div></div>
+        </span>
         <button id="btn-deshacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
         <button id="btn-rehacer" class="btn btn-tenue btn-ico" type="button" disabled></button>
         <button id="btn-terminar" class="btn" type="button"
@@ -204,6 +208,10 @@
         <button class="atajo" type="button" data-hace="deshacer" id="atajo-deshacer">
           <kbd>⌘Z</kbd><span>deshacer</span>
         </button>
+        <button class="atajo solo-tema-nuevo" type="button" data-hace="buscar-tomas"
+                title="Buscar en lo que se dijo, en las notas y en los comentarios de las tomas. Tecla: ⌘F">
+          <kbd>⌘F</kbd><span>buscar</span>
+        </button>
         <span class="crece"></span>
         <span id="vivo-donde"></span>
       </div>
@@ -219,6 +227,12 @@
           <span>Tomas</span>
           <span id="vivo-cuantas" class="v3"></span>
           <span class="crece"></span>
+          <label class="buscar-tomas solo-tema-nuevo" title="Buscar en las tomas. Tecla: ⌘F · Enter abre la primera · Esc limpia">
+            <kbd>⌘F</kbd>
+            <input type="search" id="buscar-tomas"
+                   placeholder="Buscar en lo que se dijo, en las notas y en los comentarios">
+          </label>
+          <span id="buscar-cuantas" class="v3 solo-tema-nuevo"></span>
           <button id="btn-desactivadas" class="btn btn-tenue btn-interruptor" type="button"
                   aria-pressed="false" hidden
                   title="Las desactivadas siguen en la sesión y se pueden volver a activar: esto solo las saca de la vista"></button>
@@ -399,6 +413,29 @@
 
       <!-- Las palabras que el modelo grande tiene que escribir bien. Lo llena
            `src/js/glosario.js`. -->
+      <details class="aj-seccion" name="ajustes" id="aj-apariencia">
+        <summary><span class="aj-titulo">Tema</span><span class="aj-resumen" id="aj-resumen-apariencia"></span></summary>
+        <div class="aj-contenido">
+          <div class="campo">
+            <span class="rotulo">Cómo se ve la pantalla de la clase</span>
+            <div class="alternar alternar-grande" role="group" aria-label="Tema">
+              <button type="button" data-tema="clasico" aria-pressed="true">Clásico</button>
+              <button type="button" data-tema="nuevo" aria-pressed="false">Nuevo</button>
+            </div>
+            <span class="v3">El nuevo es la misma pantalla con el texto grande y centrado (A− / A+), la
+              vista de cada toma en su fila, cada toma del color de su vista y la búsqueda en las tomas
+              (⌘F). Hace lo mismo que el clásico: se puede cambiar cuando quieras.</span>
+          </div>
+          <div class="campo" id="aj-distribucion-fila" hidden>
+            <span class="rotulo">Distribución</span>
+            <div class="alternar alternar-grande" role="group" aria-label="Distribución">
+              <button type="button" data-distribucion="vertical" aria-pressed="true">Vertical · el texto arriba</button>
+              <button type="button" data-distribucion="horizontal" aria-pressed="false">Horizontal · las tomas al costado</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
       <details class="aj-seccion" name="ajustes" id="aj-glosario">
         <summary><span class="aj-titulo">Glosario</span><span class="aj-resumen" id="aj-resumen-glosario"></span></summary>
         <div class="aj-contenido">
