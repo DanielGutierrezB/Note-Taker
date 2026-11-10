@@ -480,6 +480,8 @@
   background: var(--hairline);
 }
 
-.ses-hero-icono svg { width: 22px; height: 22px; }
-.ses-reciente-icono svg,
-.ses-menu-icono svg { width: 16px; height: 16px; }
+.ses-hero-icono .hp-ico {
+  width: 22px;
+  height: 22px;
+  flex-basis: 22px;
+}

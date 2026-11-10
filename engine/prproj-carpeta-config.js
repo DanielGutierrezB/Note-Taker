@@ -16,6 +16,7 @@ const path = require('path');
 
 const vivo = require('./notas-vivo');
 const sesionesGrabadas = require('./sesiones-grabadas');
+const nombreDeSesion = require('./nombre-de-sesion');
 const workspace = require('./workspace');
 
 /**
@@ -133,7 +134,7 @@ function leerConfig(carpeta, ultima, enCurso) {
         config,
         curso: carpeta ? path.basename(carpeta) : '',
         ejemplo: ejemplo ? {
-            nombre: String(ejemplo.secuencia || '').replace(/_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/, ''),
+            nombre: nombreDeSesion.sinFecha(ejemplo.secuencia),
             segundos: (ejemplo.resumen && ejemplo.resumen.segundos) || 0
         } : null,
         vistas: vivo.VISTAS.map(v => ({

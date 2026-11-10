@@ -663,7 +663,10 @@ async function cerrarSesion() {
     // salen de los WAV: con el audio ya cerrado, el resumen decía cero.
     const comprobacion = comprobarClase.comprobar(sesion.estado, final);
     if (!comprobacion.ok) registro.anotar('main', 'grabacion.comprobacion', { problemas: comprobacion.problemas });
-    const salida = { ...espejo.resumen(sesion), archivos: final, segundos: comprobacion.segundos, comprobacion };
+    const salida = {
+        ...espejo.resumen(sesion), corto: nombreDeSesion.sinFecha(sesion.estado.secuencia),
+        archivos: final, segundos: comprobacion.segundos, comprobacion
+    };
     soltar();
     return salida;
 }

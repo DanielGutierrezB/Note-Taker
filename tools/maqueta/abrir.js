@@ -152,7 +152,7 @@ const ESCENARIOS = [
     // `desplegada` no es una pantalla: es cómo queda la de en vivo con una toma
     // abierta, así que va con ella.
     'en-vivo', 'en-vivo,desplegada',
-    'toma-abierta', 'releyendo', 'sin-audio', 'terminada', 'notas-de-antes', 'muchas-clases',
+    'toma-abierta', 'releyendo', 'sin-audio', 'terminada', 'terminada-vacia', 'notas-de-antes', 'muchas-clases',
     'foto', 'foto-cien',
     'prproj', 'prproj-lleno', 'prproj-listo',
     'ajustes', 'diagnostico',

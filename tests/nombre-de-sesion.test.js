@@ -125,4 +125,10 @@ module.exports = function (t) {
         t.eq(leido.numero, null);
         t.eq(leido.cuandoMs, T);
     });
+
+    t.test('sin la fecha, la clase se dice por su número y su curso', () => {
+        t.eq(nombre.sinFecha('01_pruebas_2026-11-10_11-10-43'), '01_pruebas');
+        t.eq(nombre.sinFecha('02_V2_curso-de-automatizaciones_2026-09-27_14-30-00'), '02_V2_curso-de-automatizaciones');
+        t.eq(nombre.sinFecha('sin-fecha'), 'sin-fecha', 'un nombre sin fecha queda igual');
+    });
 };

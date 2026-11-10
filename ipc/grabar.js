@@ -320,7 +320,7 @@ function registrar({ ipcMain, app, send, anotar }) {
             // El número y el curso, sin la fecha ni la hora: lo que se le
             // muestra a la persona antes de grabar («la primera va a ser la
             // 01_pruebas»). La fecha la pone el motor al arrancar.
-            corto: nombre.replace(/_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/, '')
+            corto: nombreDeSesion.sinFecha(nombre)
         };
     });
 

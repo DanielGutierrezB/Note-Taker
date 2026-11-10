@@ -34,7 +34,7 @@ export const SE_HACEN = [
     'preparar-zoom-falso', 'disco-lleno',
     'sin-whisper', 'sin-zoom', 'faltan-modelos', 'update',
     'en-vivo', 'desplegada', 'toma-abierta', 'releyendo', 'muchas-clases',
-    'sin-audio', 'terminada', 'notas-de-antes', 'foto', 'foto-cien',
+    'sin-audio', 'terminada', 'terminada-vacia', 'notas-de-antes', 'foto', 'foto-cien',
     'prproj', 'prproj-lleno', 'prproj-listo',
     'ajustes', 'diagnostico', 'iconos'
 ];
@@ -569,7 +569,7 @@ async function aplicar() {
         return;
     }
 
-    if (hay('terminada')) {
+    if (hay('terminada') || hay('terminada-vacia')) {
         app.irACierre(cerrada());
         return;
     }
@@ -605,7 +605,14 @@ let vivo = null;
  * encontró la comprobación del final (`engine/comprobar-clase.js`).
  */
 function cerrada() {
-    return { ...estadoEnVivo(), grabando: false, segundos: 1043, comprobacion: { ok: true, problemas: [] } };
+    // `terminada-vacia` es una prueba de tres segundos sin ninguna toma: la
+    // pantalla tiene que decirlo sin parecer rota.
+    if (hay('terminada-vacia')) {
+        return { ...estadoEnVivo(), secuencia: '01_pruebas_2026-11-10_11-10-43', corto: '01_pruebas', curso: 'Pruebas',
+            grabando: false, segundos: 3, tomas: [], comprobacion: { ok: true, problemas: [] } };
+    }
+    return { ...estadoEnVivo(), corto: 'curso-de-automatizaciones', grabando: false, segundos: 1043,
+        comprobacion: { ok: true, problemas: [] } };
 }
 
 /** La sesión que el motor devolvería. */

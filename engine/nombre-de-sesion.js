@@ -187,6 +187,14 @@ function leer(nombre) {
     };
 }
 
+/**
+ * El nombre sin la fecha y la hora del final: `01_pruebas`. Es como se le dice
+ * a una clase en pantalla; la fecha va aparte, dicha como fecha.
+ */
+function sinFecha(nombre) {
+    return String(nombre == null ? '' : nombre).replace(/_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/, '');
+}
+
 module.exports = {
-    PRIMERA_VEZ, armar, leer, cursoEnElNombre, cursoPorDefecto, numeroEnElNombre
+    PRIMERA_VEZ, armar, leer, sinFecha, cursoEnElNombre, cursoPorDefecto, numeroEnElNombre
 };

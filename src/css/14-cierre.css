@@ -1,0 +1,296 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   14. CIERRE: qué quedó y dónde
+
+   Con la misma forma que Sesiones: sin tarjetas, un título que dice cómo
+   salió, las cifras en un renglón, la acción principal arriba, y debajo la
+   clase de punta a punta y sus tomas, en filas de 34 px.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.cierre {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.cierre-cabeza {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.cierre-icono {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+
+.cierre-icono.es-revisar {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+}
+
+.cierre-icono .hp-ico {
+  width: 22px;
+  height: 22px;
+  flex-basis: 22px;
+}
+
+.cierre-titulos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.cierre-titulo {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.cierre-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cierre-sub code {
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  color: var(--text-secondary);
+}
+
+.cierre-sub span::before {
+  content: '·';
+  margin-right: var(--sp-3);
+}
+
+/* Las cifras: el número grande y lo que es, sin cajas. */
+.cierre-cifras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4) var(--sp-6);
+  padding: var(--sp-4) 0;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.cierre-cifra {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cierre-cifra b {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cierre-cifra > span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.cierre-cifra.es-vistas {
+  margin-left: auto;
+}
+
+.cierre-vistas {
+  display: flex;
+  gap: var(--sp-1);
+  min-height: 30px;
+  align-items: center;
+}
+
+.cierre-vista {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--vista-tinta);
+  background: var(--vista);
+  border-radius: var(--radius-sm);
+}
+
+.cierre-vista small {
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.cierre-aviso {
+  font-size: 13px;
+}
+
+.cierre-aviso .hp-ico {
+  margin-top: 2px;
+}
+
+.cierre-bloque {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.cierre-paso {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.cierre-cuenta {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.cierre-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.cierre-archivo {
+  overflow: hidden;
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* La clase de punta a punta: lo gris es lo que queda afuera. */
+.cierre-tira {
+  position: relative;
+  height: 28px;
+  background: var(--bg-inset);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.cierre-bloque-toma {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  background: var(--vista);
+  border-radius: 2px;
+}
+
+.cierre-bloque-toma:hover {
+  box-shadow: 0 0 0 1.5px var(--text-primary);
+}
+
+.cierre-tira-vacia {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cierre-marcas {
+  display: flex;
+  justify-content: space-between;
+  margin-top: calc(-1 * var(--sp-2));
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Las tomas, como la lista compacta de Sesiones. */
+.cierre-tomas {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.cierre-toma {
+  display: grid;
+  grid-template-columns: 44px 56px 76px 92px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 34px;
+  padding: var(--sp-1) var(--sp-4);
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.cierre-toma:last-child {
+  border-bottom: 0;
+}
+
+.cierre-toma.es-cabeza {
+  min-height: 28px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+}
+
+.cierre-toma:not(.es-cabeza):hover {
+  background: var(--layer-hover);
+}
+
+.cierre-toma-num {
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cierre-toma-tc {
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+}
+
+.cierre-toma-texto {
+  display: flex;
+  gap: var(--sp-2);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.cierre-toma-texto b {
+  flex: none;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cierre-toma-texto span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+
+.cierre-toma-marcas {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.cierre-pie {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--hairline);
+}
