@@ -185,7 +185,14 @@ export const AJUSTES = {
     // Sin cámara de referencia: es como arranca la app, y es lo que deja que la
     // maqueta corra en una máquina sin ninguna cámara. Las fotos que se ven en
     // los bloques son las que el doble dice que ya están en el disco.
-    camara: null
+    camara: null,
+    // Las de fábrica, más una de cada tipo como las que agregaría alguien.
+    frases: {
+        cuenta: true,
+        abrir: ['retomamos', 'retoma'],
+        cerrar: ['pausa', 'pause'],
+        vista: [{ frase: 'vamos a nuestra pantalla', vista: 'R' }, { frase: 'volvemos a las slides', vista: 'S' }]
+    }
 };
 
 // Los nombres son los de verdad de una Mac con Zoom instalado: es la lista

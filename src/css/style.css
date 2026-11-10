@@ -1190,6 +1190,73 @@ select {
 }
 
 
+/* Las frases que oye la app (Ajustes). Cada frase es una ficha con su ×. */
+.frases-cuenta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.frases-cuenta input {
+  accent-color: var(--accent);
+}
+
+.frases-lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.frases-fichas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.ficha {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--row-xs);
+  padding: 0 var(--sp-1) 0 var(--sp-3);
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+.ficha-vista {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ficha-quitar {
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.ficha-quitar:hover,
+.ficha-quitar:focus-visible {
+  color: var(--text-primary);
+  background: var(--layer-hover);
+}
+
+.frases-elige-vista {
+  width: auto;
+  flex: none;
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
    8. LA LISTA DE VERIFICACIÓN DE «PREPARAR»
 

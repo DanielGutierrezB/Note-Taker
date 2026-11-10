@@ -128,6 +128,21 @@ a la carpeta rompería ese emparejamiento sin avisar.
 | **"Retomamos"** | lo mismo |
 | **"Pausa"** o **"Pause"** + un segundo de silencio | se cierra, en la última palabra dicha |
 
+Esas son las de fábrica. En **Ajustes → Frases que oye la app** se agregan
+otras, se sacan y se apaga la cuenta, también con la clase andando: la pasada
+siguiente ya oye las nuevas. Hay tres listas:
+
+- **Abrir toma**: el IN va después de la frase, como con "Retomamos".
+- **Cerrar toma**: el OUT va antes de la frase. Una de una sola palabra pide el
+  segundo de silencio detrás, igual que "Pausa"; una de varias palabras, no.
+- **Cambiar de vista**: cada frase con su vista. Con una toma abierta, la parte
+  justo después de la frase y la segunda mitad sigue en esa vista ("vamos a
+  nuestra pantalla" → R); ⌘Z lo deshace de una vez. Sin toma abierta, deja
+  elegida la vista de la próxima.
+
+Se comparan sin mayúsculas, acentos ni signos. Entre comillas no cuentan: es
+alguien explicando la señal, no diciéndola.
+
 Las palabras valen en los dos idiomas siempre, sin tener que decirle en cuál se
 va a hablar: una clase puede empezar en español y seguir en inglés y las dos
 cuentas abren toma. Lo que sí se elige es **qué idioma transcribe Whisper**, en

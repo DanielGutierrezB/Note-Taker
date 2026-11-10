@@ -349,6 +349,31 @@ function vistaDesdeAhora(sesion, toma, c) {
 }
 
 /**
+ * Una frase de vista que se oyó con una toma abierta (ver `aplicarSenales`).
+ *
+ * Es «Dividir» con vista, y no un camino aparte: queda en el historial y ⌘Z la
+ * deshace de una vez. La toma es la que tenía abierta cuando empezó la frase
+ * —se busca por la hora, porque un corte anterior de la misma pasada ya corrió
+ * los números—, y se parte en `ev.ms`, que es justo después de la frase.
+ *
+ * Con la toma recién abierta (`PARA_PARTIR_MS`) no se parte: la vista va a la
+ * toma entera, como al elegirla a mano en ese momento.
+ *
+ * @returns {'partida'|'toda'|null} qué se hizo, para decirlo en la pantalla
+ */
+function vistaPorFrase(sesion, ev) {
+    if (!sesion || !esVista(ev.vista)) return null;
+    const toma = sesion.estado.tomas.find(t => !t.descartada && t.inMs != null
+        && ev.desdeMs >= t.inMs && (t.outMs == null || ev.desdeMs < t.outMs));
+    if (!toma || toma.vista === ev.vista) return null;
+    if (ev.ms - toma.inMs < PARA_PARTIR_MS) {
+        editar(sesion, { tipo: 'vista', toma: toma.id, vista: ev.vista });
+        return 'toda';
+    }
+    return dividir(sesion, toma, { tipo: 'dividir', toma: toma.id, paredMs: ev.ms, vista: ev.vista }) ? 'partida' : null;
+}
+
+/**
  * Lo que guarda un número de toma y no vive en `estado.tomas`.
  *
  * Son dos, y se rompen distinto: la cola releería la toma que no es, y las
@@ -737,4 +762,4 @@ function cerrarToma(sesion, opciones) {
     return espejo.resumen(sesion);
 }
 
-module.exports = { editar, comoSeLlama, volver, abrirToma, cerrarToma, pasarAOtroAudio };
+module.exports = { editar, comoSeLlama, volver, abrirToma, cerrarToma, pasarAOtroAudio, vistaPorFrase };

@@ -22,13 +22,13 @@
 /* ─── Las expresiones, copiadas del motor tal cual ────────────────────── */
 
 const CUENTA = /^(?:3|2|1|tres|dos|uno|three|two|one)[.,…!?]*$/i;
-const RETOMAR = /^retomamos[.,…!?]*$/i;
-const PAUSA = /^paus[ae][.,…!?]*$/i;
 const OK = /^ok(?:ay)?[.,…!?]*$/i;
 
 const MINIMO_DE_CUENTA = 2;
 const VALOR = { 3: 3, tres: 3, three: 3, 2: 2, dos: 2, two: 2, 1: 1, uno: 1, one: 1 };
 export const SILENCIO_TRAS_PAUSA_SEC = 1;
+
+const VISTAS = ['PV', 'R', 'S', 'MG', 'X2'];
 
 function limpio(texto) {
     return String(texto == null ? '' : texto).trim();
@@ -36,6 +36,64 @@ function limpio(texto) {
 
 function palabraDe(w) {
     return limpio(w && w.texto).replace(/^[¿¡"'(]+/, '');
+}
+
+/** Lo mismo que `engine/texto.js:norm`. */
+function norm(texto) {
+    return String(texto == null ? '' : texto)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
+}
+
+/* ─── Las frases, las de Ajustes ──────────────────────────────────────── */
+
+/**
+ * Las frases que oye la app, las mismas que el motor (`reglasDeFrases`).
+ *
+ * Las pone `app.js` cada vez que lee o guarda los ajustes, así que una frase
+ * agregada a mitad de clase se marca en el repintado siguiente, igual que el
+ * motor la oye en la pasada siguiente. Hasta entonces, las de fábrica.
+ */
+let reglas = reglasDeFrases(null);
+
+export function usarFrases(frases) {
+    reglas = reglasDeFrases(frases);
+}
+
+function reglasDeFrases(frases) {
+    const f = frases || { cuenta: true, abrir: ['retomamos'], cerrar: ['pausa', 'pause'], vista: [] };
+    const de = (lista, tipo) => (Array.isArray(lista) ? lista : []).map(x => {
+        const texto = typeof x === 'string' ? x : (x && x.frase);
+        const palabras = String(texto == null ? '' : texto).split(/\s+/).map(norm).filter(Boolean);
+        return { tipo, texto: limpio(texto), pegada: palabras.join(''), palabras: palabras.length, vista: x && x.vista };
+    }).filter(r => r.pegada && (tipo !== 'vista' || VISTAS.includes(r.vista)));
+    return {
+        cuenta: f.cuenta !== false,
+        frases: de(f.abrir, 'abre').concat(de(f.cerrar, 'cierra'), de(f.vista, 'vista'))
+            .sort((a, b) => b.pegada.length - a.pegada.length)
+    };
+}
+
+function dondeTermina(lista, i, pegada) {
+    let junto = '';
+    for (let k = i; k < lista.length; k++) {
+        const crudo = String((lista[k] && lista[k].texto) || '').trim().replace(/^[¿¡"'(]+/, '');
+        // Con comillas es una cita: «el profesor dice "Pausa", y para» habla
+        // de la señal, no la dice. La de apertura sola es el comienzo de lo
+        // que alguien dijo, y esa sí vale.
+        if (/["«»“”]/.test(crudo)) return -1;
+        const n = norm(crudo);
+        if (!n) {
+            if (k === i) return -1;
+            continue;
+        }
+        junto += n;
+        if (junto === pegada) return k;
+        if (!pegada.startsWith(junto)) return -1;
+    }
+    return -1;
 }
 
 function valorDeCuenta(texto) {
@@ -54,7 +112,7 @@ function valorDeCuenta(texto) {
  * cerrada, y la marca se corrige sola.
  *
  * @param {Array} lista [{t, texto, hasta}] en orden
- * @returns {Array} [{tipo:'abre'|'cierra'|'pausa-corta', desde, hasta, huecoSec?}]
+ * @returns {Array} [{tipo:'abre'|'cierra'|'pausa-corta'|'vista', desde, hasta, huecoSec?}]
  */
 export function senalesEn(lista) {
     const ws = lista || [];
@@ -62,26 +120,37 @@ export function senalesEn(lista) {
 
     for (let i = 0; i < ws.length; i++) {
         const p = palabraDe(ws[i]);
+        let frase = null;
+        let hasta = -1;
+        for (const f of reglas.frases) {
+            hasta = dondeTermina(ws, i, f.pegada);
+            if (hasta !== -1) { frase = f; break; }
+        }
 
-        if (RETOMAR.test(p)) {
-            salida.push({ tipo: 'abre', desde: i, hasta: i });
+        if (frase && (frase.tipo !== 'cierra' || frase.palabras > 1)) {
+            salida.push({ tipo: frase.tipo, desde: i, hasta, vista: frase.vista, por: frase.texto });
+            i = hasta;
             continue;
         }
 
-        if (PAUSA.test(p)) {
-            const siguiente = ws[i + 1];
+        if (frase) {
+            const siguiente = ws[hasta + 1];
             const hueco = siguiente ? (siguiente.t - ws[i].t) / 1000 : 0;
             salida.push({
                 tipo: hueco >= SILENCIO_TRAS_PAUSA_SEC ? 'cierra' : 'pausa-corta',
                 desde: i,
-                hasta: i,
+                hasta,
+                por: frase.texto,
                 // El hueco medido, para poder decirlo. `null` cuando todavía no
                 // hay palabra detrás: ahí no se midió nada, y poner 0 sería
                 // decir que el profesor siguió hablando sin respirar.
                 huecoSec: siguiente ? Math.round(hueco * 100) / 100 : null
             });
+            i = hasta;
             continue;
         }
+
+        if (!reglas.cuenta) continue;
 
         let j = i;
         if (OK.test(p) && ws[i + 1] && CUENTA.test(palabraDe(ws[i + 1]))) j = i + 1;
@@ -121,7 +190,8 @@ export function porPalabra(lista) {
 export const QUE_HACE = {
     abre: 'Con esto la app abre una toma',
     cierra: 'Con esto la app cierra la toma',
-    'pausa-corta': '«Pausa» sin el segundo de silencio detrás: la app no cerró la toma'
+    'pausa-corta': '«Pausa» sin el segundo de silencio detrás: la app no cerró la toma',
+    vista: 'Con esto la app pasa a otra vista'
 };
 
 /**
@@ -137,7 +207,11 @@ export const QUE_HACE = {
  * Sin palabra detrás no se dice nada: no hay hueco medido todavía.
  */
 export function pistaDe(senal) {
-    const base = QUE_HACE[senal && senal.tipo] || '';
+    let base = QUE_HACE[senal && senal.tipo] || '';
+    if (senal && senal.tipo === 'pausa-corta' && senal.por) {
+        base = base.replace('«Pausa»', `«${senal.por.charAt(0).toUpperCase()}${senal.por.slice(1)}»`);
+    }
+    if (senal && senal.tipo === 'vista') return `${base}: ${senal.vista}`;
     if (!senal || senal.tipo !== 'pausa-corta' || senal.huecoSec == null) return base;
     const hueco = String(senal.huecoSec).replace('.', ',');
     return `${base}. El hueco fue de ${hueco} s y hace falta ${SILENCIO_TRAS_PAUSA_SEC}`;

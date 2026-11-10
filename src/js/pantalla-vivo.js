@@ -323,13 +323,19 @@ function alAviso(aviso) {
 
 /** Lo que pasó solo se dice; lo que el editor hizo ya lo vio hacer. */
 function contar(ev) {
+    const frase = ev.por ? `«${ev.por.charAt(0).toUpperCase()}${ev.por.slice(1)}»` : '';
     if (ev.tipo === 'abierta') {
-        avisar(ev.por === 'retomamos' ? 'Toma abierta: «Retomamos».' : 'Toma abierta: 3, 2, 1.');
+        avisar(ev.por === 'cuenta' ? 'Toma abierta: 3, 2, 1.' : `Toma abierta: ${frase}.`);
         // La toma que se acaba de abrir pasa a ser la de las teclas: es sobre
         // la que el editor va a escribir la nota y elegir la vista.
         vista.elegida = ev.toma;
     }
     if (ev.tipo === 'cerrada') avisar(`Toma ${ev.toma} cerrada.`);
+    // Las frases de vista sí se dicen: un disparo falso tiene que verse en el
+    // momento, que es cuando ⌘Z lo deshace sin pensar.
+    if (ev.tipo === 'vista' && ev.hizo === 'partida') avisar(`${frase}: la toma sigue en ${ev.vista}. ⌘Z lo deshace.`);
+    if (ev.tipo === 'vista' && ev.hizo === 'toda') avisar(`${frase}: la toma pasa a ${ev.vista}. ⌘Z lo deshace.`);
+    if (ev.tipo === 'vista-proxima') avisar(`${frase}: la próxima toma va en ${ev.vista}.`);
 }
 
 /* ─── Dibujar ─────────────────────────────────────────────────────────── */

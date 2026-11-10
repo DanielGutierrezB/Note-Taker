@@ -367,6 +367,9 @@ ipc.handle('ajustes-guardar', (event, datos) => {
     try {
         const guardados = ajustes.guardar({ ...ajustes.leer(), ...parche });
         anotar('ajustes.guardados', { que: Object.keys(parche), fps: guardados.fps });
+        // Las frases se cambian con la clase andando, desde Ajustes encima de
+        // En vivo: la pasada siguiente del ciclo ya oye las nuevas.
+        if ('frases' in parche) grabacion.cambiarFrases(guardados.frases);
         return { ok: true, ajustes: guardados };
     } catch (err) {
         anotar('ajustes.no-guardados', { error: err.message });

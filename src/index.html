@@ -250,6 +250,52 @@
         </select>
         <span class="v3" id="aj-idioma-dice"></span>
       </label>
+      <!-- Las señales del profesor. Se cambian con la clase andando: Ajustes
+           se abre encima de En vivo y la pasada siguiente ya oye las nuevas.
+           Lo llena `src/js/frases.js`. -->
+      <div class="campo" id="aj-frases">
+        <span class="rotulo">Frases que oye la app</span>
+        <span class="v3">Lo que dice el profesor para abrir o cerrar una toma, o para pasar a otra
+          vista. Se comparan sin mayúsculas, acentos ni signos, y la frase nunca queda adentro de
+          la toma. Si cambiás algo mientras grabás, la app lo oye desde el segundo siguiente.</span>
+        <label class="frases-cuenta">
+          <input type="checkbox" id="aj-frases-cuenta">
+          <span>La cuenta «3, 2, 1» abre una toma (también en inglés, y con «ok» delante)</span>
+        </label>
+        <div class="frases-lista" data-lista="abrir">
+          <span class="rotulo">Abrir toma (IN): el IN va después de la frase</span>
+          <div class="frases-fichas"></div>
+          <div class="campo-fila">
+            <input type="text" maxlength="60" data-frase-nueva aria-label="Otra frase que abre una toma"
+                   placeholder="Otra frase que abre, por ejemplo «retoma»">
+            <button class="btn" type="button" data-frase-agregar>Agregar</button>
+          </div>
+        </div>
+        <div class="frases-lista" data-lista="cerrar">
+          <span class="rotulo">Cerrar toma (OUT): el OUT va antes de la frase</span>
+          <div class="frases-fichas"></div>
+          <div class="campo-fila">
+            <input type="text" maxlength="60" data-frase-nueva aria-label="Otra frase que cierra la toma"
+                   placeholder="Otra frase que cierra, por ejemplo «cortamos acá»">
+            <button class="btn" type="button" data-frase-agregar>Agregar</button>
+          </div>
+        </div>
+        <div class="frases-lista" data-lista="vista">
+          <span class="rotulo">Cambiar de vista: la toma se parte después de la frase y sigue en esa vista</span>
+          <div class="frases-fichas"></div>
+          <div class="campo-fila">
+            <input type="text" maxlength="60" data-frase-nueva aria-label="Una frase que cambia de vista"
+                   placeholder="Por ejemplo «vamos a nuestra pantalla»">
+            <select id="aj-frase-vista" class="frases-elige-vista" aria-label="La vista a la que pasa"></select>
+            <button class="btn" type="button" data-frase-agregar>Agregar</button>
+          </div>
+        </div>
+        <span class="v3" id="aj-frases-dice" role="status"></span>
+        <div class="campo-fila">
+          <button id="aj-frases-fabrica" class="btn btn-tenue" type="button"
+                  title="Abrir con la cuenta y «retomamos», cerrar con «pausa» y «pause», y ninguna de vista">Volver a las de fábrica</button>
+        </div>
+      </div>
       <div class="campo">
         <span class="rotulo">Cámara de referencia</span>
         <div class="campo-fila">

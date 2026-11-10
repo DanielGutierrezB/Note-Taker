@@ -149,6 +149,9 @@ function iniciar(params) {
         }),
         dir,
         captura: null,
+        // Las frases que abren, cierran y cambian de vista, las de Ajustes
+        // (`cambiarFrases`). Sin ellas, las de fábrica.
+        frases: p.frases || null,
         // Las tomas que esperan que se les rehaga el texto, de a una; y la
         // promesa de la pasada que las está atendiendo, si hay una
         // (`engine/relecturas.js`).
@@ -547,6 +550,24 @@ function cambiarIdioma(cual, opciones) {
     return { ok: true, releyendo: paraReleer.length, estado: espejo.resumen(sesion) };
 }
 
+/**
+ * Las frases de señal nuevas, con la clase andando: la pasada siguiente del
+ * ciclo ya las oye. Lo que ya se oyó no se vuelve a mirar: una toma que abrió
+ * con una frase que ahora no está sigue abierta.
+ *
+ * Sin clase no hace nada: la próxima arranca con las que estén en Ajustes.
+ */
+function cambiarFrases(frases) {
+    if (!sesion || !sesion.viva) return false;
+    sesion.frases = frases || null;
+    registro.anotar('main', 'grabar.frases', {
+        abrir: (sesion.frases && sesion.frases.abrir || []).length,
+        cerrar: (sesion.frases && sesion.frases.cerrar || []).length,
+        vista: (sesion.frases && sesion.frases.vista || []).length
+    });
+    return true;
+}
+
 /* ─── El cierre ───────────────────────────────────────────────────────────*/
 
 /**
@@ -795,6 +816,7 @@ module.exports = {
     cambiarEntrada,
     reabrirAudio,
     cambiarIdioma,
+    cambiarFrases,
     editar,
     editarGrabada: (json, cambio) => sesionesGrabadas.editarGrabada(json, cambio, enCurso()),
     // Con la secuencia en curso, para que la que se está grabando no se abra por

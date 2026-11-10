@@ -370,7 +370,8 @@ async function rehacer(sesion, id) {
         // porque partir es una decisión de contenido y acá el editor está mirando.
         // Se busca solo ADENTRO: una "Pausa" que cae en una orilla es de la toma
         // de al lado o de nadie, y avisarla acá mandaría a cortar donde no va.
-        const dentro = vivo.senales(toma.palabras).filter(s => s.tipo === 'cierra');
+        const dentro = vivo.senales(toma.palabras, undefined, vivo.reglasDeFrases(sesion.frases))
+            .filter(s => s.tipo === 'cierra');
         toma.pausaAdentro = dentro.length ? toma.palabras[dentro[0].desde].t : null;
 
         espejo.fijar(sesion);

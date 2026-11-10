@@ -19,6 +19,7 @@ const path = require('path');
 const os = require('os');
 
 const idiomas = require('./idiomas');
+const vivo = require('./notas-vivo');
 
 /**
  * Los cuadros por segundo que se pueden elegir.
@@ -108,8 +109,59 @@ const DEFAULTS = {
      * (`prproj-carpeta.leerConfig`); esta es el punto de partida de una carpeta
      * que todavía no tiene ninguna.
      */
-    prproj: null
+    prproj: null,
+    /**
+     * Las frases que abren, cierran y cambian de vista (ver
+     * `notas-vivo.FRASES_DE_FABRICA`). Se cambian en Ajustes, también con la
+     * clase andando.
+     */
+    frases: vivo.FRASES_DE_FABRICA
 };
+
+/** Lo más largo que puede ser una frase, y cuántas entran en cada lista. */
+const FRASE_MAX = 60;
+const FRASES_POR_LISTA = 20;
+
+/**
+ * Las frases, sanas.
+ *
+ * Sin vacías ni repetidas —comparadas como las compara el motor, sin acentos
+ * ni signos—, y una misma frase en una sola lista: la primera que la tenga, en
+ * el orden abrir, cerrar, vista. Una frase que abriera y cerrara a la vez haría
+ * lo que le toque primero en el código, que no es nada que alguien eligió.
+ *
+ * Una lista que se vació se queda vacía: quien sacó «pausa» no quiere que
+ * vuelva sola. Solo una lista que no está —un archivo de antes de las frases—
+ * toma las de fábrica.
+ */
+function frasesSanas(crudas) {
+    const c = crudas && typeof crudas === 'object' ? crudas : {};
+    const fabrica = vivo.FRASES_DE_FABRICA;
+    const vistas = new Set(vivo.VISTAS.map(v => v.nombre));
+    const yaEstan = new Set();
+    const lista = (cual, conVista) => {
+        const cruda = Array.isArray(c[cual]) ? c[cual] : fabrica[cual];
+        const salida = [];
+        for (const x of cruda) {
+            const texto = typeof x === 'string' ? x : (x && x.frase);
+            if (typeof texto !== 'string') continue;
+            const frase = texto.replace(/\s+/g, ' ').trim().slice(0, FRASE_MAX).trim();
+            const clave = vivo.palabrasDeFrase(frase).join(' ');
+            if (!clave || yaEstan.has(clave)) continue;
+            if (conVista && !vistas.has(x && x.vista)) continue;
+            yaEstan.add(clave);
+            salida.push(conVista ? { frase, vista: x.vista } : frase);
+            if (salida.length >= FRASES_POR_LISTA) break;
+        }
+        return salida;
+    };
+    return {
+        cuenta: c.cuenta !== false,
+        abrir: lista('abrir', false),
+        cerrar: lista('cerrar', false),
+        vista: lista('vista', true)
+    };
+}
 
 /**
  * Uno de los idiomas que la app oye, o lo de fábrica.
@@ -217,7 +269,8 @@ function sanear(crudo) {
         // Lo que haya guardado que no sea un nombre —el `false` de la versión en
         // la que esto era un sí o un no— se lee como «ninguna».
         camara: (typeof c.camara === 'string' && c.camara) || null,
-        prproj: saneada(c.prproj)
+        prproj: saneada(c.prproj),
+        frases: frasesSanas(c.frases)
     };
 }
 
@@ -295,5 +348,5 @@ function recordarCarpeta(ruta) {
 
 module.exports = {
     leer, guardar, recordarCarpeta, aviso, dondeViven: archivo,
-    sanear, archivo, DEFAULTS, RECIENTES, FPS_POSIBLES
+    sanear, archivo, DEFAULTS, RECIENTES, FPS_POSIBLES, FRASE_MAX, FRASES_POR_LISTA
 };

@@ -19,6 +19,7 @@ const espejo = require('./espejo');
 const residente = require('./oido-residente');
 const oirToma = require('./oir-toma');
 const relecturas = require('./relecturas');
+const cambiosToma = require('./cambios-toma');
 
 /**
  * Cada cuánto se escucha buscando señales, y cuánto se escucha.
@@ -144,7 +145,8 @@ async function buscarSenales(s) {
         if (oido && oido.palabras.length) {
             // La ventana entera, incluido el solape: quitar acá lo ya oído deshacía
             // el solape justo cuando servía (ver `aplicarSenales`).
-            eventos = vivo.aplicarSenales(s.estado, oido.palabras, { firmeHastaMs: hasta - COLA_MS, finMs: hasta });
+            eventos = vivo.aplicarSenales(s.estado, oido.palabras,
+                { firmeHastaMs: hasta - COLA_MS, finMs: hasta, frases: s.frases });
             for (const ev of eventos) {
                 if (ev.tipo === 'cerrada') relecturas.encolar(s, ev.toma);
                 // Una «Pausa» que se oyó y no cerró. Al registro y no a la
@@ -158,6 +160,18 @@ async function buscarSenales(s) {
                         pide: vivo.SILENCIO_TRAS_PAUSA_SEC
                     });
                 }
+            }
+            // Las frases de vista, al final y no en el orden de arriba: partir
+            // corre los números de las tomas de después, y la cola de arriba
+            // ya se encargó de las suyas (`correrLoDeAfuera`).
+            for (const ev of eventos) {
+                if (ev.tipo !== 'vista') continue;
+                ev.hizo = cambiosToma.vistaPorFrase(s, ev);
+                registro.anotar('main', 'senal.vista', {
+                    segundo: Math.round((ev.desdeMs - s.estado.ceroMs) / 100) / 10,
+                    vista: ev.vista,
+                    hizo: ev.hizo
+                });
             }
             if (eventos.length) espejo.escribir(s);
         }

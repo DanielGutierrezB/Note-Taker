@@ -16,6 +16,7 @@ const grabacion = require('../engine/grabacion');
 const nombreDeSesion = require('../engine/nombre-de-sesion');
 const audioApp = require('../engine/audio-app');
 const disco = require('../engine/disco');
+const ajustes = require('../engine/ajustes');
 
 /** Cada cuánto se repite el aviso de que el audio se está perdiendo. */
 const AVISO_DE_PCM_MS = 2000;
@@ -34,8 +35,11 @@ function registrar({ ipcMain, app, send, anotar }) {
         const p = payload || {};
         olvidarPcmRoto();
         try {
+            // Las frases salen de Ajustes y no de la ventana: es el mismo
+            // archivo que `ajustes-guardar` acaba de escribir.
             const estado = grabacion.iniciar({
                 ...p,
+                frases: ajustes.leer().frases,
                 avisar: aviso => send('grabar-aviso', aviso)
             });
             anotar('grabar.inicia', {
@@ -59,6 +63,7 @@ function registrar({ ipcMain, app, send, anotar }) {
         try {
             const estado = grabacion.reanudar(json, {
                 ...(payload || {}),
+                frases: ajustes.leer().frases,
                 avisar: aviso => send('grabar-aviso', aviso)
             });
             anotar('grabar.reanuda', { json, secuencia: estado.secuencia });

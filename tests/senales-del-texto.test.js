@@ -181,12 +181,29 @@ module.exports = async t => {
             const m = codigo.match(new RegExp(`^(?:export )?const ${nombre} = (.+);$`, 'm'));
             return m ? m[1].trim() : null;
         };
-        for (const nombre of ['CUENTA', 'RETOMAR', 'PAUSA', 'OK',
+        for (const nombre of ['CUENTA', 'OK',
             'MINIMO_DE_CUENTA', 'VALOR', 'SILENCIO_TRAS_PAUSA_SEC']) {
             const delMotor = literal(motor, nombre);
             t.ok(delMotor, `${nombre} se encontró en el motor`);
             t.eq(literal(ventana, nombre), delMotor, `${nombre} es la misma en la ventana`);
         }
+    });
+
+    t.test('las frases se buscan igual: la misma función, y las mismas de fábrica y vistas', () => {
+        const motor = leer('engine', 'notas-vivo.js');
+        const ventana = leer('src', 'js', 'grabar', 'senales.js');
+        const cuerpo = (codigo, nombre) => {
+            const desde = codigo.indexOf(`function ${nombre}(`);
+            return desde === -1 ? null : codigo.slice(desde, codigo.indexOf('\n}', desde));
+        };
+        t.ok(cuerpo(motor, 'dondeTermina'), 'el motor la tiene');
+        t.eq(cuerpo(ventana, 'dondeTermina'), cuerpo(motor, 'dondeTermina'));
+        t.eq(cuerpo(ventana, 'norm'), cuerpo(leer('engine', 'texto.js'), 'norm'), 'y la misma comparación');
+        const vivo = require('../engine/notas-vivo');
+        const fabrica = ventana.match(/const f = frases \|\| (\{.+\});/)[1];
+        t.deep(Function(`return ${fabrica}`)(), JSON.parse(JSON.stringify(vivo.FRASES_DE_FABRICA)));
+        const vistas = ventana.match(/^const VISTAS = (\[.+\]);$/m)[1];
+        t.deep(Function(`return ${vistas}`)(), vivo.VISTAS.map(v => v.nombre));
     });
 
     t.group('señales · el resalte no le cambia la caja a la palabra');

@@ -28,6 +28,7 @@ import * as ojo from './grabar/ojo.js';
 import * as rotuloBarra from './grabar/rotulo-barra.js';
 import * as fotos from './fotos.js';
 import { anotarLosGestos } from './acciones.js';
+import * as frases from './frases.js';
 
 const app = {
     ajustes: null,
@@ -110,6 +111,7 @@ async function arrancar() {
     anotarLosGestos(window.nt.anotar);
     app.ajustes = await window.nt.ajustesLeer();
     if (app.ajustes.aviso) avisar(app.ajustes.aviso, 'error');
+    frases.pintar(app.ajustes.frases);
 
     $('#marca').innerHTML = `${icono('claqueta')}<span>Note Taker</span>`;
     $('#btn-ajustes').innerHTML = icono('ajustes');
@@ -351,6 +353,7 @@ function conectarAjustes() {
     $('#aj-idioma').addEventListener('change', e => guardar({ idioma: e.target.value }));
     $('#aj-camara').addEventListener('change', e => ponerCamara(e.target.value));
     $('#btn-log').addEventListener('click', e => reportar(e.currentTarget));
+    frases.conectar(guardar);
 }
 
 function esNtsc(f) {
@@ -360,6 +363,7 @@ function esNtsc(f) {
 async function pintarAjustes() {
     $('#aj-fps').value = String(app.ajustes.fps);
     pintarIdioma();
+    frases.pintar(app.ajustes.frases);
     pintarCamaras();
 }
 

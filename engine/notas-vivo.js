@@ -222,15 +222,81 @@ function estadoNuevo(params) {
  * «one of the problems».
  */
 const CUENTA = /^(?:3|2|1|tres|dos|uno|three|two|one)[.,…!?]*$/i;
-const RETOMAR = /^retomamos[.,…!?]*$/i;
+
 /**
- * «Pausa» o «Pause», que es la misma palabra dicha en el otro idioma.
+ * Las frases que abren, cierran y cambian de vista, como vienen de fábrica.
  *
- * Son dos letras de diferencia y el riesgo es el mismo que ya se corría en
- * español: lo que separa la señal de «acá hacemos una pausa» es el silencio
- * detrás, no la palabra.
+ * Se editan en Ajustes (`engine/ajustes.js` las sanea) y se pueden cambiar con
+ * la clase andando: la pasada siguiente del ciclo ya oye las nuevas.
+ *
+ * «Pausa» y «Pause» son la misma palabra dicha en los dos idiomas, y el riesgo
+ * es el mismo: lo que separa la señal de «acá hacemos una pausa» es el silencio
+ * detrás, no la palabra (ver `SILENCIO_TRAS_PAUSA_SEC`).
+ *
+ * La cuenta no es una frase sino un patrón —cualquier cuenta hacia abajo que
+ * termine en uno—, así que va como un interruptor.
  */
-const PAUSA = /^paus[ae][.,…!?]*$/i;
+const FRASES_DE_FABRICA = Object.freeze({
+    cuenta: true,
+    abrir: Object.freeze(['retomamos']),
+    cerrar: Object.freeze(['pausa', 'pause']),
+    vista: Object.freeze([])
+});
+
+/** Las palabras de una frase, comparables: sin mayúsculas, acentos ni signos. */
+function palabrasDeFrase(frase) {
+    return String(frase == null ? '' : frase).split(/\s+/).map(norm).filter(Boolean);
+}
+
+/**
+ * Las frases, listas para buscarlas en lo que se oye.
+ *
+ * Se busca la frase pegada —«vamosanuestrapantalla»— sobre las palabras
+ * pegadas, y no palabra por palabra: Whisper a veces parte una palabra en dos
+ * («re» «tomamos») o junta dos en una, y la frase es la misma. Las más largas
+ * primero: «pausa larga» tiene que ganarle a «pausa».
+ *
+ * @param {object} [frases] las de Ajustes; sin ellas, las de fábrica
+ */
+function reglasDeFrases(frases) {
+    const f = frases || FRASES_DE_FABRICA;
+    const de = (lista, tipo) => (Array.isArray(lista) ? lista : []).map(x => {
+        const texto = typeof x === 'string' ? x : (x && x.frase);
+        const palabras = palabrasDeFrase(texto);
+        return { tipo, texto: limpio(texto), pegada: palabras.join(''), palabras: palabras.length, vista: x && x.vista };
+    }).filter(r => r.pegada && (tipo !== 'vista' || VISTAS.some(v => v.nombre === r.vista)));
+    return {
+        cuenta: f.cuenta !== false,
+        frases: de(f.abrir, 'abre').concat(de(f.cerrar, 'cierra'), de(f.vista, 'vista'))
+            .sort((a, b) => b.pegada.length - a.pegada.length)
+    };
+}
+
+/**
+ * Si desde la palabra `i` se dijo esa frase: hasta qué palabra llega, o -1.
+ *
+ * Las palabras que el modelo devuelve vacías —un «…» suelto— no cortan la frase.
+ * Las citadas sí (ver adentro).
+ */
+function dondeTermina(lista, i, pegada) {
+    let junto = '';
+    for (let k = i; k < lista.length; k++) {
+        const crudo = String((lista[k] && lista[k].texto) || '').trim().replace(/^[¿¡"'(]+/, '');
+        // Con comillas es una cita: «el profesor dice "Pausa", y para» habla
+        // de la señal, no la dice. La de apertura sola es el comienzo de lo
+        // que alguien dijo, y esa sí vale.
+        if (/["«»“”]/.test(crudo)) return -1;
+        const n = norm(crudo);
+        if (!n) {
+            if (k === i) return -1;
+            continue;
+        }
+        junto += n;
+        if (junto === pegada) return k;
+        if (!pegada.startsWith(junto)) return -1;
+    }
+    return -1;
+}
 /**
  * "Ok" delante del conteo es parte de la señal, no de la clase.
  *
@@ -292,21 +358,45 @@ function palabra(w) {
  * (`speech-edges.trimChatter`), y por las mismas razones.
  *
  * @param {Array} palabras [{t, texto}] con `t` en hora del día (ms)
- * @returns {Array} [{tipo:'abre'|'cierra'|'pausa-corta', desde:number, hasta:number}]
+ * @param {number} [finMs] hasta dónde llega el audio oído
+ * @param {object} [reglas] las de `reglasDeFrases`; sin ellas, las de fábrica
+ * @returns {Array} [{tipo:'abre'|'cierra'|'pausa-corta'|'vista', desde:number, hasta:number}]
  */
-function senales(palabras, finMs) {
+function senales(palabras, finMs, reglas) {
     const lista = palabras || [];
     const salida = [];
+    const r = reglas || reglasDeFrases();
 
     for (let i = 0; i < lista.length; i++) {
         const p = palabra(lista[i]);
+        let frase = null;
+        let hasta = -1;
+        for (const f of r.frases) {
+            hasta = dondeTermina(lista, i, f.pegada);
+            if (hasta !== -1) { frase = f; break; }
+        }
 
-        if (RETOMAR.test(p)) {
-            salida.push({ tipo: 'abre', desde: i, hasta: i, por: 'retomamos' });
+        if (frase && frase.tipo === 'abre') {
+            salida.push({ tipo: 'abre', desde: i, hasta, por: frase.texto });
+            i = hasta;
             continue;
         }
 
-        if (PAUSA.test(p)) {
+        if (frase && frase.tipo === 'vista') {
+            salida.push({ tipo: 'vista', desde: i, hasta, vista: frase.vista, por: frase.texto });
+            i = hasta;
+            continue;
+        }
+
+        // Una frase de varias palabras cierra sin pedir silencio: «terminamos
+        // por hoy» no se dice hablando de otra cosa como se dice «pausa».
+        if (frase && frase.tipo === 'cierra' && frase.palabras > 1) {
+            salida.push({ tipo: 'cierra', desde: i, hasta, por: frase.texto, larga: true });
+            i = hasta;
+            continue;
+        }
+
+        if (frase && frase.tipo === 'cierra') {
             // Sin lo que sigue no se puede saber si es la señal o una palabra de
             // la clase: se pide silencio detrás. La última palabra de la tirada
             // se resuelve con el silencio que venga después, así que quien llama
@@ -332,21 +422,24 @@ function senales(palabras, finMs) {
             // daba una centésima. Desde el comienzo, el hueco mide lo único que
             // se puede medir sin creerle al final: cuánto audio pasó desde que
             // la palabra empezó sin que llegara nada más.
-            const siguiente = lista[i + 1];
+            const siguiente = lista[hasta + 1];
             const hueco = siguiente
                 ? (siguiente.t - lista[i].t) / 1000
                 : (finMs != null ? (finMs - lista[i].t) / 1000 : Infinity);
             if (hueco >= SILENCIO_TRAS_PAUSA_SEC) {
-                salida.push({ tipo: 'cierra', desde: i, hasta: i, por: 'pausa' });
+                salida.push({ tipo: 'cierra', desde: i, hasta, por: frase.texto });
             } else {
                 // Una «Pausa» que no cerró queda anotada con su hueco. Es lo
                 // único que deja saber, al día siguiente, si la toma se cerró a
                 // mano porque el profesor siguió hablando o porque este número
                 // está mal puesto (lo escribe `grabacion.js` en el registro).
-                salida.push({ tipo: 'pausa-corta', desde: i, hasta: i, huecoSec: Math.round(hueco * 100) / 100 });
+                salida.push({ tipo: 'pausa-corta', desde: i, hasta, huecoSec: Math.round(hueco * 100) / 100 });
             }
+            i = hasta;
             continue;
         }
+
+        if (!r.cuenta) continue;
 
         // El conteo: se mira si desde acá arranca una tirada de números.
         let j = i;
@@ -385,6 +478,12 @@ function senales(palabras, finMs) {
 function textoDe(palabras, desde, hasta) {
     return (palabras || []).slice(desde, hasta + 1).map(w => limpio(w.texto)).join(' ').trim();
 }
+
+/**
+ * Cuánto después de empezar su última palabra se corta una toma por una frase
+ * de vista, si detrás todavía no se oyó nada.
+ */
+const FIN_DE_FRASE_MAX_MS = 800;
 
 /** Cuántas palabras del arranque se citan en el comentario del IN. */
 const PALABRAS_DEL_CUE = 8;
@@ -1272,7 +1371,8 @@ function aplicarSenales(estado, palabras, opciones) {
     // «funcionando» empieza a tiempo y se guardaría cortada—, así que ahí sigue
     // valiendo el final (ver `cuantasFirmes`).
     const empezoATiempo = m => nuevas[m.hasta].t <= firme;
-    const marcas = senales(nuevas, finMs).filter(m => empezoATiempo(m) && !yaVista(m));
+    const reglas = reglasDeFrases(opciones && opciones.frases);
+    const marcas = senales(nuevas, finMs, reglas).filter(m => empezoATiempo(m) && !yaVista(m));
     // Dónde empieza lo que no se había oído: por el TEXTO y no por la hora (ver
     // `dondeSigue`).
     const inicioNuevo = dondeSigue(estado, nuevas);
@@ -1325,6 +1425,37 @@ function aplicarSenales(estado, palabras, opciones) {
         // que no se reconoce.
         if (marca.tipo === 'pausa-corta') {
             eventos.push({ tipo: 'pausa-corta', ms: nuevas[marca.desde].t, huecoSec: marca.huecoSec });
+            continue;
+        }
+
+        // Cambiar de vista no abre ni cierra: la frase es clase —el profesor
+        // se lo dice a la gente, no a la app— y sus palabras se guardan como
+        // cualquier otra. Sin toma abierta queda elegida para la próxima; con
+        // una abierta, el corte lo hace quien llama (`cambiosToma.vistaPorFrase`),
+        // que es quien anota en el historial: así ⌘Z lo deshace de una vez.
+        if (marca.tipo === 'vista') {
+            const abierta = tomaAbierta(estado);
+            if (!abierta) {
+                if (vistaDeLaProxima(estado, marca.vista)) {
+                    eventos.push({ tipo: 'vista-proxima', vista: marca.vista, por: marca.por });
+                }
+                continue;
+            }
+            if (abierta.vista === marca.vista) continue;
+            // La toma se parte justo después de la frase: en la palabra que la
+            // sigue, o poco después de la última si todavía no llegó nada. Sin
+            // ese tope, el final estirado de la última palabra (ver arriba)
+            // corría el corte hasta el borde de la ventana.
+            const ultima = nuevas[marca.hasta];
+            const sigue = nuevas[marca.hasta + 1];
+            const finDeLaFrase = ultima.hasta != null ? ultima.hasta : ultima.t;
+            eventos.push({
+                tipo: 'vista',
+                vista: marca.vista,
+                por: marca.por,
+                desdeMs: nuevas[marca.desde].t,
+                ms: sigue ? sigue.t : Math.min(finDeLaFrase, ultima.t + FIN_DE_FRASE_MAX_MS)
+            });
             continue;
         }
 
@@ -1420,8 +1551,12 @@ function aplicarSenales(estado, palabras, opciones) {
         // abrió lo hizo a propósito, y la cierra la próxima «Pausa» o la mano.
         const toma = tomaAbierta(estado);
         if (toma && nuevas[marca.desde].t > toma.inMs) {
+            // Una frase de varias palabras puede llegar partida entre dos
+            // pasadas, y entonces su comienzo ya se guardó como clase: se saca,
+            // o el OUT caería en el medio de la frase.
+            if (marca.larga) toma.palabras = (toma.palabras || []).filter(w => w.t < nuevas[marca.desde].t);
             toma.outMs = finDeToma(toma, nuevas[marca.desde].t);
-            eventos.push({ tipo: 'cerrada', toma: toma.id });
+            eventos.push({ tipo: 'cerrada', toma: toma.id, por: marca.por });
         }
         cursor = marca.hasta + 1;
     }
@@ -1922,6 +2057,9 @@ module.exports = {
     FRESCURA_MAX_SEC,
     finDeToma,
     SILENCIO_TRAS_PAUSA_SEC,
+    FRASES_DE_FABRICA,
+    palabrasDeFrase,
+    reglasDeFrases,
     vistaHeredada,
     vistaDeLaProxima,
     repartir,
