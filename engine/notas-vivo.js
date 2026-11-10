@@ -32,19 +32,7 @@
 const { norm } = require('./texto');
 
 /**
- * Las dos fuentes que graba el Rodecaster, en el orden en que las numera.
- *
- * Son índices y no nombres porque es lo que el resto de la cadena maneja: el
- * plan de cortes elige la cámara por número (`cameraIndex`), el XML le pone a
- * cada fuente la etiqueta de color que le toca por posición (`CLIP_LABELS` en
- * `fcp-xml.js`) y el reproductor monta un `<video>` por índice. El orden es
- * estable clase a clase porque el aparato numera siempre igual.
- */
-const CAMARA = 0;
-const PANTALLA = 1;
-
-/**
- * Las vistas que se pueden elegir: con qué se ve cada una y de qué color va.
+ * Las vistas que se pueden elegir: cómo se llama cada una y de qué color va.
  *
  * `colorDeMarcador` es el entero nativo de Premiere (`pproColor`) y es lo que
  * se escribe en el XML. Salen de un XML de verdad del director de contenido, no
@@ -66,26 +54,19 @@ const PANTALLA = 1;
  * otra cosa. Note Taker no tiene reproductor, y dos colores para lo mismo solo
  * lograban que el profesor se viera azul mientras se grababa y llegara rojo a
  * Premiere. Cómo se pinta sin perder contraste está en `src/js/colores.js`.
- *
- * `fuente` es con qué se ve cada vista en Class Cut (cámara o pantalla). Acá no
- * se usa para nada más que el `viewMap`, y se queda para que un XML hecho con
- * Note Taker se abra en Class Cut sin traducir nada.
  */
 const VISTAS = [
-    { nombre: 'PV', titulo: 'Profesor', fuente: CAMARA, colorDeMarcador: 4281740498 },
-    { nombre: 'R', titulo: 'Pantalla', fuente: PANTALLA, colorDeMarcador: 4280578025 },
-    { nombre: 'S', titulo: 'Slides', fuente: PANTALLA, colorDeMarcador: 4281828977 },
+    { nombre: 'PV', titulo: 'Profesor', colorDeMarcador: 4281740498 },
+    { nombre: 'R', titulo: 'Pantalla', colorDeMarcador: 4280578025 },
+    { nombre: 'S', titulo: 'Slides', colorDeMarcador: 4281828977 },
     // Los títulos son los nombres con que el equipo llama a cada plano: MG es
     // Motion Graphics y X2 es el tramo que se acelera en post. «Multi» y
     // «Doble» eran traducciones que nadie usaba (corregido el 14/10).
-    { nombre: 'MG', titulo: 'Motion Graphics', fuente: PANTALLA, colorDeMarcador: 4294345275 },
-    { nombre: 'X2', titulo: 'Acelerar', fuente: PANTALLA, colorDeMarcador: 4289825711 }
+    { nombre: 'MG', titulo: 'Motion Graphics', colorDeMarcador: 4294345275 },
+    { nombre: 'X2', titulo: 'Acelerar', colorDeMarcador: 4289825711 }
 ];
 
 const VISTA_POR_DEFECTO = 'PV';
-
-/** Nombre de vista → con qué fuente se ve. Es el `viewMap` de todo el pipeline. */
-const MAPA_DE_VISTAS = Object.fromEntries(VISTAS.map(v => [v.nombre, v.fuente]));
 
 /**
  * Nombres de vista que ya no se ofrecen pero que hay que seguir entendiendo.
@@ -140,8 +121,8 @@ function estadoNuevo(params) {
         secuencia: p.secuencia || null,
         curso: p.curso || null,
         // El número de clase (1 → `01` en el nombre) y, si esa clase se grabó
-        // más de una vez, cuál de esas veces es esta. Los dos nulos en el modo
-        // semanal, que nombra por fecha y no tiene clases que numerar.
+        // más de una vez, cuál de esas veces es esta. Los dos nulos en una
+        // sesión sin número, que se nombra solo por la fecha.
         //
         // `vez` y no `version`, que es el nombre que ya usa el formato del
         // sidecar (ver `PRIMERA_VEZ` en `nombre-de-sesion.js`).
@@ -232,8 +213,8 @@ function estadoNuevo(params) {
  * permitido el "1..." no era un número, el conteo se quedaba en "3, 2" y la toma
  * no se abría. Lo encontró la simulación sobre el audio de verdad.
  *
- * **En los dos idiomas.** Quien se graba contando su semana se pasa al inglés a
- * mitad de frase, y el conteo se le pasa con él: medido con el residente, el
+ * **En los dos idiomas.** Una clase puede pasarse al inglés a mitad de frase,
+ * y el conteo se le pasa con ella: medido con el residente, el
  * modelo escribe los números como dígitos en los dos idiomas —«Okay. 3, 2, 1.
  * So this week…»— así que la mayoría de las veces alcanza con lo que ya había.
  * Las palabras van igual, por las veces que no: «three» no es «3» y una toma
@@ -2019,11 +2000,8 @@ function aplicar(toma, cambio, tomas) {
 }
 
 module.exports = {
-    CAMARA,
-    PANTALLA,
     VISTAS,
     VISTA_POR_DEFECTO,
-    MAPA_DE_VISTAS,
     vistaLeida,
     aplicar,
     estadoNuevo,

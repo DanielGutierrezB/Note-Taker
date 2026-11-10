@@ -97,7 +97,7 @@ module.exports = function (t) {
     t.test('los dos rótulos tienen su hueco en la barra', () => {
         t.ok(/id="vivo-rotulos"/.test(barra), 'y está en la fila de arriba, con el nivel');
         t.ok(/idiomas\.rotulo\('vivo-idioma', estado\.idioma, estado\.idiomaOido \|\| null\)/.test(rotulos),
-            'el de idioma es el mismo que el del vídeo semanal');
+            'el de idioma sale de idiomas.rotulo');
         t.ok(/rotuloDeCamara\(\)/.test(rotulos) && /id: 'vivo-camara'/.test(camara),
             'y el de cámara es de esta pantalla, que es la única con cámara de referencia');
     });

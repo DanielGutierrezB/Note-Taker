@@ -76,7 +76,7 @@ async function clicLento(p, punto) {
     await p.setViewport({ width: 1440, height: 820 });
 
     for (const [escenario, id] of [
-        ['en-vivo', 'vivo-idioma'], ['en-vivo', 'vivo-camara'], ['semanal-grabando', 'semanal-idioma']
+        ['en-vivo', 'vivo-idioma'], ['en-vivo', 'vivo-camara']
     ]) {
         console.log(`\n── ${id}\n`);
         await p.goto(`${sitio.url}?e=${escenario}`, { waitUntil: 'networkidle0' });
@@ -126,24 +126,9 @@ async function clicLento(p, punto) {
     decir(cambio.dice === 'Idioma: EN', `dice el idioma nuevo («${cambio.dice}»)`);
     decir(cambio.mismo, 'y es el mismo botón, no uno nuevo');
 
-    console.log('\n── El vídeo semanal\n');
-    await p.goto(`${sitio.url}?e=semanal-grabando`, { waitUntil: 'networkidle0' });
+    console.log('\n── Con el menú abierto\n');
+    await p.goto(`${sitio.url}?e=en-vivo`, { waitUntil: 'networkidle0' });
     await p.evaluate(() => window.maquetaPuesta);
-    // Lo que oye cambia sin que cambie ninguna toma: el rótulo tiene que
-    // enterarse con el reloj. (Que sea con el reloj y no con la tarjeta lo
-    // cuida la suite: en la maqueta la tarjeta se rehace sola cada tanto, y
-    // acá no se distinguiría una cosa de la otra.)
-    await p.evaluate(() => {
-        const real = window.nt.grabarEstado;
-        window.nt.grabarEstado = async () => ({ ...(await real()), idioma: 'es', idiomaOido: 'en' });
-    });
-    await espera(1600);
-    const semanal = await p.evaluate(() => ({
-        dice: document.getElementById('semanal-idioma').getAttribute('aria-label'),
-        avisa: document.getElementById('semanal-idioma').getAttribute('data-avisa')
-    }));
-    decir(semanal.dice === 'Idioma: ES' && semanal.avisa === 'si',
-        `en ámbar al oír otro idioma («${semanal.dice}», ámbar: ${semanal.avisa})`);
 
     // Con el menú abierto, una letra de vista le cambiaba la vista a una toma.
     await p.evaluate(() => {
@@ -151,7 +136,7 @@ async function clicLento(p, punto) {
         const real = window.nt.grabarEditar;
         window.nt.grabarEditar = (...a) => { window.pedidos.push(a[0] && a[0].tipo); return real(...a); };
     });
-    await p.click('#semanal-idioma');
+    await p.click('#vivo-idioma');
     await espera(300);
     for (const k of ['p', 's', 'k', 'z']) { await p.keyboard.press(k); await espera(120); }
     const escapadas = await p.evaluate(() => window.pedidos);

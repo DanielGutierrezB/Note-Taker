@@ -210,8 +210,8 @@ module.exports = async function (t) {
     };
 
     enElMundo('una letra no llega a la pantalla', () => {
-        // En el vídeo semanal, una letra de vista con el menú abierto le
-        // cambiaba la vista a una toma que no se estaba mirando.
+        // Una letra de vista con el menú abierto le cambiaría la vista a una
+        // toma que no se está mirando.
         conMenu();
         for (const k of ['k', 'p', 'z', 'Enter', ' ']) {
             t.ok(teclear(k).parada, `«${k}» no sigue hasta la pantalla`);

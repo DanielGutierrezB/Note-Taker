@@ -103,7 +103,7 @@ function registrar(p) {
             herramientas: { doctor, dependencias: faltan },
             ventana,
             grabando: grabacion.activa() ? grabacion.resumen() : null,
-            carpetas: [lasAjustes.carpeta, lasAjustes.semanal && lasAjustes.semanal.carpeta],
+            carpetas: [lasAjustes.carpeta],
             ffprobe: (paths.ffprobe() || {}).path || null,
             cuelgues: path.join(os.homedir(), 'Library', 'Logs', 'DiagnosticReports'),
             // En desarrollo la app corre como «Electron», y así se llaman sus

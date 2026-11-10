@@ -328,12 +328,11 @@ const esVista = v => vivo.VISTAS.some(x => x.nombre === v);
 /**
  * Cambiar de plano con la toma abierta: desde ESTE instante, no desde el IN.
  *
- * El gesto es el del vídeo semanal: estás grabando, abrís la mirilla y pasás a
- * «Yo» porque lo que sigue lo querés contar a cámara. Lo que ya dijiste con la
- * pantalla sigue con la pantalla. Antes le cambiaba la vista a la toma entera,
- * y lo de atrás pasaba a cámara también. Así que se parte donde llegó el audio
- * —la hora del motor, que es la del WAV— y la segunda mitad, que sigue abierta,
- * se lleva la vista nueva (`dividir`).
+ * El profesor pasa a mostrar su pantalla a mitad de toma: lo que ya dijo a
+ * cámara sigue con la cámara. Cambiarle la vista a la toma entera pasaría lo de
+ * atrás a pantalla también. Así que se parte donde llegó el audio —la hora del
+ * motor, que es la del WAV— y la segunda mitad, que sigue abierta, se lleva la
+ * vista nueva (`dividir`).
  *
  * Con la toma recién abierta (`PARA_PARTIR_MS`) no se parte: es corregir la
  * vista que se acaba de poner, y va a la toma entera. Lo mismo si ya está

@@ -134,12 +134,6 @@ function numeroEnElNombre(numero) {
 /**
  * La fecha y la hora, como se escriben en un nombre: `2026-10-05_10-27-28`.
  *
- * Está aparte porque lo usan dos cosas que TIENEN que coincidir: el nombre de
- * los archivos de la sesión y el de la carpeta que los contiene en el modo
- * semanal. Son el mismo instante —el cero de la grabación— y si se formatearan
- * en dos sitios podrían separarse por un segundo justo al cruzar el minuto, y
- * entonces la carpeta diría una hora y los archivos de adentro otra.
- *
  * Sin `Z` ni desfase: es la hora de esta máquina, que es la que la persona
  * reconoce. `leer` la vuelve a interpretar igual.
  */
@@ -194,5 +188,5 @@ function leer(nombre) {
 }
 
 module.exports = {
-    PRIMERA_VEZ, armar, sello, leer, cursoEnElNombre, cursoPorDefecto, numeroEnElNombre
+    PRIMERA_VEZ, armar, leer, cursoEnElNombre, cursoPorDefecto, numeroEnElNombre
 };

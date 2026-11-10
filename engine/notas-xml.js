@@ -427,11 +427,9 @@ function sidecar(estado) {
         })),
         dispositivo: estado.dispositivo || null,
         sesiones: estado.sesiones || [],
-        // Los dos vídeos del modo semanal, si los hubo: qué archivo es cada uno
-        // y a qué hora del reloj de pared empieza. Van al sidecar porque es lo
-        // que deja volver a cortar el MP4 más tarde sin grabar otra vez, igual
-        // que `sesiones` deja rehacer el XML sin el audio delante. En el modo de
-        // clase esto queda vacío y el XML no se entera de que existe.
+        // Los vídeos que grababa el modo semanal, que ya no existe. Se siguen
+        // escribiendo para que reescribir el archivo de notas de una de esas
+        // grabaciones no los borre; en una clase queda vacío.
         videos: estado.videos || [],
         tomas: (estado.tomas || []).map(t => ({
             id: t.id,

@@ -46,7 +46,6 @@
 
 const captura = require('./captura');
 const idiomas = require('./idiomas');
-const videoCrudo = require('./video-crudo');
 const registro = require('./registro');
 const vivo = require('./notas-vivo');
 const historial = require('./deshacer');
@@ -75,47 +74,6 @@ function enCurso() {
 }
 
 /**
- * Dónde está escribiendo la sesión viva, para quien tenga que escribir al lado.
- *
- * Lo usa el modo semanal: los dos vídeos van a una carpeta de ESTA sesión y con
- * SU nombre, y quien los graba es la ventana, que no sabe ni una cosa ni la
- * otra. Devolver el objeto entero dejaría a cualquiera tocar la sesión por
- * dentro; esto es una copia de los tres datos que hacen falta.
- */
-function dondeVa() {
-    if (!sesion) return null;
-    return { dir: sesion.dir, secuencia: sesion.estado.secuencia, ceroMs: sesion.estado.ceroMs };
-}
-
-/**
- * Apunta en la sesión los vídeos que se grabaron al lado del audio.
- *
- * Van al estado —y de ahí al sidecar— porque son el material del corte: con el
- * archivo y su hora de arranque se puede volver a exportar el MP4 más tarde sin
- * grabar nada otra vez.
- *
- * **Lo que identifica a un vídeo es su archivo, no su fuente.** Antes era el
- * `cual`, y así una pantalla nueva reemplazaba a la anterior, que es lo que
- * hace falta al reanudar: el archivo se vuelve a abrir con el mismo nombre y
- * se sobreescribe, así que el apunte viejo ya no describe nada. Con el archivo
- * como identidad eso sigue pasando igual —mismo nombre, mismo apunte— y además
- * caben los tramos: cambiar de ventana a mitad de grabación deja varios
- * archivos de pantalla, cada uno con su hora de arranque, y los dos hacen
- * falta para cubrir las tomas de antes y las de después.
- */
-function anotarVideos(videos) {
-    if (!sesion || !videos || !videos.length) return [];
-    const puestos = sesion.estado.videos || [];
-    for (const v of videos) {
-        if (!v || !v.cual) continue;
-        const i = puestos.findIndex(x => x.archivo === v.archivo);
-        if (i === -1) puestos.push(v); else puestos[i] = v;
-    }
-    sesion.estado.videos = puestos;
-    return puestos;
-}
-
-/**
  * Suelta la sesión, y le avisa.
  *
  * Los dos son necesarios y por eso van juntos. Bajar `viva` es lo que hace que
@@ -139,7 +97,7 @@ function soltar() {
  * por forma de onda.
  *
  * @param {object} params { dir, numero, fps, idioma, dispositivo,
- *   sampleRate, canales, avisar, sinReloj, reanudar, carpetaPropia }
+ *   sampleRate, canales, avisar, sinReloj, reanudar }
  */
 function iniciar(params) {
     const p = params || {};
@@ -154,20 +112,7 @@ function iniciar(params) {
     const previa = p.reanudar || null;
     const ceroMs = previa ? previa.ceroMs : Date.now();
 
-    // `carpetaPropia` es el modo semanal: una carpeta por grabación dentro de
-    // la que eligió la persona (ver `workspace.carpetaDeGrabacion`). Se decide
-    // ACÁ y no en la ventana por dos razones: la ventana no tiene `path`, y
-    // sobre todo el nombre de la carpeta tiene que salir del MISMO `ceroMs` que
-    // nombra los archivos de adentro, que se acaba de fijar dos líneas arriba.
-    // Mandándolo ya armado desde la ventana serían dos relojes y podrían
-    // separarse por un segundo justo al cruzar el minuto.
-    //
-    // Al reanudar no se toca: la sesión previa ya tiene su carpeta, y hacerle
-    // otra con la hora de ahora dejaría la mitad del audio en una y la mitad en
-    // la otra.
-    const dir = p.carpetaPropia && !previa
-        ? workspace.carpetaDeGrabacion(p.dir, nombreDeSesion.sello(ceroMs))
-        : p.dir;
+    const dir = p.dir;
 
     // El número de clase, y cuál de las veces que se grabó esa clase es esta.
     //
@@ -177,8 +122,7 @@ function iniciar(params) {
     // Drive compartido— puede haber aparecido la 01 de otra máquina. Lo que vale
     // es lo que hay en el disco en el instante en que se va a escribir.
     //
-    // Sin número no hay versión: así entra el modo semanal, que nombra por fecha
-    // y no tiene clases que numerar.
+    // Sin número no hay versión: la sesión se nombra solo por la fecha.
     const numero = nombreDeSesion.numeroEnElNombre(p.numero) ? Math.floor(Number(p.numero)) : null;
     const vez = numero != null ? sesionesGrabadas.vezLibre(dir, numero) : null;
 
@@ -521,10 +465,6 @@ function cerrarLoAbierto() {
         if (cerrada) sesion.estado.sesiones.push(cerrada);
         sesion.captura = null;
     }
-    // Y los vídeos del modo semanal, si los había. Cerrarlos acá y no solo
-    // cuando la ventana avisa es lo que hace que cerrar la app a mitad de una
-    // grabación deje dos archivos que se abren: lo que llegó, llegó.
-    anotarVideos(videoCrudo.cerrarTodo());
     return abierta ? abierta.id : null;
 }
 
@@ -655,8 +595,6 @@ module.exports = {
     topeDeVentana: ciclo.topeDeVentana,
     activa,
     enCurso,
-    dondeVa,
-    anotarVideos,
     iniciar,
     pcm,
     cambiarIdioma,

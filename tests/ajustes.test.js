@@ -17,8 +17,8 @@ const ajustes = require('../engine/ajustes');
 module.exports = function (t) {
     t.group('ajustes · dónde se escriben');
 
-    // El banco de pruebas de punta a punta necesita escribir ajustes —modo
-    // semanal, carpeta de /tmp— y además la app, mientras graba, guarda sola el
+    // Los guiones de prueba necesitan escribir ajustes —una carpeta de /tmp— y
+    // además la app, mientras graba, guarda sola el
     // micrófono y la cámara, que ahí son los falsos de Chromium. Que eso no
     // pueda caer sobre la configuración de quien usa la app es una propiedad, no
     // una buena costumbre: el intento anterior fue devolverlos en un `finally`,
@@ -41,7 +41,7 @@ module.exports = function (t) {
                 throw new Error(`NO se escribe: los ajustes irían a ${ajustes.dondeViven()}`
                     + ` en vez de a ${aparte}`);
             }
-            ajustes.guardar({ modo: 'semanal', dispositivo: 'solo de prueba' });
+            ajustes.guardar({ dispositivo: 'solo de prueba' });
             t.ok(fs.existsSync(aparte), 'escribió donde se le dijo');
             t.eq(JSON.parse(fs.readFileSync(aparte, 'utf8')).dispositivo, 'solo de prueba');
             t.eq(ajustes.leer().dispositivo, 'solo de prueba', 'y lee de ahí también');
@@ -73,9 +73,14 @@ module.exports = function (t) {
         t.eq(a.idioma, 'auto');
         t.eq(a.carpeta, null);
         t.deep(a.carpetas, []);
-        t.eq(a.modo, 'clase', 'la app abre tomando notas, como siempre');
-        t.deep(a.semanal, { carpeta: null, idioma: 'auto' },
-            'los dos modos detectan el idioma: equivocarlo no sale caro, sale traducido');
+    });
+
+    t.test('lo del modo semanal que quedó escrito se cae al guardar', () => {
+        // El modo pasó a otro proyecto. `sanear` rearma el objeto entero, así
+        // que lo de antes no llega a la app ni vuelve al archivo.
+        const a = ajustes.sanear({ modo: 'semanal', semanal: { carpeta: '/x', idioma: 'en' }, fps: 25 });
+        t.ok(!('modo' in a) && !('semanal' in a));
+        t.eq(a.fps, 25, 'y lo demás se queda');
     });
 
     t.test('solo los idiomas que la app oye, y cualquier otra cosa no', () => {
@@ -91,7 +96,6 @@ module.exports = function (t) {
         t.eq(puesto('fr'), 'auto', 'un idioma que la app no oye se cae a lo de fábrica');
         t.eq(puesto('automático'), 'auto');
         t.eq(puesto('--help'), 'auto');
-        t.eq(ajustes.sanear({ semanal: { idioma: 'xx-larga' } }).semanal.idioma, 'auto');
     });
 
     t.test('el «es» de fábrica de antes pasa a «auto» una vez, y después se respeta lo elegido', () => {
@@ -121,49 +125,6 @@ module.exports = function (t) {
         // versión es una sola marca para todas.
         t.ok(!('idiomaMigrado' in ajustes.sanear({ version: 1, idioma: 'es', idiomaMigrado: true })));
         t.ok(!('idiomaMigrado' in ajustes.DEFAULTS));
-    });
-
-    t.group('ajustes · el parche de cada pantalla');
-
-    t.test('guardar la carpeta del semanal no se lleva su idioma', () => {
-        // Es por esto que el parche entra un nivel: quien guarda la carpeta
-        // manda `{semanal:{carpeta}}`, y pegado por arriba eso borraba el
-        // idioma de al lado.
-        const previos = ajustes.sanear({ semanal: { carpeta: '/tmp/x', idioma: 'en' } });
-        const despues = ajustes.sanear(
-            ajustes.conParche(previos, { semanal: { carpeta: '/tmp/otra' } }));
-        t.eq(despues.semanal.carpeta, '/tmp/otra');
-        t.eq(despues.semanal.idioma, 'en', 'el idioma sigue donde estaba');
-    });
-
-    t.test('y un nivel y nada más: lo que se vacía se vacía', () => {
-        const previos = ajustes.sanear({ carpeta: '/tmp/x', camara: 'OBSBOT', fps: 25 });
-        const despues = ajustes.conParche(previos, { camara: null, fps: 30 });
-        t.eq(despues.camara, null, 'un null reemplaza, no se fusiona');
-        t.eq(despues.fps, 30);
-        t.eq(despues.carpeta, '/tmp/x', 'y lo que no se mandó sigue igual');
-        t.deep(ajustes.conParche(previos, { carpetas: ['/a'] }).carpetas, ['/a'],
-            'un array tampoco se fusiona');
-    });
-
-    t.test('el modo se guarda, y uno inventado abre la app como siempre', () => {
-        // Que un ajuste roto no pueda dejar a nadie en una pantalla que no
-        // entiende: `clase` es el modo que no graba vídeo ni exporta nada.
-        // El semanal pasó a otro proyecto: quien lo tenía guardado vuelve acá.
-        t.eq(ajustes.sanear({ modo: 'semanal' }).modo, 'clase');
-        t.eq(ajustes.sanear({ modo: 'clase' }).modo, 'clase');
-        t.eq(ajustes.sanear({ modo: 'cualquiera' }).modo, 'clase');
-        t.eq(ajustes.sanear({ modo: 7 }).modo, 'clase');
-    });
-
-    t.test('el modo semanal tiene su propia carpeta, aparte de la del curso', () => {
-        // Aparte a propósito: así la lista de clases del editor no se llena de
-        // vídeos de la semana ni la carpeta de un curso de MP4.
-        const a = ajustes.sanear({ carpeta: '/Cursos/React', semanal: { carpeta: '/Users/x/Movies/Semanal' } });
-        t.eq(a.carpeta, '/Cursos/React');
-        t.eq(a.semanal.carpeta, '/Users/x/Movies/Semanal');
-        t.deep(a.carpetas, ['/Cursos/React'], 'y la del modo semanal no entra en las recientes');
-        t.eq(ajustes.sanear({ semanal: 'una cadena' }).semanal.carpeta, null);
     });
 
     t.test('un fps de la lista se respeta', () => {

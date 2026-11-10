@@ -135,16 +135,8 @@ window.nt = {
     doctor: async () => doctor,
 
     ajustesLeer: async () => ajustes,
-    // El parche entra un nivel, igual que `ajustes.conParche` en el motor.
     ajustesGuardar: async parche => {
-        const llano = x => Boolean(x) && typeof x === 'object' && !Array.isArray(x);
-        const nuevos = { ...ajustes };
-        for (const [clave, valor] of Object.entries(parche || {})) {
-            nuevos[clave] = llano(valor) && llano(ajustes[clave])
-                ? { ...ajustes[clave], ...valor }
-                : valor;
-        }
-        ajustes = nuevos;
+        ajustes = { ...ajustes, ...parche };
         return { ok: true, ajustes };
     },
     carpetaRecordar: async ruta => {

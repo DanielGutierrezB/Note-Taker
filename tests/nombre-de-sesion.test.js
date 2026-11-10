@@ -85,7 +85,6 @@ module.exports = function (t) {
     });
 
     t.test('sin número el nombre es el de siempre', () => {
-        // Es por acá que entra el modo semanal, que nombra por fecha.
         t.eq(arma(null), 'curso-jev_2026-09-29_10-15-00');
         t.eq(arma(0), 'curso-jev_2026-09-29_10-15-00', 'no hay clase 00');
         t.eq(arma('abc'), 'curso-jev_2026-09-29_10-15-00');

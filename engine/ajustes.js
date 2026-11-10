@@ -108,46 +108,8 @@ const DEFAULTS = {
      * (`prproj-carpeta.leerConfig`); esta es el punto de partida de una carpeta
      * que todavía no tiene ninguna.
      */
-    prproj: null,
-    /**
-     * En qué modo abre la app.
-     *
-     * `clase` es tomar notas de un rodaje en vivo y dejarle el XML al editor, o
-     * sea todo lo que había hasta ahora. `semanal` es grabarse explicando lo que
-     * se hizo en la semana y salir con un MP4 cortado: otra pantalla, otra
-     * carpeta y ningún XML que nadie vaya a abrir.
-     *
-     * Es un ajuste y no un botón en la barra a propósito: una persona usa uno de
-     * los dos y no los va alternando. El editor lo deja en `clase` y no vuelve a
-     * verlo; en la empresa se pone en `semanal` el primer día.
-     */
-    modo: 'clase',
-    /**
-     * Lo del modo semanal, aparte de lo del modo de clase.
-     *
-     * La carpeta es otra a propósito: así la lista de clases del editor no se
-     * llena de vídeos de la semana, y la carpeta de un curso no se llena de
-     * MP4. Lo que se comparte son la cámara y el micrófono, que son de la
-     * máquina y no del modo.
-     *
-     * Y el idioma es otro, y de fábrica `auto`: una clase es de un idioma, pero
-     * una persona contando su semana se pasa al inglés a mitad de frase. Los
-     * 400 ms que cuesta detectar se pagan acá y no allá, y acá no duelen: la
-     * toma también se abre con Enter.
-     */
-    semanal: { carpeta: null, idioma: 'auto' }
+    prproj: null
 };
-
-/**
- * Los modos que se pueden elegir. Cualquier otra cosa escrita en el archivo es
- * `clase`.
- *
- * `semanal` ya no está: el vídeo de la semana pasó a editarse en Claude, y la
- * herramienta para eso es un proyecto aparte (`docs/guia-video-para-claude.md`).
- * Su código sigue en este repo porque es la base de ese proyecto; quien lo
- * tenía guardado vuelve a la lista de clases.
- */
-const MODOS = ['clase'];
 
 /**
  * Uno de los idiomas que la app oye, o lo de fábrica.
@@ -196,8 +158,8 @@ function saneada(prproj) {
 /**
  * Dónde viven los ajustes.
  *
- * `NT_AJUSTES` lo desvía a otro archivo, y existe por una sola razón: el banco
- * de pruebas de punta a punta necesita el modo semanal, una carpeta en `/tmp` y
+ * `NT_AJUSTES` lo desvía a otro archivo, y existe por una sola razón: los
+ * guiones de prueba (`--guion=` en `dev-shot.js`) usan una carpeta en `/tmp` y
  * los dispositivos falsos de Chromium, y eso no puede escribirse encima de la
  * configuración de quien trabaja con la app.
  *
@@ -205,8 +167,8 @@ function saneada(prproj) {
  * `finally`. Eso tapa el caso bueno y falla justo en el malo: un `kill` —o
  * cerrar la ventana, o que Electron no salga y haya que matarlo— se salta el
  * `finally` y deja el micrófono apuntando a `Fake Default Audio Input` y la
- * carpeta semanal a un `/tmp` que ya no existe. Medido: pasó. Un archivo
- * aparte no se puede corromper porque no se toca.
+ * carpeta a un `/tmp` que ya no existe. Medido: pasó. Un archivo aparte no se
+ * puede corromper porque no se toca.
  */
 function archivo() {
     return process.env.NT_AJUSTES
@@ -255,14 +217,7 @@ function sanear(crudo) {
         // Lo que haya guardado que no sea un nombre —el `false` de la versión en
         // la que esto era un sí o un no— se lee como «ninguna».
         camara: (typeof c.camara === 'string' && c.camara) || null,
-        prproj: saneada(c.prproj),
-        // Un modo que no existe se lee como `clase`: es el que no graba vídeo ni
-        // exporta nada, o sea el que menos sorprende a quien abra la app.
-        modo: MODOS.includes(c.modo) ? c.modo : DEFAULTS.modo,
-        semanal: {
-            carpeta: (c.semanal && typeof c.semanal.carpeta === 'string' && c.semanal.carpeta) || null,
-            idioma: idiomaSano(c.semanal && c.semanal.idioma, DEFAULTS.semanal.idioma)
-        }
+        prproj: saneada(c.prproj)
     };
 }
 
@@ -304,31 +259,7 @@ function recordarCarpeta(ruta) {
     return guardar({ ...antes, carpeta: ruta, carpetas: antes.carpetas });
 }
 
-/**
- * Lo que había con un parche encima, entrando UN nivel.
- *
- * Cada pantalla guarda solo lo suyo, así que lo que llega es un pedazo: el fps,
- * o la carpeta, o el idioma. Pegado por arriba, un pedazo de `semanal` borraba
- * el resto de `semanal`: quien guardaba la carpeta del vídeo mandaba
- * `{semanal:{carpeta}}` y con eso se llevaba el idioma de al lado, porque el
- * objeto nuevo reemplazaba al viejo entero y `sanear` le ponía el de fábrica.
- *
- * Un nivel y no más: los ajustes son llanos salvo `semanal` y `prproj`, y
- * fusionar en profundidad haría imposible vaciar algo. Un `null` reemplaza —es
- * como se limpia un campo—, igual que un array: solo se fusionan dos objetos.
- */
-function conParche(previos, parche) {
-    const llano = x => Boolean(x) && typeof x === 'object' && !Array.isArray(x);
-    const salida = { ...previos };
-    for (const [clave, valor] of Object.entries(parche || {})) {
-        salida[clave] = llano(valor) && llano(previos && previos[clave])
-            ? { ...previos[clave], ...valor }
-            : valor;
-    }
-    return salida;
-}
-
 module.exports = {
-    leer, guardar, recordarCarpeta, conParche, dondeViven: archivo,
-    sanear, archivo, DEFAULTS, RECIENTES, FPS_POSIBLES, MODOS
+    leer, guardar, recordarCarpeta, dondeViven: archivo,
+    sanear, archivo, DEFAULTS, RECIENTES, FPS_POSIBLES
 };

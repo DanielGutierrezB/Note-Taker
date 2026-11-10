@@ -20,11 +20,11 @@ function palabras(texto, desdeSeg) {
 }
 
 const VISTAS = [
-    { nombre: 'PV', titulo: 'Profesor', fuente: 0, colorDeMarcador: 4281740498 },
-    { nombre: 'R', titulo: 'Pantalla', fuente: 1, colorDeMarcador: 4280578025 },
-    { nombre: 'S', titulo: 'Slides', fuente: 1, colorDeMarcador: 4281828977 },
-    { nombre: 'MG', titulo: 'Motion Graphics', fuente: 1, colorDeMarcador: 4294345275 },
-    { nombre: 'X2', titulo: 'Acelerar', fuente: 1, colorDeMarcador: 4289825711 }
+    { nombre: 'PV', titulo: 'Profesor', colorDeMarcador: 4281740498 },
+    { nombre: 'R', titulo: 'Pantalla', colorDeMarcador: 4280578025 },
+    { nombre: 'S', titulo: 'Slides', colorDeMarcador: 4281828977 },
+    { nombre: 'MG', titulo: 'Motion Graphics', colorDeMarcador: 4294345275 },
+    { nombre: 'X2', titulo: 'Acelerar', colorDeMarcador: 4289825711 }
 ];
 
 const TOMAS = [

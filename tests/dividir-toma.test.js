@@ -453,8 +453,8 @@ module.exports = function (t) {
     }
 
     t.test('parte la toma en este instante, y lo que sigue va con la vista nueva', async () => {
-        // Estás con la pantalla, abrís la mirilla y pasás a «Yo» para contar lo
-        // que sigue a cámara: lo que ya dijiste sigue con la pantalla.
+        // El profesor estaba con la pantalla y pasa a cámara para contar lo que
+        // sigue: lo que ya dijo sigue con la pantalla.
         await conLaAbierta(46, async (s, st, ahora) => {
             const r = grabacion.editar({ tipo: 'vista-desde-ahora', toma: 2, vista: 'PV' });
             t.deep(r.tomas.map(x => x.id), [1, 2, 3], 'una toma más');

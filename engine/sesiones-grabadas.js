@@ -51,7 +51,7 @@ function listar(dirs, enCurso) {
     const sesiones = [];
     const vistas = new Set();
     for (const dir of dirs || []) {
-        for (const base of dondeBuscar(dir)) {
+        for (const base of workspace.carpetasConSesiones(dir)) {
             for (const s of sidecaresDe(workspace.datosDir(base), base)) {
                 if (s.secuencia === enCurso || vistas.has(s.secuencia)) continue;
                 vistas.add(s.secuencia);
@@ -131,41 +131,6 @@ function vezLibre(dir, numero, salvo) {
         if (suyo.numero === n && suyo.vez > alta) alta = suyo.vez;
     }
     return Math.max(nombreDeSesion.PRIMERA_VEZ, alta + 1);
-}
-
-/**
- * Las carpetas donde puede haber sesiones, dada una que eligió la persona.
- *
- * Son dos formas y hay que leer las dos. La carpeta misma, que es como escribe
- * el modo de clase —un curso con muchas clases compartiendo `xml/`— y como
- * escribía el modo semanal hasta que cada grabación pasó a tener su carpeta. Y
- * un piso más abajo, que es la forma nueva.
- *
- * Mirar el piso de abajo no es por completitud: es lo que hace que **lo que ya
- * está en el disco no desaparezca de la app**. El día del cambio hay grabaciones
- * de las dos formas en la misma carpeta, y una lista que solo entendiera la
- * nueva las habría escondido sin borrarlas, que es la peor de las dos cosas.
- *
- * Se mira cualquier subcarpeta y no solo las que se llaman `Grabación-...`:
- * renombrar una carpeta es lo primero que hace cualquiera, y no es razón para
- * que la app deje de verla. Lo que la hace una grabación es tener el archivo con
- * la hora del día adentro, no cómo se llame.
- */
-function dondeBuscar(dir) {
-    const sitios = [dir];
-    let hijos = [];
-    try {
-        hijos = fs.readdirSync(dir, { withFileTypes: true });
-    } catch (e) {
-        return sitios; // una carpeta que no está no tiene subcarpetas
-    }
-    for (const h of hijos) {
-        // `xml` es la de esta misma carpeta, ya contada: entrar dentro buscaría
-        // `xml/xml/Datos`.
-        if (!h.isDirectory() || h.name === workspace.XML_DIR) continue;
-        sitios.push(path.join(dir, h.name));
-    }
-    return sitios;
 }
 
 /**
@@ -838,10 +803,6 @@ module.exports = {
     rehacerXml,
     dondeQuedoElWav,
     ajustarBordes,
-    // Lo lee también el modo semanal, para cortar el MP4 de una sesión ya
-    // terminada: el corte sale del disco y no de la memoria, así exportar otra
-    // vez mañana da exactamente el mismo vídeo.
-    leerSidecar,
     editarGrabada,
     paraMirar,
     paraReanudar,

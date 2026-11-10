@@ -138,7 +138,7 @@ module.exports = async function (t) {
 
     t.group('reporte · el .zip');
 
-    t.test('las últimas grabaciones: de un curso y del vídeo de la semana, la más nueva primero', () => {
+    t.test('las últimas grabaciones: de un curso y de sus subcarpetas, la más nueva primero', () => {
         const curso = tmp();
         const semana = tmp();
         grabacion(curso, 'curso_clase-1', 3 * 3600e3);

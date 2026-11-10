@@ -44,59 +44,10 @@ const DATOS_DIR = 'Datos';
 const REFERENCIAS_DIR = 'Referencias';
 
 /**
- * `Video` es de los brutos del modo semanal: la cámara y la pantalla tal como
- * salieron de la grabación, sin cortar. Van al lado del audio porque son lo
- * mismo que el audio —material que se grabó y no se puede repetir— y van con
- * mayúscula por lo mismo que `Audio`. Lo que la persona se lleva es el MP4
- * cortado, que queda arriba, en la raíz de su carpeta; esto es de dónde salió.
- */
-const VIDEO_DIR = 'Video';
-
-/**
  * Cómo termina el archivo con la hora del día, que es lo que hace visible a una
  * sesión: la lista se arma buscando este sufijo (`sesiones-grabadas.js`).
  */
 const SUFIJO_SIDECAR = '_notas-en-vivo.json';
-
-/**
- * En el modo semanal, UNA CARPETA POR GRABACIÓN.
- *
- *   <la carpeta que eligió>/
- *     Grabación-2026-10-05_10-27-28/
- *       semana_2026-10-05_10-27-28.mp4     el vídeo, que es lo que se lleva
- *       xml/...                            de dónde salió: los brutos y los datos
- *     Grabación-2026-10-05_18-04-11/
- *       ...
- *
- * Y no todo junto en la carpeta elegida, que es como estaba. La diferencia es
- * quién se tiene que acordar: con una carpeta por grabación, mover, mandar o
- * borrar una es mover, mandar o borrar una carpeta; sin ella, hay que saber que
- * el vídeo está arriba, la cámara y la pantalla en `xml/Video`, el audio en
- * `xml/Audio` y la hora del día en `xml/Datos`, y juntar cinco archivos de
- * cuatro sitios sin olvidarse de ninguno.
- *
- * En el modo de clase NO: ahí la carpeta es un curso con muchas clases, el XML
- * de cada una se importa a mano desde `xml/`, y las fotos y el audio se
- * comparten entre todas. Partirlo por clase rompería justamente eso.
- *
- * La carpeta lleva la fecha y la hora del CERO de la grabación, el mismo
- * instante con el que se nombran los archivos de adentro (`nombre-de-sesion.sello`),
- * así que la carpeta y lo que contiene dicen siempre lo mismo.
- */
-const CARPETA_GRABACION = 'Grabación';
-
-/**
- * @param {string} casa la carpeta que eligió la persona
- * @param {string} sello la fecha y la hora, de `nombre-de-sesion.sello`
- */
-function carpetaDeGrabacion(casa, sello) {
-    return path.join(casa, `${CARPETA_GRABACION}-${sello}`);
-}
-
-/** Si una carpeta tiene la forma de las que hace el modo semanal. */
-function esCarpetaDeGrabacion(nombre) {
-    return String(nombre || '').startsWith(`${CARPETA_GRABACION}-`);
-}
 
 function xmlDir(base) {
     return path.join(base, XML_DIR);
@@ -110,8 +61,36 @@ function datosDir(base) {
     return path.join(xmlDir(base), DATOS_DIR);
 }
 
-function videoDir(base) {
-    return path.join(xmlDir(base), VIDEO_DIR);
+/**
+ * Las carpetas donde puede haber sesiones, dada una que eligió la persona.
+ *
+ * La carpeta misma, que es donde escribe la app —un curso con muchas clases
+ * compartiendo `xml/`—, y un piso más abajo, que es donde quedaron las
+ * grabaciones de cuando cada una tenía su carpeta. Mirar el piso de abajo es lo
+ * que hace que **lo que ya está en el disco no desaparezca de la app**: una
+ * lista que no lo mirara las escondería sin borrarlas, que es la peor de las
+ * dos cosas.
+ *
+ * Se mira cualquier subcarpeta y no solo las que se llaman `Grabación-...`:
+ * renombrar una carpeta es lo primero que hace cualquiera, y no es razón para
+ * que la app deje de verla. Lo que la hace una grabación es tener el archivo con
+ * la hora del día adentro, no cómo se llame.
+ */
+function carpetasConSesiones(dir) {
+    const sitios = [dir];
+    let hijos = [];
+    try {
+        hijos = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (e) {
+        return sitios; // una carpeta que no está no tiene subcarpetas
+    }
+    for (const h of hijos) {
+        // `xml` es la de esta misma carpeta, ya contada: entrar dentro buscaría
+        // `xml/xml/Datos`.
+        if (!h.isDirectory() || h.name === XML_DIR) continue;
+        sitios.push(path.join(dir, h.name));
+    }
+    return sitios;
 }
 
 /** Las fotos de referencia van en una subcarpeta por clase, con su nombre. */
@@ -249,15 +228,11 @@ module.exports = {
     AUDIO_DIR,
     DATOS_DIR,
     REFERENCIAS_DIR,
-    VIDEO_DIR,
     SUFIJO_SIDECAR,
-    CARPETA_GRABACION,
-    carpetaDeGrabacion,
-    esCarpetaDeGrabacion,
     xmlDir,
     audioDir,
     datosDir,
-    videoDir,
+    carpetasConSesiones,
     referenciasDir,
     archivosDeSesion,
     sesionDelSidecar,

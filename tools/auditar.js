@@ -45,8 +45,8 @@ const ALTO = Number(arg('alto', 840));
 /** Los escenarios que se auditan, y a qué anchos. */
 // Todo lo que una persona puede llegar a ver, también los estados vacíos y los
 // de error: son los que se escriben con menos cuidado y los que más se leen
-// cuando algo salió mal. Antes esta lista tenía 21 de 37 y los del modo semanal
-// que se salen del camino felíz no los miraba nadie.
+// cuando algo salió mal. Antes esta lista tenía 21 de 37, y los que se salen
+// del camino feliz no los miraba nadie.
 const ESCENARIOS = arg('escenario', null)
     ? [arg('escenario')]
     : maqueta.escenariosMenos({ iconos: 'no es una pantalla: es la hoja de los dibujos' });
@@ -251,8 +251,8 @@ async function main() {
                 await pagina.setViewport({ width: ancho, height: ALTO });
                 await pagina.goto(`${sitio.url}?e=${escenario}`, { waitUntil: 'networkidle0' });
                 // La maqueta aplica el escenario después de que la app dibuja.
-                // Esperar a que el escenario esté puesto, y no un rato fijo: los
-                // del modo semanal tardan segundos en armarse.
+                // Esperar a que el escenario esté puesto, y no un rato fijo:
+                // hay escenarios que tardan en armarse.
                 const puesta = await pagina.evaluate('window.maquetaPuesta');
                 if (!puesta.ok) {
                     console.log(`✗ ${escenario} no se pudo armar: ${puesta.error}`);

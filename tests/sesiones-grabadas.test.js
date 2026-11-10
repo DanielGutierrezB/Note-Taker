@@ -61,13 +61,13 @@ function sembrar(dir, opciones) {
 module.exports = function (t) {
     t.group('sesiones-grabadas · listar');
 
-    // El modo semanal pasó a darle una carpeta a cada grabación. Lo que estas
-    // dos pruebas cuidan es el día del cambio: en la misma carpeta hay
-    // grabaciones de las dos formas, y una lista que solo entendiera la nueva
-    // las habría escondido sin borrarlas, que es peor que borrarlas.
+    // Hubo un tiempo en que cada grabación tenía su carpeta. Lo que estas dos
+    // pruebas cuidan es que esas sigan a la vista: en la misma carpeta hay
+    // grabaciones de las dos formas, y una lista que solo entendiera una las
+    // habría escondido sin borrarlas, que es peor que borrarlas.
     t.test('encuentra una grabación con su carpeta propia', () => {
         const casa = carpeta();
-        const suya = workspace.carpetaDeGrabacion(casa, '2026-09-29_10-00-00');
+        const suya = path.join(casa, 'Grabación-2026-09-29_10-00-00');
         sembrar(suya, { secuencia: 'semana_2026-09-29_10-00-00' });
         const lista = sesiones.listar([casa]);
         t.eq(lista.length, 1, 'la encuentra un piso más abajo');
@@ -78,7 +78,7 @@ module.exports = function (t) {
     t.test('las de antes y las de ahora salen juntas, sin repetirse', () => {
         const casa = carpeta();
         sembrar(casa, { secuencia: 'semana_2026-09-28_09-00-00', ceroMs: T0 - 86400000 });
-        sembrar(workspace.carpetaDeGrabacion(casa, '2026-09-29_10-00-00'),
+        sembrar(path.join(casa, 'Grabación-2026-09-29_10-00-00'),
             { secuencia: 'semana_2026-09-29_10-00-00', ceroMs: T0 });
         const lista = sesiones.listar([casa]);
         t.eq(lista.length, 2);

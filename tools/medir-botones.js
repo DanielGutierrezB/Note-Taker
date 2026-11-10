@@ -191,8 +191,8 @@ async function main() {
                 const pagina = await navegador.newPage();
                 await pagina.setViewport({ width: ancho, height: ALTO });
                 await pagina.goto(`${sitio.url}?e=${escenario}`, { waitUntil: 'networkidle0' });
-                // Esperar a que el escenario esté puesto, y no un rato fijo: los
-                // del modo semanal tardan segundos en armarse.
+                // Esperar a que el escenario esté puesto, y no un rato fijo:
+                // hay escenarios que tardan en armarse.
                 const puesta = await pagina.evaluate('window.maquetaPuesta');
                 if (!puesta.ok) {
                     console.log(`✗ ${escenario} no se pudo armar: ${puesta.error}`);

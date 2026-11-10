@@ -70,9 +70,8 @@ function nombreDelReporte(cuando) {
 /**
  * Las grabaciones más nuevas de esas carpetas, de la más reciente para atrás.
  *
- * Se buscan los sidecars, que es de donde cuelga todo lo demás: en la carpeta
- * misma —un curso, donde están todas las clases— y en cada `Grabación-…` de
- * adentro, que es como guarda el vídeo de la semana.
+ * Se buscan los sidecars, que es de donde cuelga todo lo demás, en los mismos
+ * sitios donde los busca la lista de sesiones (`workspace.carpetasConSesiones`).
  *
  * @param {string[]} carpetas
  * @param {number} [cuantas]
@@ -81,15 +80,7 @@ function nombreDelReporte(cuando) {
 function ultimasGrabaciones(carpetas, cuantas) {
     const vistos = new Map();
     for (const carpeta of (carpetas || []).filter(Boolean)) {
-        const bases = [carpeta];
-        try {
-            for (const n of fs.readdirSync(carpeta)) {
-                if (workspace.esCarpetaDeGrabacion(n)) bases.push(path.join(carpeta, n));
-            }
-        } catch (e) {
-            continue;
-        }
-        for (const base of bases) {
+        for (const base of workspace.carpetasConSesiones(carpeta)) {
             let nombres = [];
             try { nombres = fs.readdirSync(workspace.datosDir(base)); } catch (e) { continue; }
             for (const n of nombres.filter(x => !oculto(x) && x.endsWith(workspace.SUFIJO_SIDECAR))) {
@@ -105,23 +96,19 @@ function ultimasGrabaciones(carpetas, cuantas) {
 }
 
 /**
- * Los audios y vídeos de una grabación: los de su carpeta de audio, los de la
- * de vídeo y el vídeo ya cortado, que va suelto en la carpeta. Solo los suyos:
- * en un curso la carpeta de audio tiene los WAV de todas las clases, y se
+ * Los audios de una grabación, los de su carpeta de audio. Solo los suyos: en
+ * un curso la carpeta de audio tiene los WAV de todas las clases, y se
  * reconocen por llamarse como la sesión seguida de un guion o un punto. Por
  * prefijo a secas, la clase 1 se llevaba los audios de la 10, la 11 y la 12.
  */
 function mediosDe(sesion) {
-    const salida = [];
-    for (const dir of [workspace.audioDir(sesion.base), workspace.videoDir(sesion.base), sesion.base]) {
-        let nombres = [];
-        try { nombres = fs.readdirSync(dir); } catch (e) { continue; }
-        for (const n of nombres) {
-            const suyo = n.startsWith(`${sesion.nombre}-`) || n.startsWith(`${sesion.nombre}.`);
-            if (!oculto(n) && suyo && MEDIOS.has(path.extname(n).toLowerCase())) salida.push(path.join(dir, n));
-        }
-    }
-    return salida;
+    const dir = workspace.audioDir(sesion.base);
+    let nombres = [];
+    try { nombres = fs.readdirSync(dir); } catch (e) { return []; }
+    return nombres
+        .filter(n => !oculto(n) && (n.startsWith(`${sesion.nombre}-`) || n.startsWith(`${sesion.nombre}.`)))
+        .filter(n => MEDIOS.has(path.extname(n).toLowerCase()))
+        .map(n => path.join(dir, n));
 }
 
 /** La ficha de un archivo según ffprobe: sus pistas y su duración, y cuánto pesa. */
