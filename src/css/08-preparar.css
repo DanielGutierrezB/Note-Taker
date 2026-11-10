@@ -122,3 +122,211 @@
   user-select: text;
   -webkit-user-select: text;
 }
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Preparar: una columna que se lee de arriba abajo en el orden en que se
+   decide. Sin tarjetas por renglón: grupos con su título, y en cada grupo
+   filas de etiqueta y control alineadas, como un formulario. Lo que explica
+   va en el «?» de cada etiqueta, y lo que está bien (Whisper, la carpeta) en
+   el pie, chico.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.prep {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-5) var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.prep-cabeza {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.prep-cabeza-texto {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.prep-titulo {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.prep-cabeza .btn-primario {
+  min-height: 40px;
+  padding: 0 var(--sp-5);
+  font-size: 14px;
+}
+
+#prep-avisos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+#prep-avisos:empty {
+  display: none;
+}
+
+.prep-aviso {
+  align-items: center;
+}
+
+.prep-aviso > span {
+  flex: 1 1 auto;
+}
+
+.prep-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--hairline);
+}
+
+.prep-grupo-cabeza {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+
+.prep-grupo-titulo {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Etiqueta a la izquierda y control a la derecha, con la nota debajo del
+   control: el ojo baja por una sola columna de controles. */
+.prep-fila {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: center;
+  column-gap: var(--sp-4);
+  row-gap: var(--sp-2);
+}
+
+.prep-etiqueta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.prep-control {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.prep-control select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 420px;
+}
+
+.prep-control .prep-numero {
+  width: 96px;
+}
+
+.prep-nota {
+  grid-column: 2;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.prep-nota.es-aviso {
+  color: var(--warn);
+}
+
+.prep-valor {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* El «?»: un círculo chico que muestra la explicación al pasar el mouse. */
+.ayuda {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border: 1px solid var(--border-field);
+  border-radius: 50%;
+  cursor: help;
+}
+
+.ayuda:hover,
+.ayuda:focus-visible {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+/* Un botón que se lee como un enlace: para lo que no es una acción principal. */
+.btn-enlace {
+  padding: 0;
+  font-size: 12px;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.btn-enlace:hover,
+.btn-enlace:focus-visible {
+  text-decoration: underline;
+}
+
+.prep-glosario-listas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+}
+
+.prep-pie {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--hairline);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.prep-pie-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.prep-pie-item svg {
+  width: 14px;
+  height: 14px;
+}
+
+.prep-pie-item[data-listo='si'] svg { color: var(--ok); }
+.prep-pie-item[data-listo='no'] svg { color: var(--warn); }
+.prep-pie-item[data-listo='mal'] svg { color: var(--error); }
+
+@media (max-width: 760px) {
+  .prep-fila { grid-template-columns: 1fr; }
+  .prep-nota { grid-column: 1; }
+  .prep-glosario-listas { grid-template-columns: 1fr; }
+}

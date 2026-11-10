@@ -1,15 +1,16 @@
 /**
- * pantalla-preparar.js — La lista de verificación antes de grabar.
+ * pantalla-preparar.js — Lo que se elige antes de grabar.
  *
  * Es la pantalla que evita el error caro de esta app: descubrir a mitad de una
  * clase de tres horas que entraba el micrófono de la Mac en vez del audio del
  * Zoom, o que faltaba un modelo de Whisper. Cuando eso pasa no hay arreglo: la
  * clase ya se dio.
  *
- * Por eso no es un formulario sino un checklist, y por eso cada renglón hace
- * tres cosas en el mismo sitio: dice cómo está, dice qué significa si está mal,
- * y ofrece el arreglo ahí mismo. Un checklist que dice «falta el dispositivo» y
- * te manda a otra pantalla a buscarlo es un checklist que hay que aprender.
+ * Va en el orden en que se decide: de dónde sale la clase (audio y cámara),
+ * qué clase es (número, idioma, fps) y qué tiene que escribir bien Whisper (el
+ * glosario). Lo que está bien no ocupa lugar: Whisper y la carpeta van en el
+ * pie, y suben arriba como aviso solo si algo impide grabar. Lo que explica
+ * cada cosa es una pista al pasar el mouse por su «?».
  *
  * **El botón de Iniciar se enciende solo cuando lo esencial está.** Lo esencial
  * son tres: la carpeta, una entrada abierta, y Whisper. Que la entrada suene, o
@@ -22,6 +23,7 @@ import { icono } from './iconos.js';
 import * as fuente from './grabar/fuente.js';
 import * as idiomas from './idiomas.js';
 import * as estados from './estados.js';
+import * as editorDeGlosario from './glosario.js';
 
 let app = null;
 let doctor = null;
@@ -66,8 +68,8 @@ let nombre = null;
  */
 let cargando = false;
 
-/** El glosario de la carpeta, para su renglón (`glosario-leer`). */
-let glosario = null;
+/** Las cámaras, como opciones (`app.camarasParaElegir`), con la elegida marcada. */
+let camaras = [];
 
 /** El pico decae solo: sin esto, un golpe deja el medidor arriba para siempre. */
 let ultimoPico = 0;
@@ -77,8 +79,9 @@ let ultimoEstado = null;
 export function conectar(contexto) {
     app = contexto;
     $('#btn-iniciar').addEventListener('click', iniciar);
-    $('#checklist').addEventListener('click', alClic);
-    $('#checklist').addEventListener('change', alCambiar);
+    $('#vista-preparar').addEventListener('click', alClic);
+    $('#vista-preparar').addEventListener('change', alCambiar);
+    editorDeGlosario.conectar('#prep-glosario');
 }
 
 /**
@@ -108,7 +111,8 @@ async function entrar() {
     // ofrecerle el siguiente invitaría a cambiarle el nombre a una sesión que ya
     // tiene marcadores escritos y que el editor puede haber sincronizado.
     nombre = reanudar ? null : await preguntarElNombre();
-    glosario = window.nt.glosarioLeer ? await window.nt.glosarioLeer(app.ajustes.carpeta) : null;
+    await editorDeGlosario.pintar(app.ajustes.carpeta);
+    camaras = await app.camarasParaElegir();
     await releerEntradas();
 
     // Si la entrada de la última vez sigue ahí, se abre sola. Se guarda por
@@ -167,7 +171,8 @@ export function entradaAbierta() {
 /** Volver a leer lo que se pudo cambiar en Ajustes, y repintar. */
 export async function refrescar() {
     if (cargando) return;
-    glosario = window.nt.glosarioLeer ? await window.nt.glosarioLeer(app.ajustes.carpeta) : null;
+    await editorDeGlosario.pintar(app.ajustes.carpeta);
+    camaras = await app.camarasParaElegir();
     pintar();
 }
 
@@ -178,11 +183,15 @@ export async function salir() {
 }
 
 function pintar() {
+    const boton = $('#btn-iniciar');
+    boton.textContent = reanudar ? 'Reanudar la grabación' : 'Iniciar grabación';
     if (cargando) {
-        const boton = $('#btn-iniciar');
         boton.disabled = true;
         boton.title = 'Revisando el audio, la carpeta y los modelos';
-        $('#checklist').innerHTML = '<p class="v3">Revisando el audio, la carpeta y los modelos…</p>';
+        $('#prep-avisos').innerHTML = '';
+        $('#prep-fuentes').innerHTML = '<p class="v3">Revisando el audio, la carpeta y los modelos…</p>';
+        $('#prep-clase').innerHTML = '';
+        $('#prep-pie').innerHTML = '';
         return;
     }
     const a = estados.deAudio(audio);
@@ -191,106 +200,109 @@ function pintar() {
     const c = estados.deCarpeta(carpeta, disco);
 
     const listo = a.listo === 'si' && w.listo === 'si' && c.listo === 'si' && !audio.abriendo;
-    const boton = $('#btn-iniciar');
     boton.disabled = !listo;
-    boton.textContent = reanudar ? 'Reanudar la grabación' : 'Iniciar grabación';
     boton.title = listo
         ? 'Empieza a grabar y pone el cero del XML acá'
-        : 'Falta algo de la lista: cada renglón dice qué';
+        : 'Falta algo: el aviso de arriba dice qué';
 
-    $('#checklist').innerHTML = [
-        check({
-            listo: a.listo,
-            titulo: 'Entrada de audio',
-            estado: a,
-            dice: queDice(),
-            arreglo: `
-              <select data-campo="dispositivo" style="max-width:300px">
-                <option value="">Elegí una entrada…</option>
-                ${opciones()}
-              </select>
-              <div class="nivel" id="prep-nivel"><div class="nivel-barra"></div></div>
-              <button class="btn btn-tenue" type="button" data-hace="releer-entradas"
-                      title="Volver a preguntarle al sistema qué entradas hay, por si acabás de conectar el micrófono o de abrir el Zoom">
-                Buscar de nuevo</button>`
-        }),
-        check({
-            listo: w.listo,
-            titulo: 'Whisper',
-            estado: w,
-            dice: 'Es lo que oye el «3, 2, 1» y el «Pausa», y lo ' +
-                'que le escribe el texto a cada toma cuando cierra.',
-            arreglo: `<button class="btn" type="button" data-hace="diagnostico"
-                        title="Abrir el Diagnóstico: dice qué modelos encontró la app, dónde los buscó y qué falta bajar">
-                Ver Diagnóstico</button>`
-        }),
-        check({
-            listo: c.listo,
-            titulo: 'Dónde se guarda',
-            estado: c,
-            dice: carpeta
-                ? `El XML, el audio y los datos van a <code>${esc(carpeta)}/xml/</code>.`
-                    + (disco && disco.minutos != null && c.clave === 'listo'
-                        ? ` Queda lugar para unas ${Math.floor(disco.minutos / 60)} h de audio.` : '')
-                : 'Elegí la carpeta del curso en la pantalla anterior.',
-            arreglo: `<button class="btn btn-tenue" type="button" data-hace="volver"
-                        title="Volver atrás para elegir la carpeta del curso">
-                Volver a Sesiones</button>`
-        }),
-        reanudar ? '' : check({
-            listo: 'si',
-            titulo: 'Qué clase es',
-            estado: { clave: 'listo', palabra: `la ${dosDigitos(nombre && nombre.numero)}` },
-            dice: comoSeVaALlamar(),
-            arreglo: `
-              <label class="campo-fila">
-                <span class="v2">Número de clase</span>
-                <input type="number" min="1" step="1" data-campo="numero" class="prep-numero"
-                       value="${nombre && nombre.numero != null ? nombre.numero : ''}"
-                       title="El que sigue en esta carpeta. Cambialo si esta clase es otra.">
-              </label>`
-        }),
-        check({
-            listo: 'si',
-            titulo: 'Cómo va a quedar el XML',
-            estado: { clave: 'listo', palabra: `${app.ajustes.fps} cuadros` },
-            dice: `Los marcadores se calculan a ${app.ajustes.fps} cuadros por segundo, ` +
-                'que tiene que ser el de la secuencia donde vas a cortar.',
-            arreglo: `<button class="btn btn-tenue" type="button" data-hace="ajustes"
-                        title="Abrir Ajustes para cambiar los cuadros por segundo">
-                Cambiar en Ajustes</button>`
-        }),
-        // El idioma, en su propio renglón. Iba al final del de arriba, y ahí no
-        // lo leía nadie: empezar en el idioma equivocado no es un detalle del
-        // XML, es una clase entera traducida (ver `engine/idiomas.js`).
-        check({
-            listo: 'si',
-            titulo: 'En qué idioma habla la clase',
-            estado: { clave: 'listo', palabra: esc(idiomaDicho(app.ajustes.idioma)) },
-            dice: app.ajustes.idioma === 'auto'
-                ? 'Lo elige solo entre español e inglés, y mientras grabás el rótulo de la barra '
-                    + 'dice cuál está oyendo. Si la clase es en portugués, ponelo a mano.'
-                : `Si la clase no es en ${esc(idiomaDicho(app.ajustes.idioma))}, el transcript va a salir `
-                    + 'traducido. Se puede cambiar grabando, desde el rótulo de la barra.',
-            arreglo: `<button class="btn btn-tenue" type="button" data-hace="ajustes"
-                        title="Abrir Ajustes para cambiar el idioma de la clase">
-                Cambiar en Ajustes</button>`
-        }),
-        glosario ? check({
-            listo: 'si',
-            titulo: 'Glosario',
-            estado: { clave: 'listo', palabra: `${glosario.entran.length} término${glosario.entran.length === 1 ? '' : 's'}` },
-            dice: (glosario.entran.length
-                ? `${glosario.delCurso.length} del curso y ${glosario.general.length} generales: el modelo grande `
-                    + 'los tiene a mano al releer cada toma.'
-                : 'Vacío. Los nombres de herramientas o de personas que salgan mal escritos se agregan acá.')
-                + (glosario.afuera.length ? ` <span style="color:var(--warn)">Quedan afuera: ${esc(glosario.afuera.join(', '))}.</span>` : ''),
-            arreglo: `<button class="btn btn-tenue" type="button" data-hace="ajustes"
-                        title="Abrir Ajustes para editar el glosario general y el de este curso">
-                Editar en Ajustes</button>`
-        }) : '',
-        reanudar ? avisoReanudar() : ''
+    $('#prep-nombre').innerHTML = !reanudar && nombre ? `Va a quedar <code>${esc(nombre.nombre)}.xml</code>` : '';
+    $('#prep-avisos').innerHTML = [
+        reanudar ? avisoReanudar() : '',
+        w.listo !== 'si' ? aviso(w, 'Whisper', `<button class="btn" type="button" data-hace="diagnostico">Ver Diagnóstico</button>`) : '',
+        // El disco que alcanza justo no frena, pero se dice arriba: se descubre
+        // a la segunda hora de clase.
+        c.listo !== 'si' || c.porque ? aviso(c, 'Dónde se guarda', carpeta
+            ? '' : `<button class="btn" type="button" data-hace="volver">Elegir la carpeta en Sesiones</button>`) : ''
     ].join('');
+
+    $('#prep-fuentes').innerHTML = `
+      <div class="prep-grupo-cabeza"><span class="prep-grupo-titulo">Fuentes</span></div>
+      <div class="prep-fila">
+        <span class="prep-etiqueta">Audio ${ayuda(queDice() + ' ' + COMO_SABER)}</span>
+        <div class="prep-control">
+          <select data-campo="dispositivo" aria-label="Entrada de audio">
+            ${audio.dispositivo ? '' : '<option value="">Elegí una entrada…</option>'}
+            ${opciones()}
+          </select>
+          <button class="btn btn-ico" type="button" data-hace="releer-entradas" aria-label="Buscar de nuevo las entradas"
+                  title="Volver a preguntarle al sistema qué entradas hay: por si acabás de conectar el micrófono o de abrir Zoom">${icono('regenerar')}</button>
+          <div class="nivel" id="prep-nivel"><div class="nivel-barra"></div></div>
+          <span class="pastilla" data-estado="${a.clave}">${esc(a.palabra)}</span>
+        </div>
+        ${a.porque ? `<div class="prep-nota es-aviso">${esc(a.porque)}</div>` : ''}
+      </div>
+      <div class="prep-fila">
+        <span class="prep-etiqueta">Cámara ${ayuda('Una cámara, o una cámara virtual como la de OBS para una señal por NDI. '
+            + 'De ella sale un fotograma al cerrarse cada toma, guardado al lado de las notas y fuera del XML.')}</span>
+        <div class="prep-control">
+          <select data-campo="camara" aria-label="Cámara de referencia">
+            ${camaras.map(o => `<option value="${esc(o.valor)}" ${o.marcada ? 'selected' : ''}>${esc(o.dice)}</option>`).join('')}
+          </select>
+          <button class="btn btn-ico" type="button" data-hace="releer-camaras" aria-label="Buscar de nuevo las cámaras"
+                  title="Volver a preguntarle al sistema qué cámaras hay: por si acabás de conectar una o de abrir OBS">${icono('regenerar')}</button>
+        </div>
+        <div class="prep-nota">Solo para la foto del OUT de cada toma. No graba la pantalla ni vídeo.</div>
+      </div>`;
+
+    $('#prep-clase').innerHTML = `
+      <div class="prep-grupo-cabeza"><span class="prep-grupo-titulo">La clase</span></div>
+      ${reanudar ? '' : `<div class="prep-fila">
+        <label class="prep-etiqueta" for="prep-numero">Número de clase ${ayuda(
+            'El que sigue en esta carpeta. Cambialo si esta clase es otra: el nombre del XML y de la secuencia de Premiere salen de acá.')}</label>
+        <div class="prep-control">
+          <input type="number" min="1" step="1" id="prep-numero" data-campo="numero" class="prep-numero"
+                 value="${nombre && nombre.numero != null ? nombre.numero : ''}">
+          ${nombre && nombre.vez > 1 ? `<span class="pastilla" data-estado="por confirmar">V${nombre.vez}</span>` : ''}
+        </div>
+        ${nombre && nombre.vez > 1 ? `<div class="prep-nota es-aviso" title="${esc(comoSeVaALlamar().replace(/<[^>]+>/g, ''))}">`
+            + `Ya hay una clase ${dosDigitos(nombre.numero)} en esta carpeta: esta queda como V${nombre.vez}.</div>` : ''}
+      </div>`}
+      <div class="prep-fila">
+        <label class="prep-etiqueta" for="prep-idioma">Idioma ${ayuda(app.ajustes.idioma === 'auto'
+            ? 'Automático elige entre español e inglés, y mientras grabás el rótulo de la barra dice cuál está oyendo. '
+                + 'Para el portugués, ponelo a mano.'
+            : 'Si la clase no es en este idioma, el transcript sale traducido. Se puede cambiar grabando, desde la barra.')}</label>
+        <div class="prep-control">
+          <select id="prep-idioma" data-campo="idioma">
+            ${['auto', ...idiomas.IDIOMAS].map(cod => `<option value="${cod}" ${cod === app.ajustes.idioma ? 'selected' : ''}>${esc(idiomas.nombre(cod))}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="prep-fila">
+        <span class="prep-etiqueta">Selección de FPS ${ayuda(
+            'Los cuadros por segundo de la secuencia donde vas a cortar: con ellos se calculan los marcadores del XML. '
+                + 'Se cambia en Ajustes, para que no se toque sin querer.')}</span>
+        <div class="prep-control">
+          <span class="prep-valor">${esc(String(app.ajustes.fps))} fps</span>
+          <button class="btn-enlace" type="button" data-hace="ajustes">Cambiar en Ajustes</button>
+        </div>
+      </div>`;
+
+    $('#prep-pie').innerHTML = `
+      <span class="prep-pie-item" data-listo="${w.listo}">${icono(w.listo === 'si' ? 'ok' : 'atencion')} Whisper ${esc(w.palabra)}</span>
+      <button class="btn-enlace" type="button" data-hace="diagnostico"
+              title="Qué modelos encontró la app, dónde los buscó y qué falta bajar">Ver diagnóstico</button>
+      <span class="prep-pie-item" title="${esc(carpeta ? `${carpeta}/xml/` : '')}">${carpeta
+        ? `Se guarda en <code>${esc(carpeta.split('/').pop())}/xml/</code>`
+            + (disco && disco.minutos != null ? ` · quedan unas ${Math.floor(disco.minutos / 60)} h` : '')
+        : 'Sin carpeta'}</span>`;
+}
+
+/** Cómo comprobar la voz en los primeros segundos: va en la pista del audio. */
+const COMO_SABER = 'El medidor se mueve con cualquier sonido, así que no alcanza: apenas inicies, En vivo muestra '
+    + 'en «Oyendo» lo que Whisper entiende. Si no es lo que dice el profesor, cambiá la entrada desde el rótulo '
+    + 'Audio de la barra: la clase sigue, con lo anotado.';
+
+/** El «?» con la explicación al pasar el mouse. */
+function ayuda(texto) {
+    return `<span class="ayuda" tabindex="0" title="${esc(texto)}">?</span>`;
+}
+
+/** Lo que impide grabar, arriba y con su arreglo. */
+function aviso(estado, que, arreglo) {
+    return `<div class="aviso prep-aviso" data-tono="${estado.listo === 'mal' ? 'error' : ''}">${icono(estado.listo === 'mal' ? 'error' : 'atencion')}
+      <span><strong>${esc(que)}: ${esc(estado.palabra)}.</strong> ${esc(estado.porque || '')}</span>
+      ${arreglo || ''}</div>`;
 }
 
 /**
@@ -339,7 +351,7 @@ function queDice() {
     if (!zoom.soportado) {
         return 'Por acá entra la clase. Si viene de un Zoom, elegí un dispositivo virtual ' +
             'que reciba el sonido de la reunión (BlackHole o Loopback); si viene de una ' +
-            'interfaz, su línea.' + (zoom.error ? ` ${esc(zoom.error)}` : '');
+            'interfaz, su línea.' + (zoom.error ? ` ${zoom.error}` : '');
     }
     // Las dos entradas del ayudante hacen lo mismo visto desde afuera —graban
     // la llamada sin que haya que tocar nada ni dejar de oírla— y lo que hay
@@ -353,35 +365,11 @@ function queDice() {
         'graba la sala, que sirve solo si la clase es presencial.';
 }
 
-function idiomaDicho(codigo) {
-    return codigo === 'auto' ? 'automático' : idiomas.nombre(codigo).toLowerCase();
-}
-
 function avisoReanudar() {
     return `<div class="aviso" style="margin-top:12px">${icono('atencion')}
       <span>Vas a seguir en el XML de una sesión que quedó abierta. El cero no se
       mueve —los marcadores que ya están escritos cuelgan de él— y el audio nuevo
       entra como otro clip en su lugar, con el hueco de lo que no se grabó.</span></div>`;
-}
-
-/**
- * Un renglón: la marca, el título con su pastilla, qué es, por qué está mal si
- * lo está, y el arreglo.
- */
-function check({ listo, titulo, estado, dice, arreglo }) {
-    const marca = listo === 'si' ? 'ok' : (listo === 'mal' ? 'error' : 'atencion');
-    return `<div class="check" data-listo="${listo}">
-      <span class="check-marca">${icono(marca)}</span>
-      <div class="check-texto">
-        <div class="check-titulo">
-          <span>${esc(titulo)}</span>
-          <span class="pastilla" data-estado="${estado.clave}">${esc(estado.palabra)}</span>
-        </div>
-        <div class="check-dice">${dice}</div>
-        ${estado.porque ? `<div class="check-dice" style="color:var(--warn)">${esc(estado.porque)}</div>` : ''}
-        <div class="check-arreglo">${arreglo}</div>
-      </div>
-    </div>`;
 }
 
 async function alCambiar(e) {
@@ -392,6 +380,17 @@ async function alCambiar(e) {
         // un número que ya está tomado tiene que mostrar la V2 que va a salir,
         // antes de grabar y no después.
         nombre = await preguntarElNombre(campo.value);
+        pintar();
+        return;
+    }
+    if (campo.dataset.campo === 'idioma') {
+        await app.guardarAjustes({ idioma: campo.value });
+        pintar();
+        return;
+    }
+    if (campo.dataset.campo === 'camara') {
+        await app.ponerCamara(campo.value);
+        camaras = await app.camarasParaElegir();
         pintar();
         return;
     }
@@ -414,6 +413,10 @@ async function alClic(e) {
             pintar();
             break;
         }
+        case 'releer-camaras':
+            camaras = await app.camarasParaElegir();
+            pintar();
+            break;
         case 'diagnostico': app.verDiagnostico(); break;
         case 'ajustes': app.verAjustes(); break;
         case 'volver': app.irASesiones(); break;

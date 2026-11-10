@@ -416,7 +416,8 @@ module.exports = function (t) {
 
     t.test('la lista de verificación muestra el número antes de grabar', () => {
         const js = fs.readFileSync(path.join(__dirname, '..', 'src', 'js', 'pantalla-preparar.js'), 'utf8');
-        t.ok(/titulo: 'Qué clase es'/.test(js), 'tiene su renglón');
+        t.ok(/Número de clase \$\{ayuda\(/.test(js) && /data-campo="numero"/.test(js), 'tiene su fila, arriba, debajo de las fuentes');
+        t.ok(js.indexOf("'#prep-fuentes'") < js.indexOf("'#prep-clase'"), 'las fuentes primero');
         t.ok(/numero: nombre \? nombre\.numero : null/.test(js),
             'y manda el número al arrancar, no la vez: esa la resuelve el motor');
         t.ok(/nombre = reanudar \? null : await preguntarElNombre\(\)/.test(js),

@@ -90,6 +90,16 @@ module.exports = async function (t) {
         }
     });
 
+    t.test('Preparar: fuentes arriba, la cámara dice que es para el OUT, el fps no se toca ahí, y el glosario se edita ahí', () => {
+        const js = leer('src', 'js', 'pantalla-preparar.js');
+        t.ok(/Solo para la foto del OUT de cada toma\. No graba la pantalla ni vídeo\./.test(js));
+        t.ok(/Selección de FPS/.test(js) && !/Cómo va a quedar el XML/.test(js), 'se llama por lo que es');
+        t.ok(!/data-campo="fps"/.test(js), 'y se cambia en Ajustes, no ahí');
+        t.ok(/<select id="prep-idioma" data-campo="idioma">/.test(js), 'el idioma, con su desplegable');
+        t.ok(/editorDeGlosario\.conectar\('#prep-glosario'\)/.test(js), 'el glosario, editable en Preparar');
+        t.ok(/id="prep-pie"/.test(leer('src', 'index.html')), 'y Whisper abajo, en el pie');
+    });
+
     t.test('Preparar descarta la respuesta de una apertura reemplazada', () => {
         const js = leer('src', 'js', 'pantalla-preparar.js');
         t.ok(/if \(r\.reemplazada\) return r;/.test(js));

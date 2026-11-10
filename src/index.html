@@ -88,29 +88,52 @@
        esencial está en verde, y cada renglón ofrece su arreglo ahí mismo. -->
   <section class="vista" id="vista-preparar">
     <div class="scroll">
-      <div class="seccion">
-        <div class="seccion-titulo">
-          <span>Antes de empezar</span>
-          <span class="crece"></span>
+      <!-- Preparar lleva a la persona en el orden en que decide: de dónde sale
+           la clase, qué clase es, y lo que Whisper tiene que escribir bien. Lo
+           que está bien no ocupa lugar: Whisper y la carpeta van en el pie, y
+           solo suben arriba, como aviso, si algo impide grabar. Las
+           explicaciones son pistas al pasar el mouse por el «?». -->
+      <div class="prep">
+        <div class="prep-cabeza">
+          <div class="prep-cabeza-texto">
+            <span class="prep-titulo">Preparar la clase</span>
+            <span class="v3" id="prep-nombre"></span>
+          </div>
           <button id="btn-iniciar" class="btn btn-primario" type="button" disabled>
             Iniciar grabación
           </button>
         </div>
-        <div id="checklist"></div>
-      </div>
-
-      <!-- Acá no se transcribe nada todavía: Whisper arranca con la grabación.
-           Lo que sí se puede hacer es decir cómo comprobar la voz en los
-           primeros segundos, que es lo que este renglón prometía y no cumplía. -->
-      <div class="seccion">
-        <div class="seccion-titulo"><span>Cómo saber que es la voz correcta</span></div>
-        <p id="oyendo-preparar" class="v2">
-          El medidor se mueve con cualquier sonido, así que no alcanza. Apenas
-          inicies, la pantalla de En vivo muestra en «Oyendo» lo que Whisper
-          entiende, a los pocos segundos. Si ahí no aparece lo que dice el
-          profesor, elegí otra entrada en el rótulo Audio de la barra: la clase
-          sigue, con lo anotado.
-        </p>
+        <div id="prep-avisos"></div>
+        <div class="prep-grupo" id="prep-fuentes"></div>
+        <div class="prep-grupo" id="prep-clase"></div>
+        <div class="prep-grupo" id="prep-glosario">
+          <div class="prep-grupo-cabeza">
+            <span class="prep-grupo-titulo">Glosario</span>
+            <span class="ayuda" tabindex="0" title="Nombres de herramientas, personas o siglas que el modelo grande tiene que escribir bien al releer cada toma. Se pueden agregar varias separadas por coma. El general vale para todas las clases; el del curso viaja con la carpeta.">?</span>
+            <span class="v3 glosario-dice" data-glosario-dice></span>
+          </div>
+          <div class="prep-glosario-listas">
+            <div class="frases-grupo" data-glosario="delCurso">
+              <div class="frases-cabeza"><span class="frases-que rotulo">De este curso</span></div>
+              <div class="frases-fichas"></div>
+              <div class="campo-fila">
+                <input type="text" maxlength="200" data-termino-nuevo aria-label="Otra palabra del glosario del curso"
+                       placeholder="Por ejemplo «Canva Pro, Magic Studio»">
+                <button class="btn" type="button" data-termino-agregar>Agregar</button>
+              </div>
+            </div>
+            <div class="frases-grupo" data-glosario="general">
+              <div class="frases-cabeza"><span class="frases-que rotulo" title="Vale para todas las clases.">General</span></div>
+              <div class="frases-fichas"></div>
+              <div class="campo-fila">
+                <input type="text" maxlength="200" data-termino-nuevo aria-label="Otra palabra del glosario general"
+                       placeholder="Por ejemplo «Figma, Notion»">
+                <button class="btn" type="button" data-termino-agregar>Agregar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="prep-pie" id="prep-pie"></div>
       </div>
     </div>
   </section>
@@ -378,7 +401,7 @@
               <button class="btn" type="button" data-termino-agregar>Agregar</button>
             </div>
           </div>
-          <span class="v3 glosario-dice" id="aj-glosario-dice" role="status"></span>
+          <span class="v3 glosario-dice" id="aj-glosario-dice" data-glosario-dice role="status"></span>
         </div>
       </details>
 
