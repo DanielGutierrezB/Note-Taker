@@ -127,7 +127,19 @@ function neutralizar(texto) {
     for (const [viejo, nuevo] of deRuta.concat(nombres)) salida = salida.split(viejo).join(nuevo);
     // El proyecto se llama como el archivo del que salió, y eso también se ve.
     salida = salida.replace(/<Name>[^<]*\.prproj<\/Name>/g, '<Name>Plantilla.prproj</Name>');
-    return { texto: salida, rutas: rutas.length };
+    // Y lo que no es una ruta absoluta pero dice de dónde salió: la ruta
+    // RELATIVA de cada medio —«../../CUR/<el curso>/Clase 11…»— y las huellas
+    // que Premiere guarda del archivo, en base64. Son las mismas que el
+    // generador quita de cada medio que importa (`importarMedio`), pero acá
+    // sobre el archivo entero: por eso sin `[\s\S]`, que cruzaba de un objeto
+    // al de al lado y dejaba referencias colgando.
+    const antesDeHuellas = salida.length;
+    salida = salida
+        .replace(/\n\t*<RelativePath>[^<]*<\/RelativePath>/g, '')
+        .replace(/\n\t*<ModificationState\b[^>]*>[^<]*<\/ModificationState>/g, '')
+        .replace(/\n\t*<ContentAndMetadataState\b[^>]*>[^<]*<\/ContentAndMetadataState>/g, '')
+        .replace(/\n\t*<CCFileModTime>[^<]*<\/CCFileModTime>/g, '');
+    return { texto: salida, rutas: rutas.length, huellas: antesDeHuellas !== salida.length };
 }
 
 function main() {
@@ -146,7 +158,8 @@ function main() {
     const limpio = new prproj.Proyecto(texto);
     const r = limpio.guardar(destino);
 
-    const quedan = rutasDe(limpio.texto()).filter(x => !x.startsWith(CARPETA));
+    const quedan = rutasDe(limpio.texto()).filter(x => !x.startsWith(CARPETA))
+        .concat((limpio.texto().match(/<RelativePath>[^<]*<\/RelativePath>/g) || []));
     console.log(`De ${origen}`);
     console.log(`  ${fuera} objeto(s) de transcripción fuera`);
     console.log(`  ${rutas} ruta(s) cambiadas por ${CARPETA}/`);

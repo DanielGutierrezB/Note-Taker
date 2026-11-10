@@ -699,6 +699,7 @@ function ajustarSesion(estado, opciones) {
             if (movidoOut) cuenta.movidos++;
             cuenta.mayorMs = Math.max(cuenta.mayorMs, movidoIn, movidoOut);
         }
+        noCruzarVecinas(estado.tomas);
     } finally {
         for (const w of abiertos.values()) cerrar(w);
     }
@@ -779,7 +780,42 @@ function ajustarSesion(estado, opciones) {
     }
 }
 
+/**
+ * Que el OUT ajustado de una toma no pase el IN ajustado de la siguiente.
+ *
+ * Cada borde se ajusta por su cuenta y cada uno mira medio segundo de su lado
+ * (`VENTANA`): con dos tomas a trescientos milisegundos, el OUT de la primera se
+ * corría hacia adelante y el IN de la segunda hacia atrás, y se cruzaban. En el
+ * XML y en la precortada salían encimadas, con ese pedazo dos veces.
+ *
+ * Cuando se cruzan, las dos se frenan en la mitad del hueco que el editor dejó
+ * entre ellas: ninguna pasa a la otra y ninguna se corre del lado contrario al
+ * que el ajuste la había llevado. Corre en cada escritura sobre todas las tomas,
+ * así que sale lo mismo aunque una sola se haya vuelto a ajustar.
+ */
+function noCruzarVecinas(tomas) {
+    const vivas = (tomas || [])
+        .filter(t => t && !t.descartada && t.inMs != null)
+        .sort((a, b) => a.inMs - b.inMs);
+    for (let i = 0; i + 1 < vivas.length; i++) {
+        const a = vivas[i];
+        const b = vivas[i + 1];
+        if (a.outMs == null || !a.ajuste || Number(a.outMs) > Number(b.inMs)) continue;
+        const outA = outAjustado(a);
+        const inB = inAjustado(b);
+        if (outA <= inB) continue;
+        const medio = Math.round((Number(a.outMs) + Number(b.inMs)) / 2);
+        a.ajuste.outMs = Math.min(outA, medio);
+        a.ajuste.porQueOut = 'vecina';
+        if (b.ajuste && Number(b.ajuste.deInMs) === Number(b.inMs)) {
+            b.ajuste.inMs = Math.max(inB, medio);
+            b.ajuste.porQueIn = 'vecina';
+        }
+    }
+}
+
 module.exports = {
+    noCruzarVecinas,
     HOP_SEC,
     VENTANA,
     SILENCIO_MIN_SEC,

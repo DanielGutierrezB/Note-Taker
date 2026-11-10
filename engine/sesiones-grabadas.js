@@ -317,6 +317,15 @@ function dondeQuedoElWav(sitio, guardado) {
  * antes en vez de perder los cortes buenos.
  */
 function ajustarBordes(estado, sitio) {
+    // Y el XML también lo nombra donde está hoy. Antes escribía la ruta del día
+    // de la grabación: en una carpeta movida o abierta desde otra Mac, Premiere
+    // importaba la secuencia con el audio sin conectar. Un WAV que no está en
+    // ningún lado se deja con la ruta que tenía: es la única pista que queda.
+    for (const s of estado.sesiones || []) {
+        if (!s || !s.archivo) continue;
+        const hoy = dondeQuedoElWav(sitio, s.archivo);
+        if (hoy !== s.archivo && fs.existsSync(hoy)) s.archivo = hoy;
+    }
     return ajustar.ajustarSesion(estado, { resolver: g => dondeQuedoElWav(sitio, g) });
 }
 

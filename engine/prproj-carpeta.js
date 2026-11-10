@@ -31,6 +31,7 @@
 const fs = require('fs');
 const path = require('path');
 
+const paths = require('./paths');
 const prproj = require('./prproj');
 const { Taller, loQueFalta } = require('./prproj-secuencia');
 const {
@@ -73,6 +74,43 @@ const ETIQUETA_DE_REFERENCIA = 'Caribbean';
 /** Los cuadros por segundo de la secuencia molde, leídos de su `VideoTrackGroup`. */
 function fpsDeLaPlantilla(taller) {
     return taller.cuadro ? prproj.TICKS / taller.cuadro : null;
+}
+
+/** Por qué esta plantilla no sirve para estas clases, o null si sirve. */
+function errorDeFps(sesiones, fps) {
+    if (fps == null) return 'No pude leer los cuadros por segundo de la secuencia de la plantilla.';
+    const distintas = sesiones.filter(s => !mismoFps(s.fps || 30, fps));
+    if (!distintas.length) return null;
+    const cuales = [...new Set(distintas.map(s => s.fps || 30))].join(', ');
+    return `La plantilla es de ${Math.round(fps * 1000) / 1000} fps y en esta carpeta hay clases a ${cuales} fps`
+        + ` (${distintas.length}). Un proyecto así quedaría corrido: hace falta una plantilla a ese fps`
+        + ` (Plantilla-${cuales.split(', ')[0]}.prproj en la carpeta de plantillas).`;
+}
+
+/**
+ * Lo que se puede saber antes de preguntar nada: si hay clases y si la
+ * plantilla es de su fps.
+ *
+ * Antes el rechazo por fps llegaba después del diálogo de «ya hay un proyecto,
+ * ¿lo reemplazo?»: se contestaba una pregunta para enterarse de que no se podía.
+ *
+ * @returns {{ok:boolean, plantilla:string|null, error?:string}}
+ */
+function revisarAntes({ carpeta, enCurso }) {
+    if (!carpeta || !fs.existsSync(carpeta)) return { ok: false, plantilla: null, error: 'Esa carpeta no está.' };
+    const sesiones = sesionesGrabadas.listar([carpeta], enCurso);
+    if (!sesiones.length) return { ok: false, plantilla: null, error: 'Esta carpeta no tiene ninguna clase grabada todavía.' };
+    const fpsDeLasClases = [...new Set(sesiones.map(s => s.fps || 30))];
+    const plantilla = paths.plantillaPrproj(fpsDeLasClases.length === 1 ? fpsDeLasClases[0] : null);
+    if (!plantilla) return { ok: false, plantilla: null, error: 'Falta la plantilla de Premiere que viene con la app. Reinstalala.' };
+    let fps;
+    try {
+        fps = fpsDeLaPlantilla(new Taller(prproj.Proyecto.leer(plantilla)));
+    } catch (e) {
+        return { ok: false, plantilla, error: `No pude abrir la plantilla: ${e.message}` };
+    }
+    const error = errorDeFps(sesiones, fps);
+    return error ? { ok: false, plantilla, error } : { ok: true, plantilla };
 }
 
 /** ¿Es el mismo fps? 29.97 y 30 no lo son, aunque se escriban parecido. */
@@ -323,6 +361,16 @@ function armarPre(taller, clase, plan, fuentes, capturas, medios, bin) {
  * @param {function} [opciones.avisar] recibe `{hecho, total, que}` mientras arma
  * @param {number} [opciones.semilla] para que dos corridas den el mismo archivo
  */
+/**
+ * Le da paso a lo que espera en el proceso principal.
+ *
+ * Armar el proyecto es trabajo de CPU de corrido, y en el mismo proceso que
+ * escribe el audio: con 60 clases eran 2,7 s sin soltar, y con una clase
+ * grabando, los pedazos de PCM que llegaban mientras tanto se encolaban en el
+ * puente. Entre clase y clase se suelta, y el audio se escribe en el medio.
+ */
+const ceder = () => new Promise(r => setImmediate(r));
+
 async function generar(opciones) {
     const op = opciones || {};
     const vacio = { ok: false, ruta: null, clases: 0, avisos: [], cuenta: [], error: null };
@@ -358,18 +406,8 @@ async function generar(opciones) {
     // armada sobre una plantilla a 30 saldría corrida un cuadro cada medio
     // minuto. Se dice antes de armar nada.
     const fps = fpsDeLaPlantilla(taller);
-    if (fps == null) {
-        return { ...vacio, error: 'No pude leer los cuadros por segundo de la secuencia de la plantilla.' };
-    }
-    const distintas = sesiones.filter(s => !mismoFps(s.fps || 30, fps));
-    if (distintas.length) {
-        const cuales = [...new Set(distintas.map(s => s.fps || 30))].join(', ');
-        return {
-            ...vacio,
-            error: `La plantilla es de ${Math.round(fps * 1000) / 1000} fps y en esta carpeta hay clases a ${cuales} fps`
-                + ` (${distintas.length}). Un proyecto así quedaría corrido: hace falta una plantilla a ese fps.`
-        };
-    }
+    const contraFps = errorDeFps(sesiones, fps);
+    if (contraFps) return { ...vacio, error: contraFps };
 
     // **Los cortes se ajustan contra la onda antes de planear.** El sidecar ya
     // trae el ajuste, pero puede ser de una versión anterior de esa cuenta
@@ -381,6 +419,7 @@ async function generar(opciones) {
     for (const s of sesiones) {
         if (!s.archivos || !s.archivos.json) continue;
         sesionesGrabadas.ajustarBordes(s, workspace.sesionDelSidecar(s.archivos.json));
+        await ceder();
     }
 
     const plan = planear(sesiones, config, fps);
@@ -413,6 +452,7 @@ async function generar(opciones) {
                 taller.guardarEn(binAudio, medio.clipProjectItem);
                 medios.set(w.ruta, medio);
             }
+            await ceder();
         }
 
         decir(0, total, 'Armando las capturas…');
@@ -433,7 +473,8 @@ async function generar(opciones) {
         let cortes = 0;
         let precortadas = 0;
         let pres = 0;
-        plan.clases.forEach((clase, i) => {
+        for (const [i, clase] of plan.clases.entries()) {
+            await ceder();
             decir(i, total, `Precortando ${clase.nombre}…`);
             const precortada = armarPrecortada(taller, clase, plan, fuentes, capturas, medios, binPrecortadas);
             if (precortada) { cortes += precortada; precortadas++; }
@@ -443,7 +484,8 @@ async function generar(opciones) {
             // ningún lado.
             const pre = armarPre(taller, clase, plan, fuentes, capturas, medios, binPre);
             if (pre) { cortes += pre; pres++; }
-        });
+        }
+        await ceder();
 
         const podados = taller.podarLaPlantilla();
 
@@ -491,6 +533,7 @@ async function generar(opciones) {
 
 module.exports = {
     generar,
+    revisarAntes,
     planear,
     normalizar,
     vistasUsadas,

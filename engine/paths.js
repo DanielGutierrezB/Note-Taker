@@ -444,12 +444,19 @@ const PLANTILLA_PRPROJ = 'Plantilla-30.prproj';
  *
  * @returns {string|null} la ruta, o null si no está en ningún lado
  */
-function plantillaPrproj() {
-    const candidatas = [
-        process.env.NOTETAKER_PLANTILLA_PRPROJ,
-        process.resourcesPath ? path.join(process.resourcesPath, 'plantillas', PLANTILLA_PRPROJ) : null,
-        path.join(appRoot(), 'plantillas', PLANTILLA_PRPROJ)
+function plantillaPrproj(fps) {
+    // Con el fps de las clases, primero la plantilla que lleva ese número en el
+    // nombre (`Plantilla-29.97.prproj`): agregar otro fps es poner otro archivo
+    // en la carpeta, sin tocar código. La de 30 queda como la de siempre.
+    const nombres = (fps != null && Number(fps) !== 30 ? [`Plantilla-${Number(fps)}.prproj`] : [])
+        .concat([PLANTILLA_PRPROJ]);
+    const dirs = [
+        process.resourcesPath ? path.join(process.resourcesPath, 'plantillas') : null,
+        path.join(appRoot(), 'plantillas')
     ].filter(Boolean);
+    const candidatas = [process.env.NOTETAKER_PLANTILLA_PRPROJ]
+        .concat(...nombres.map(n => dirs.map(d => path.join(d, n))))
+        .filter(Boolean);
     return candidatas.find(r => fs.existsSync(r)) || null;
 }
 

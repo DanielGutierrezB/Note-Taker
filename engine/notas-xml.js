@@ -360,7 +360,7 @@ function xmlDeNotas(estado) {
 
     // La firma va detrás del DOCTYPE, que es donde un comentario no molesta a
     // ningún parser y donde queda a la vista al abrir el archivo.
-    return cuerpo.replace('<!DOCTYPE xmeml>', `<!DOCTYPE xmeml>\n${FIRMA}`);
+    return cuerpo.replace('<!DOCTYPE xmeml>', () => `<!DOCTYPE xmeml>\n${FIRMA}`);
 }
 
 /**

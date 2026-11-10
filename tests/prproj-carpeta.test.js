@@ -933,6 +933,27 @@ module.exports = async function (t) {
         return dir;
     }
 
+    t.test('una carpeta con «$&» y «$\'» en el nombre llega al proyecto tal cual', async () => {
+        // `String.replace` con un texto de reemplazo lee `$&` como «lo
+        // encontrado» y `$'` como «lo de después»: la ruta salía con pedazos
+        // del proyecto adentro y el grafo, que no mira el contenido, pasaba igual.
+        const base = carpetaConClases(30);
+        const dir = path.join(path.dirname(base), `nt-$&-$'-$1-${path.basename(base)}`);
+        fs.renameSync(base, dir);
+        const destino = path.join(dir, 'Proyecto', 'prueba.prproj');
+        const r = await carpetaPrproj.generar({
+            carpeta: dir, destino, plantilla: PLANTILLA, semilla: 7,
+            config: soloLasDichas({ capturas: 1, vistas: { PV: [1] } })
+        });
+        t.ok(r.ok, r.error || '');
+        const texto = prproj.Proyecto.leer(destino).texto();
+        const rutas = [...texto.matchAll(/<(?:ActualMedia)?FilePath>([^<]*)<\/(?:ActualMedia)?FilePath>/g)]
+            .map(m => m[1].replace(/&amp;/g, '&').replace(/&apos;/g, "'"))
+            .filter(ruta => ruta.includes('nt-'));
+        t.ok(rutas.length > 0, 'el proyecto nombra los WAV de la carpeta');
+        for (const ruta of rutas) t.ok(ruta.startsWith(dir), ruta);
+    });
+
     t.test('armar un proyecto entero y volver a leerlo', async () => {
         const dir = carpetaConClases(30);
         const destino = path.join(dir, 'Proyecto', 'prueba.prproj');

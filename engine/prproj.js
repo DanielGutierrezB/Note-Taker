@@ -346,7 +346,10 @@ class Proyecto {
         if (!antes.includes(viejo)) {
             throw new Error(`no está ${JSON.stringify(viejo)} en ${this.clase(k)} ${k}`);
         }
-        this.escribir(k, veces === 1 ? antes.replace(viejo, nuevo) : antes.split(viejo).join(nuevo));
+        // Con una función y no con el texto: un `$&` o un `$'` en una ruta o un
+        // nombre se interpretaba como «lo encontrado» o «lo de después», y
+        // metía pedazos del proyecto adentro del campo.
+        this.escribir(k, veces === 1 ? antes.replace(viejo, () => nuevo) : antes.split(viejo).join(nuevo));
     }
 
     /** Agrega objetos de nivel raíz al final, que es donde es seguro (trampa 3). */
@@ -442,7 +445,7 @@ class Proyecto {
             const [tipo, valor] = parte(k);
             let t = this.contenido(k);
             if (tipo === 'ID') {
-                t = t.replace(`ObjectID="${valor}"`, `ObjectID="${mapaId.get(valor)}"`);
+                t = t.replace(`ObjectID="${valor}"`, () => `ObjectID="${mapaId.get(valor)}"`);
             }
             t = t.replace(/ObjectRef="(\d+)"/g,
                 (todo, n) => (mapaId.has(n) ? `ObjectRef="${mapaId.get(n)}"` : todo));

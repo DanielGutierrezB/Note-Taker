@@ -66,10 +66,12 @@ function registrar({ ipcMain, dialog, ventana, send, anotar }) {
 
     ipcMain.handle('prproj-generar', async (event, carpeta, config) => {
         anotar('prproj.generar', { carpeta, config });
-        const plantilla = paths.plantillaPrproj();
-        if (!plantilla) {
-            return { ok: false, error: 'Falta la plantilla de Premiere que viene con la app. Reinstalala.' };
-        }
+        // Lo que hace que no se pueda armar, antes de preguntar si se reemplaza
+        // el que ya está: contestar esa pregunta para enterarse después de que
+        // la plantilla no es de este fps era una pregunta de más.
+        const antes = carpetaPrproj.revisarAntes({ carpeta, enCurso: grabacion.enCurso() });
+        if (!antes.ok) return { ok: false, error: antes.error };
+        const plantilla = antes.plantilla;
 
         let limpia;
         try {

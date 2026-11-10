@@ -291,23 +291,23 @@ class Taller {
 
         for (const k of [cpi, master]) {
             this.proyecto.escribir(k, this.proyecto.contenido(k)
-                .replace(/<Name>[^<]*<\/Name>/g, `<Name>${xmlSeguro(ficha.nombre)}</Name>`));
+                .replace(/<Name>[^<]*<\/Name>/g, () => `<Name>${xmlSeguro(ficha.nombre)}</Name>`));
         }
         // El `<ID>` del panel es el orden en que el editor importó las cosas: no
         // es identidad y no lo renueva el clonado, pero repetido deja dos filas
         // del panel discutiendo cuál es cuál.
         this.proyecto.escribir(cpi, this.proyecto.contenido(cpi)
-            .replace(/<ID>\d+<\/ID>/, `<ID>${this.proximoIdDePanel++}</ID>`));
+            .replace(/<ID>\d+<\/ID>/, () => `<ID>${this.proximoIdDePanel++}</ID>`));
 
         // Las tres rutas del medio, más el título. `RelativePath` se saca en vez
         // de calcularla: es relativa a dónde se guarde el proyecto, que este
         // módulo no sabe, y con `FilePath` absoluto Premiere encuentra el
         // archivo igual. Escribir una relativa mal apuntada es peor que no tener.
         let t = this.proyecto.contenido(medio)
-            .replace(/<FilePath>[^<]*<\/FilePath>/, `<FilePath>${xmlSeguro(ficha.ruta)}</FilePath>`)
+            .replace(/<FilePath>[^<]*<\/FilePath>/, () => `<FilePath>${xmlSeguro(ficha.ruta)}</FilePath>`)
             .replace(/<ActualMediaFilePath>[^<]*<\/ActualMediaFilePath>/,
-                `<ActualMediaFilePath>${xmlSeguro(ficha.ruta)}</ActualMediaFilePath>`)
-            .replace(/<Title>[^<]*<\/Title>/, `<Title>${xmlSeguro(ficha.nombre)}</Title>`)
+                () => `<ActualMediaFilePath>${xmlSeguro(ficha.ruta)}</ActualMediaFilePath>`)
+            .replace(/<Title>[^<]*<\/Title>/, () => `<Title>${xmlSeguro(ficha.nombre)}</Title>`)
             .replace(/\n\t\t<RelativePath>[^<]*<\/RelativePath>/, '');
         // `ModificationState` y `ContentAndMetadataState` son huellas del
         // contenido del archivo de ORIGEN. Copiadas a otro archivo estarían
@@ -329,11 +329,11 @@ class Taller {
             const clase = this.proyecto.clase(k);
             if (clase === 'VideoStream' || clase === 'AudioStream') {
                 this.proyecto.escribir(k, this.proyecto.contenido(k)
-                    .replace(/<Duration>\d+<\/Duration>/g, `<Duration>${ticks}</Duration>`));
+                    .replace(/<Duration>\d+<\/Duration>/g, () => `<Duration>${ticks}</Duration>`));
             }
             if (clase === 'VideoMediaSource' || clase === 'AudioMediaSource') {
                 this.proyecto.escribir(k, this.proyecto.contenido(k)
-                    .replace(/<OriginalDuration>\d+<\/OriginalDuration>/, `<OriginalDuration>${ticks}</OriginalDuration>`));
+                    .replace(/<OriginalDuration>\d+<\/OriginalDuration>/, () => `<OriginalDuration>${ticks}</OriginalDuration>`));
             }
         }
 
@@ -407,7 +407,7 @@ class Taller {
         const inlet = this._deClase(clonados, 'AudioTrackInlet')[0];
 
         p.escribir(seq, p.contenido(seq)
-            .replace(/<Name>[^<]*<\/Name>/, `<Name>${xmlSeguro(pedido.nombre)}</Name>`));
+            .replace(/<Name>[^<]*<\/Name>/, () => `<Name>${xmlSeguro(pedido.nombre)}</Name>`));
         this.encuadrarLaLinea(seq, pedido.duracionSeg);
 
 
@@ -509,16 +509,16 @@ class Taller {
                 if (tics > 0) {
                     p.escribir(k, p.contenido(k).replace(
                         /<OriginalDuration>\d+<\/OriginalDuration>/,
-                        `<OriginalDuration>${tics}</OriginalDuration>`));
+                        () => `<OriginalDuration>${tics}</OriginalDuration>`));
                 }
             }
             if (clase === 'ClipProjectItem' || clase === 'MasterClip') {
                 p.escribir(k, p.contenido(k)
-                    .replace(/<Name>[^<]*<\/Name>/g, `<Name>${xmlSeguro(nombre)}</Name>`));
+                    .replace(/<Name>[^<]*<\/Name>/g, () => `<Name>${xmlSeguro(nombre)}</Name>`));
             }
         }
         const cpi = this._deClase(clonados, 'ClipProjectItem')[0];
-        p.escribir(cpi, p.contenido(cpi).replace(/<ID>\d+<\/ID>/, `<ID>${this.proximoIdDePanel++}</ID>`));
+        p.escribir(cpi, p.contenido(cpi).replace(/<ID>\d+<\/ID>/, () => `<ID>${this.proximoIdDePanel++}</ID>`));
         // El verde de las secuencias se escribe siempre, sin heredarlo del molde:
         // el molde es una secuencia cualquiera y podría venir de cualquier color.
         this.pintarItemDelPanel(cpi, COLOR_DE.secuencia);
@@ -543,9 +543,9 @@ class Taller {
         const dur = Number(duracionSeg) > 0 ? Number(duracionSeg) : 60;
         p.escribir(seq, p.contenido(seq)
             .replace(/<TL.SQTimePerPixel>[^<]*<\/TL.SQTimePerPixel>/,
-                `<TL.SQTimePerPixel>${(dur / ANCHO_DE_LA_LINEA).toFixed(10)}</TL.SQTimePerPixel>`)
+                () => `<TL.SQTimePerPixel>${(dur / ANCHO_DE_LA_LINEA).toFixed(10)}</TL.SQTimePerPixel>`)
             .replace(/<MZ.WorkOutPoint>[^<]*<\/MZ.WorkOutPoint>/,
-                `<MZ.WorkOutPoint>${prproj.aTicks(dur)}</MZ.WorkOutPoint>`));
+                () => `<MZ.WorkOutPoint>${prproj.aTicks(dur)}</MZ.WorkOutPoint>`));
     }
 
 
@@ -595,13 +595,13 @@ class Taller {
      */
     numerarPista(k, id, indice) {
         this.proyecto.escribir(k, this.proyecto.contenido(k)
-            .replace(/\n\t\t\t\t<ID>\d+<\/ID>/, `\n\t\t\t\t<ID>${id}</ID>`)
-            .replace(/\n\t\t\t\t<Index>\d+<\/Index>/g, `\n\t\t\t\t<Index>${indice}</Index>`));
+            .replace(/\n\t\t\t\t<ID>\d+<\/ID>/, () => `\n\t\t\t\t<ID>${id}</ID>`)
+            .replace(/\n\t\t\t\t<Index>\d+<\/Index>/g, () => `\n\t\t\t\t<Index>${indice}</Index>`));
     }
 
     siguienteIdDePista(grupo, valor) {
         this.proyecto.escribir(grupo, this.proyecto.contenido(grupo)
-            .replace(/<NextTrackID>\d+<\/NextTrackID>/, `<NextTrackID>${valor}</NextTrackID>`));
+            .replace(/<NextTrackID>\d+<\/NextTrackID>/, () => `<NextTrackID>${valor}</NextTrackID>`));
     }
 
 
@@ -655,8 +655,8 @@ class Taller {
         // pidiéndole a Premiere que estire el tiempo.
         const entrada = prproj.aTicks(corte.entradaSeg, this.cuadro);
         p.escribir(clip, p.contenido(clip)
-            .replace(/<InPoint>\d+<\/InPoint>/, `<InPoint>${entrada}</InPoint>`)
-            .replace(/<OutPoint>\d+<\/OutPoint>/, `<OutPoint>${entrada + (hasta - desde)}</OutPoint>`));
+            .replace(/<InPoint>\d+<\/InPoint>/, () => `<InPoint>${entrada}</InPoint>`)
+            .replace(/<OutPoint>\d+<\/OutPoint>/, () => `<OutPoint>${entrada + (hasta - desde)}</OutPoint>`));
 
         // Al medio nuevo: la fuente del clip, el clip maestro del subclip, y el
         // nombre que se ve en la línea de tiempo.
@@ -668,8 +668,8 @@ class Taller {
         }
         p.escribir(sub, p.contenido(sub)
             .replace(/<MasterClip ObjectURef="[^"]+"\/>/,
-                `<MasterClip ObjectURef="${prproj.parte(medio.masterClip)[1]}"/>`)
-            .replace(/<Name>[^<]*<\/Name>/, `<Name>${xmlSeguro(medio.nombre)}</Name>`));
+                () => `<MasterClip ObjectURef="${prproj.parte(medio.masterClip)[1]}"/>`)
+            .replace(/<Name>[^<]*<\/Name>/, () => `<Name>${xmlSeguro(medio.nombre)}</Name>`));
         // Los marcadores del clip son los del medio de ORIGEN: los del molde
         // hablan de otro archivo. Se repuntan a los del medio nuevo, que el
         // clonado del medio ya trajo vacíos y `marcarMedio` puede llenar. Una
@@ -719,7 +719,7 @@ class Taller {
         const texto = this.proyecto.contenido(k);
         const re = new RegExp(`<${etiqueta} Object(?:U?)Ref="[^"]+"/>`);
         if (!re.test(texto)) return false;
-        this.proyecto.escribir(k, texto.replace(re, `<${etiqueta} ${attr}="${valor}"/>`));
+        this.proyecto.escribir(k, texto.replace(re, () => `<${etiqueta} ${attr}="${valor}"/>`));
         return true;
     }
 
@@ -795,8 +795,8 @@ class Taller {
     valorDelParametro(k, valor) {
         const p = this.proyecto;
         p.escribir(k, p.contenido(k)
-            .replace(/<StartKeyframe>([^,]*),[^,]*,/, `<StartKeyframe>$1,${valor},`)
-            .replace(/<CurrentValue>[^<]*<\/CurrentValue>/, `<CurrentValue>${valor}</CurrentValue>`));
+            .replace(/<StartKeyframe>([^,]*),[^,]*,/, (_m, primero) => `<StartKeyframe>${primero},${valor},`)
+            .replace(/<CurrentValue>[^<]*<\/CurrentValue>/, () => `<CurrentValue>${valor}</CurrentValue>`));
     }
 
     /**
@@ -971,8 +971,8 @@ class Taller {
         const { clonados } = this._clonar([this.moldes.bin], { claseFrontera: ['ClipProjectItem', 'BinProjectItem'] });
         const bin = this._deClase(clonados, 'BinProjectItem')[0];
         p.escribir(bin, p.contenido(bin)
-            .replace(/<Name>[^<]*<\/Name>/, `<Name>${xmlSeguro(nombre)}</Name>`)
-            .replace(/<ID>\d+<\/ID>/, `<ID>${this.proximoIdDePanel++}</ID>`));
+            .replace(/<Name>[^<]*<\/Name>/, () => `<Name>${xmlSeguro(nombre)}</Name>`)
+            .replace(/<ID>\d+<\/ID>/, () => `<ID>${this.proximoIdDePanel++}</ID>`));
         // Un bin recién creado no hereda los hijos del que se copió. Y la lista
         // se saca entera en vez de dejarla vacía porque **un bin sin nada no
         // trae `<Items>`**: es la regla de que los valores por defecto no se
