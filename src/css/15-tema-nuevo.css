@@ -73,20 +73,22 @@
 .tema-nuevo .comentarios .comentario q { color: var(--text-primary); }
 .tema-nuevo .comentarios .comentario .hp-ico { color: #f5c54a; }
 
-/* ── Enter, grande y diciendo qué hace ─────────────────────────────────── */
+/* ── Abrir y cerrar: un solo botón, en la punta derecha de «Ahora» ────────
+   La tarjeta ya no lo repite, así que se ve como el botón que es. */
 .tema-nuevo #atajo-borde {
-  min-height: 30px;
-  padding: 0 var(--sp-3) 0 4px;
-  font-size: 13px;
+  min-height: var(--row-xs);
+  padding: var(--sp-2) var(--sp-4);
+  font-size: 12px;
   font-weight: 600;
-  color: var(--accent);
-  background: var(--accent-8);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
-.tema-nuevo #atajo-borde kbd { color: #0b1a2e; background: var(--accent); border-color: transparent; }
-.tema-nuevo #atajo-borde.es-cerrar { color: #ff9a9a; background: color-mix(in srgb, var(--error) 10%, transparent); border-color: color-mix(in srgb, var(--error) 55%, transparent); }
-.tema-nuevo #atajo-borde.es-cerrar kbd { color: var(--on-error); background: var(--error); }
+.tema-nuevo #atajo-borde:hover { color: var(--on-accent); background: var(--accent-hover); border-color: var(--accent-hover); }
+.tema-nuevo #atajo-borde.es-cerrar { color: var(--on-error); background: var(--error); border-color: var(--error); }
+.tema-nuevo #atajo-borde.es-cerrar:hover { background: color-mix(in srgb, var(--error) 88%, white); }
+.tema-nuevo #atajo-borde .tecla-enter { color: inherit; }
 .tema-nuevo .atajos { font-size: 12px; }
 .tema-nuevo .atajo-vistas .atajo { min-height: 26px; font-size: 12px; }
 
@@ -230,16 +232,49 @@
 /* La vista de una toma desplegada se cambia arriba, en su fila: abajo sobra. */
 .tema-nuevo .cuerpo-toma .campo-fila > .selector-vista { display: none; }
 
-/* Los atajos, a la derecha de «Ahora» y en su misma fila. */
-.tema-nuevo .seccion-titulo #vivo-atajos {
-  margin-left: auto;
+/* Los atajos, en la fila de «Ahora»: las vistas al centro, siempre a la vista,
+   y deshacer con abrir o cerrar en la punta derecha. Las columnas de los
+   costados son iguales mientras haya lugar, que es lo que deja las vistas en
+   el medio de verdad; si no, cede la izquierda. */
+.atajos-centro { display: contents; }
+
+.tema-nuevo .seccion-titulo:has(> #vivo-atajos:not([hidden])) {
+  display: grid;
+  grid-template-columns: minmax(auto, 1fr) auto minmax(auto, 1fr);
+  align-items: center;
+  column-gap: var(--sp-3);
+}
+
+.tema-nuevo .seccion-titulo > #vivo-atajos:not([hidden]) { display: contents; font-weight: 400; }
+.tema-nuevo .seccion-titulo #vivo-atajos .crece { display: none; }
+.tema-nuevo .atajos-centro {
+  grid-column: 2;
+  display: inline-flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  font-weight: 400;
+}
+.tema-nuevo .atajos-centro .atajo-vistas-de { margin-left: 0; }
+.tema-nuevo .atajos-centro .atajo-vistas { flex-wrap: wrap; justify-content: center; }
+.tema-nuevo .atajos-derecha {
+  grid-column: 3;
+  justify-self: end;
+  align-items: center;
+  gap: var(--sp-2);
   font-weight: 400;
 }
 
-.tema-nuevo .seccion-titulo { align-items: center; }
-.tema-nuevo .seccion-titulo #vivo-atajos .crece { display: none; }
+/* Con la columna angosta (horizontal) no entra todo en un renglón: las vistas
+   bajan a uno propio, centradas, y «Ahora» queda con abrir o cerrar. */
+.tema-nuevo #vista-vivo .scroll > .seccion:first-child { container-type: inline-size; }
+@container (max-width: 620px) {
+  .tema-nuevo .seccion-titulo:has(> #vivo-atajos:not([hidden])) { grid-template-columns: auto minmax(0, 1fr); row-gap: var(--sp-2); }
+  .tema-nuevo .atajos-centro { grid-column: 1 / -1; grid-row: 2; }
+  .tema-nuevo .atajos-derecha { grid-column: 2; }
+}
 
 /* La ruta del XML se queda en la barra, chica y a la derecha. */
 .tema-nuevo .barra-sesion > #vivo-donde {
@@ -278,9 +313,9 @@
 .tema-nuevo #lista-vivo .fila > .fila-nota { flex: 1 1 auto; min-width: 0; }
 .tema-nuevo #lista-vivo .fila > .crece { flex: 0 0 0; }
 
-/* En horizontal la vista se elige en los atajos: el encabezado de la toma no
-   la repite, y le queda lugar al botón de cerrar. */
-.tema-nuevo.es-horizontal #ahora .tarjeta-cabeza .selector-vista { display: none; }
+/* La vista de la toma abierta se elige en los atajos, al centro de «Ahora»: el
+   encabezado de la toma no la repite. */
+.tema-nuevo #ahora .tarjeta-cabeza .selector-vista { display: none; }
 .tema-nuevo #lista-vivo .bloque-toma.es-abierta > .fila { flex-wrap: wrap; row-gap: var(--sp-1); }
 .tema-nuevo #lista-vivo .bloque-toma.es-abierta > .fila > .fila-nota { flex-basis: 0; min-width: 8ch; }
 

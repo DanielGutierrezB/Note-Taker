@@ -706,10 +706,10 @@ function ahora(fps) {
             <span class="pastilla" data-estado="escuchando">escuchando</span>
             <span class="crece"></span>
             ${botonesDeLetra()}
-            <button class="btn btn-primario" type="button" data-hace="abrir"
+            ${tema.esNuevo() ? '' : `<button class="btn btn-primario" type="button" data-hace="abrir"
                     title="Abre una toma acá. Si el profesor ya venía hablando, el IN
 retrocede solo hasta donde empezó la frase. Tecla: Enter">
-              ${icono('abrirToma')} Abrir toma <kbd class="tecla-enter solo-tema-nuevo">⏎ Enter</kbd></button>
+              ${icono('abrirToma')} Abrir toma</button>`}
           </div>
           <div class="tarjeta-cuerpo">
             <div data-texto="espera"></div>
@@ -730,9 +730,9 @@ retrocede solo hasta donde empezó la frase. Tecla: Enter">
         <span class="crece"></span>
         ${vistas(abierta)}
         ${botonesDeLetra()}
-        <button class="btn btn-primario" type="button" data-hace="cerrar"
+        ${tema.esNuevo() ? '' : `<button class="btn btn-primario" type="button" data-hace="cerrar"
                 title="Cierra la toma en la última palabra dicha. Tecla: Enter">
-          ${icono('cerrarToma')} Cerrar toma <kbd class="tecla-enter solo-tema-nuevo">⏎ Enter</kbd></button>
+          ${icono('cerrarToma')} Cerrar toma</button>`}
       </div>
       <div class="tarjeta-cuerpo">
         <input type="text" data-campo="nota" data-toma="${abierta.id}"
@@ -759,15 +759,25 @@ retrocede solo hasta donde empezó la frase. Tecla: Enter">
 function acomodarAtajos() {
     const atajos = $('#vivo-atajos');
     const donde = $('#vivo-donde');
+    const borde = $('#atajo-borde');
+    const deshacer = $('#atajo-deshacer');
     if (tema.esNuevo()) {
         const fila = $('#vivo-titulo-ahora').parentElement;
         if (atajos.parentElement !== fila) fila.append(atajos);
         const barra = $('.barra-sesion');
         if (donde.parentElement !== barra) barra.append(donde);
+        // Las vistas al centro y abrir o cerrar en la punta derecha, que es
+        // donde estaba el botón de la tarjeta.
+        const derecha = $('#atajos-derecha');
+        if (borde.parentElement !== derecha) derecha.append(deshacer, borde);
     } else {
         const barra = $('.barra-sesion');
         if (atajos.parentElement !== barra) barra.append(atajos);
         if (donde.parentElement !== atajos) atajos.append(donde);
+        if (borde.parentElement !== atajos) {
+            atajos.prepend(borde);
+            $('.atajos-centro').after(deshacer);
+        }
     }
 }
 
@@ -1077,8 +1087,18 @@ function pintarAtajos() {
     // El borde dice qué va a hacer, no las dos cosas: es la misma tecla con el
     // signo cambiado, y leer «abrir / cerrar» obliga a decidir cuál toca.
     const abierta = estado.abierta != null;
-    $('#atajo-borde-dice').textContent = abierta ? 'cerrar toma' : 'abrir toma';
-    $('#atajo-borde').classList.toggle('es-cerrar', abierta);
+    // En el tema nuevo es EL botón de abrir y cerrar —la tarjeta ya no lo
+    // repite—, así que se ve como uno. Se rehace solo cuando cambia: rehecho en
+    // cada pasada, un clic que cae justo entre dos se pierde.
+    const borde = $('#atajo-borde');
+    const como = `${tema.esNuevo() ? 'nuevo' : 'clasico'}-${abierta ? 'cerrar' : 'abrir'}`;
+    if (borde.dataset.como !== como) {
+        borde.dataset.como = como;
+        borde.innerHTML = tema.esNuevo()
+            ? `${icono(abierta ? 'cerrarToma' : 'abrirToma')}<span>${abierta ? 'Cerrar toma' : 'Abrir toma'}</span><kbd class="tecla-enter">⏎ Enter</kbd>`
+            : `<kbd>Enter</kbd><span>${abierta ? 'cerrar toma' : 'abrir toma'}</span>`;
+    }
+    borde.classList.toggle('es-cerrar', abierta);
     $('#atajo-borde').title = abierta
         ? 'Cerrar la toma en la última palabra dicha. Tecla: Enter'
         : 'Abrir una toma acá. Si el profesor ya venía hablando, el IN retrocede hasta donde arrancó la frase. Tecla: Enter';
@@ -1423,7 +1443,6 @@ async function alClic(e) {
             break;
         case 'letra-mas': tema.cambiarLetra(2); break;
         case 'letra-menos': tema.cambiarLetra(-2); break;
-        case 'buscar-tomas': $('#buscar-tomas').focus(); break;
         case 'mantener':
         case 'desactivar':
             await editar({ ...estadosToma.cambioDe(boton.dataset.hace), toma });
