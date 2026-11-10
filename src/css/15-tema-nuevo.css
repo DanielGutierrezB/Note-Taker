@@ -257,3 +257,9 @@
    partirse en dos renglones. */
 .tema-nuevo.es-horizontal .atajo-vistas .atajo span { display: none; }
 .tema-nuevo.es-horizontal .seccion-titulo { flex-wrap: wrap; row-gap: var(--sp-2); }
+
+/* Lo buscado, marcado en el texto: todas las veces, y la que se está mirando más fuerte. */
+.tema-nuevo .transcript .palabra.es-hallada { background: rgba(245, 197, 74, 0.38); color: var(--text-primary); border-radius: 2px; }
+.tema-nuevo .transcript .palabra.es-hallada-actual { background: #f5c54a; color: #1a1300; box-shadow: 0 0 0 2px #f5c54a; }
+.buscar-pasos { gap: 2px; }
+.buscar-pasos .btn { min-width: 26px; min-height: 26px; font-size: 10px; }

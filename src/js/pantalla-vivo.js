@@ -107,8 +107,10 @@ const vista = {
     // Uno solo a la vez, y nunca junto con `comentando`: dos campos abiertos al
     // mismo tiempo son dos sitios donde escribir y uno que se pierde al repintar.
     editando: null,
-    // Lo que se busca en las tomas (tema nuevo, ⌘F): filtra la lista.
-    busqueda: ''
+    // Lo que se busca en las tomas (tema nuevo, ⌘F): filtra la lista, y
+    // `ocurrencia` es cuál de las veces que aparece se está mirando (▲ ▼).
+    busqueda: '',
+    ocurrencia: null
 };
 
 /** Descarta las respuestas que llegan tarde (`turnos.js`). */
@@ -168,7 +170,9 @@ export function conectar(contexto) {
     $('#letra-tomas-menos').addEventListener('click', () => tema.cambiarLetraTomas(-1));
     $('#letra-tomas-mas').addEventListener('click', () => tema.cambiarLetraTomas(1));
     const buscar = $('#buscar-tomas');
-    buscar.addEventListener('input', () => { vista.busqueda = buscar.value; pintar(); });
+    buscar.addEventListener('input', () => { vista.busqueda = buscar.value; vista.ocurrencia = null; pintar(); });
+    $('#buscar-anterior').addEventListener('click', () => irAOcurrencia(-1));
+    $('#buscar-siguiente').addEventListener('click', () => irAOcurrencia(1));
 
     $('#btn-compacto').addEventListener('click', () => {
         vista.compacto = !vista.compacto;
@@ -594,8 +598,7 @@ function pintar() {
     devolverSeleccion(eligiendo);
     if (lienzo) lienzo.scrollTop = arriba;
     pantalla.querySelectorAll('.scroll > .seccion').forEach((c, i) => { c.scrollTop = columnas[i] || 0; });
-    const hallados = vista.busqueda.trim().length >= 2 && tema.esNuevo() ? tomas.length : null;
-    $('#buscar-cuantas').textContent = hallados == null ? '' : `${hallados} toma${hallados === 1 ? '' : 's'}`;
+    marcarHallados(tomas);
     devolverFoco(foco);
     // El foco estaba en algo de esta pantalla que ya no existe (un botón que se
     // repintó, el campo de una toma que se cerró): vuelve a la pantalla y no al
@@ -950,6 +953,93 @@ function coincide(t, busqueda) {
 
 function sinTildes(x) {
     return String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/** Lo buscado, en palabras comparables: sin tildes, mayúsculas ni signos. */
+function palabrasDe(x) {
+    return sinTildes(x).split(/\s+/).map(w => w.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean);
+}
+
+/**
+ * Si desde la palabra `i` se dice lo buscado. Una palabra sola vale adentro de
+ * otra («idioma» en «idiomas»); una frase, palabra por palabra, con la última
+ * pudiendo estar a medio escribir.
+ */
+function dichoDesde(ws, i, q) {
+    for (let k = 0; k < q.length; k++) {
+        const w = ws[i + k];
+        if (!w) return false;
+        const n = palabrasDe(w.texto)[0] || '';
+        const ok = q.length === 1 ? n.includes(q[0]) : (k === q.length - 1 ? n.startsWith(q[k]) : n === q[k]);
+        if (!ok) return false;
+    }
+    return true;
+}
+
+/** Cada vez que aparece lo buscado en el texto de las tomas, en el orden de la lista. */
+function ocurrencias(lista) {
+    const q = palabrasDe(vista.busqueda);
+    if (!tema.esNuevo() || !q.length || vista.busqueda.trim().length < 2) return [];
+    const salida = [];
+    for (const t of lista || laLista()) {
+        const ws = t.palabras || [];
+        for (let i = 0; i < ws.length; i++) {
+            if (dichoDesde(ws, i, q)) salida.push({ toma: t.id, ts: ws.slice(i, i + q.length).map(w => String(w.t)) });
+        }
+    }
+    return salida;
+}
+
+/**
+ * Marca lo buscado en los textos que están a la vista, y la vez que se está
+ * mirando más fuerte. Va después de montar los textos, en cada repintado: los
+ * textos se reusan entre repintados y la marca de antes podría haber quedado.
+ */
+function marcarHallados(tomas) {
+    for (const s of document.querySelectorAll('#vista-vivo .palabra.es-hallada')) s.classList.remove('es-hallada', 'es-hallada-actual');
+    const cuantas = $('#buscar-cuantas');
+    const lista = ocurrencias(tomas);
+    if (vista.ocurrencia != null && vista.ocurrencia >= lista.length) vista.ocurrencia = null;
+    $('#buscar-anterior').disabled = !lista.length;
+    $('#buscar-siguiente').disabled = !lista.length;
+    if (!tema.esNuevo() || vista.busqueda.trim().length < 2) { cuantas.textContent = ''; return; }
+    const enTomas = new Set(lista.map(o => o.toma)).size;
+    cuantas.textContent = lista.length
+        ? `${vista.ocurrencia != null ? `${vista.ocurrencia + 1} de ` : ''}${lista.length} ${lista.length === 1 ? 'vez' : 'veces'} · ${enTomas} toma${enTomas === 1 ? '' : 's'}`
+        : `${tomas.length} toma${tomas.length === 1 ? '' : 's'}`;
+    const porToma = new Map();
+    for (const o of lista) {
+        if (!porToma.has(o.toma)) porToma.set(o.toma, new Set());
+        for (const t of o.ts) porToma.get(o.toma).add(t);
+    }
+    const actual = vista.ocurrencia != null ? lista[vista.ocurrencia] : null;
+    for (const hueco of document.querySelectorAll('#vista-vivo [data-texto][data-toma]')) {
+        const toma = Number(hueco.dataset.toma);
+        const suyas = porToma.get(toma);
+        if (!suyas) continue;
+        for (const s of hueco.querySelectorAll('.palabra')) {
+            if (!suyas.has(s.dataset.t) || s.dataset.deToma) continue;
+            s.classList.add('es-hallada');
+            if (actual && actual.toma === toma && actual.ts.includes(s.dataset.t)) s.classList.add('es-hallada-actual');
+        }
+    }
+}
+
+/** ▲ ▼ o Enter en la búsqueda: la vez anterior o la siguiente, con su toma desplegada. */
+function irAOcurrencia(paso) {
+    const lista = ocurrencias();
+    if (!lista.length) return;
+    vista.ocurrencia = vista.ocurrencia == null
+        ? (paso > 0 ? 0 : lista.length - 1)
+        : (vista.ocurrencia + paso + lista.length) % lista.length;
+    const o = lista[vista.ocurrencia];
+    const t = estado.tomas.find(x => x.id === o.toma);
+    // La abierta se lee arriba, en «Ahora»; las cerradas se despliegan.
+    if (t && t.outMs != null) vista.abierta = `t${o.toma}`;
+    vista.elegida = o.toma;
+    pintar();
+    const s = document.querySelector('#vista-vivo .palabra.es-hallada-actual');
+    if (s) s.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 /** Enter en la búsqueda: despliega la primera que la dice y la trae a la vista. */
@@ -1735,8 +1825,12 @@ async function alTeclado(e) {
     if (escribiendo()) {
         const campo = document.activeElement;
         if (campo.id === 'buscar-tomas') {
-            if (e.key === 'Enter') { e.preventDefault(); abrirLaPrimera(); }
-            if (e.key === 'Escape') { campo.value = ''; vista.busqueda = ''; campo.blur(); pintar(); }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (ocurrencias().length) irAOcurrencia(e.shiftKey ? -1 : 1);
+                else abrirLaPrimera();
+            }
+            if (e.key === 'Escape') { campo.value = ''; vista.busqueda = ''; vista.ocurrencia = null; campo.blur(); pintar(); }
             return;
         }
         if (campo.dataset.campo === 'comentario') {
