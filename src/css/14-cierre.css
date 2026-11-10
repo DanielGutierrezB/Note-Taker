@@ -1,9 +1,10 @@
 /* ──────────────────────────────────────────────────────────────────────────
    14. CIERRE: qué quedó y dónde
 
-   Con la misma forma que Sesiones: sin tarjetas, un título que dice cómo
-   salió, las cifras en un renglón, la acción principal arriba, y debajo la
-   clase de punta a punta y sus tomas, en filas de 34 px.
+   Con la misma forma que Sesiones: sin tarjetas. Arriba el título y lo que se
+   hace al terminar —mostrar el XML y volver a la lista—; al centro, las cifras,
+   la clase de punta a punta y sus tomas en filas de 34 px; y abajo, en una
+   barra fija y chica, lo que se usa de vez en cuando.
    ────────────────────────────────────────────────────────────────────────── */
 
 .cierre {
@@ -52,16 +53,24 @@
 }
 
 .cierre-titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
   margin: 0;
   font-size: 19px;
   font-weight: 600;
 }
 
+.cierre-cabeza .btn-grande .hp-ico {
+  margin-right: var(--sp-1);
+}
+
 .cierre-sub {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-1) var(--sp-3);
+  gap: var(--sp-3);
+  overflow: hidden;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--text-muted);
 }
@@ -76,11 +85,12 @@
   margin-right: var(--sp-3);
 }
 
-/* Las cifras: el número grande y lo que es, sin cajas. */
+/* Las cifras: el número grande y lo que es, sin cajas, al centro. */
 .cierre-cifras {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-4) var(--sp-6);
+  justify-content: center;
+  gap: var(--sp-4) 56px;
   padding: var(--sp-4) 0;
   border-top: 1px solid var(--hairline);
   border-bottom: 1px solid var(--hairline);
@@ -89,11 +99,13 @@
 .cierre-cifra {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 2px;
+  text-align: center;
 }
 
 .cierre-cifra b {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -101,10 +113,6 @@
 .cierre-cifra > span {
   font-size: 11px;
   color: var(--text-muted);
-}
-
-.cierre-cifra.es-vistas {
-  margin-left: auto;
 }
 
 .cierre-vistas {
@@ -161,21 +169,6 @@
   color: var(--text-muted);
 }
 
-.cierre-acciones {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-3);
-}
-
-.cierre-archivo {
-  overflow: hidden;
-  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
-  font-size: 11px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
 
 /* La clase de punta a punta: lo gris es lo que queda afuera. */
 .cierre-tira {
@@ -290,7 +283,41 @@
 
 .cierre-pie {
   display: flex;
-  justify-content: flex-end;
-  padding-top: var(--sp-4);
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-5);
+  background: var(--bg-surface);
   border-top: 1px solid var(--hairline);
+}
+
+.cierre-pie:empty {
+  display: none;
+}
+
+.cierre-archivo {
+  min-width: 0;
+  overflow: hidden;
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.btn.btn-chico {
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 var(--sp-3);
+  font-size: 12px;
+}
+
+.btn-chico .logo-premiere {
+  width: 16px;
+  height: 15px;
+}
+
+.btn-chico .hp-ico {
+  width: 14px;
+  height: 14px;
+  flex-basis: 14px;
 }

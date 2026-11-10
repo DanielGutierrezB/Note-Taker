@@ -4,7 +4,8 @@
  * Es corta a propósito: la clase terminó, el editor está cansado y lo único
  * que necesita es saber que salió bien y dónde está el archivo. Lo que no se
  * puede es que tenga que ir a buscarlo — por eso el botón que lo muestra en el
- * Finder es la acción principal, y está arriba.
+ * Finder está arriba, al lado de «Volver a Sesiones», que es lo que se hace
+ * después.
  *
  * Y dice lo que NO salió bien con el mismo detalle que lo que sí: una sesión
  * con tres tomas sin releer que solo diga «listo» es la pérdida silenciosa que
@@ -28,7 +29,7 @@ const LOGO_PREMIERE = `<svg class="logo-premiere" viewBox="0 0 24 23" aria-hidde
 
 export function conectar(contexto) {
     app = contexto;
-    $('#cierre-resumen').addEventListener('click', alClic);
+    $('#vista-cierre').addEventListener('click', alClic);
 }
 
 export function ver(laSalida) {
@@ -41,6 +42,7 @@ function pintar() {
     if (!salida) {
         $('#cierre-resumen').innerHTML =
             '<div class="vacio"><span class="vacio-titulo">No quedó nada que mostrar.</span></div>';
+        $('#cierre-pie').innerHTML = '';
         return;
     }
 
@@ -54,13 +56,20 @@ function pintar() {
       <header class="cierre-cabeza">
         <span class="cierre-icono ${revisar ? 'es-revisar' : ''}">${icono(revisar ? 'atencion' : 'ok')}</span>
         <div class="cierre-titulos">
-          <h1 class="cierre-titulo">${revisar ? 'La clase quedó guardada, con algo para revisar' : 'La clase quedó guardada'}</h1>
+          <h1 class="cierre-titulo">Resumen de la clase
+            ${revisar ? '<span class="pastilla" data-estado="sin releer">revisar</span>' : ''}</h1>
           <div class="cierre-sub">
             <code>${esc(salida.corto || salida.secuencia)}</code>
             ${salida.curso ? `<span>${esc(salida.curso)}</span>` : ''}
             ${salida.ceroMs ? `<span>${esc(fmt.cuando(salida.ceroMs))}</span>` : ''}
           </div>
         </div>
+        <span class="crece"></span>
+        <button class="btn btn-grande" type="button" data-hace="finder"
+                title="Abrir el Finder con el XML de esta clase seleccionado, listo para arrastrarlo a Premiere">
+          ${icono('finder')} Mostrar el XML en el Finder</button>
+        <button class="btn btn-primario btn-grande" type="button" data-hace="sesiones"
+                title="Volver a la lista de clases de la carpeta">Volver a Sesiones</button>
       </header>
 
       <div class="cierre-cifras">
@@ -72,24 +81,6 @@ function pintar() {
 
       ${revisar ? avisoDeComprobacion(problemas) : ''}
       ${sinReleer.length || chicas.length ? aviso(sinReleer, chicas) : ''}
-
-      <section class="cierre-bloque">
-        <h2 class="cierre-paso">Para Premiere
-          <span class="ayuda" tabindex="0" title="El XML lleva el audio en A1, y los mismos marcadores van tres veces: en la secuencia, en el clip de A1 y en el clip maestro del WAV. Los del maestro son los que acompañan al audio si lo arrastrás a otra secuencia o lo metés en un multicámara. La sincronía con las cámaras va por forma de onda.">?</span></h2>
-        <div class="cierre-acciones">
-          <button class="btn btn-primario btn-grande" type="button" data-hace="finder"
-                  title="Abrir el Finder con el XML de esta clase seleccionado, listo para arrastrarlo a Premiere">
-            ${icono('finder')} Mostrar el XML en el Finder</button>
-          <button class="btn btn-premiere btn-grande" type="button" data-hace="prproj"
-                  title="Armar el proyecto de Premiere del curso entero, con esta clase adentro">
-            ${LOGO_PREMIERE} Crear proyecto</button>
-          <span class="crece"></span>
-          <button class="btn btn-tenue" type="button" data-hace="rehacer-xml"
-                  title="Reescribe el XML con el formato de esta versión. No relee el audio ni toca las notas: es para cuando una versión nueva arregla algo del archivo.">
-            ${icono('xml')} Rehacer el XML</button>
-        </div>
-        <div class="cierre-archivo" title="${esc(salida.archivos.xml)}">${esc(salida.archivos.xml)}</div>
-      </section>
 
       <section class="cierre-bloque">
         <h2 class="cierre-paso">La clase, de punta a punta
@@ -104,12 +95,21 @@ function pintar() {
           <div class="cierre-toma es-cabeza"><span>N.º</span><span>Vista</span><span>Empieza</span><span>Dura</span><span>Qué se dijo</span><span></span></div>
           ${vivas.map(filaDeToma).join('')}
         </div>
-      </section>` : ''}
+      </section>` : ''}`;
 
-      <div class="cierre-pie">
-        <button class="btn" type="button" data-hace="sesiones"
-                title="Volver a la lista de clases de la carpeta">Volver a Sesiones</button>
-      </div>`;
+    // Lo que se usa poco va abajo y chico: «Crear proyecto» es del curso entero
+    // y «Rehacer el XML» es para cuando una versión nueva arregla el archivo.
+    // Al lado de los de arriba se confundían con lo que hay que hacer al terminar.
+    $('#cierre-pie').innerHTML = `
+      <span class="cierre-archivo" title="${esc(salida.archivos.xml)}">${esc(salida.archivos.xml)}</span>
+      <span class="ayuda" tabindex="0" title="El XML lleva el audio en A1, y los mismos marcadores van tres veces: en la secuencia, en el clip de A1 y en el clip maestro del WAV. Los del maestro son los que acompañan al audio si lo arrastrás a otra secuencia o lo metés en un multicámara. La sincronía con las cámaras va por forma de onda.">?</span>
+      <span class="crece"></span>
+      <button class="btn btn-tenue btn-chico" type="button" data-hace="prproj"
+              title="Armar el proyecto de Premiere del curso entero, con esta clase adentro">
+        ${LOGO_PREMIERE} Crear proyecto</button>
+      <button class="btn btn-tenue btn-chico" type="button" data-hace="rehacer-xml"
+              title="Reescribe el XML con el formato de esta versión. No relee el audio ni toca las notas: es para cuando una versión nueva arregla algo del archivo.">
+        ${icono('xml')} Rehacer el XML</button>`;
 }
 
 /**
