@@ -492,6 +492,22 @@ function sidecar(estado) {
  * mismo motivo: si cada quien tradujera por su cuenta, listar una sesión y
  * editarla darían nombres de vista distintos para la misma toma.
  */
+/**
+ * Que cada toma tenga su número y ninguno se repita: la que no tiene uno que
+ * sirva, o repite el de otra, toma el siguiente libre. Con dos tomas en el 1,
+ * editar la 1 tocaba la primera que apareciera y las dos compartían foto.
+ */
+function idsSinRepetir(tomas) {
+    let mayor = tomas.reduce((m, t) => Math.max(m, t.id || 0), 0);
+    const vistos = new Set();
+    return tomas.map(t => {
+        if (t.id && !vistos.has(t.id)) { vistos.add(t.id); return t; }
+        mayor++;
+        vistos.add(mayor);
+        return { ...t, id: mayor };
+    });
+}
+
 function estadoLeido(estado) {
     if (!estado) return estado;
     // Lo que la pantalla escribe tal cual en el HTML —el número de cada toma va
@@ -504,8 +520,8 @@ function estadoLeido(estado) {
         numero: entero(estado.numero),
         vez: entero(estado.vez),
         claquetas: estado.claquetas || [],
-        tomas: (estado.tomas || []).filter(t => t && typeof t === 'object')
-            .map((t, i) => ({ ...t, id: entero(t.id) || i + 1, vista: vivo.vistaLeida(t.vista) }))
+        tomas: idsSinRepetir((estado.tomas || []).filter(t => t && typeof t === 'object').map(t => ({ ...t, id: entero(t.id) })))
+            .map(t => ({ ...t, vista: vivo.vistaLeida(t.vista) }))
     };
 }
 

@@ -25,6 +25,7 @@
       "main.js",
       "preload.js",
       "dev-shot.js",
+      "arranque-seguro.js",
       "package.json",
       "version.json",
       "engine/**/*",
@@ -32,6 +33,11 @@
       "src/**/*",
       "nativo/**/*"
     ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false
+    },
     "mac": {
       "category": "public.app-category.video",
       "minimumSystemVersion": "12.0",

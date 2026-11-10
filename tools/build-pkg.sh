@@ -142,15 +142,21 @@ echo "→ armando los componentes"
 # cerrarse para que la instalen (`update-install` en main.js), y esto la reabre
 # al terminar. Sin la marca —una instalación a mano— no abre nada.
 mkdir -p "$STAGE/scripts"
-cat > "$STAGE/scripts/postinstall" <<'POSTINSTALL'
+cat > "$STAGE/scripts/postinstall" <<POSTINSTALL
 #!/bin/sh
-USUARIO=$(stat -f %Su /dev/console)
-[ -n "$USUARIO" ] && [ "$USUARIO" != root ] || exit 0
-CASA=$(dscl . -read "/Users/$USUARIO" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
-MARCA="$CASA/Library/Application Support/Note Taker/reabrir-al-instalar"
-if [ -n "$CASA" ] && [ -f "$MARCA" ]; then
-    rm -f "$MARCA"
-    sudo -u "$USUARIO" open "/Applications/Note Taker.app" || true
+# Corre como root, desde el Instalador. La app se abre como el usuario que está
+# frente a la pantalla y dentro de su sesión (\`launchctl asuser\`), por su
+# identificador y no por su ruta: si alguien la movió, se actualizó donde está.
+# La marca solo vale si es de esta media hora: una que quedó de un instalador
+# cancelado no puede abrir la app sola semanas después.
+USUARIO=\$(stat -f %Su /dev/console)
+[ -n "\$USUARIO" ] && [ "\$USUARIO" != root ] || exit 0
+CASA=\$(dscacheutil -q user -a name "\$USUARIO" | sed -n 's/^dir: //p' | head -n 1)
+MARCA="\$CASA/Library/Application Support/${APP_NAME}/reabrir-al-instalar"
+if [ -n "\$CASA" ] && [ -n "\$(find "\$MARCA" -mmin -30 2>/dev/null)" ]; then
+    rm -f "\$MARCA"
+    launchctl asuser "\$(id -u "\$USUARIO")" sudo -u "\$USUARIO" open -b "${IDENT}" \\
+        || echo "postinstall: no se pudo reabrir ${APP_NAME}" >&2
 fi
 exit 0
 POSTINSTALL

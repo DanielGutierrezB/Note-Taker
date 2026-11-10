@@ -132,6 +132,11 @@ module.exports = async function (t) {
             getAttribute: () => null, textContent: 'La nota que escribió el editor y lo que dijo el profesor'
         };
         t.eq(acciones.describir(fila).dice, null, 'de lo que no es un botón no se copia el texto: puede ser de alguien');
+        const ficha = {
+            tagName: 'BUTTON', id: '', dataset: { terminoQuitar: '2' },
+            getAttribute: n => (n === 'aria-label' ? 'Sacar «Cliente Acme»' : null), textContent: '×'
+        };
+        t.eq(acciones.describir(ficha).dice, 'Sacar', 'ni el término de una ficha del glosario');
     });
 
     t.test('la ventana empieza a anotar apenas arranca', () => {

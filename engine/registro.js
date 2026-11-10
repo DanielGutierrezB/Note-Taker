@@ -119,7 +119,7 @@ function sanearTexto(texto) {
     // Canva/Audio/clase.wav» también dice de quién es el disco—; un mensaje que
     // lleva una ruta adentro («ENOENT: no such file, open '/…'») no, porque
     // cortarlo por la barra se llevaría el mensaje.
-    const rutaSola = /^(~\/|\/)/.test(limpio) && !/[:;]\s|\n|'|"/.test(limpio);
+    const rutaSola = /^(~\/|\/)/.test(limpio) && !/[:;]\s|[\n'"()]/.test(limpio);
     if (pareceRuta(limpio) && (rutaSola || !limpio.includes(' '))) limpio = acortarRuta(limpio);
     return limpio.length > MAX_TEXTO ? `${limpio.slice(0, MAX_TEXTO)}…` : limpio;
 }
@@ -168,19 +168,22 @@ function sanear(valor, nivel, tope) {
 function anotar(origen, evento, datos) {
     const ts = Date.now();
     const nombre = String(evento || '?');
-    const paso = dejaPasar(nombre, ts);
-    const limpios = datos == null ? null : sanear(datos, 0);
     const linea = {
         ts,
         origen: String(origen || '?'),
         evento: nombre,
-        datos: paso && paso.callados
-            ? { ...(limpios && typeof limpios === 'object' ? limpios : { valor: limpios }), callados: paso.callados }
-            : limpios
+        datos: datos == null ? null : sanear(datos, 0)
     };
-    // Una ráfaga del mismo evento no se escribe entera: se cuenta, y la primera
-    // línea que pasa después dice cuántas se callaron.
-    if (!paso) return linea;
+    resumirRafagas(ts, false);
+    // Una ráfaga del mismo evento no se escribe entera: se cuenta, y al
+    // cerrarse su minuto queda una línea que dice cuántas se callaron y cuál
+    // fue la última (`resumirRafagas`).
+    if (!dejaPasar(claveDeRafaga(linea), ts, linea)) return linea;
+    escribirLinea(linea);
+    return linea;
+}
+
+function escribirLinea(linea) {
     lineas.push(linea);
     // Se recorta de a una y no de golpe: así el tope es un techo de verdad y no
     // "el techo más lo que se acumule hasta la próxima limpieza".
@@ -191,10 +194,9 @@ function anotar(origen, evento, datos) {
 
     if (archivoDiario) {
         pendientes.push(linea);
-        if (HUELE_A_PROBLEMA.test(linea.evento)) volcar();
+        if (HUELE_A_PROBLEMA.test(linea.evento) || tieneError(linea.datos)) volcar();
         else programarVolcado();
     }
-    return linea;
 }
 
 /**
@@ -213,21 +215,65 @@ const RAFAGA = 20;
 const VENTANA_DE_RAFAGA_MS = 60000;
 const rafagas = new Map();
 
-/** Si este evento se escribe; con cuántos se callaron desde el último que pasó. */
-function dejaPasar(evento, ahora) {
-    let r = rafagas.get(evento);
-    if (!r || ahora - r.desde >= VENTANA_DE_RAFAGA_MS) {
-        r = { desde: ahora, n: 0, callados: r ? r.callados : 0 };
-        rafagas.set(evento, r);
+/** Si una línea dice que algo falló: un `error`, o un `ok: false`, en ella o en lo que contestó. */
+function tieneError(datos) {
+    if (!datos || typeof datos !== 'object') return false;
+    const contesta = datos.contesta && typeof datos.contesta === 'object' ? datos.contesta : {};
+    return Boolean(datos.error || datos.ok === false || contesta.error || contesta.ok === false);
+}
+
+/**
+ * Bajo qué nombre se cuenta una línea para el freno.
+ *
+ * Un fallo se cuenta con su mensaje: veinte «ECONNREFUSED» seguidos no pueden
+ * callar el «Cannot read properties» distinto que llega en el mismo minuto, y
+ * que es el que explica lo que pasó. Lo que se repite idéntico sí se frena.
+ */
+function claveDeRafaga(linea) {
+    const problema = HUELE_A_PROBLEMA.test(linea.evento) || tieneError(linea.datos);
+    if (!problema) return linea.evento;
+    const d = linea.datos && typeof linea.datos === 'object' ? linea.datos : {};
+    const contesta = d.contesta && typeof d.contesta === 'object' ? d.contesta : {};
+    return `${linea.evento}|${String(d.error || d.mensaje || contesta.error || '').slice(0, 120)}`;
+}
+
+/** Si la línea se escribe; si no, la cuenta. */
+function dejaPasar(clave, ahora, linea) {
+    let r = rafagas.get(clave);
+    if (!r) {
+        r = { evento: linea.evento, desde: ahora, n: 0, callados: 0, hasta: null, ultimo: null };
+        rafagas.set(clave, r);
     }
     r.n++;
-    if (r.n > RAFAGA) {
-        r.callados++;
-        return null;
+    if (r.n <= RAFAGA) return true;
+    r.callados++;
+    r.hasta = ahora;
+    r.ultimo = linea.datos;
+    return false;
+}
+
+/**
+ * Las ráfagas cuyo minuto ya pasó —o todas, al cerrar la app—, con una línea
+ * por cada una que calló algo: cuántas, entre qué horas y cuál fue la última,
+ * que en una que crece es la que dice dónde terminó.
+ */
+function resumirRafagas(ahora, todas) {
+    for (const [clave, r] of rafagas) {
+        if (!todas && ahora - r.desde < VENTANA_DE_RAFAGA_MS) continue;
+        rafagas.delete(clave);
+        if (!r.callados) continue;
+        escribirLinea({
+            ts: ahora,
+            origen: 'main',
+            evento: 'diario.callados',
+            datos: { evento: r.evento, callados: r.callados, desdeMs: r.desde, hastaMs: r.hasta, ultimo: r.ultimo }
+        });
     }
-    const callados = r.callados;
-    r.callados = 0;
-    return { callados };
+}
+
+/** Al cerrar: lo que estaba callado queda dicho antes del último volcado. */
+function cerrarRafagas() {
+    resumirRafagas(Date.now(), true);
 }
 
 // ─── El diario en disco ──────────────────────────────────────────────
@@ -498,6 +544,6 @@ function escribirAtomico(destino, contenido) {
 
 module.exports = {
     TOPE, TOPE_EN_DISCO, OCULTO,
-    anotar, todo, estado, limpiar, sanear, texto, comoTexto, escribir, nombreDeArchivo,
+    anotar, cerrarRafagas, todo, estado, limpiar, sanear, texto, comoTexto, escribir, nombreDeArchivo,
     abrirDiario, volcar, leerDelDisco
 };

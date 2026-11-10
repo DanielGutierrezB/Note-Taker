@@ -12,6 +12,9 @@
  * motor se puede probar entero sin abrir la app (`node tests/run.js`).
  */
 
+// Primero: en la app instalada saca las variables de desarrollo antes de que
+// el motor las lea, y no arranca con un depurador (`arranque-seguro.js`).
+require('./arranque-seguro');
 const { app, BrowserWindow, Menu, ipcMain, dialog, shell, nativeImage, clipboard,
     screen, systemPreferences, powerSaveBlocker, powerMonitor } = require('electron');
 const path = require('path');
@@ -272,6 +275,10 @@ if (!app.requestSingleInstanceLock()) {
         // abriera después, las líneas del arranque —que son las que explican
         // una app que no llega ni a mostrar la ventana— quedarían solo en memoria.
         const diario = registro.abrirDiario(app.getPath('userData'));
+        // La marca de «Instalar y reabrir» ya cumplió, o quedó de un instalador
+        // que se canceló: si siguiera ahí, la próxima instalación a mano
+        // abriría la app sola (ver el postinstall de `tools/build-pkg.sh`).
+        fs.rmSync(path.join(app.getPath('userData'), 'reabrir-al-instalar'), { force: true });
         anotar('app.arranca', {
             version: appVersion(),
             electron: process.versions.electron,
@@ -313,6 +320,7 @@ app.on('before-quit', e => {
     // interesante cuando alguien cierra la app porque se le quedó colgada. (Lo
     // que quede de la grabación lo cierra su propio puente: `ipc/grabar.js`.)
     anotar('app.cierra', {});
+    registro.cerrarRafagas();
     registro.volcar();
 });
 

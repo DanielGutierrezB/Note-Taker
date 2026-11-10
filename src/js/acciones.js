@@ -42,9 +42,13 @@ export function describir(el) {
     // Lo que dice un botón es la interfaz; lo que dice cualquier otra cosa que
     // se toca —una fila, una etiqueta, un pedazo del transcript— puede ser lo
     // que alguien escribió o dijo, y eso no va al diario (ver arriba).
+    // Y la × de una ficha lleva en su nombre el término que saca («Sacar
+    // «Cliente Acme»»): de esa se anota que se sacó, no qué.
     const delBoton = el.tagName === 'BUTTON' || el.tagName === 'A' || el.tagName === 'SUMMARY';
-    const dice = (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title')))
-        || (delBoton ? el.textContent : '') || '';
+    const deUnaFicha = datos.terminoQuitar != null || datos.fraseQuitar != null;
+    const dice = deUnaFicha ? 'Sacar'
+        : (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title')))
+            || (delBoton ? el.textContent : '') || '';
     return {
         que: datos.hace || el.id || null,
         dice: dice.replace(/\s+/g, ' ').trim().slice(0, TEXTO_MAX) || null,
