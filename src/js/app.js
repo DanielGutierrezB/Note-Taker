@@ -82,6 +82,8 @@ const app = {
         await pintarAjustes();
         dependencias.refrescar();
         verPanel('telon-ajustes', true);
+        // Cada vez que se abre, se pregunta: es donde se mira si hay una nueva.
+        buscar(true);
     },
     verDiagnostico() { pintarDiagnostico(); verPanel('telon-diagnostico', true); },
 
@@ -590,8 +592,11 @@ async function pintarDiagnostico() {
 const update = { estado: 'al-dia', version: null, url: null, nombre: null, ruta: null, notas: '' };
 
 function conectarActualizaciones() {
-    $('#btn-buscar-update').addEventListener('click', () => buscar(true));
+    // El botón de Ajustes hace lo que diga: buscar, bajar o instalar.
+    $('#btn-buscar-update').addEventListener('click', () => (
+        update.estado === 'hay' || update.estado === 'lista' ? alApretarUpdate() : buscar(true)));
     $('#btn-update').addEventListener('click', alApretarUpdate);
+    pintarUpdateEnAjustes();
 
     window.nt.onUpdateProgress(p => {
         // `percent` es lo que manda el motor (`updates.download`). Antes acá se
@@ -619,9 +624,30 @@ function conectarActualizaciones() {
 function pintarVersion(version) {
     $('#app-version').textContent = `v${version}`;
     $('#app-version').title = `Note Taker ${version}. Se comprueba solo si hay una nueva.`;
+    $('#aj-version').textContent = `Versión ${version}`;
+}
+
+/** El botón de la cabecera de Ajustes, con lo que va a hacer al apretarlo. */
+function pintarUpdateEnAjustes() {
+    const boton = $('#btn-buscar-update');
+    const hay = update.estado === 'hay' || update.estado === 'lista';
+    boton.classList.toggle('btn-primario', hay);
+    boton.classList.toggle('btn-tenue', !hay);
+    boton.disabled = update.estado === 'bajando';
+    boton.textContent = {
+        'al-dia': 'Buscar de nuevo',
+        hay: `Actualizar a la ${update.version}`,
+        bajando: `Bajando… ${update.pct || 0} %`,
+        lista: 'Instalar y reabrir'
+    }[update.estado] || 'Buscar de nuevo';
+    boton.title = update.estado === 'al-dia'
+        ? 'Preguntar ahora mismo si hay una versión publicada más nueva que esta'
+        : 'Tus ajustes y los modelos se quedan como están.';
+    $('#update-dice').dataset.estado = update.estado;
 }
 
 function pintarUpdate() {
+    pintarUpdateEnAjustes();
     const boton = $('#btn-update');
     if (update.estado === 'al-dia') {
         boton.hidden = true;
@@ -692,7 +718,7 @@ async function buscar(aMano) {
         estado: 'hay', version: r.version, url: r.url, nombre: r.nombre, notas: r.notas || '', ruta: null
     });
     pintarUpdate();
-    $('#update-dice').textContent = `Hay la ${r.version}.`;
+    $('#update-dice').textContent = `Hay una nueva: la ${r.version}.`;
     if (aMano) return;
     // Una sola vez por versión se dice en voz alta; después queda el botón. Con
     // una clase grabando no se dice nada: el botón está ahí y no molesta, y el

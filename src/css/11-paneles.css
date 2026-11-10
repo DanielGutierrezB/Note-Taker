@@ -347,3 +347,33 @@
   padding-left: var(--sp-4);
   color: var(--warn);
 }
+
+/* La versión y la actualización, en la cabecera de Ajustes. */
+.aj-version {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.aj-version-numero {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.aj-version-dice {
+  min-width: 0;
+  max-width: 280px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.aj-version-dice[data-estado='hay'],
+.aj-version-dice[data-estado='lista'] {
+  color: var(--accent);
+}

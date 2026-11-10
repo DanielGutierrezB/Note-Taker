@@ -254,6 +254,13 @@
     <div class="panel-cabeza">
       <span class="v1">Ajustes</span>
       <span class="crece"></span>
+      <!-- La versión y la actualización, a la vista al abrir: se comprueba sola
+           cada vez que se abre Ajustes, y el botón dice qué va a hacer. -->
+      <div class="aj-version">
+        <span class="aj-version-numero" id="aj-version"></span>
+        <span class="aj-version-dice" id="update-dice" role="status"></span>
+        <button id="btn-buscar-update" class="btn btn-tenue" type="button">Buscar de nuevo</button>
+      </div>
       <button class="btn btn-tenue btn-ico" type="button" data-cerrar="telon-ajustes"
               title="Cerrar Ajustes. Cada cosa se guarda al cambiarla, así que no hay nada que confirmar."></button>
     </div>
@@ -417,15 +424,6 @@
         </div>
       </details>
 
-      <details class="aj-seccion" name="ajustes" id="aj-actualizar">
-        <summary><span class="aj-titulo">Actualizaciones</span><span class="aj-resumen" id="update-dice"></span></summary>
-        <div class="aj-contenido">
-          <div class="campo-fila">
-            <button id="btn-buscar-update" class="btn" type="button"
-                    title="Preguntar ahora mismo si hay una versión publicada más nueva que esta">Buscar una versión nueva</button>
-          </div>
-        </div>
-      </details>
     </div>
     <div class="panel-pie">
       <button id="btn-log" class="btn btn-tenue" type="button"
