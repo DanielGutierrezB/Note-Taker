@@ -263,9 +263,7 @@ function sacar(historia, hacia) {
         que: paso.que,
         id: paso.id,
         campos: paso.campos,
-        foto: hacia === 'adelante' ? paso.despues : paso.antes,
-        // Lo que está ahora, que es lo que hay que sacar en un paso de lista.
-        quitar: hacia === 'adelante' ? paso.antes : paso.despues
+        foto: hacia === 'adelante' ? paso.despues : paso.antes
     };
 }
 
@@ -298,14 +296,11 @@ function pasos(historia) {
 
 module.exports = {
     tirar,
-    TOPE,
     nueva,
     foto,
     mismaFoto,
     anotar,
     poner,
-    camposQueCambian,
-    dondeEntra,
     dejariaDosAbiertas,
     proximo,
     sacar,

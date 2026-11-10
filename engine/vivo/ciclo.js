@@ -69,37 +69,6 @@ function dondeSigue(estado, nuevas) {
 }
 
 /**
- * Mete palabras nuevas y abre o cierra tomas según lo que se dijo.
- *
- * Las palabras llegan del ciclo de señales, que es rápido y de calidad mediana:
- * lo único que se le cree es que una señal SONÓ y a qué hora. El texto de la
- * toma no se arma con esto — se rehace entero al cerrar, con el modelo grande
- * (`oir.escuchar`) — así que acá las palabras se guardan para poder mostrar algo
- * mientras se habla y se reemplazan después.
- *
- * **Se le pasa la ventana ENTERA, con lo que ya se había oído.** Antes quien
- * llamaba recortaba las palabras viejas antes de entrar, y eso deshacía el solape
- * justo cuando servía: un conteo a caballo entre dos pasadas llegaba completo en
- * la segunda, el recorte le sacaba el "3" y el "2" por viejos, quedaba "uno"
- * suelto y la toma no se abría. En el audio del curso eso perdió dos tomas del
- * primer minuto. Ahora los duplicados se descartan acá, donde se sabe qué es una
- * palabra repetida y qué es una señal repetida.
- *
- * **Lo del final de la ventana se mira pero no se cree** (`firmeHastaMs`). La
- * última palabra de un pedazo suele estar cortada a la mitad —«funcion» por
- * «funcionando»— y la pasada siguiente, que la oye entera, ya no podía
- * arreglarla porque la palabra quedaba guardada. Ahora lo que termina después de
- * ese límite no se guarda ni dispara señales: vuelve a llegar en la pasada
- * siguiente, con audio de los dos lados. Pero SÍ se usa para mirar qué sigue a
- * "Pausa": sin eso, «pausa» al borde de la parte firme de «pausa en el flujo»
- * quedaba como última palabra, o sea con silencio detrás, y cerraba la toma.
- *
- * @param {object} estado el de la sesión (de `estadoNuevo`), se muta
- * @param {Array} palabras [{t, texto, hasta}] la ventana entera, en orden
- * @param {object} [opciones] { firmeHastaMs } — sin él, todo es firme
- * @returns {Array} qué pasó, para poder contarlo en la pantalla y en el registro
- */
-/**
  * De qué toma es una palabra que el ciclo de señales acaba de oír.
  *
  * **La abierta no es la única que puede recibir palabras**, y eso es lo que
@@ -159,6 +128,37 @@ function meterEnToma(toma, w) {
     return meterEnOrden(toma.palabras || (toma.palabras = []), w);
 }
 
+/**
+ * Mete palabras nuevas y abre o cierra tomas según lo que se dijo.
+ *
+ * Las palabras llegan del ciclo de señales, que es rápido y de calidad mediana:
+ * lo único que se le cree es que una señal SONÓ y a qué hora. El texto de la
+ * toma no se arma con esto — se rehace entero al cerrar, con el modelo grande
+ * (`oir.escuchar`) — así que acá las palabras se guardan para poder mostrar algo
+ * mientras se habla y se reemplazan después.
+ *
+ * **Se le pasa la ventana ENTERA, con lo que ya se había oído.** Antes quien
+ * llamaba recortaba las palabras viejas antes de entrar, y eso deshacía el solape
+ * justo cuando servía: un conteo a caballo entre dos pasadas llegaba completo en
+ * la segunda, el recorte le sacaba el "3" y el "2" por viejos, quedaba "uno"
+ * suelto y la toma no se abría. En el audio del curso eso perdió dos tomas del
+ * primer minuto. Ahora los duplicados se descartan acá, donde se sabe qué es una
+ * palabra repetida y qué es una señal repetida.
+ *
+ * **Lo del final de la ventana se mira pero no se cree** (`firmeHastaMs`). La
+ * última palabra de un pedazo suele estar cortada a la mitad —«funcion» por
+ * «funcionando»— y la pasada siguiente, que la oye entera, ya no podía
+ * arreglarla porque la palabra quedaba guardada. Ahora lo que termina después de
+ * ese límite no se guarda ni dispara señales: vuelve a llegar en la pasada
+ * siguiente, con audio de los dos lados. Pero SÍ se usa para mirar qué sigue a
+ * "Pausa": sin eso, «pausa» al borde de la parte firme de «pausa en el flujo»
+ * quedaba como última palabra, o sea con silencio detrás, y cerraba la toma.
+ *
+ * @param {object} estado el de la sesión (de `estadoNuevo`), se muta
+ * @param {Array} palabras [{t, texto, hasta}] la ventana entera, en orden
+ * @param {object} [opciones] { firmeHastaMs } — sin él, todo es firme
+ * @returns {Array} qué pasó, para poder contarlo en la pantalla y en el registro
+ */
 function aplicarSenales(estado, palabras, opciones) {
     if (!Array.isArray(estado.sueltas)) estado.sueltas = [];
     if (!estado.ultimaSenal) estado.ultimaSenal = {};

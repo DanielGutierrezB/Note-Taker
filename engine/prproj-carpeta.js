@@ -346,6 +346,16 @@ function armarPre(taller, clase, plan, fuentes, capturas, medios, bin) {
 }
 
 /**
+ * Le da paso a lo que espera en el proceso principal.
+ *
+ * Armar el proyecto es trabajo de CPU de corrido, y en el mismo proceso que
+ * escribe el audio: con 60 clases eran 2,7 s sin soltar, y con una clase
+ * grabando, los pedazos de PCM que llegaban mientras tanto se encolaban en el
+ * puente. Entre clase y clase se suelta, y el audio se escribe en el medio.
+ */
+const ceder = () => new Promise(r => setImmediate(r));
+
+/**
  * Arma el `.prproj` de la carpeta.
  *
  * El destino llega resuelto, como en Class Cut: decidir si se pisa un proyecto
@@ -361,16 +371,6 @@ function armarPre(taller, clase, plan, fuentes, capturas, medios, bin) {
  * @param {function} [opciones.avisar] recibe `{hecho, total, que}` mientras arma
  * @param {number} [opciones.semilla] para que dos corridas den el mismo archivo
  */
-/**
- * Le da paso a lo que espera en el proceso principal.
- *
- * Armar el proyecto es trabajo de CPU de corrido, y en el mismo proceso que
- * escribe el audio: con 60 clases eran 2,7 s sin soltar, y con una clase
- * grabando, los pedazos de PCM que llegaban mientras tanto se encolaban en el
- * puente. Entre clase y clase se suelta, y el audio se escribe en el medio.
- */
-const ceder = () => new Promise(r => setImmediate(r));
-
 async function generar(opciones) {
     const carpeta = opciones && opciones.carpeta;
     if (carpeta) sesionesGrabadas.marcarGenerando(carpeta, true);

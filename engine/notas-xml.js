@@ -487,13 +487,6 @@ function sidecar(estado) {
 }
 
 /**
- * Un sidecar recién leído del disco, hablado como se habla hoy.
- *
- * La puerta de entrada del formato es una sola, igual que la de salida, y por el
- * mismo motivo: si cada quien tradujera por su cuenta, listar una sesión y
- * editarla darían nombres de vista distintos para la misma toma.
- */
-/**
  * Que cada toma tenga su número y ninguno se repita: la que no tiene uno que
  * sirva, o repite el de otra, toma el siguiente libre. Con dos tomas en el 1,
  * editar la 1 tocaba la primera que apareciera y las dos compartían foto.
@@ -509,6 +502,13 @@ function idsSinRepetir(tomas) {
     });
 }
 
+/**
+ * Un sidecar recién leído del disco, hablado como se habla hoy.
+ *
+ * La puerta de entrada del formato es una sola, igual que la de salida, y por el
+ * mismo motivo: si cada quien tradujera por su cuenta, listar una sesión y
+ * editarla darían nombres de vista distintos para la misma toma.
+ */
 function estadoLeido(estado) {
     if (!estado) return estado;
     // Lo que la pantalla escribe tal cual en el HTML —el número de cada toma va

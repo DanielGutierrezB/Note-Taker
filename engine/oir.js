@@ -63,11 +63,6 @@ function aHoraDelDia(words, sesion, desdeSec) {
 }
 
 /**
- * El ciclo de señales, por el servidor con el modelo grande cargado
- * (`oido-residente.js`). Null si no está o si falla esta vez: entonces se oye
- * por `whisper-cli` como antes, y la pasada no se pierde.
- */
-/**
  * El piso de ruido de cada sesión de captura. En un WeakMap y no en la sesión
  * para no meterlo en lo que se guarda a disco; se va solo cuando la sesión se
  * va.
@@ -105,6 +100,11 @@ function tocaMedirIdioma(sesion, pedido) {
     return true;
 }
 
+/**
+ * El ciclo de señales, por el servidor con el modelo grande cargado
+ * (`oido-residente.js`). Null si no está o si falla esta vez: entonces se oye
+ * por `whisper-cli` como antes, y la pasada no se pierde.
+ */
 async function delResidente(archivo, idioma, medirIdioma) {
     if (!residente.listo()) return null;
     try {

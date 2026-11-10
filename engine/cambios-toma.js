@@ -413,16 +413,6 @@ function vistaPorFrase(sesion, ev) {
 }
 
 /**
- * Lo que guarda un número de toma y no vive en `estado.tomas`.
- *
- * Son dos, y se rompen distinto: la cola releería la toma que no es, y las
- * fotos del OUT quedarían cada una en el bloque de al lado.
- *
- * El historial NO está acá, y no es un olvido: su pila es LIFO, así que cuando
- * un paso se aplica la numeración es siempre la que había cuando se anotó. El
- * razonamiento entero está en `engine/deshacer.js`.
- */
-/**
  * La toma abierta, cuando la entrada de audio cambia a mitad de la clase.
  *
  * Cada entrada escribe su propio WAV, y una toma se relee de UN solo WAV: el
@@ -447,6 +437,16 @@ function pasarAOtroAudio(sesion, finDelViejo, inicioDelNuevo) {
     return partida ? 'partida' : 'corrida';
 }
 
+/**
+ * Lo que guarda un número de toma y no vive en `estado.tomas`.
+ *
+ * Son dos, y se rompen distinto: la cola releería la toma que no es, y las
+ * fotos del OUT quedarían cada una en el bloque de al lado.
+ *
+ * El historial NO está acá, y no es un olvido: su pila es LIFO, así que cuando
+ * un paso se aplica la numeración es siempre la que había cuando se anotó. El
+ * razonamiento entero está en `engine/deshacer.js`.
+ */
 function correrLoDeAfuera(sesion, movidas) {
     if (!(movidas || []).length) return;
     const cambia = new Map(movidas.map(m => [m.de, m.a]));

@@ -135,6 +135,14 @@ function alDia(estado) {
     return estado.proximaToma;
 }
 
+/**
+ * Una toma nueva, con la forma entera declarada en un solo sitio.
+ *
+ * La arman los dos caminos que abren —el conteo hablado y el botón— y por eso
+ * está acá: con la forma escrita dos veces, un campo que se agregue de un lado
+ * deja tomas a las que les falta del otro, y eso no se ve hasta que algo lee el
+ * campo que no está.
+ */
 function nuevaToma(estado, inMs, cuenta) {
     const pedida = estado.vistaProxima;
     estado.vistaProxima = null;
@@ -488,27 +496,6 @@ function tomaAnterior(tomas, toma) {
 }
 
 /**
- * Hasta dónde puede retroceder el IN de una toma: el OUT de la de antes.
- *
- * El editor, después de la clase del 30/09: «No debería poder colocar un In
- * antes del OUT de la toma anterior. Esto si sucede, solo parece que se demora
- * en cargar lo anterior. Cuando pues es un espacio compartido.» Tenía razón en
- * las dos mitades: el texto de la toma de antes ya está escrito y ahora se ve
- * (ver `antesDeLaAbierta` en grabar/alrededor-de-la-toma.js), y por eso mismo el IN no puede
- * meterse ahí — las dos tomas se quedarían con las mismas palabras y el XML
- * tendría dos bloques pisados sobre el mismo tramo de clase.
- *
- * **El OUT es exclusivo en toda la app** (`repartir`), así que un IN puesto
- * justo EN el OUT de la de antes es legal: se tocan y no se pisan. El piso es
- * un mínimo, no una prohibición.
- *
- * Esta es la última palabra sobre la regla. La ventana la dibuja —el arrastre se
- * frena en la marca y el menú del clic derecho no ofrece el IN más atrás—, pero
- * el motor no le cree: cada camino que mueve un IN pasa por acá.
- *
- * @returns {number|null} el ms mínimo, o `null` si no hay toma antes
- */
-/**
  * Desde dónde las palabras sueltas son «de nadie».
  *
  * El OUT de la última toma cerrada: lo anterior ya es texto de una toma, y
@@ -546,6 +533,27 @@ function laQuePisa(tomas, toma) {
     }) || null;
 }
 
+/**
+ * Hasta dónde puede retroceder el IN de una toma: el OUT de la de antes.
+ *
+ * El editor, después de la clase del 30/09: «No debería poder colocar un In
+ * antes del OUT de la toma anterior. Esto si sucede, solo parece que se demora
+ * en cargar lo anterior. Cuando pues es un espacio compartido.» Tenía razón en
+ * las dos mitades: el texto de la toma de antes ya está escrito y ahora se ve
+ * (ver `antesDeLaAbierta` en grabar/alrededor-de-la-toma.js), y por eso mismo el IN no puede
+ * meterse ahí — las dos tomas se quedarían con las mismas palabras y el XML
+ * tendría dos bloques pisados sobre el mismo tramo de clase.
+ *
+ * **El OUT es exclusivo en toda la app** (`repartir`), así que un IN puesto
+ * justo EN el OUT de la de antes es legal: se tocan y no se pisan. El piso es
+ * un mínimo, no una prohibición.
+ *
+ * Esta es la última palabra sobre la regla. La ventana la dibuja —el arrastre se
+ * frena en la marca y el menú del clic derecho no ofrece el IN más atrás—, pero
+ * el motor no le cree: cada camino que mueve un IN pasa por acá.
+ *
+ * @returns {number|null} el ms mínimo, o `null` si no hay toma antes
+ */
 function pisoDelIn(tomas, toma) {
     const previa = toma && toma.inMs != null ? tomaAnterior(tomas, toma) : null;
     return previa ? previa.outMs : null;

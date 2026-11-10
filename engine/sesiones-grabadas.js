@@ -295,7 +295,7 @@ async function regenerar(json, avisar, enCurso, glosario) {
     if (estado.secuencia && estado.secuencia === enCurso) {
         throw new Error('Esa sesión se está grabando ahora. Terminala antes de regenerarla.');
     }
-    if (regenerando.has(json)) throw new Error('Esa sesión ya se está regenerando.');
+    siEstaOcupada(json);
     regenerando.add(json);
     try {
         // El WAV se guardó con la ruta de entonces. Si la carpeta se movió,
@@ -328,11 +328,13 @@ async function regenerar(json, avisar, enCurso, glosario) {
         // Si mientras tanto el archivo dejó de estar —la carpeta se movió, el
         // disco se desenchufó—, escribir acá haría aparecer una sesión sin audio.
         if (!fs.existsSync(sitio.json)) throw new Error('La sesión ya no está donde estaba: no la regeneré.');
+        // Y regenerar lleva minutos: en ese rato otra Mac pudo haberla reanudado.
+        const otra = grabandoEnOtraMac(leerSinFallar(json));
+        if (otra) throw new Error(`Esa clase se empezó a grabar en «${otra}» mientras se releía: no la regeneré.`);
         // Releer mueve los bordes —el modelo grande oye la palabra en otro
         // sitio—, así que el ajuste se vuelve a hacer con los tiempos nuevos.
         ajustarBordes(estado, sitio);
-        workspace.writeAtomic(sitio.xml, notasXml.xmlDeNotas(estado));
-        workspace.writeJson(sitio.json, notasXml.sidecar(estado));
+        escribirSesion(sitio, estado);
         // `degradadas` y `sinLeer` se cuentan para poder decirlo al terminar:
         // una regeneración que no logró leer tres tomas y contesta "8 tomas
         // releídas" es la misma pérdida silenciosa que esto vino a arreglar.
@@ -494,8 +496,7 @@ function editarGrabada(json, cambio, enCurso) {
     // contra el tiempo nuevo: el editor suelta la línea roja donde quiere y la
     // onda termina de acomodarla al hueco.
     ajustarBordes(estado, sitio);
-    workspace.writeAtomic(sitio.xml, notasXml.xmlDeNotas(estado));
-    workspace.writeJson(sitio.json, notasXml.sidecar(estado));
+    escribirSesion(sitio, estado);
     // El estado de vuelta, releído del sidecar que se acaba de escribir: la
     // pantalla de la clase se repinta con él, igual que en vivo se repinta con el
     // que manda `espejo.fijar`. Releer y no devolver el de memoria es a propósito
@@ -540,8 +541,7 @@ function rehacerXml(json, enCurso) {
         throw new Error('Esa sesión se está grabando ahora: su XML se reescribe en cada cambio.');
     }
     const ajustados = ajustarBordes(estado, sitio);
-    workspace.writeAtomic(sitio.xml, notasXml.xmlDeNotas(estado));
-    workspace.writeJson(sitio.json, notasXml.sidecar(estado));
+    escribirSesion(sitio, estado);
     return {
         tomas: vivo.tomasQueQuedan(estado).length,
         // Cuántos bordes se corrieron al silencio, para poder decirlo: un botón
@@ -570,13 +570,6 @@ function rehacerXml(json, enCurso) {
  */
 
 /**
- * Prepara una sesión abierta para volver a ponerla en curso.
- *
- * @param {string} json el sidecar de la sesión
- * @param {string} [enCurso] la secuencia que se está grabando ahora
- * @returns {{dir:string, ceroMs:number, estado:object}}
- */
-/**
  * Cuántos segundos de audio tiene un WAV, contados por su tamaño.
  *
  * Por el tamaño y no por la cabecera: la cabecera se reescribe con cada pedazo,
@@ -596,6 +589,13 @@ function segundosEnElDisco(archivo, wav) {
     return Math.round(Math.max(0, bytes - 44) / porSegundo * 100) / 100;
 }
 
+/**
+ * Prepara una sesión abierta para volver a ponerla en curso.
+ *
+ * @param {string} json el sidecar de la sesión
+ * @param {string} [enCurso] la secuencia que se está grabando ahora
+ * @returns {{dir:string, ceroMs:number, estado:object}}
+ */
 function paraReanudar(json, enCurso) {
     siEstaOcupada(json);
     const sitio = workspace.sesionDelSidecar(json);
@@ -700,6 +700,18 @@ function conLoQueMideHoy(estado, json) {
             return medidos != null && medidos > (Number(w.segundos) || 0) ? { ...w, segundos: medidos } : w;
         })
     };
+}
+
+/**
+ * El XML y el archivo de notas de una sesión grabada, como los escribe la
+ * sesión en vivo (`espejo.escribir`): el de notas asegurado en el disco y con
+ * el de antes al lado, que es lo que `leerSidecar` lee si el nuevo saliera
+ * roto. Sin esa copia al día, una edición de después de la clase se perdía
+ * entera: lo que se leía era la copia del final de la grabación.
+ */
+function escribirSesion(destino, estado) {
+    workspace.writeAtomic(destino.xml, notasXml.xmlDeNotas(estado));
+    workspace.writeJson(destino.json, notasXml.sidecar(estado), { asegurar: true, conservarAnterior: true });
 }
 
 /** Lee el sidecar de una sesión, o dice que ese archivo no es una sesión. */
@@ -879,8 +891,7 @@ function renombrar(json, cambio, enCurso) {
         // guardado se reusa tal cual; esto solo lo calcula para una sesión vieja
         // que todavía no lo tenía. El WAV ya está en su nombre nuevo.
         ajustarBordes(estado, sitio);
-        workspace.writeAtomic(destino.xml, notasXml.xmlDeNotas(estado));
-        workspace.writeJson(destino.json, notasXml.sidecar(estado));
+        escribirSesion(destino, estado);
     } catch (err) {
         // Lo que se llegó a hacer se deshace, y la sesión queda exactamente como
         // estaba. Es lo que convierte tres escrituras sueltas en una operación:
@@ -900,6 +911,8 @@ function renombrar(json, cambio, enCurso) {
     // que tarda un `unlink`, y el XML que queda suelto no lo lista nadie.
     quitar(sitio.json);
     quitar(sitio.xml);
+    // La copia de antes es del nombre viejo: el nuevo empieza sin ella.
+    quitar(`${sitio.json}${workspace.ANTERIOR}`);
 
     return { secuencia: nombre, archivos: destino, movida: true, audios: movidos.length };
 }
@@ -940,6 +953,8 @@ function borrar(json, enCurso) {
     const fotos = referencias.borrar(sitio.base, sitio.nombre);
     const xml = quitar(sitio.xml);
     const sidecar = quitar(sitio.json);
+    // Con el transcript entero adentro: dejarla en el Drive era no haber borrado la clase.
+    quitar(`${sitio.json}${workspace.ANTERIOR}`);
     return { secuencia: estado.secuencia || sitio.nombre, xml, sidecar, audios, fotos };
 }
 

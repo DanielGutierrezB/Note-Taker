@@ -116,6 +116,45 @@ module.exports = function (t) {
         t.eq(JSON.parse(fs.readFileSync(json, 'utf8')).grabandoEn, null);
     });
 
+    t.test('regenerar tampoco: es la que más tarda en escribir', async () => {
+        const { json } = abiertaCon({ equipo: 'Mac-del-estudio', pid: 1, latidoMs: Date.now() - 30000 });
+        const antes = fs.readFileSync(json, 'utf8');
+        let error = '';
+        try { await sesionesGrabadas.regenerar(json, null, null, ''); } catch (e) { error = e.message; }
+        t.ok(/Mac-del-estudio/.test(error), error || 'no se negó');
+        t.eq(fs.readFileSync(json, 'utf8'), antes, 'y el archivo de la otra Mac quedó como estaba');
+    });
+
+    t.group('varios WAV · la copia de antes del archivo de notas');
+
+    /** Una clase terminada con una toma, para editarla después. */
+    function grabadaConUnaToma() {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-copia-'));
+        grabacion.iniciar({ dir, curso: 'prueba', fps: 30, sinReloj: true, dispositivo: 'MacBook' });
+        for (let i = 0; i < 5; i++) grabacion.pcm(Buffer.alloc(4096 * 2));
+        const abierta = grabacion.abrirToma();
+        for (let i = 0; i < 20; i++) grabacion.pcm(Buffer.alloc(4096 * 2));
+        grabacion.cerrarToma();
+        const json = abierta.archivos.json;
+        grabacion.apagar();
+        return { json, toma: abierta.abierta };
+    }
+
+    t.test('editar después de la clase la deja al día: si el archivo se rompe, se pierde un cambio y no todos', () => {
+        const { json, toma } = grabadaConUnaToma();
+        sesionesGrabadas.editarGrabada(json, { tipo: 'nota', toma, texto: 'Uno' }, null);
+        sesionesGrabadas.editarGrabada(json, { tipo: 'nota', toma, texto: 'Dos' }, null);
+        const copia = JSON.parse(fs.readFileSync(`${json}${workspace.ANTERIOR}`, 'utf8'));
+        t.eq(copia.tomas.find(x => x.id === toma).comentario, 'Uno');
+    });
+
+    t.test('borrar se lleva también la copia, que tiene la clase entera adentro', () => {
+        const { json } = grabadaConUnaToma();
+        t.ok(fs.existsSync(`${json}${workspace.ANTERIOR}`), 'la sesión en vivo la dejó');
+        sesionesGrabadas.borrar(json, null);
+        t.ok(!fs.existsSync(`${json}${workspace.ANTERIOR}`));
+    });
+
     t.test('la señal de esta misma Mac no la bloquea: es una que se murió acá', () => {
         const { dir } = abiertaCon({ equipo: os.hostname(), pid: 1, latidoMs: Date.now() });
         const lista = sesionesGrabadas.sidecaresDe(workspace.datosDir(dir), dir);

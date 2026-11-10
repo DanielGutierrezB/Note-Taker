@@ -83,14 +83,6 @@ function vistaLeida(nombre) {
 }
 
 /**
- * Una toma nueva, con la forma entera declarada en un solo sitio.
- *
- * La arman los dos caminos que abren —el conteo hablado y el botón— y por eso
- * está acá: con la forma escrita dos veces, un campo que se agregue de un lado
- * deja tomas a las que les falta del otro, y eso no se ve hasta que algo lee el
- * campo que no está.
- */
-/**
  * La vista que le toca a una toma nueva: la de la última que se hizo.
  *
  * Una clase se graba por tramos con la misma vista —varias tomas de profesor
