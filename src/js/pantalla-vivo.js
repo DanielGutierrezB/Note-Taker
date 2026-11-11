@@ -45,6 +45,7 @@ import * as fotos from './fotos.js';
 import * as panelFoto from './panel-foto.js';
 import * as tema from './tema.js';
 import * as buscar from './grabar/buscar-tomas.js';
+import * as divisor from './grabar/divisor-columnas.js';
 
 let app = null;
 let estado = null;
@@ -195,6 +196,7 @@ export function conectar(contexto) {
     document.addEventListener('keydown', alTeclado);
     window.nt.onGrabarAviso(alAviso);
     acomodarAtajos();
+    divisor.conectar();
 
     // Soltar sin cambiar nada no trae estado nuevo: el texto se repinta ya.
     // Con un cambio, lo repinta la respuesta del motor (`enVuelo`).

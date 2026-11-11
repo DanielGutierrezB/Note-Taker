@@ -235,11 +235,11 @@
     </div>
 
     <div class="scroll">
-      <div class="seccion">
+      <div class="seccion seccion-ahora">
         <div class="seccion-titulo"><span id="vivo-titulo-ahora">Ahora</span></div>
         <div id="ahora"></div>
       </div>
-      <div class="seccion">
+      <div class="seccion seccion-tomas">
         <div class="seccion-titulo">
           <span>Tomas</span>
           <span id="vivo-cuantas" class="v3"></span>
@@ -266,6 +266,11 @@
         </div>
         <div id="lista-vivo" class="lista"></div>
       </div>
+      <!-- Tema nuevo, en horizontal: el ancho de cada columna se arrastra desde
+           acá (`grabar/divisor-columnas.js`). En el resto no se ve. -->
+      <div class="divisor-columnas" id="divisor-columnas" role="separator" aria-orientation="vertical"
+           tabindex="0" aria-label="Ancho de las tomas y de lo que se dice"
+           title="Arrastrá para repartir el ancho · doble clic: como venía"></div>
     </div>
 
   </section>

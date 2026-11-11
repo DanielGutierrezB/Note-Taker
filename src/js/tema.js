@@ -56,6 +56,28 @@ function tamano(clave, min, max, deFabrica) {
 const deLoDicho = tamano('tema.letra', 14, 30, 19);
 const deLasTomas = tamano('tema.letraTomas', 11, 24, 13);
 
+/**
+ * Qué parte del ancho se llevan las tomas en horizontal: la mueve el divisor
+ * entre las dos columnas (`grabar/divisor-columnas.js`). El CSS le pone además
+ * un mínimo a cada columna, así que esto es lo que se pidió y no lo que entra.
+ */
+const PARTE_TOMAS = { clave: 'tema.parteTomas', min: 0.2, max: 0.75, deFabrica: 0.42 };
+
+export function parteTomas() {
+    const v = Number(pref.leer(PARTE_TOMAS.clave, PARTE_TOMAS.deFabrica));
+    return Number.isFinite(v) && v > 0 ? Math.max(PARTE_TOMAS.min, Math.min(PARTE_TOMAS.max, v)) : PARTE_TOMAS.deFabrica;
+}
+
+/** Mientras se arrastra se pone y nada más; al soltar, además se guarda. */
+export function ponerParteTomas(parte, { guardar } = {}) {
+    const p = Math.max(PARTE_TOMAS.min, Math.min(PARTE_TOMAS.max, parte));
+    document.body.style.setProperty('--parte-tomas', String(p));
+    if (guardar) pref.guardar(PARTE_TOMAS.clave, p);
+    return p;
+}
+
+export const PARTE_TOMAS_DE_FABRICA = PARTE_TOMAS.deFabrica;
+
 export const letra = deLoDicho.leer;
 export const cambiarLetra = deLoDicho.cambiar;
 export const letraTomas = deLasTomas.leer;
@@ -76,6 +98,7 @@ export function aplicar() {
     document.body.classList.toggle('es-texto-izquierda', nuevo && d === 'horizontal-izquierda');
     document.body.style.setProperty('--letra-vivo', `${letra()}px`);
     document.body.style.setProperty('--letra-tomas', `${letraTomas()}px`);
+    document.body.style.setProperty('--parte-tomas', String(parteTomas()));
     for (const b of document.querySelectorAll('[data-tema]')) b.setAttribute('aria-pressed', String(b.dataset.tema === (nuevo ? 'nuevo' : 'clasico')));
     for (const b of document.querySelectorAll('[data-distribucion]')) b.setAttribute('aria-pressed', String(b.dataset.distribucion === d));
     const distribuciones = $('#distribuciones');
