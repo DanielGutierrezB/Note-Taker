@@ -80,7 +80,9 @@ function pisoDe(sesion) {
  *
  * Medirlo vuelve a pasar la ventana por el codificador: medido con
  * `tools/banco-pasada.js` sobre 40 ventanas de una clase de 141 minutos, la
- * pasada bajó de 681 a 408 ms de mediana sin medirlo. Y medirlo en cada pasada
+ * pasada bajó de 681 a 408 ms de mediana sin medirlo. Hoy la medida es un
+ * pedido aparte y barato (`idiomaEnDosPasos` en `oido-residente.js`), pero
+ * medirlo en cada pasada
  * tampoco daba más información: dos pasadas seguidas comparten cinco de sus
  * seis segundos, así que «dos seguidas en inglés» (`PASADAS_PARA_CAMBIAR`) eran
  * siete segundos de audio y no doce, y el rótulo saltaba de idioma con una cita.

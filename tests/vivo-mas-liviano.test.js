@@ -105,7 +105,7 @@ module.exports = function (t) {
     t.test('cada pasada va sin reintentos, y el idioma se mide solo si se pide', () => {
         const js = leer('engine', 'oido-residente.js');
         t.ok(/if \(!o\.reintentos\) form\.append\('temperature_inc', '0'\);/.test(js));
-        t.ok(/if \(!medir\) form\.append\('no_language_probabilities', 'true'\);/.test(js));
+        t.ok(/if \(!medir \|\| aparte\) form\.append\('no_language_probabilities', 'true'\);/.test(js));
     });
 
     t.test('el vivo mide el idioma cada cinco segundos, y siempre con «auto», hasta que se asienta', () => {

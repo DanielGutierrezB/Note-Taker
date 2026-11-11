@@ -280,19 +280,95 @@ function palabrasDe(respuesta) {
 }
 
 /**
+ * Qué idioma suena, medido aparte de transcribir y en dos pasos.
+ *
+ * **Medir costaba casi lo mismo que transcribir**: el servidor volvía a pasar
+ * el audio por el codificador con el contexto entero —treinta segundos, aunque
+ * la ventana sea de seis—, y una pasada que medía tardaba 653 ms contra 355.
+ * Una de cada tres pasadas del vivo mide.
+ *
+ * Ahora la medida es un pedido aparte que no transcribe nada (`duration` de
+ * 100 ms: `whisper_full` sale antes de la primera ventana) y que le da al
+ * codificador solo el contexto que la ventana ocupa (`audio_ctx`): 68 ms. Con
+ * el contexto corto se equivoca un poco más —en 12 de 319 ventanas dijo otro
+ * idioma que la medida entera, casi siempre inglés sobre español con términos
+ * en inglés—, así que **a la barata solo se le cree cuando dice el idioma que
+ * se viene oyendo**, que es lo de casi siempre. Si dice otro, se mide de nuevo
+ * con el contexto entero, que es la medida de antes, y vale esa.
+ *
+ * Medido el 11/11 sobre cinco clases y tres audios en inglés, por la lógica de
+ * verdad (`enAutomatico` + `anotarOido`): 227 medidas, las mismas 227
+ * decisiones y los cambios de idioma en el mismo segundo que con la medida
+ * entera, a 103 ms de promedio en vez de 305. El contexto justo (sin margen)
+ * no sirve: con 6 s de contexto para 6 s de audio los pesos se corren, y con
+ * la mitad dijo inglés sobre español claro.
+ *
+ * @param {function(number): Promise<{oido:string|null, pesos:object|null}>} pedir
+ *   mide con ese contexto, en cuadros de 20 ms; 0 es el entero
+ * @param {string} idioma el que se le pidió a la pasada, que es el que se viene oyendo
+ * @param {number} segundos cuánto dura la ventana
+ */
+async function idiomaEnDosPasos(pedir, idioma, segundos) {
+    const corto = contextoPara(segundos);
+    if (corto) {
+        const barata = await pedir(corto);
+        if (barata.oido === idioma) return barata;
+    }
+    return pedir(0);
+}
+
+/** Lo que no se transcribe en un pedido de solo medir: el mínimo que `whisper_full` acepta. */
+const SOLO_MEDIR_MS = 100;
+/** El contexto entero del codificador, y el margen que se le deja a la ventana: dos segundos. */
+const CONTEXTO_ENTERO = 1500;
+const MARGEN_DE_CONTEXTO = 100;
+
+/** El contexto para una ventana de tantos segundos, o 0 si ya da lo mismo que el entero. */
+function contextoPara(segundos) {
+    if (!(segundos > 0)) return 0;
+    const cuadros = Math.ceil(segundos * 50) + MARGEN_DE_CONTEXTO;
+    return cuadros < CONTEXTO_ENTERO ? cuadros : 0;
+}
+
+/** Cuánto dura un WAV de los de `captura.recorte`: 16 kHz, mono, 16 bits. */
+const segundosDelRecorte = bytes => Math.max(0, bytes - 44) / 32000;
+
+/** Un pedido de solo medir: sin transcripción, y con el contexto que se diga. */
+async function medirIdioma(este, audio, idioma, contexto) {
+    const form = new FormData();
+    form.append('file', new Blob([audio], { type: 'audio/wav' }), 'pedazo.wav');
+    form.append('response_format', 'verbose_json');
+    form.append('temperature', '0');
+    form.append('temperature_inc', '0');
+    // Con un idioma puesto y no `auto`: con `auto`, `whisper_full` detecta por
+    // su cuenta antes de salir, y eso es otra pasada entera por el codificador.
+    form.append('language', idioma);
+    form.append('duration', String(SOLO_MEDIR_MS));
+    if (contexto) form.append('audio_ctx', String(contexto));
+    const r = await fetch(`http://127.0.0.1:${este.puerto}/inference`, {
+        method: 'POST', body: form, signal: AbortSignal.timeout(PASADA_MAX_MS)
+    });
+    if (!r.ok) throw new Error(`whisper-server contestó ${r.status}`);
+    const dicho = await r.json();
+    return { oido: idiomas.normalizar(dicho.detected_language), pesos: dicho.language_probabilities || null };
+}
+
+/**
  * Transcribe un WAV de 16 kHz mono (el de `captura.recorte`).
  *
- * **Y dice qué idioma oyó, aunque se le haya pedido uno.** Es el hallazgo que
- * hace barato detectar: el servidor contesta `detected_language` —y cuánto se
- * parece el audio a cada idioma— en TODAS las pasadas, no solo en las que se
- * piden con `auto`. Medido el 20/10 sobre dos clases reales: audio en inglés
- * pedido en español contestó «detectó english, 100 %» en 871 ms, mientras que
- * pedirlo con `auto` costó 1214 ms. O sea que vigilar el idioma sale gratis y
- * detectarlo cuesta 400 ms, que es lo que `oir.escuchar` aprovecha para que
- * «Automático» no sea más lento que tener el idioma puesto.
+ * **Y dice qué idioma oyó, aunque se le haya pedido uno**: es lo que deja que
+ * «Automático» pida el idioma que viene oyendo —que es rápido— sin dejar de
+ * mirar si cambió, y que con el idioma puesto a mano la barra avise que suena
+ * otro. Con un idioma pedido se mide aparte y barato (`idiomaEnDosPasos`); con
+ * `auto` lo contesta el mismo pedido, que igual tiene que detectar para
+ * transcribir, y eso pasa solo hasta que el idioma se asienta.
  *
- * @param {object} [opciones] `medirIdioma` (sí, salvo `false`) y `reintentos`
- *   (no, salvo `true`): los dos los compara `tools/banco-pasada.js`
+ * Una medida que falla no tira la pasada: el texto ya está, y el idioma se
+ * vuelve a medir en la que sigue.
+ *
+ * @param {object} [opciones] `medirIdioma` (sí, salvo `false`), `reintentos`
+ *   (no, salvo `true`) y `medidaEntera` (la medida de antes, en el mismo
+ *   pedido): los compara `tools/banco-pasada.js`
  * @returns {Promise<{words:Array, model:string, oido:string|null, pesos:object}>}
  *   tira si el servidor no está o falla: quien llama cae al respaldo
  */
@@ -300,9 +376,11 @@ async function transcribir(wavPath, idioma, opciones) {
     if (!listo()) throw new Error('whisper-server no está listo');
     const o = opciones || {};
     const medir = o.medirIdioma !== false;
+    const aparte = medir && !o.medidaEntera && Boolean(idioma) && idioma !== 'auto';
     const este = servidor;
+    const audio = fs.readFileSync(wavPath);
     const form = new FormData();
-    form.append('file', new Blob([fs.readFileSync(wavPath)], { type: 'audio/wav' }), 'pedazo.wav');
+    form.append('file', new Blob([audio], { type: 'audio/wav' }), 'pedazo.wav');
     form.append('response_format', 'verbose_json');
     form.append('temperature', '0');
     // Sin reintentos a más temperatura: con el de fábrica (0,2) una ventana
@@ -310,29 +388,35 @@ async function transcribir(wavPath, idioma, opciones) {
     // llega tarde. La relectura de la toma, que sí puede esperar, va por
     // `whisper-cli` con los suyos.
     if (!o.reintentos) form.append('temperature_inc', '0');
-    // Medir el idioma vuelve a pasar el audio por el codificador, así que se
-    // mide cada tanto (`oir.js`). Sin medir, con `auto` igual se sabe cuál
-    // eligió para decodificar (`language`), pero no cuánto se parecía a los otros.
-    if (!medir) form.append('no_language_probabilities', 'true');
+    // Los pesos de cada idioma en este mismo pedido vuelven a pasar el audio
+    // por el codificador con el contexto entero: solo con `auto` o si se pide.
+    if (!medir || aparte) form.append('no_language_probabilities', 'true');
     if (idioma) form.append('language', idioma);
     const r = await fetch(`http://127.0.0.1:${este.puerto}/inference`, {
         method: 'POST', body: form, signal: AbortSignal.timeout(PASADA_MAX_MS)
     });
     if (!r.ok) throw new Error(`whisper-server contestó ${r.status}`);
     const dicho = await r.json();
-    const salida = {
-        words: palabrasDe(dicho),
-        model: este.modelo.name,
-        // El que DETECTÓ, no el que se usó: con el idioma forzado los dos
-        // difieren, y es justo ahí donde saberlo sirve. Sin medir, con `auto` el
-        // que se usó es el detectado; con uno pedido, no se sabe.
+    fallas = 0;
+    // El que DETECTÓ, no el que se usó: con el idioma forzado los dos
+    // difieren, y es justo ahí donde saberlo sirve. Sin medir, con `auto` el
+    // que se usó es el detectado; con uno pedido, no se sabe.
+    let medido = {
         oido: medir
             ? idiomas.normalizar(dicho.detected_language)
             : (idioma === 'auto' ? idiomas.normalizar(dicho.language) : null),
         pesos: dicho.language_probabilities || null
     };
-    fallas = 0;
-    return salida;
+    if (aparte) {
+        try {
+            medido = await idiomaEnDosPasos(
+                contexto => medirIdioma(este, audio, idioma, contexto), idioma, segundosDelRecorte(audio.length));
+        } catch (err) {
+            medido = { oido: null, pesos: null };
+            registro.anotar('main', 'residente.no-midio', { error: err.message });
+        }
+    }
+    return { words: palabrasDe(dicho), model: este.modelo.name, oido: medido.oido, pesos: medido.pesos };
 }
 
 /** Una pasada que falló. A la tercera seguida, el servidor se tira y se rearma. */
@@ -360,4 +444,7 @@ function apagarServidor() {
     }
 }
 
-module.exports = { arrancar, asegurar, listo, modelo, transcribir, fallo, apagar, palabrasDe, limpiarHuerfano };
+module.exports = {
+    arrancar, asegurar, listo, modelo, transcribir, fallo, apagar, palabrasDe, limpiarHuerfano,
+    idiomaEnDosPasos, contextoPara
+};

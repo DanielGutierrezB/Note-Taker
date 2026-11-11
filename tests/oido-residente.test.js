@@ -139,6 +139,55 @@ module.exports = function (t) {
         });
     });
 
+    t.group('oído residente · medir el idioma en dos pasos');
+
+    /** Un `pedir` de mentira: contesta lo que diga `segun(contexto)` y anota con qué contexto se lo pidieron. */
+    function medidor(segun) {
+        const contextos = [];
+        return { contextos, pedir: async contexto => { contextos.push(contexto); return segun(contexto); } };
+    }
+
+    t.test('si la barata dice el idioma que se viene oyendo, alcanza con esa', async () => {
+        const m = medidor(() => ({ oido: 'es', pesos: { es: 0.99 } }));
+        const r = await residente.idiomaEnDosPasos(m.pedir, 'es', 6);
+        t.deep(m.contextos, [400], 'un pedido, con el contexto de la ventana y dos segundos de margen');
+        t.eq(r.oido, 'es');
+    });
+
+    t.test('si dice otro, se mide con el contexto entero y vale esa', async () => {
+        const m = medidor(contexto => (contexto ? { oido: 'en', pesos: { en: 0.9 } } : { oido: 'es', pesos: { es: 1 } }));
+        const r = await residente.idiomaEnDosPasos(m.pedir, 'es', 6);
+        t.deep(m.contextos, [400, 0]);
+        t.eq(r.oido, 'es', 'la barata se equivocaba: sigue en español');
+        const cambio = medidor(() => ({ oido: 'en', pesos: { en: 0.97 } }));
+        t.eq((await residente.idiomaEnDosPasos(cambio.pedir, 'es', 6)).oido, 'en', 'y si la entera también lo dice, cambió');
+        t.deep(cambio.contextos, [400, 0]);
+    });
+
+    t.test('una medida que no dice nada tampoco se cree: se confirma', async () => {
+        const m = medidor(contexto => (contexto ? { oido: null, pesos: null } : { oido: 'es', pesos: null }));
+        await residente.idiomaEnDosPasos(m.pedir, 'es', 6);
+        t.deep(m.contextos, [400, 0]);
+    });
+
+    t.test('el contexto es el de la ventana más dos segundos, y una ventana larga va con el entero', async () => {
+        t.eq(residente.contextoPara(6), 400);
+        t.eq(residente.contextoPara(15), 850);
+        t.eq(residente.contextoPara(28), 0, 'ya no ahorra nada');
+        t.eq(residente.contextoPara(0), 0);
+        const m = medidor(() => ({ oido: 'es', pesos: null }));
+        await residente.idiomaEnDosPasos(m.pedir, 'es', 29);
+        t.deep(m.contextos, [0], 'una sola medida, la entera');
+    });
+
+    t.test('el pedido de solo medir no transcribe, y con `auto` no se mide aparte', () => {
+        const js = fs.readFileSync(path.join(__dirname, '..', 'engine', 'oido-residente.js'), 'utf8');
+        const medir = js.slice(js.indexOf('async function medirIdioma('), js.indexOf('async function transcribir('));
+        t.ok(/form\.append\('duration', String\(SOLO_MEDIR_MS\)\)/.test(medir) && /const SOLO_MEDIR_MS = 100;/.test(js));
+        t.ok(/if \(contexto\) form\.append\('audio_ctx', String\(contexto\)\)/.test(medir));
+        t.ok(/const aparte = medir && !o\.medidaEntera && Boolean\(idioma\) && idioma !== 'auto';/.test(js));
+    });
+
     t.test('transcribir sin servidor tira, para que quien llama use el respaldo', async () => {
         let error = null;
         try { await residente.transcribir('/no/existe.wav', 'es'); } catch (e) { error = e; }
