@@ -102,11 +102,10 @@ export function antesDeLaAbierta(estado, toma) {
         .map(w => ({ ...w, de: { id: previa.id, vista: previa.vista, ...coloresDeVista(estado.vistas, previa.vista) } }));
     // Entre su OUT y este IN: su orilla de después y las sueltas son la misma
     // tirada contada dos veces, así que se juntan sin repetir.
-    const vistas = new Set(libres.map(w => w.t));
-    const medio = (previa.despues || [])
-        .filter(w => w.t >= previa.outMs && w.t < toma.inMs && !vistas.has(w.t))
-        .concat(libres)
-        .sort((a, b) => a.t - b.t);
+    const medio = juntarSinRepetir([
+        (previa.despues || []).filter(w => w.t >= previa.outMs && w.t < toma.inMs),
+        libres
+    ]);
     return {
         antes: suyas.concat(medio),
         limite: { toma: previa.id, ms: previa.outMs, ...coloresDeVista(estado.vistas, previa.vista) }
@@ -152,12 +151,12 @@ export function despuesDeLaCerrada(estado, toma) {
     const techo = siguiente ? siguiente.inMs : Infinity;
     // La orilla de la relectura, las sueltas y la orilla de la siguiente son la
     // misma tirada contada hasta tres veces: se juntan por tiempo, sin repetir.
-    const tierraDeNadie = new Map();
-    for (const w of (toma.despues || [])
-        .concat(sueltasEntre(estado, toma.outMs, techo), siguiente ? (siguiente.antes || []) : [])) {
-        if (w.t >= toma.outMs && w.t < techo && !tierraDeNadie.has(w.t)) tierraDeNadie.set(w.t, w);
-    }
-    const medio = [...tierraDeNadie.values()].sort((a, b) => a.t - b.t);
+    const enElTramo = w => w.t >= toma.outMs && w.t < techo;
+    const medio = juntarSinRepetir([
+        (toma.despues || []).filter(enElTramo),
+        (siguiente ? (siguiente.antes || []) : []).filter(enElTramo),
+        sueltasEntre(estado, toma.outMs, techo)
+    ]);
     if (!siguiente) return { despues: medio, limiteDespues: null };
     // De la toma siguiente, con su dueña pegada para que se distinga al dibujar.
     const suyas = (siguiente.palabras || []).slice(0, SIGUIENTE_MAX)
@@ -198,12 +197,12 @@ export function despuesDeLaCerrada(estado, toma) {
 export function antesDeLaCerrada(estado, toma) {
     const previa = tomaAnterior(estado, toma);
     const piso = previa ? previa.outMs : -Infinity;
-    const tierraDeNadie = new Map();
-    for (const w of (toma.antes || [])
-        .concat(sueltasEntre(estado, piso, toma.inMs), previa ? (previa.despues || []) : [])) {
-        if (w.t >= piso && w.t < toma.inMs && !tierraDeNadie.has(w.t)) tierraDeNadie.set(w.t, w);
-    }
-    const medio = [...tierraDeNadie.values()].sort((a, b) => a.t - b.t);
+    const enElTramo = w => w.t >= piso && w.t < toma.inMs;
+    const medio = juntarSinRepetir([
+        (toma.antes || []).filter(enElTramo),
+        (previa ? (previa.despues || []) : []).filter(enElTramo),
+        sueltasEntre(estado, piso, toma.inMs)
+    ]);
     if (!previa) return { antes: medio, limite: null };
     // Del final de la toma anterior se asoman pocas, como del principio de la
     // siguiente del otro lado: acá lo que hace falta es entender dónde se frena
@@ -214,6 +213,36 @@ export function antesDeLaCerrada(estado, toma) {
         antes: suyas.concat(medio),
         limite: { toma: previa.id, ms: previa.outMs, ...coloresDeVista(estado.vistas, previa.vista) }
     };
+}
+
+/**
+ * Varias tiradas del mismo tramo, juntas y sin repetir lo dicho.
+ *
+ * Son la misma clase contada hasta tres veces —la orilla que escribe la
+ * relectura de una toma, la de la toma vecina y lo que el vivo oyó suelto—, y
+ * cada una le pone a cada palabra su propio instante: «esto» a los 12,34 s en
+ * una y a los 12,38 s en otra. Juntarlas por instante exacto dejaba pasar las
+ * dos, y el gris después del OUT salía con cada palabra repetida.
+ *
+ * Así que van en orden de confianza —primero las de la relectura, que son las
+ * del modelo grande con la frase entera, y el vivo al final— y de cada una entra
+ * solo lo que cae fuera del tramo que ya cubre una anterior: desde su primera
+ * palabra hasta el final de la última.
+ */
+function juntarSinRepetir(fuentes) {
+    const cubierto = [];
+    const salida = [];
+    for (const lista of fuentes) {
+        if (!lista.length) continue;
+        for (const w of lista) {
+            if (!cubierto.some(([desde, hasta]) => w.t >= desde && w.t <= hasta)) salida.push(w);
+        }
+        cubierto.push([
+            Math.min(...lista.map(w => w.t)),
+            Math.max(...lista.map(w => (w.hasta != null ? w.hasta : w.t)))
+        ]);
+    }
+    return salida.sort((a, b) => a.t - b.t);
 }
 
 /**

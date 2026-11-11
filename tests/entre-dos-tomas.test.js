@@ -288,6 +288,31 @@ module.exports = function (t) {
             'y la del otro lado sigue estando: son los dos lados, no uno');
     });
 
+    t.test('después del OUT, la relectura y el vivo no repiten cada palabra', async () => {
+        // El 10/11: «esto Esto debería debería funcionar funcionar». La orilla de
+        // la relectura y lo que oyó el vivo eran lo mismo, con los instantes
+        // corridos unas centésimas, y se juntaban por instante exacto.
+        const { despuesDeLaCerrada, antesDeLaCerrada } = await cargarAlrededor();
+        const T = Date.parse('2026-11-10T19:33:00');
+        const w = (ms, texto) => ({ t: T + ms, hasta: T + ms + 300, texto });
+        const releida = [w(100, 'Esto'), w(500, 'debería'), w(1000, 'funcionar')];
+        const delVivo = [w(140, 'esto'), w(540, 'debería'), w(1040, 'funcionar'), w(1600, 'después')];
+        const estado = {
+            vistas: [],
+            tomas: [
+                { id: 5, vista: 'R', inMs: T - 30000, outMs: T, palabras: [], despues: releida },
+                { id: 6, vista: 'R', inMs: T + 5000, outMs: T + 9000, palabras: [], antes: [] }
+            ],
+            sueltas: delVivo
+        };
+        const { despues } = despuesDeLaCerrada(estado, estado.tomas[0]);
+        t.deep(despues.map(x => x.texto), ['Esto', 'debería', 'funcionar', 'después'],
+            'la de la relectura, y del vivo solo lo que ella no cubre');
+        const { antes } = antesDeLaCerrada(estado, estado.tomas[1]);
+        t.eq(antes.filter(x => !x.de).map(x => x.texto).join(' '), 'Esto debería funcionar después',
+            'y lo mismo desde la toma de abajo');
+    });
+
     t.group('entre dos tomas · lo que queda escrito');
 
     t.test('la orilla de una toma llega hasta su vecina, no doce segundos', () => {
