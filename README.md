@@ -1164,13 +1164,22 @@ Tres cosas más del ciclo, cada una por algo que se vio:
   «3, 2, 1» y el OUT de «Pausa». Sin la alineación contra el sonido caían hasta
   medio segundo corridos, y la relectura —que sí la usa— después ponía las
   palabras a un lado distinto del borde. Cuesta 0,15 s por pasada.
-- **Cada segundo sobre seis.** Medido con una sesión de verdad sobre esa prueba,
-  desde que se dice una palabra hasta que aparece: 2,9 s de mediana y 4,1 s en
-  el peor décimo (antes, más de cinco).
+- **Cada dos segundos de audio, sobre seis.** Whisper procesa la ventana entera
+  en cada pasada, así que con una pasada por segundo cada segundo de clase se
+  transcribía seis veces: el vivo solo llevaba la GPU de 39 % a 87 %. Cada dos,
+  a 67 %, con la misma pasada; con una relectura corriendo, cada tres
+  (`NUEVO_MIN_RELEYENDO_MS`). Lo que se dice tarda 1,7 s de mediana en aparecer.
 
 `node tools/medir-vivo.js --wav=<audio> --salida=/tmp/textos.txt` recorre un
 audio con la forma vieja y la nueva y deja los dos textos al lado del de
 referencia.
+
+`node tools/banco-carga.js --wav=<audio> --minutos=4 --salida=antes.json` mide
+lo otro: **cuánto le cuesta a la Mac**. Le pasa la clase al motor a ritmo real
+—el PCM contra el reloj, el ciclo con su propio `setInterval`— y dice la GPU, la
+CPU y la memoria de cada proceso, cuánto tarda cada pasada y cuánto tarda en
+aparecer lo que se dice. Con `--contra=antes.json` pone los dos lados: un cambio
+que alivia la Mac pero mueve las tomas o pierde texto no sirve, y así se ve.
 
 El de toma sigue siendo el que queda: corre una vez, sobre la toma entera, con
 la alineación contra el sonido, y ESE texto es el del XML. Así el transcript
