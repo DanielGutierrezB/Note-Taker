@@ -118,10 +118,11 @@ module.exports = function (t) {
 
     t.group('vivo más liviano · el vivo y la relectura no se pisan');
 
-    t.test('con una relectura corriendo, el vivo pasa cada dos segundos', () => {
+    t.test('el vivo pasa cada dos segundos de audio, y cada tres con una relectura corriendo', () => {
         const js = leer('engine', 'ciclo-senales.js');
-        t.ok(/const NUEVO_MIN_RELEYENDO_MS = 2000;/.test(js));
-        t.ok(/\(s\.rehaciendo \? NUEVO_MIN_RELEYENDO_MS : NUEVO_MIN_MS\)/.test(js));
+        t.ok(/const NUEVO_MIN_MS = 2000;/.test(js));
+        t.ok(/const NUEVO_MIN_RELEYENDO_MS = 3000;/.test(js));
+        t.ok(/return s\.rehaciendo \? NUEVO_MIN_RELEYENDO_MS : NUEVO_MIN_MS;/.test(js));
     });
 
     t.group('vivo más liviano · el archivo de notas');

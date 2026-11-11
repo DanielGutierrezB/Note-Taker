@@ -158,6 +158,9 @@ function iniciar(params) {
         }),
         dir,
         captura: null,
+        // La simulación y las pruebas empujan el ciclo a mano: sin reloj, la
+        // cadencia es la de quien empuja (`nuevoMinimo` en ciclo-senales.js).
+        sinReloj: Boolean(p.sinReloj),
         // Las frases que abren, cierran y cambian de vista, las de Ajustes
         // (`cambiarFrases`). Sin ellas, las de fábrica.
         frases: p.frases || null,

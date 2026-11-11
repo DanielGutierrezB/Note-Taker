@@ -30,6 +30,7 @@ const { spawnSync } = require('child_process');
 
 const paths = require('../engine/paths');
 const grabacion = require('../engine/grabacion');
+const ciclo = require('../engine/ciclo-senales');
 const residente = require('../engine/oido-residente');
 const rodecaster = require('./rodecaster-xml');
 const { arg, horaDelDia: hhmmss, mmss } = require('./lib/cli');
@@ -173,8 +174,9 @@ async function main() {
     // nuevo: es lo que el reloj haría en vivo cada tres segundos.
     const bytesPorPedazo = MUESTRAS_POR_PEDAZO * 2;
     // `--cada=<s>` pasa el ciclo cada tantos segundos de audio en vez de cada
-    // `CICLO_MS`: para simular una clase larga en pocos minutos.
-    const cadaSec = Number(arg('cada', String(grabacion.CICLO_MS / 1000)));
+    // `NUEVO_MIN_MS`, que es lo que hace la app: para simular una clase larga en
+    // pocos minutos.
+    const cadaSec = Number(arg('cada', String(ciclo.NUEVO_MIN_MS / 1000)));
     const pedazosPorCiclo = Math.max(1, Math.round(cadaSec * TASA / MUESTRAS_POR_PEDAZO));
     // El texto en vivo por el servidor con el modelo cargado, como en la app.
     if (!process.argv.includes('--sin-servidor')) {

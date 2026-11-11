@@ -2,7 +2,7 @@
 /**
  * ciclo-senales.js — El ciclo que escucha lo último y abre o cierra tomas.
  *
- * Cada segundo oye los últimos seis de audio buscando «3, 2, 1» y «Pausa». Su
+ * Cada dos segundos oye los últimos seis de audio buscando «3, 2, 1» y «Pausa». Su
  * texto es descartable: de lo que oye solo se le cree la hora (ver la cabecera de
  * `grabacion.js`, «Dos ciclos»).
  *
@@ -37,6 +37,13 @@ const cargaDelSistema = require('./carga-del-sistema');
  * mismo texto. Más seguido que esto la GPU pasa más de la mitad del tiempo en el
  * ciclo, y la relectura de las tomas cerradas la necesita.
  *
+ * **Y la pasada sale cada dos segundos de audio nuevo, no cada uno** (ver
+ * `NUEVO_MIN_MS`): el reloj sigue mirando cada segundo, pero no lee hasta que
+ * haya dos. Whisper procesa la ventana entera en cada pasada, así que con una
+ * por segundo cada segundo de clase se transcribía seis veces: el 10/11, con
+ * la Mac libre, el vivo solo llevaba la GPU de 39 % a 87 %, y con una grabación
+ * de pantalla al lado ya no alcanzaba. Cada dos, a 67 %, con la misma pasada.
+ *
  * La ventana se solapa con la anterior a propósito: una señal que caiga justo en
  * el borde entre dos pedazos aparece partida en los dos y en ninguno completa.
  * Lo repetido lo descarta `aplicarSenales`.
@@ -48,7 +55,7 @@ const cargaDelSistema = require('./carga-del-sistema');
 const CICLO_MS = 1000;
 const SOLAPE_MS = 1200;
 const CONTEXTO_MS = 6000;
-const NUEVO_MIN_MS = 700;
+const NUEVO_MIN_MS = 2000;
 const COLA_MS = 500;
 
 /**
@@ -56,11 +63,23 @@ const COLA_MS = 500;
  *
  * La relectura y el vivo comparten la GPU, y en la clase de tres horas un
  * tercio de las pasadas lentas cayó en el minuto en que terminaba una
- * relectura. Mientras corre, el vivo pasa cada dos segundos y no cada uno: la
+ * relectura. Mientras corre, el vivo pasa cada tres segundos y no cada dos: la
  * ventana sale un poco más larga —hasta su tope, `topeDeVentana`—, la señal
  * llega un segundo más tarde, y la relectura termina antes.
  */
-const NUEVO_MIN_RELEYENDO_MS = 2000;
+const NUEVO_MIN_RELEYENDO_MS = 3000;
+
+/**
+ * Cuánto audio nuevo pide esta pasada.
+ *
+ * Sin reloj —la simulación y las pruebas, que empujan el ciclo a mano después
+ * de cada pedazo— la cadencia la pone quien empuja: alcanza con que haya algo
+ * más que la cola que la pasada anterior dejó sin creer. Con reloj, la de arriba.
+ */
+function nuevoMinimo(s) {
+    if (s.sinReloj) return COLA_MS + 200;
+    return s.rehaciendo ? NUEVO_MIN_RELEYENDO_MS : NUEVO_MIN_MS;
+}
 
 /** Un tramo de esta sesión, transcripto (`oir-toma.js` no sabe de sesiones). */
 function oirTramo(desdeMs, hastaMs, liviano, s) {
@@ -138,7 +157,7 @@ async function buscarSenales(s) {
     if (!s || s.buscando || !s.captura || s.terminando) return;
     const vive = () => s.viva && !s.terminando;
     const hasta = espejo.grabadoHastaMs(s);
-    if (hasta - s.escuchadoHastaMs < (s.rehaciendo ? NUEVO_MIN_RELEYENDO_MS : NUEVO_MIN_MS)) return;
+    if (hasta - s.escuchadoHastaMs < nuevoMinimo(s)) return;
     const desde = Math.max(s.captura.desdeMs, hasta - topeDeVentana(s),
         Math.min(s.escuchadoHastaMs - SOLAPE_MS, hasta - CONTEXTO_MS));
 
