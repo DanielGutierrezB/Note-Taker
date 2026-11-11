@@ -26,7 +26,7 @@ const OK = /^ok(?:ay)?[.,…!?]*$/i;
 
 const MINIMO_DE_CUENTA = 2;
 const VALOR = { 3: 3, tres: 3, three: 3, 2: 2, dos: 2, two: 2, 1: 1, uno: 1, one: 1 };
-export const SILENCIO_TRAS_PAUSA_SEC = 1;
+export const SILENCIO_TRAS_PAUSA_SEC = 0.7;
 
 const VISTAS = ['PV', 'R', 'S', 'MG', 'X2'];
 

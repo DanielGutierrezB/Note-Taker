@@ -128,14 +128,27 @@ module.exports = function (t) {
         t.eq(e.tomas[0].inMs, T0 + 2200, 'y ahí donde empieza la clase');
     });
 
-    t.test('«pausa» al final de lo oído necesita un segundo de silencio de verdad', () => {
+    t.test('«pausa» al final de lo oído necesita su silencio de verdad', () => {
         const e = vivo.estadoNuevo({});
         vivo.aplicarSenales(e, ws([[0, '3,'], [400, '2,'], [800, '1.'], [1600, 'Hola']]));
-        // «pausa» termina a 5300 y lo oído llega a 5750: medio segundo, no alcanza.
-        vivo.aplicarSenales(e, ws([[5000, 'pausa']]), { finMs: T0 + 5750 });
+        // «pausa» empieza a 5000 y lo oído llega a 5550: medio segundo, no alcanza.
+        vivo.aplicarSenales(e, ws([[5000, 'pausa']]), { finMs: T0 + 5550 });
         t.eq(e.tomas[0].outMs, null, 'sigue abierta');
         vivo.aplicarSenales(e, ws([[5000, 'pausa']]), { finMs: T0 + 6500 });
         t.ok(e.tomas[0].outMs != null, 'con 1,2 s de silencio sí cierra');
+    });
+
+    t.test('«pausa» con la palabra siguiente a 0,9 s cierra: es parar y seguir hablando', () => {
+        // El 10/11: «puedo decir pausa · y él pues va a acabar la toma», con la
+        // siguiente a 0,9 s del comienzo de «pausa». Con el segundo de antes no cerraba.
+        const e = vivo.estadoNuevo({});
+        vivo.aplicarSenales(e, ws([[0, '3,'], [400, '2,'], [800, '1.'], [1600, 'Hola']]));
+        vivo.aplicarSenales(e, ws([[5000, 'pausa'], [5900, 'y'], [6100, 'él']]), { finMs: T0 + 7000 });
+        t.ok(e.tomas[0].outMs != null, 'cerró');
+        const f = vivo.estadoNuevo({});
+        vivo.aplicarSenales(f, ws([[0, '3,'], [400, '2,'], [800, '1.'], [1600, 'Hola']]));
+        vivo.aplicarSenales(f, ws([[5000, 'pausa'], [5450, 'en'], [5600, 'el'], [5800, 'flujo']]), { finMs: T0 + 7000 });
+        t.eq(f.tomas[0].outMs, null, 'y dicha de corrido, «una pausa en el flujo», no');
     });
 
     t.test('dos conteos en la misma ventana no se vuelven a disparar en cada pasada', () => {

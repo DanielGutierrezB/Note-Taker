@@ -149,10 +149,16 @@ const MISMA_SENAL_MS = 2000;
  *
  * El profesor puede decir "pausa" hablando de otra cosa —"acá hacemos una pausa
  * en el flujo"— y cerrar la toma ahí partiría la clase al medio. Lo que
- * distingue la señal es que después no se dice nada: el profesor para. Un segundo
- * alcanza y no obliga a esperar.
+ * distingue la señal es que después no se dice nada: el profesor para.
+ *
+ * Era un segundo, y era demasiado. Se mide desde que EMPIEZA «pausa» (abajo,
+ * el porqué), así que incluye la palabra misma: el 10/11 el editor la dijo para
+ * cerrar dos veces y la palabra siguiente llegó a los 0,78 s y a los 0,9 s, o
+ * sea tres a cinco décimas de silencio, y ninguna cerró. Dicha de corrido
+ * —«una pausa en el flujo»— la siguiente arranca a medio segundo, así que 0,7 s
+ * sigue separando la señal de la palabra.
  */
-const SILENCIO_TRAS_PAUSA_SEC = 1;
+const SILENCIO_TRAS_PAUSA_SEC = 0.7;
 
 /**
  * Las señales que hay en una tirada de palabras, en orden.
