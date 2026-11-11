@@ -235,7 +235,10 @@
 .tema-nuevo #ahora > .tarjeta:has([data-texto]),
 .tema-nuevo #ahora > .tarjeta:has([data-texto]) > .tarjeta-cuerpo,
 .tema-nuevo #ahora [data-texto] { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.tema-nuevo #ahora [data-texto] > .transcript { flex: 1 1 auto; min-height: 5em; max-height: none; }
+/* Con su ancho entero desde la primera palabra: con los márgenes automáticos
+   que lo centran, adentro de una columna flexible medía lo que el texto, y el
+   recuadro se iba ensanchando mientras se hablaba. */
+.tema-nuevo #ahora [data-texto] > .transcript { flex: 1 1 auto; width: 100%; min-height: 5em; max-height: none; box-sizing: border-box; }
 
 /* El divisor: invisible hasta que se le pasa por encima, y se arrastra.
    Parado entre dos columnas, acostado entre dos filas. */
