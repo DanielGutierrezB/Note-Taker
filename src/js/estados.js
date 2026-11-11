@@ -102,6 +102,66 @@ export function atrasado(estado) {
     return null;
 }
 
+/**
+ * Cómo va el texto en vivo, en un renglón que está siempre (tema nuevo, debajo
+ * de los timers).
+ *
+ * El aviso grande aparecía y desaparecía cada vez que el atraso cruzaba su
+ * umbral, y con él la pantalla entera saltaba para abajo y para arriba: en una
+ * clase en vivo, justo cuando la Mac iba cargada. Y solo hablaba cuando algo
+ * fallaba, así que no decía cuándo se había arreglado. Esto dice siempre algo,
+ * corto, y en el mismo lugar: al día, atrasada, al día otra vez, o el audio.
+ * La explicación entera va en `porque`, al pasar el mouse.
+ *
+ * @param {object} estado el de la sesión
+ * @param {object} [sesion] lo que contestó `deSesion`, para los problemas del audio
+ * @returns {{tono:'ok'|'atraso'|'error', dice:string, porque:string}}
+ */
+export function salud(estado, sesion) {
+    if (estado.terminando) {
+        return { tono: 'ok', dice: 'Terminando · se releen con el modelo grande las tomas que quedaron', porque: '' };
+    }
+    if (sesion && sesion.clave === 'sin audio' && !(estado.salteadoSec > 0 && sesion.palabra === 'transcript con huecos')) {
+        return { tono: 'error', dice: `${mayuscula(sesion.palabra)} · ${primeraFrase(sesion.porque)}`, porque: sesion.porque || '' };
+    }
+    const huecos = estado.salteadoSec > 0 ? fmt(estado.salteadoSec) : null;
+    const lento = estado.atrasoSec > SE_PIERDEN_PALABRAS_SEC;
+    if (lento) {
+        return {
+            tono: 'atraso',
+            dice: `Atrasada ${fmt(estado.atrasoSec)} s · ` + (huecos
+                ? `ya quedaron ${huecos} s sin texto en vivo`
+                : 'lo que decís tarda en aparecer, y «3, 2, 1» y «Pausa» llegan tarde'),
+            porque: atrasado({ atrasoSec: estado.atrasoSec }).porque
+        };
+    }
+    if (huecos) {
+        return {
+            tono: 'atraso',
+            dice: `Al día otra vez · quedaron ${huecos} s sin texto en vivo: revisá los bordes de ese rato`,
+            porque: atrasado(estado).porque
+        };
+    }
+    const va = Math.max(1, Math.round(estado.atrasoSec || 0));
+    return {
+        tono: 'ok',
+        dice: `Al día · el texto va unos ${va} s detrás de lo que decís`,
+        porque: 'La app escucha a tiempo: lo que se dice aparece en unos segundos, y «3, 2, 1» y «Pausa» abren y cierran en su palabra.'
+    };
+}
+
+function mayuscula(texto) {
+    const t = String(texto || '');
+    return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/** La primera oración, que es la que cabe en un renglón. */
+function primeraFrase(texto) {
+    const t = String(texto || '');
+    const fin = t.search(/[.:](\s|$)/);
+    return fin > 0 ? t.slice(0, fin) : t;
+}
+
 /** Un segundo con coma, como se escribe acá. */
 function fmt(sec) {
     return String(Math.round(sec * 10) / 10).replace('.', ',');

@@ -212,6 +212,13 @@
                 title="Cerrar la clase: deja de grabar, termina de escribir el XML y lleva a la pantalla de cierre">Terminar</button>
       </div>
 
+      <!-- Tema nuevo: cómo va el texto en vivo, siempre en el mismo renglón
+           (`estados.salud`), y a la derecha la ruta del XML. Es un renglón que
+           está siempre: avisar no mueve nada de la pantalla. -->
+      <div class="barra-pie solo-tema-nuevo" id="vivo-pie">
+        <span class="salud-vivo" id="vivo-salud" role="status" aria-live="polite"></span>
+      </div>
+
       <!-- Los atajos, debajo del timecode y no en un pie: es donde se mira
            mientras se graba. Y son botones de verdad, así que lo mismo se
            hace con la tecla o con el mouse. La vista y el borde se pintan

@@ -54,7 +54,8 @@ module.exports = function (t) {
         t.ok(/if \(caja\.dataset\.dice === dice\) return;/.test(fn), 'sin tocar el documento si dice lo mismo');
         const barra = tramo(vivo, 'function pintarBarra() {', '\n}');
         t.ok(/pintarAviso\(terminando \? null : est\)/.test(barra), 'lo pone al día la barra, en cada vuelta');
-        t.ok(/pintarAviso\(null\);\s*return;/.test(barra), 'y mirando una clase grabada no hay aviso');
+        t.ok(/pintarAviso\(null\);\s*pintarSalud\(null\);\s*return;/.test(barra), 'y mirando una clase grabada no hay aviso');
+        t.ok(/pintarSalud\(estados\.salud\(/.test(barra), 'y el renglón de cómo va el vivo, también en cada vuelta');
     });
 
     t.test('la tarjeta de «Ahora» no dice «escuchando» con la barra en «sin audio»', () => {

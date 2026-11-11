@@ -368,10 +368,48 @@ body:not(:has(#vista-vivo.es-activa)) .tema-barra .distribuciones { display: non
   .tema-nuevo .atajo-vistas .atajo span { display: none; }
 }
 
-/* La ruta del XML se queda en la barra, chica y a la derecha. */
-.tema-nuevo .barra-sesion > #vivo-donde {
-  display: block;
+/* Debajo de los timers: cómo va el texto en vivo a la izquierda y la ruta del
+   XML a la derecha, chica. El renglón está siempre, así que lo que cambia en
+   él no mueve nada; el aviso grande, que aparecía y desaparecía, no va. */
+.tema-nuevo .barra-pie {
+  display: flex !important;
+  align-items: baseline;
+  gap: var(--sp-4);
   padding: 0 var(--sp-5) var(--sp-2);
+  min-height: 18px;
+}
+.tema-nuevo #vivo-aviso { display: none !important; }
+
+.tema-nuevo .salud-vivo {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tema-nuevo .salud-vivo:empty { display: none; }
+.tema-nuevo .salud-vivo::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  transform: translateY(-1px);
+}
+.tema-nuevo .salud-vivo[data-tono='atraso'] { color: var(--warn); }
+.tema-nuevo .salud-vivo[data-tono='atraso']::before { background: var(--warn); }
+.tema-nuevo .salud-vivo[data-tono='error'] { color: var(--error); }
+.tema-nuevo .salud-vivo[data-tono='error']::before { background: var(--error); }
+
+.tema-nuevo .barra-pie > #vivo-donde {
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
   font-size: 11px;
   color: var(--text-muted);

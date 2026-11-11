@@ -427,10 +427,12 @@ function pintarBarra() {
             + 'Lo que cambies acá se escribe en su XML en el acto.';
         $('#vivo-estado').style.color = 'var(--text-secondary)';
         pintarAviso(null);
+        pintarSalud(null);
         return;
     }
     const est = estadoDeLaSesion();
     pintarAviso(terminando ? null : est);
+    pintarSalud(estados.salud({ ...estado, terminando: estado.terminando || terminando }, est));
     // Sin cuadros: son dos dígitos que cambian treinta veces por segundo al
     // lado de los que se quieren leer. El cuadro sigue en cada fila y en el XML.
     $('#vivo-tc').textContent = fmt.relojCorto(segundosDeLaClase());
@@ -490,6 +492,20 @@ function pintarAviso(est) {
     caja.dataset.tono = est.clave === 'sin audio' ? 'error' : 'normal';
     const titulo = est.palabra.charAt(0).toUpperCase() + est.palabra.slice(1);
     caja.innerHTML = `${icono('atencion')}<span><strong>${esc(titulo)}.</strong> ${esc(est.porque)}</span>`;
+}
+
+/**
+ * El renglón de cómo va el texto en vivo (tema nuevo): siempre puesto, y se
+ * toca solo cuando cambia lo que dice. En el clásico no se ve y manda el aviso.
+ */
+function pintarSalud(s) {
+    const caja = $('#vivo-salud');
+    const dice = s ? `${s.tono}|${s.dice}` : '';
+    if (caja.dataset.dice === dice) return;
+    caja.dataset.dice = dice;
+    caja.dataset.tono = s ? s.tono : '';
+    caja.textContent = s ? s.dice : '';
+    caja.title = s ? s.porque : '';
 }
 
 /** La pastilla de la tarjeta de espera: «escuchando», o lo que esté fallando. */
@@ -829,8 +845,8 @@ function acomodarAtajos() {
     if (tema.esNuevo()) {
         const fila = $('#vivo-titulo-ahora').parentElement;
         if (atajos.parentElement !== fila) fila.append(atajos);
-        const barra = $('.barra-sesion');
-        if (donde.parentElement !== barra) barra.append(donde);
+        const pie = $('#vivo-pie');
+        if (donde.parentElement !== pie) pie.append(donde);
         // Las vistas al centro y abrir o cerrar en la punta derecha, que es
         // donde estaba el botón de la tarjeta.
         const derecha = $('#atajos-derecha');
