@@ -229,7 +229,10 @@ async function escuchar(params) {
         opciones.tiempoMaxMs = p.liviano
             ? 20000
             : 60000 + 2 * Math.max(0, p.hastaMs - p.desdeMs);
-        let salida = (p.liviano
+        // Con la Mac ahogada no se le pregunta al residente, que tiene el
+        // grande: así cae sola a `whisper-cli` con el liviano, que es lo que
+        // deja al ciclo ponerse al día (`mirarSiDaAbasto` en ciclo-senales.js).
+        let salida = (p.liviano && !p.apurado
             && await delResidente(recortado.archivo, opciones.language, tocaMedirIdioma(p.sesion, opciones.language)))
             || await transcribe.runWhisper(recortado.archivo, opciones);
 

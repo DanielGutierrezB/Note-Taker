@@ -15,6 +15,7 @@ const path = require('path');
 
 const captura = require('../engine/captura');
 const grabacion = require('../engine/grabacion');
+const ciclo = require('../engine/ciclo-senales');
 const oir = require('../engine/oir');
 const sonido = require('../engine/sonido');
 
@@ -188,6 +189,47 @@ module.exports = function (t) {
         t.ok(/const NUEVO_MIN_MS = 2000;/.test(js));
         t.ok(/const NUEVO_MIN_RELEYENDO_MS = 3000;/.test(js));
         t.ok(/return s\.rehaciendo \? NUEVO_MIN_RELEYENDO_MS : NUEVO_MIN_MS;/.test(js));
+    });
+
+    t.group('vivo más liviano · con la Mac ahogada, el modelo chico');
+
+    /** Una sesión como la que mira el ciclo, con lo justo para esta cuenta. */
+    const sesion = () => ({ apurado: false, avisos: [], avisar(a) { this.avisos.push(a); } });
+    const pasadas = (s, ms, cuantas) => {
+        for (let i = 0; i < cuantas; i++) { s.ultimaPasadaMs = ms; ciclo.mirarSiDaAbasto(s); }
+    };
+
+    t.test('una pasada lenta suelta no cambia nada: pasa sola', () => {
+        const s = sesion();
+        pasadas(s, 5000, ciclo.PARA_CAMBIAR_DE_MODELO - 1);
+        pasadas(s, 400, 1);
+        t.eq(s.apurado, false);
+        t.eq(s.avisos.length, 0, 'y no se le dice nada a nadie');
+    });
+
+    t.test('tres seguidas sí: se pasa al chico y se avisa', () => {
+        const s = sesion();
+        pasadas(s, 5000, ciclo.PARA_CAMBIAR_DE_MODELO);
+        t.eq(s.apurado, true);
+        t.ok(/modelo liviano/.test(s.avisos[0].mensaje), s.avisos[0].mensaje);
+    });
+
+    t.test('con el chico no se vuelve por ser rápido: se pide una Mac de verdad libre', () => {
+        const s = sesion();
+        pasadas(s, 5000, ciclo.PARA_CAMBIAR_DE_MODELO);
+        // Con el chico, 1,5 s es rápido contra los 5 s del grande y lento para
+        // esta Mac: si bastara, el ciclo saltaría de un modelo al otro.
+        pasadas(s, 1500, 10);
+        t.eq(s.apurado, true);
+        pasadas(s, ciclo.VUELVE_MS, ciclo.PARA_CAMBIAR_DE_MODELO);
+        t.eq(s.apurado, false, 'y con la Mac libre, sí');
+        t.ok(/vuelve al modelo grande/.test(s.avisos[1].mensaje), s.avisos[1].mensaje);
+    });
+
+    t.test('el ciclo le pasa «apurado» a la pasada, y con eso no va al residente', () => {
+        t.ok(/apurado: Boolean\(s\.apurado\)/.test(leer('engine', 'ciclo-senales.js')));
+        t.ok(/p\.liviano && !p\.apurado\s*\n\s*&& await delResidente\(/.test(leer('engine', 'oir.js')),
+            'y sin residente cae sola al liviano, que ya existía');
     });
 
     t.group('vivo más liviano · el archivo de notas');

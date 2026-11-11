@@ -113,8 +113,10 @@ function tramo(archivos, desdeMs, hastaMs, liviano, idioma, oyendo, opciones) {
     return oir.escuchar({
         sesion: donde, desdeMs, hastaMs, liviano, idioma, oyendo,
         // Desde dónde es nuevo lo que trae esta ventana, que es lo que el ciclo
-        // sabe y acá no (`escuchar` lo usa para saltear las pausas).
-        nuevoDesdeMs: (opciones || {}).nuevoDesdeMs
+        // sabe y acá no (`escuchar` lo usa para saltear las pausas), y si la
+        // Mac viene sin dar abasto (`mirarSiDaAbasto`).
+        nuevoDesdeMs: (opciones || {}).nuevoDesdeMs,
+        apurado: (opciones || {}).apurado
     });
 }
 

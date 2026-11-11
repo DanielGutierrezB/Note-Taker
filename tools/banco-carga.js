@@ -264,6 +264,9 @@ async function medir(wav, minutos) {
             pasadaMs: resumen(pasadas.filter(ms => ms >= PASADA_LIVIANA_MS)),
             demoraSec: resumen(demoras),
             lentas: eventos.filter(e => e.evento === 'senal.pasada-lenta').length,
+            // Cuántas veces la Mac se ahogó tanto que el vivo pasó al modelo
+            // chico para no perder audio (`mirarSiDaAbasto` en ciclo-senales).
+            conElChico: eventos.filter(e => e.evento === 'vivo.con-el-chico').length,
             salteadoSec: salteado ? salteado.datos.enTotalSec : 0
         },
         cierre: { segundos: redondo((Date.now() - cerrado) / 1000), relecturas: relecturas.length },
@@ -303,7 +306,8 @@ function parte(m, viejo) {
     console.log('El vivo:');
     console.log(`  pasadas           ${contra(m.vivo.pasadas, v.vivo && v.vivo.pasadas, '')}` +
         `, ${contra(m.vivo.sinWhisper, v.vivo && v.vivo.sinWhisper, '')} sin preguntarle a Whisper` +
-        `${m.vivo.lentas ? `, ${m.vivo.lentas} lentas` : ''}`);
+        `${m.vivo.lentas ? `, ${m.vivo.lentas} lentas` : ''}` +
+        `${m.vivo.conElChico ? `, ${m.vivo.conElChico} veces al modelo chico` : ''}`);
     console.log(`  cada pasada       ${contarParte(m.vivo.pasadaMs, v.vivo && v.vivo.pasadaMs, ' ms')}`);
     console.log(`  transcribiendo    ${contra(m.vivo.ocupado, v.vivo && v.vivo.ocupado, ' % de la clase')}`);
     // El peor caso de la demora no dice nada: en un silencio largo la última

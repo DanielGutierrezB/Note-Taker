@@ -81,10 +81,78 @@ function nuevoMinimo(s) {
     return s.rehaciendo ? NUEVO_MIN_RELEYENDO_MS : NUEVO_MIN_MS;
 }
 
+/**
+ * Cuántas pasadas seguidas hacen falta para cambiar de modelo, y con qué.
+ *
+ * Tres: una pasada lenta pasa sola —un guardado, una relectura que arranca— y
+ * no significa nada. Tres seguidas son seis segundos largos sin que el texto
+ * avance, y de ahí no se sale solo.
+ *
+ * **Para volver se pide mucho más que para irse, y no es simetría perdida: es
+ * lo único que evita el ida y vuelta.** Con el chico las pasadas son rápidas
+ * PORQUE es el chico, así que medirlas contra `PASADA_LENTA_MS` diría «ya está,
+ * volvé» a los seis segundos, el grande volvería a ahogarse y el ciclo pasaría
+ * la clase saltando de un modelo al otro. Medido en esta Mac libre: con el
+ * chico, 572 ms por ventana (whisper-cli lo relanza y carga 487 MB cada vez);
+ * con la Mac ocupada, bastante más. Así que por debajo de `VUELVE_MS` la Mac
+ * está de verdad libre y recién ahí se vuelve.
+ */
+const PARA_CAMBIAR_DE_MODELO = 3;
+const VUELVE_MS = 800;
+
+/**
+ * El modelo grande no da abasto: se oye con el chico hasta que la Mac afloje.
+ *
+ * **Es la diferencia entre texto peor y texto que no está.** Cuando una pasada
+ * tarda más que el audio que se lleva, lo que no entra en esa ventana no lo oye
+ * nadie nunca (ver `topeDeVentana` y `senal.salteado`): el 10/11 fueron 14 s de
+ * clase sin transcribir, y con ellos las señales que hubiera adentro. El modelo
+ * chico lee la misma ventana unas tres veces más rápido, así que el ciclo se
+ * pone al día: el texto en vivo sale con más faltas —el bueno lo rehace la
+ * relectura igual, que para eso está— pero sigue saliendo, y «3, 2, 1» y
+ * «Pausa» se siguen oyendo.
+ *
+ * No hace falta cambiar nada más para que pase: sin el servidor residente,
+ * `oir.escuchar` ya lee con el liviano (`paths.modeloLiviano`). Acá solo se
+ * decide no preguntarle al residente mientras dure.
+ *
+ * **Qué se probó y qué no.** La cuenta de cuándo cambiar y cuándo volver tiene
+ * sus pruebas. Lo que no se pudo montar es la situación entera: con la Mac
+ * tomada como la toma una grabación de pantalla, el vivo aguanta sin esto
+ * —815 ms por pasada y nada de audio salteado— y el cambio ni se dispara; y
+ * con tres servidores más saturando la GPU se dispara, pero para entonces ya
+ * no hay modelo que alcance (123 s salteados igual). O sea que es una red para
+ * el medio de esos dos, que es justo donde estuvo la clase del 10/11, y esa red
+ * no se pudo ver atajar. Lo que sí: por debajo no se activa sola.
+ */
+function mirarSiDaAbasto(s) {
+    const cambia = s.apurado
+        ? s.ultimaPasadaMs <= VUELVE_MS
+        : s.ultimaPasadaMs >= PASADA_LENTA_MS;
+    s.seguidas = cambia === Boolean(s.seguidasQueCambian) ? (s.seguidas || 0) + 1 : 1;
+    s.seguidasQueCambian = cambia;
+    if (!cambia || s.seguidas < PARA_CAMBIAR_DE_MODELO) return;
+    const seguidas = s.seguidas;
+    s.seguidas = 0;
+    s.apurado = !s.apurado;
+    const lenta = Boolean(s.apurado);
+    registro.anotar('main', lenta ? 'vivo.con-el-chico' : 'vivo.con-el-grande', {
+        pasadaMs: s.ultimaPasadaMs, seguidas
+    });
+    s.avisar({
+        tipo: 'error',
+        mensaje: lenta
+            ? 'La Mac no da abasto: el texto en vivo pasa al modelo liviano para no perder lo que se dice. '
+                + 'Sale con más faltas; el del XML lo rehace igual el modelo grande al cerrar cada toma.'
+            : 'La Mac aflojó: el texto en vivo vuelve al modelo grande.'
+    });
+}
+
 /** Un tramo de esta sesión, transcripto (`oir-toma.js` no sabe de sesiones). */
 function oirTramo(desdeMs, hastaMs, liviano, s) {
     return oirToma.tramo(espejo.archivosDeLaSesion(s), desdeMs, hastaMs, liviano,
-        s.estado.idioma, s.estado.idiomaOido, { nuevoDesdeMs: s.escuchadoHastaMs });
+        s.estado.idioma, s.estado.idiomaOido,
+        { nuevoDesdeMs: s.escuchadoHastaMs, apurado: Boolean(s.apurado) });
 }
 
 /**
@@ -234,6 +302,7 @@ async function buscarSenales(s) {
         s.escuchadoHastaMs = Math.max(s.escuchadoHastaMs, hasta - COLA_MS);
         s.buscando = false;
         anotarSiSeAtraso(s, s.ultimaPasadaMs, s.ultimaVentanaMs);
+        mirarSiDaAbasto(s);
         listo();
     }
 }
@@ -316,5 +385,8 @@ module.exports = {
     COLA_MS,
     VENTANA_MAX_MS,
     topeDeVentana,
+    mirarSiDaAbasto,
+    PARA_CAMBIAR_DE_MODELO,
+    VUELVE_MS,
     buscarSenales
 };
