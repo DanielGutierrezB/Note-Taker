@@ -1044,7 +1044,7 @@ Hay dos ciclos y la separación es lo que protege el transcript.
 
 | | cuándo | modelo | qué queda |
 |---|---|---|---|
-| **en vivo** | cada 1 s, sobre los últimos 6 s | el grande (`large-v3-turbo`) con DTW, cargado en `whisper-server` | el texto que se ve mientras se habla, y la hora de las señales |
+| **en vivo** | cada 2 s de audio, sobre los últimos 6 s | el grande (`large-v3-turbo`) con DTW, cargado en `whisper-server` | el texto que se ve mientras se habla, y la hora de las señales |
 | **toma** | al cerrar cada toma | el grande, con alineación DTW (`whisper-cli`) | el texto del XML |
 
 ### Una toma no se lee cortada en seco
@@ -1180,6 +1180,29 @@ lo otro: **cuánto le cuesta a la Mac**. Le pasa la clase al motor a ritmo real
 CPU y la memoria de cada proceso, cuánto tarda cada pasada y cuánto tarda en
 aparecer lo que se dice. Con `--contra=antes.json` pone los dos lados: un cambio
 que alivia la Mac pero mueve las tomas o pierde texto no sirve, y así se ve.
+
+#### Lo que se probó para aliviar la Mac y no entró
+
+Todo medido con el banco en un M3 Max, sobre clases de verdad. Queda escrito
+para no volver a probarlo a ciegas:
+
+- **El codificador en el Neural Engine (Core ML).** Es la idea más prometedora
+  —el codificador se va al ANE, que está ocioso, y el decodificador se queda en
+  la GPU—, y funciona: compilando whisper.cpp con `-DWHISPER_COREML=1` y
+  poniendo `ggml-large-v3-turbo-encoder.mlmodelc` al lado del modelo, la ventana
+  de 6 s baja de 638 a 575 ms, **un 10 %**, con el mismo texto (comparado sobre
+  una toma de tres minutos, alternando pedidos entre los dos servidores
+  levantados a la vez para que vean la misma Mac). Lo que cuesta: **1,1 GB más
+  de descarga** en cada Mac —sobre los 2 GB que ya se bajan—, 23 s la primera
+  vez que se carga en cada equipo, y otro binario que mantener. Diez por ciento
+  no paga eso. El encoder ya convertido está en el mismo repo del que la app
+  baja los modelos, así que el día que convenga es bajarlo y recompilar.
+- **El modelo cuantizado (`large-v3-turbo-q5_0`, 547 MB contra 1549).** Sale
+  **6 % más lento** (490 ms contra 462) además de peor: en Apple Silicon el
+  modelo entero mapea mejor a la GPU y lo cuantizado se paga en
+  descuantizar. Solo ahorraría descarga y memoria, que no es lo que falta.
+- **Más o menos hilos de CPU** (`-t`): nada. Está anotado en `oido-residente.js`.
+- **La ventana de la app**: 2,3 % de un núcleo. Está anotado en `pantalla-vivo.js`.
 
 El de toma sigue siendo el que queda: corre una vez, sobre la toma entera, con
 la alineación contra el sonido, y ESE texto es el del XML. Así el transcript
