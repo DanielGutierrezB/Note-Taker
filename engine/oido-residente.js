@@ -179,6 +179,12 @@ function arrancar(opciones) {
                 // relectura, que sí lo usa, después ponía las palabras en otro
                 // lado que el borde. Cuesta 0,15 s por pasada (0,69 contra 0,54).
                 ...dtw(modelo)
+                // Y sin `-t`: los hilos de CPU quedan en los cuatro de fábrica.
+                // Medido sobre una ventana de seis segundos, la pasada da igual
+                // con 2, 3 o 4 (393, 403 y 397 ms) y empeora con 6 (433), porque
+                // el trabajo está en la GPU por Metal y la CPU solo acompaña.
+                // Bajarlos no alivia nada y sí dejaría lento el respaldo, que es
+                // justo cuando Metal no está y todo cae en la CPU.
             ], { stdio: ['ignore', 'ignore', 'pipe'] });
             este.hijo.stderr.on('data', () => {});
             const hijo = este.hijo;
