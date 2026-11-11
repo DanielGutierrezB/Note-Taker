@@ -20,6 +20,7 @@ const residente = require('./oido-residente');
 const oirToma = require('./oir-toma');
 const relecturas = require('./relecturas');
 const cambiosToma = require('./cambios-toma');
+const cargaDelSistema = require('./carga-del-sistema');
 
 /**
  * Cada cuánto se escucha buscando señales, y cuánto se escucha.
@@ -282,6 +283,10 @@ function anotarSiSeAtraso(s, tardo, ventanaMs) {
         ventanaSec: enDecimas(ventanaMs),
         ciclo: CICLO_MS
     });
+    // Y quién estaba ocupando la Mac, sin esperarlo (`carga-del-sistema.js`).
+    cargaDelSistema.medir()
+        .then(carga => registro.anotar('main', 'sistema.carga', carga))
+        .catch(() => {});
 }
 
 module.exports = {
