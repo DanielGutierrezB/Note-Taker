@@ -276,7 +276,7 @@ function pintar() {
     $('#prep-nombre').innerHTML = !reanudar && nombre ? `Va a quedar <code>${esc(nombre.nombre)}.xml</code>` : '';
     $('#prep-avisos').innerHTML = [
         reanudar ? avisoReanudar() : '',
-        w.listo !== 'si' ? aviso(w, 'Whisper', `<button class="btn" type="button" data-hace="diagnostico">Ver Diagnóstico</button>`) : '',
+        w.listo !== 'si' ? aviso(w, 'Whisper', `<button class="btn" type="button" data-hace="diagnostico" title="Qué modelos encontró la app, dónde los buscó y qué falta bajar">Ver Diagnóstico</button>`) : '',
         // El disco que alcanza justo no frena, pero se dice arriba: se descubre
         // a la segunda hora de clase.
         c.listo !== 'si' || c.porque ? aviso(c, 'Dónde se guarda', carpeta
@@ -343,7 +343,8 @@ function pintar() {
                 + 'Se cambia en Ajustes, para que no se toque sin querer.')}</span>
         <div class="prep-control">
           <span class="prep-valor">${esc(String(app.ajustes.fps))} fps</span>
-          <button class="btn-enlace" type="button" data-hace="ajustes">Cambiar en Ajustes</button>
+          <button class="btn-enlace" type="button" data-hace="ajustes"
+                  title="Abre Ajustes: los cuadros por segundo se cambian ahí, y valen para la clase que sigue">Cambiar en Ajustes</button>
         </div>
       </div>`;
 

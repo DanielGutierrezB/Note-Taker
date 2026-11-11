@@ -217,6 +217,10 @@
 }
 
 .alternar button {
+  /* 24 px de alto como poco, que es el blanco mínimo para acertarle. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   padding: 3px var(--sp-3);
   font-size: 11px;
   color: var(--text-muted);

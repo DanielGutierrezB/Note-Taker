@@ -314,7 +314,10 @@
 
 /* Un botón que se lee como un enlace: para lo que no es una acción principal. */
 .btn-enlace {
-  padding: 0;
+  /* El renglón no cambia —el margen negativo devuelve lo que el relleno
+     suma— y el blanco pasa de 16 a 24 px de alto. */
+  padding: 4px 0;
+  margin: -4px 0;
   font-size: 12px;
   color: var(--accent);
   background: none;

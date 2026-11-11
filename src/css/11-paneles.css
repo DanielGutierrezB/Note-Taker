@@ -17,6 +17,12 @@
   display: flex;
 }
 
+/* El panel recibe el foco al abrirse (`verPanel`): es para que Tab arranque
+   adentro, no para marcarlo. */
+.panel:focus {
+  outline: none;
+}
+
 .panel {
   width: min(560px, 100%);
   max-height: 100%;
@@ -645,7 +651,8 @@
 .pp-clip small {
   font-size: 10px;
   font-weight: 500;
-  opacity: 0.8;
+  /* Sin bajarle la opacidad: la tinta ya es la que mejor contrasta con el color
+     de la vista (4,6:1 como poco), y al 80 % quedaba debajo del mínimo. */
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -669,8 +676,10 @@
   background: #1f6b45;
 }
 
+/* La de referencia va apagada, pero el fondo y no el texto: con la opacidad en
+   toda la caja el nombre del archivo quedaba en 2,5:1. */
 .pp-clip.es-referencia {
-  opacity: 0.6;
+  background: color-mix(in srgb, #1f6b45 60%, var(--bg-inset));
 }
 
 .pp-linea-vacia {

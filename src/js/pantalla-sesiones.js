@@ -169,7 +169,8 @@ function vacio(siguiente) {
         <span class="ses-vacio-titulo">Todavía no grabaste ninguna clase en este curso</span>
         <span class="ses-vacio-dice">Antes de grabar elegís el audio y la cámara y revisás el nombre de la clase.
           Nada se graba hasta que aprietes Iniciar.</span>
-        <button class="btn btn-primario btn-grande" type="button" data-hace="nueva">Nueva sesión</button>
+        <button class="btn btn-primario btn-grande" type="button" data-hace="nueva"
+                title="Empezar una clase nueva en este curso: primero se elige el audio y se revisa el nombre">Nueva sesión</button>
         ${siguiente && siguiente.corto ? `<span class="ses-proxima">La primera va a ser la <code>${esc(siguiente.corto)}</code></span>` : ''}
       </div>`;
 }

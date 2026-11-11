@@ -101,8 +101,10 @@
             <span class="crece"></span>
             <span class="v3">Vista</span>
             <span class="alternar" role="group" aria-label="Cómo se ve la lista">
-              <button type="button" data-vista-lista="compacta">Compacta</button>
-              <button type="button" data-vista-lista="comoda">Cómoda</button>
+              <button type="button" data-vista-lista="compacta"
+                      title="Una fila baja por clase, para ver muchas de un vistazo">Compacta</button>
+              <button type="button" data-vista-lista="comoda"
+                      title="Una fila alta por clase, con sus datos y sus botones a la vista">Cómoda</button>
             </span>
           </div>
           <div id="lista-sesiones" class="ses-lista"></div>
@@ -149,7 +151,8 @@
               <div class="campo-fila">
                 <input type="text" maxlength="200" data-termino-nuevo aria-label="Otra palabra del glosario del curso"
                        placeholder="Por ejemplo «Canva Pro, Magic Studio»">
-                <button class="btn" type="button" data-termino-agregar>Agregar</button>
+                <button class="btn" type="button" data-termino-agregar
+                        title="Sumar al glosario lo que escribiste, separado por comas. También con Enter">Agregar</button>
               </div>
             </div>
             <div class="frases-grupo" data-glosario="general">
@@ -158,7 +161,8 @@
               <div class="campo-fila">
                 <input type="text" maxlength="200" data-termino-nuevo aria-label="Otra palabra del glosario general"
                        placeholder="Por ejemplo «Figma, Notion»">
-                <button class="btn" type="button" data-termino-agregar>Agregar</button>
+                <button class="btn" type="button" data-termino-agregar
+                        title="Sumar al glosario lo que escribiste, separado por comas. También con Enter">Agregar</button>
               </div>
             </div>
           </div>
@@ -233,6 +237,10 @@
         <span id="vivo-donde"></span>
       </div>
     </div>
+
+    <!-- Lo que le pasa a la clase, con el motivo y qué hacer, escrito: la
+         palabra roja de la barra sola no alcanza (`pintarAviso`). -->
+    <div class="aviso aviso-sesion" id="vivo-aviso" role="alert" hidden></div>
 
     <div class="scroll">
       <div class="seccion seccion-ahora">
@@ -407,7 +415,8 @@
             <div class="campo-fila">
               <input type="text" maxlength="60" data-frase-nueva aria-label="Otra frase que abre una toma"
                      placeholder="Otra frase que abre, por ejemplo «retoma»">
-              <button class="btn" type="button" data-frase-agregar>Agregar</button>
+              <button class="btn" type="button" data-frase-agregar
+                      title="Sumar la frase que escribiste. También con Enter">Agregar</button>
             </div>
           </div>
 
@@ -421,7 +430,8 @@
             <div class="campo-fila">
               <input type="text" maxlength="60" data-frase-nueva aria-label="Otra frase que cierra la toma"
                      placeholder="Otra frase que cierra, por ejemplo «cortamos acá»">
-              <button class="btn" type="button" data-frase-agregar>Agregar</button>
+              <button class="btn" type="button" data-frase-agregar
+                      title="Sumar la frase que escribiste. También con Enter">Agregar</button>
             </div>
           </div>
 
@@ -456,7 +466,8 @@
             <div class="campo-fila">
               <input type="text" maxlength="200" data-termino-nuevo aria-label="Otra palabra del glosario general"
                      placeholder="Por ejemplo «Figma, Notion»">
-              <button class="btn" type="button" data-termino-agregar>Agregar</button>
+              <button class="btn" type="button" data-termino-agregar
+                        title="Sumar al glosario lo que escribiste, separado por comas. También con Enter">Agregar</button>
             </div>
           </div>
           <div class="frases-grupo" data-glosario="delCurso" id="aj-glosario-curso">
@@ -465,7 +476,8 @@
             <div class="campo-fila">
               <input type="text" maxlength="200" data-termino-nuevo aria-label="Otra palabra del glosario del curso"
                      placeholder="Por ejemplo «Canva Pro, Magic Studio»">
-              <button class="btn" type="button" data-termino-agregar>Agregar</button>
+              <button class="btn" type="button" data-termino-agregar
+                        title="Sumar al glosario lo que escribiste, separado por comas. También con Enter">Agregar</button>
             </div>
           </div>
           <span class="v3 glosario-dice" id="aj-glosario-dice" data-glosario-dice role="status"></span>

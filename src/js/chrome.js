@@ -30,10 +30,63 @@ export function verVista(id) {
     for (const v of $$('.vista')) v.classList.toggle('es-activa', v.id === id);
 }
 
-/** Abre o cierra un panel flotante (Ajustes, Diagnóstico). */
+/** Desde dónde se abrió cada panel, para devolverle el foco al cerrarlo. */
+const abiertoDesde = new Map();
+
+/**
+ * Abre o cierra un panel flotante (Ajustes, Diagnóstico, Crear proyecto…).
+ *
+ * **Abierto, el teclado es suyo.** El panel tapa la pantalla, pero el foco
+ * seguía en el botón que lo abrió y Tab recorría lo de atrás: catorce paradas
+ * en controles que no se ven antes de llegar a uno del panel. Ahora el foco
+ * entra al panel, lo de atrás queda inerte —ni Tab ni lector de pantalla
+ * llegan—, y al cerrar vuelve a donde estaba.
+ */
 export function verPanel(id, abierto) {
     const t = document.getElementById(id);
-    if (t) t.classList.toggle('es-activa', abierto !== false);
+    if (!t) return;
+    const abrir = abierto !== false;
+    const estaba = t.classList.contains('es-activa');
+    t.classList.toggle('es-activa', abrir);
+    if (abrir === estaba) return;
+    if (abrir) {
+        abiertoDesde.set(id, document.activeElement);
+        const panel = t.querySelector('.panel') || t;
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'true');
+        if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
+        dejarElFondo(true);
+        panel.focus({ preventScroll: true });
+        return;
+    }
+    const desde = abiertoDesde.get(id);
+    abiertoDesde.delete(id);
+    const otro = [...document.querySelectorAll('.telon.es-activa')].pop();
+    dejarElFondo(Boolean(otro));
+    devolverElFoco(desde, otro);
+}
+
+/** Lo que queda detrás de un panel: la barra de arriba y las pantallas. */
+function dejarElFondo(inerte) {
+    for (const el of document.querySelectorAll('.topbar, .vista')) el.inert = inerte;
+}
+
+/**
+ * A dónde va el foco al cerrar un panel: al panel que quede abierto debajo; si
+ * no hay, a la pantalla si es de las que se llevan el teclado —la de la clase,
+ * donde Enter abre y cierra tomas y no puede quedar en un botón—; y si no, a lo
+ * que tenía el foco al abrir.
+ */
+function devolverElFoco(desde, otroPanel) {
+    const sirve = el => el && el.isConnected && typeof el.focus === 'function';
+    if (otroPanel) {
+        const destino = sirve(desde) && otroPanel.contains(desde) ? desde : otroPanel.querySelector('.panel') || otroPanel;
+        destino.focus({ preventScroll: true });
+        return;
+    }
+    const pantalla = document.querySelector('.vista.es-activa');
+    if (pantalla && pantalla.hasAttribute('tabindex')) pantalla.focus({ preventScroll: true });
+    else if (sirve(desde) && desde !== document.body) desde.focus({ preventScroll: true });
 }
 
 let tostadaTimer = null;

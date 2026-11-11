@@ -59,6 +59,7 @@ const FILES = [
     'buscar-tomas.test.js',
     'relectura-espera.test.js',
     'carga-del-sistema.test.js',
+    'uso.test.js',
     'senales-del-texto.test.js',
     'menu-de-palabra.test.js',
     'tres-estados.test.js',

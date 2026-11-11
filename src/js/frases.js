@@ -104,7 +104,8 @@ function armarVistas() {
               <input type="text" maxlength="60" data-frase-nueva
                      aria-label="Una frase que pasa a ${esc(v.titulo)}"
                      placeholder="Una frase que pasa a ${esc(v.titulo)}">
-              <button class="btn" type="button" data-frase-agregar>Agregar</button>
+              <button class="btn" type="button" data-frase-agregar
+                      title="Sumar la frase que escribiste. También con Enter">Agregar</button>
             </div>
           </div>
         </div>`).join('');

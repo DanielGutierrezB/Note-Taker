@@ -44,6 +44,22 @@
   color: var(--error);
 }
 
+/* El de la pantalla de la clase: debajo de la barra, a todo el ancho, mientras
+   dure el problema (`pintarAviso` en pantalla-vivo.js). */
+.aviso-sesion {
+  flex: 0 0 auto;
+  margin: var(--sp-3) var(--sp-5) 0;
+}
+
+.aviso-sesion .hp-ico {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.aviso-sesion strong {
+  font-weight: 600;
+}
+
 .aviso[data-tono='ok'] {
   background: rgba(62, 216, 144, 0.1);
   color: var(--ok);

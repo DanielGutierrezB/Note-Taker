@@ -426,11 +426,11 @@ function pintarBarra() {
         $('#vivo-estado').title = 'Esta clase no se está grabando: se está mirando. '
             + 'Lo que cambies acá se escribe en su XML en el acto.';
         $('#vivo-estado').style.color = 'var(--text-secondary)';
+        pintarAviso(null);
         return;
     }
-    const callado = !terminando && Date.now() - ultimoAvisoMs > MOTOR_CALLADO_MS;
-    const conAudio = audio ? { ...audio, caido: audio.caido || callado } : (callado ? { caido: true } : null);
-    const est = estados.deSesion(estado, conAudio);
+    const est = estadoDeLaSesion();
+    pintarAviso(terminando ? null : est);
     // Sin cuadros: son dos dígitos que cambian treinta veces por segundo al
     // lado de los que se quieren leer. El cuadro sigue en cada fila y en el XML.
     $('#vivo-tc').textContent = fmt.relojCorto(segundosDeLaClase());
@@ -451,6 +451,58 @@ function pintarBarra() {
         barra.dataset.pico = audio.pico > 0.95 ? 'clip' : (audio.pico > 0.7 ? 'alto' : '');
     }
     pintarRotulos();
+}
+
+/**
+ * Cómo está la sesión ahora mismo, contando el motor que dejó de mandar.
+ *
+ * Lo miran la barra, el aviso de debajo y la tarjeta de «Ahora», y tiene que
+ * ser el mismo para los tres: la tarjeta decía «escuchando» con la barra en
+ * «sin audio».
+ */
+function estadoDeLaSesion() {
+    const callado = !terminando && Date.now() - ultimoAvisoMs > MOTOR_CALLADO_MS;
+    const conAudio = audio ? { ...audio, caido: audio.caido || callado } : (callado ? { caido: true } : null);
+    return estados.deSesion(estado, conAudio);
+}
+
+/**
+ * El problema de la clase, escrito debajo de la barra: qué pasa y qué hacer.
+ *
+ * Ese texto ya existía, pero solo al pasar el mouse por la palabra de la barra
+ * («sin audio», «transcript con huecos», «oyendo 6 s atrás»): quien graba ve
+ * una palabra roja y no sabe ni qué quiere decir ni qué hacer. Va a la vista
+ * mientras el problema dure, en rojo si falta audio o texto y en ámbar si es
+ * solo atraso. Se toca el documento solo cuando cambia lo que dice, que esto
+ * corre en cada vuelta de la barra.
+ */
+function pintarAviso(est) {
+    const caja = $('#vivo-aviso');
+    const dice = est && est.porque ? `${est.palabra}\n${est.porque}` : '';
+    if (caja.dataset.dice === dice) return;
+    caja.dataset.dice = dice;
+    caja.hidden = !dice;
+    // La pastilla de «Ahora» dice lo mismo que la barra; `ahora` la dibuja con
+    // cada estado, y esto la pone al día entre uno y otro.
+    const pastilla = document.querySelector('#ahora [data-pastilla-sesion]');
+    if (pastilla) ponerPastillaDeSesion(pastilla, est);
+    if (!dice) return;
+    caja.dataset.tono = est.clave === 'sin audio' ? 'error' : 'normal';
+    const titulo = est.palabra.charAt(0).toUpperCase() + est.palabra.slice(1);
+    caja.innerHTML = `${icono('atencion')}<span><strong>${esc(titulo)}.</strong> ${esc(est.porque)}</span>`;
+}
+
+/** La pastilla de la tarjeta de espera: «escuchando», o lo que esté fallando. */
+function pastillaDeSesion(est) {
+    return est && est.clave === 'sin audio'
+        ? { estado: 'sin audio', dice: est.palabra }
+        : { estado: 'escuchando', dice: 'escuchando' };
+}
+
+function ponerPastillaDeSesion(pastilla, est) {
+    const p = pastillaDeSesion(est);
+    pastilla.dataset.estado = p.estado;
+    pastilla.textContent = p.dice;
 }
 
 /**
@@ -716,7 +768,7 @@ function ahora(fps) {
           <div class="tarjeta-cabeza">
             <span class="hp-ico" style="color:var(--text-muted)">${icono('oido')}</span>
             <span class="v1">Sin toma abierta</span>
-            <span class="pastilla" data-estado="escuchando">escuchando</span>
+            ${(p => `<span class="pastilla" data-pastilla-sesion data-estado="${p.estado}">${esc(p.dice)}</span>`)(pastillaDeSesion(estadoDeLaSesion()))}
             <span class="crece"></span>
             ${botonesDeLetra()}
             <button class="btn btn-primario solo-tema-clasico" type="button" data-hace="abrir"

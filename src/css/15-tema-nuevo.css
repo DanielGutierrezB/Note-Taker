@@ -134,6 +134,11 @@
 .tema-nuevo .con-vista > .fila:hover { background: color-mix(in srgb, var(--vista) 34%, var(--bg-inset)); }
 .tema-nuevo .con-vista > .cuerpo-toma { background: color-mix(in srgb, var(--vista) 12%, var(--bg-inset)); }
 
+/* Sobre el tinte de la vista, el gris de las pistas y la pastilla «abierta»
+   quedaban apenas debajo del mínimo (4,2 y 4,4:1). */
+.tema-nuevo .tarjeta.con-vista .pista { color: var(--text-secondary); }
+.tema-nuevo .con-vista .pastilla[data-estado='abierta'] { background: color-mix(in srgb, var(--accent) 14%, var(--bg-inset)); }
+
 .tema-nuevo .fila-nota mark { color: var(--text-primary); background: var(--resaltado-suave); border-radius: 2px; }
 
 /* La vista en la fila: la puesta siempre, las otras al pasar o con la fila elegida. */
@@ -142,7 +147,7 @@
 .mini-vista {
   display: none;
   min-width: 26px;
-  height: 20px;
+  height: 24px;
   padding: 0 4px;
   font-size: 10px;
   font-weight: 700;
@@ -291,6 +296,8 @@ body.es-horizontal.es-moviendo-divisor { cursor: col-resize; }
 .tema-barra { display: inline-flex; align-items: center; gap: var(--sp-2); -webkit-app-region: no-drag; }
 .tema-barra .alternar button { padding: 3px var(--sp-2); font-size: 11px; }
 .tema-barra .distribuciones[hidden] { display: none; }
+/* La distribución es de la pantalla de la clase: en las otras no hace nada. */
+body:not(:has(#vista-vivo.es-activa)) .tema-barra .distribuciones { display: none; }
 .tema-barra .distribuciones button { display: inline-flex; align-items: center; padding: 3px 6px; }
 .tema-barra svg { width: 20px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.2; }
 .tema-barra svg .es-tomas { fill: currentColor; fill-opacity: 0.35; }
@@ -345,13 +352,20 @@ body.es-horizontal.es-moviendo-divisor { cursor: col-resize; }
   font-weight: 400;
 }
 
-/* Con la columna angosta (horizontal) no entra todo en un renglón: las vistas
-   bajan a uno propio, centradas, y «Ahora» queda con abrir o cerrar. */
+/* Las vistas van con su nombre siempre que entre: «X» sola no dice «Acelerar».
+   El renglón entero pide unos 840 px (título, vistas con nombre, deshacer y
+   abrir o cerrar); con menos, las vistas bajan a un renglón propio, centradas,
+   y recién cuando ni ahí entran (496 px) se quedan con la letra y el color,
+   con el nombre en el hover. Se mide la columna y no la ventana: en horizontal
+   la mueve el divisor. */
 .tema-nuevo #vista-vivo .seccion-ahora { container-type: inline-size; }
-@container (max-width: 620px) {
+@container (max-width: 860px) {
   .tema-nuevo .seccion-titulo:has(> #vivo-atajos:not([hidden])) { grid-template-columns: auto minmax(0, 1fr); row-gap: var(--sp-2); }
   .tema-nuevo .atajos-centro { grid-column: 1 / -1; grid-row: 2; }
   .tema-nuevo .atajos-derecha { grid-column: 2; }
+}
+@container (max-width: 520px) {
+  .tema-nuevo .atajo-vistas .atajo span { display: none; }
 }
 
 /* La ruta del XML se queda en la barra, chica y a la derecha. */
@@ -365,10 +379,6 @@ body.es-horizontal.es-moviendo-divisor { cursor: col-resize; }
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-
-/* Horizontal: la columna es angosta. Las vistas de los atajos van con su letra
-   y su color —el nombre está en el hover—. */
-.tema-nuevo.es-horizontal .atajo-vistas .atajo span { display: none; }
 
 /* Lo buscado, marcado en el texto: todas las veces, y la que se está mirando más fuerte. */
 .tema-nuevo .transcript .palabra.es-hallada { background: var(--resaltado-suave); color: var(--text-primary); border-radius: 2px; }
