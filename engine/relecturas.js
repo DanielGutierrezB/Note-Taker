@@ -144,6 +144,38 @@ function siguiente(sesion) {
 }
 
 /**
+ * Cuánto puede tardar una pasada del vivo antes de que la relectura le ceda el
+ * paso: el doble de su ciclo, lo mismo que el diario llama «pasada lenta»
+ * (`PASADA_LENTA_MS` en `ciclo-senales.js`, que no se puede pedir desde acá:
+ * ese módulo es el que llama a este).
+ */
+const VIVO_APURADO_MS = 2000;
+
+/**
+ * Si la relectura tiene que esperar al vivo.
+ *
+ * **Mientras se graba, el texto en vivo va primero.** Con la Mac libre una
+ * relectura casi no se nota —medido: la pasada del vivo va de 0,70 s a 0,78 s
+ * con una toma de 47 s releyéndose al lado—, pero con la Mac ocupada las dos
+ * se hunden juntas: el 10/11 esa misma relectura tardó 33 s, el vivo pasó de
+ * 2,5 s a 8 s por pasada y se salteó 14 s de clase, que es el texto que el
+ * editor estaba mirando. Así que si la última pasada ya vino lenta, la cola no
+ * arranca otra lectura; la pasada siguiente vuelve a mirar, y lo que quede se
+ * lee al terminar, con el vivo apagado y la máquina para la relectura sola.
+ */
+function esperaAlVivo(sesion) {
+    if (sesion.terminando || !(sesion.ultimaPasadaMs >= VIVO_APURADO_MS)) return false;
+    const ahora = Date.now();
+    if (ahora - (sesion.esperaAnotadaMs || 0) > 30000) {
+        sesion.esperaAnotadaMs = ahora;
+        registro.anotar('main', 'relectura.espera-al-vivo', {
+            pasadaMs: sesion.ultimaPasadaMs, enCola: sesion.cola.length
+        });
+    }
+    return true;
+}
+
+/**
  * Pone la cola a andar, si no lo está ya.
  *
  * Lo llama el ciclo de señales en cada pasada, que es lo que recoge a las tomas
@@ -152,7 +184,7 @@ function siguiente(sesion) {
  */
 function atender(sesion) {
     if (!sesion || !sesion.viva) return;
-    if (!sesion.rehaciendo && sesion.cola.length) atenderCola(sesion);
+    if (!sesion.rehaciendo && sesion.cola.length && !esperaAlVivo(sesion)) atenderCola(sesion);
 }
 
 async function atenderCola(sesion) {
@@ -169,7 +201,7 @@ async function atenderCola(sesion) {
     let listo;
     sesion.rehaciendo = new Promise(r => { listo = r; });
     try {
-        while (sesion.viva) {
+        while (sesion.viva && !esperaAlVivo(sesion)) {
             const id = siguiente(sesion);
             // Nada que leer todavía: las que quedan esperan su orilla. La cola
             // se suelta y la próxima pasada del ciclo vuelve a mirar.
