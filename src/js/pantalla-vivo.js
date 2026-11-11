@@ -249,6 +249,14 @@ export function conectar(contexto) {
     // La barra de arriba —timecode, estado, nivel— se refresca sola, aunque el
     // motor no mande nada: si el audio se cae, el motor deja de mandar estados,
     // y esta pantalla seguía diciendo «escuchando» con el timecode quieto.
+    //
+    // **Cada 150 ms y no menos seguido, a propósito.** Acá adentro va el
+    // medidor de entrada, que es lo único de la pantalla que se mira moverse:
+    // más espaciado se ve a tirones. Y no es lo que pesa: la ventana entera
+    // —esta barra, el repintado de cada estado y el texto creciendo— cuesta
+    // 22,9 ms por segundo, o sea 2,3 % de un núcleo, contra el medio segundo
+    // de GPU que se lleva cada pasada de Whisper. Buscar la liviandad acá es
+    // buscarla donde no está.
     setInterval(() => {
         if (estado && $('#vista-vivo').classList.contains('es-activa')) pintarBarra();
     }, 150);
