@@ -225,24 +225,37 @@ export function antesDeLaCerrada(estado, toma) {
  * dos, y el gris después del OUT salía con cada palabra repetida.
  *
  * Así que van en orden de confianza —primero las de la relectura, que son las
- * del modelo grande con la frase entera, y el vivo al final— y de cada una entra
- * solo lo que cae fuera del tramo que ya cubre una anterior: desde su primera
- * palabra hasta el final de la última.
+ * del modelo grande con la frase entera, y el vivo al final— y de cada una se
+ * tira solo la palabra que otra de más confianza ya dice en el mismo momento.
+ *
+ * **Palabra por palabra, y no por tramo.** Se probó tirar todo lo que cayera
+ * entre la primera y la última palabra de una fuente anterior, y eso escondía
+ * texto: una relectura que dejó dos palabras sueltas en un tramo —el resto lo
+ * quitó su filtro de silencio— «cubría» el tramo entero y se tragaba lo que el
+ * vivo sí tenía en el medio. Pasó en vivo el 11/11, al correr un IN.
  */
+const MISMA_PALABRA_MS = 350;
+
 function juntarSinRepetir(fuentes) {
-    const cubierto = [];
     const salida = [];
     for (const lista of fuentes) {
-        if (!lista.length) continue;
+        const ya = salida.map(w => w.t).sort((a, b) => a - b);
         for (const w of lista) {
-            if (!cubierto.some(([desde, hasta]) => w.t >= desde && w.t <= hasta)) salida.push(w);
+            if (!cercaDeAlguna(ya, w.t)) salida.push(w);
         }
-        cubierto.push([
-            Math.min(...lista.map(w => w.t)),
-            Math.max(...lista.map(w => (w.hasta != null ? w.hasta : w.t)))
-        ]);
     }
     return salida.sort((a, b) => a.t - b.t);
+}
+
+/** Si en `ts` (ordenados) hay un instante a menos de `MISMA_PALABRA_MS` de `t`. */
+function cercaDeAlguna(ts, t) {
+    let lo = 0;
+    let hi = ts.length;
+    while (lo < hi) {
+        const m = (lo + hi) >> 1;
+        if (ts[m] < t) lo = m + 1; else hi = m;
+    }
+    return (lo < ts.length && ts[lo] - t < MISMA_PALABRA_MS) || (lo > 0 && t - ts[lo - 1] < MISMA_PALABRA_MS);
 }
 
 /**
