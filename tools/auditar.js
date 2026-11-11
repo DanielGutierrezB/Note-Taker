@@ -85,9 +85,15 @@ async function medir(pagina) {
         };
 
         /* ── El contraste real, con la opacidad compuesta ──────────────── */
+        // `rgb()`/`rgba()` van de 0 a 255; `color(srgb …)`, que es como Chrome
+        // devuelve un `color-mix`, de 0 a 1. Leído como el primero, todo el tema
+        // nuevo daba casi negro sobre casi negro: 1:1 en las filas de tomas.
         const aRgb = s => {
-            const m = String(s).match(/[\d.]+/g);
-            return m ? { r: +m[0], g: +m[1], b: +m[2], a: m[3] === undefined ? 1 : +m[3] } : null;
+            const texto = String(s);
+            const m = texto.match(/-?[\d.]+(?:e-?\d+)?/g);
+            if (!m) return null;
+            const escala = /^color\(srgb/.test(texto) ? 255 : 1;
+            return { r: +m[0] * escala, g: +m[1] * escala, b: +m[2] * escala, a: m[3] === undefined ? 1 : +m[3] };
         };
         const mezclar = (frente, fondo) => ({
             r: frente.r * frente.a + fondo.r * (1 - frente.a),
