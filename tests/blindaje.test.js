@@ -83,6 +83,10 @@ module.exports = async function (t) {
     t.test('los atrasos del proceso principal quedan en el diario', () => {
         const main = leer('main.js');
         t.ok(/setInterval\(vigilarElAtraso, 500\)/.test(main));
+        // Con la Mac dormida el reloj no corre: eso no se anota como atraso.
+        const vigia = main.slice(main.indexOf('function vigilarElAtraso() {'), main.indexOf('anotar(\'main.atrasado\''));
+        t.ok(/if \(macDormida\) \{\s*esperadoMs = 0;\s*return;/.test(vigia), 'dormida, no mide y empieza de cero al volver');
+        t.ok(/on\('suspend', \(\) => \{\s*macDormida = true;/.test(main) && /on\('resume', \(\) => \{\s*macDormida = false;/.test(main));
         t.ok(/anotar\('main\.atrasado', \{/.test(main), 'con lo que se había anotado antes');
     });
 

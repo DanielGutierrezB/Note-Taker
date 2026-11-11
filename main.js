@@ -241,7 +241,17 @@ function vigilarElSueno() {
 const ATRASO_QUE_SE_ANOTA_MS = 400;
 let esperadoMs = 0;
 let ultimoAtrasoAnotado = 0;
+/**
+ * Con la Mac dormida el reloj no corre y eso no es un atraso: la noche del
+ * 10/11, con la app abierta, cada vez que la Mac se asomaba dormida esto
+ * anotaba uno —139 en una noche—, que es ruido encima de lo que hay que leer.
+ */
+let macDormida = false;
 function vigilarElAtraso() {
+    if (macDormida) {
+        esperadoMs = 0;
+        return;
+    }
     const ahora = Date.now();
     const atraso = esperadoMs ? ahora - esperadoMs : 0;
     esperadoMs = ahora + 500;
@@ -337,12 +347,14 @@ if (!app.requestSingleInstanceLock()) {
         // dormido no está en el archivo, y seguir en el mismo correría todo lo
         // de después contra la cámara.
         powerMonitor.on('suspend', () => {
+            macDormida = true;
             anotar('mac.se-durmio', { grabando: grabacion.activa() });
             // Lo que la ventana mande entre dormirse y despertar no es de la
             // clase: escrito en el WAV de antes, caería en la hora de antes.
             grabacion.dormir();
         });
         powerMonitor.on('resume', () => {
+            macDormida = false;
             anotar('mac.desperto', { grabando: grabacion.activa() });
             if (grabacion.activa()) grabacion.despertar();
         });
