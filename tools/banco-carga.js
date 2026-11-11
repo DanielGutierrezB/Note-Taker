@@ -237,6 +237,7 @@ async function medir(wav, minutos) {
     residente.apagar();
     fs.rmSync(path.dirname(raw), { recursive: true, force: true });
 
+    const trabajo = pasadas.reduce((n, ms) => n + ms, 0);
     const eventos = registro.todo();
     const relecturas = eventos.filter(e => e.evento === 'relectura.leida');
     const salteado = eventos.filter(e => e.evento === 'senal.salteado').pop();
@@ -252,6 +253,11 @@ async function medir(wav, minutos) {
         },
         vivo: {
             pasadas: pasadas.length,
+            // La parte de la clase que el vivo pasó transcribiendo. Es lo único
+            // de acá que no se ensucia con lo que haga el resto de la Mac: la
+            // GPU la comparten todos, y una medición con otra app encima dice
+            // más de esa app que de esta.
+            ocupado: redondo(trabajo / 10 / segundos),
             // Las que no le preguntaron a Whisper: con más silencio salteado,
             // más de estas y la misma clase.
             sinWhisper: pasadas.filter(ms => ms < PASADA_LIVIANA_MS).length,
@@ -299,6 +305,7 @@ function parte(m, viejo) {
         `, ${contra(m.vivo.sinWhisper, v.vivo && v.vivo.sinWhisper, '')} sin preguntarle a Whisper` +
         `${m.vivo.lentas ? `, ${m.vivo.lentas} lentas` : ''}`);
     console.log(`  cada pasada       ${contarParte(m.vivo.pasadaMs, v.vivo && v.vivo.pasadaMs, ' ms')}`);
+    console.log(`  transcribiendo    ${contra(m.vivo.ocupado, v.vivo && v.vivo.ocupado, ' % de la clase')}`);
     // El peor caso de la demora no dice nada: en un silencio largo la última
     // palabra envejece sin que nada falle. El noveno décimo sí.
     console.log(`  tarda en aparecer mediana ${contra(m.vivo.demoraSec.mediana, v.vivo && v.vivo.demoraSec.mediana, ' s')}` +

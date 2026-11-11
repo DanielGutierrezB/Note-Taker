@@ -107,10 +107,15 @@ function orillaDerecha(toma, tomas) {
  * (`estado.sesiones`). Lo segundo es lo que permite releer la última toma de una
  * clase después de cerrar el audio, en `terminar`.
  */
-function tramo(archivos, desdeMs, hastaMs, liviano, idioma, oyendo) {
+function tramo(archivos, desdeMs, hastaMs, liviano, idioma, oyendo, opciones) {
     const donde = captura.laQueContiene(archivos, desdeMs);
     if (!donde) return Promise.resolve(null);
-    return oir.escuchar({ sesion: donde, desdeMs, hastaMs, liviano, idioma, oyendo });
+    return oir.escuchar({
+        sesion: donde, desdeMs, hastaMs, liviano, idioma, oyendo,
+        // Desde dónde es nuevo lo que trae esta ventana, que es lo que el ciclo
+        // sabe y acá no (`escuchar` lo usa para saltear las pausas).
+        nuevoDesdeMs: (opciones || {}).nuevoDesdeMs
+    });
 }
 
 /**

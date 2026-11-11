@@ -366,10 +366,14 @@ function umbral(s) {
 /**
  * ¿Se habló en algún momento del recorte? Si no, no hace falta ni preguntarle a
  * Whisper: se ahorra la pasada y no hay nada que inventar.
+ *
+ * Con `desdeSec` se pregunta solo por el final: es lo que deja saber si lo que
+ * entró desde la pasada anterior trae voz o es la pausa que sigue
+ * (`escuchar` en `oir.js`).
  */
-function algoSuena(n, corte) {
+function algoSuena(n, corte, desdeSec) {
     if (!n) return true;
-    return arribaMs(n, 0, Infinity, corte == null ? PISO_DB : corte) >= SOSTENIDO_MS;
+    return arribaMs(n, desdeSec || 0, Infinity, corte == null ? PISO_DB : corte) >= SOSTENIDO_MS;
 }
 
 /**

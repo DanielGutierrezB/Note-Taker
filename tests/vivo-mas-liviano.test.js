@@ -15,6 +15,8 @@ const path = require('path');
 
 const captura = require('../engine/captura');
 const grabacion = require('../engine/grabacion');
+const oir = require('../engine/oir');
+const sonido = require('../engine/sonido');
 
 const RAIZ = path.join(__dirname, '..');
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), 'utf8');
@@ -98,6 +100,69 @@ module.exports = function (t) {
         const js = leer('engine', 'captura.js');
         t.ok(/const enLaApp = !p\.conFfmpeg && dur <= RECORTE_EN_LA_APP_MAX_SEC;/.test(js));
         t.ok(/const RECORTE_EN_LA_APP_MAX_SEC = 20;/.test(js));
+    });
+
+    t.group('vivo más liviano · las pausas no se transcriben');
+
+    /** Un nivel como el que mide `sonido.niveles`: `db` por saltos de `hopSec`. */
+    function nivel(tramos) {
+        const db = [];
+        for (const [segundos, valor] of tramos) for (let i = 0; i < segundos * 50; i++) db.push(valor);
+        return { hopSec: 0.02, db };
+    }
+
+    const HABLA = -20;
+    const CALLADO = -90;
+    const CORTE = -60;
+    /** Una ventana de seis segundos que habla hasta `hablaHastaSec` y después calla. */
+    const ventana = hablaHastaSec => nivel([[hablaHastaSec, HABLA], [6 - hablaHastaSec, CALLADO]]);
+    /** La pasada del vivo: seis segundos de ventana, los dos últimos recién traídos. */
+    const pasada = (sesion, nuevoDesdeMs) => ({ liviano: true, sesion, desdeMs: 0, nuevoDesdeMs });
+
+    t.test('una ventana entera muda no se le pregunta a Whisper', () => {
+        t.eq(oir.hayQueOir(pasada({}, 4000), nivel([[6, CALLADO]]), CORTE), false);
+    });
+
+    t.test('con voz en lo que trae de nuevo, se oye', () => {
+        t.eq(oir.hayQueOir(pasada({}, 4000), ventana(6), CORTE), true);
+    });
+
+    t.test('la primera pasada tras callarse se oye igual: es la que confirma lo último dicho', () => {
+        const sesion = {};
+        // Habló hasta el final de la ventana: la pasada siguiente trae silencio.
+        t.eq(oir.hayQueOir(pasada(sesion, 4000), ventana(6), CORTE), true);
+        t.eq(oir.hayQueOir(pasada(sesion, 4000), ventana(4), CORTE), true, 'esta confirma la «Pausa» del final');
+    });
+
+    t.test('y de ahí en más, mientras siga callado, se saltea', () => {
+        const sesion = {};
+        oir.hayQueOir(pasada(sesion, 4000), ventana(6), CORTE);
+        oir.hayQueOir(pasada(sesion, 4000), ventana(4), CORTE);
+        t.eq(oir.hayQueOir(pasada(sesion, 4000), ventana(2), CORTE), false);
+        t.eq(oir.hayQueOir(pasada(sesion, 4000), ventana(1), CORTE), false);
+    });
+
+    t.test('cuando vuelve a hablar, se vuelve a oír', () => {
+        const sesion = {};
+        oir.hayQueOir(pasada(sesion, 4000), ventana(6), CORTE);
+        oir.hayQueOir(pasada(sesion, 4000), ventana(4), CORTE);
+        t.eq(oir.hayQueOir(pasada(sesion, 4000), ventana(2), CORTE), false);
+        t.eq(oir.hayQueOir(pasada(sesion, 4000), nivel([[4, CALLADO], [2, HABLA]]), CORTE), true);
+    });
+
+    t.test('la relectura no se saltea nunca: lee la toma entera', () => {
+        const sesion = {};
+        oir.hayQueOir(pasada(sesion, 4000), ventana(2), CORTE);
+        t.eq(oir.hayQueOir({ liviano: false, sesion, desdeMs: 0 }, ventana(2), CORTE), true);
+    });
+
+    t.test('cada captura lleva su cuenta: otro WAV no hereda el silencio del anterior', () => {
+        const uno = {};
+        const otro = {};
+        oir.hayQueOir(pasada(uno, 4000), ventana(6), CORTE);
+        oir.hayQueOir(pasada(uno, 4000), ventana(4), CORTE);
+        t.eq(oir.hayQueOir(pasada(uno, 4000), ventana(2), CORTE), false);
+        t.eq(oir.hayQueOir(pasada(otro, 4000), ventana(2), CORTE), true, 'el WAV nuevo empieza confirmando');
     });
 
     t.group('vivo más liviano · el idioma y los reintentos');
