@@ -57,26 +57,40 @@ const deLoDicho = tamano('tema.letra', 14, 30, 19);
 const deLasTomas = tamano('tema.letraTomas', 11, 24, 13);
 
 /**
- * Qué parte del ancho se llevan las tomas en horizontal: la mueve el divisor
- * entre las dos columnas (`grabar/divisor-columnas.js`). El CSS le pone además
- * un mínimo a cada columna, así que esto es lo que se pidió y no lo que entra.
+ * Cómo se reparte la pantalla entre lo que se dice y las tomas: lo mueve el
+ * divisor de entre las dos (`grabar/divisor-secciones.js`). En horizontal es
+ * qué parte del ancho se llevan las tomas; en vertical, qué parte del alto se
+ * lleva «Ahora». Cada distribución recuerda la suya, y el CSS le pone además
+ * un mínimo a cada lado: esto es lo que se pidió y no lo que entra.
  */
-const PARTE_TOMAS = { clave: 'tema.parteTomas', min: 0.2, max: 0.75, deFabrica: 0.42 };
+const PARTES = {
+    tomas: { clave: 'tema.parteTomas', variable: '--parte-tomas', min: 0.2, max: 0.75, deFabrica: 0.42 },
+    ahora: { clave: 'tema.parteAhora', variable: '--parte-ahora', min: 0.2, max: 0.8, deFabrica: 0.45 }
+};
 
-export function parteTomas() {
-    const v = Number(pref.leer(PARTE_TOMAS.clave, PARTE_TOMAS.deFabrica));
-    return Number.isFinite(v) && v > 0 ? Math.max(PARTE_TOMAS.min, Math.min(PARTE_TOMAS.max, v)) : PARTE_TOMAS.deFabrica;
+/** La parte que mueve el divisor con la distribución de ahora. */
+export function parteDelDivisor() {
+    return document.body.classList.contains('es-horizontal') ? 'tomas' : 'ahora';
+}
+
+export function parte(cual) {
+    const p = PARTES[cual];
+    const v = Number(pref.leer(p.clave, p.deFabrica));
+    return Number.isFinite(v) && v > 0 ? Math.max(p.min, Math.min(p.max, v)) : p.deFabrica;
 }
 
 /** Mientras se arrastra se pone y nada más; al soltar, además se guarda. */
-export function ponerParteTomas(parte, { guardar } = {}) {
-    const p = Math.max(PARTE_TOMAS.min, Math.min(PARTE_TOMAS.max, parte));
-    document.body.style.setProperty('--parte-tomas', String(p));
-    if (guardar) pref.guardar(PARTE_TOMAS.clave, p);
-    return p;
+export function ponerParte(cual, valor, { guardar } = {}) {
+    const p = PARTES[cual];
+    const v = Math.max(p.min, Math.min(p.max, valor));
+    document.body.style.setProperty(p.variable, String(v));
+    if (guardar) pref.guardar(p.clave, v);
+    return v;
 }
 
-export const PARTE_TOMAS_DE_FABRICA = PARTE_TOMAS.deFabrica;
+export function parteDeFabrica(cual) {
+    return PARTES[cual].deFabrica;
+}
 
 export const letra = deLoDicho.leer;
 export const cambiarLetra = deLoDicho.cambiar;
@@ -98,7 +112,10 @@ export function aplicar() {
     document.body.classList.toggle('es-texto-izquierda', nuevo && d === 'horizontal-izquierda');
     document.body.style.setProperty('--letra-vivo', `${letra()}px`);
     document.body.style.setProperty('--letra-tomas', `${letraTomas()}px`);
-    document.body.style.setProperty('--parte-tomas', String(parteTomas()));
+    for (const cual of Object.keys(PARTES)) document.body.style.setProperty(PARTES[cual].variable, String(parte(cual)));
+    // El divisor está acostado en vertical y parado en horizontal.
+    const divisor = $('#divisor-secciones');
+    if (divisor) divisor.setAttribute('aria-orientation', nuevo && d !== 'vertical' ? 'vertical' : 'horizontal');
     for (const b of document.querySelectorAll('[data-tema]')) b.setAttribute('aria-pressed', String(b.dataset.tema === (nuevo ? 'nuevo' : 'clasico')));
     for (const b of document.querySelectorAll('[data-distribucion]')) b.setAttribute('aria-pressed', String(b.dataset.distribucion === d));
     const distribuciones = $('#distribuciones');

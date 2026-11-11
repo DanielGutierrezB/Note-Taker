@@ -181,9 +181,12 @@
 }
 .buscar-tomas input { min-height: 28px; padding: 4px var(--sp-3); font-size: 12px; }
 
-/* ── Horizontal: las tomas a la izquierda, lo que se dice a la derecha ──── */
-/* El ancho de las tomas lo pone el divisor (`--parte-tomas`, de `tema.js`), con
-   un mínimo para cada columna: así una ventana angosta no rompe ninguna. */
+/* ── Lo que se dice y las tomas, cada uno con su parte ──────────────────
+   Dos partes con su propio scroll y un divisor entre las dos, que mueve la
+   variable de su distribución (`--parte-tomas`, `--parte-ahora`, de
+   `tema.js`). Cada lado tiene su mínimo: una ventana chica no rompe ninguno.
+
+   Horizontal: las tomas a un costado y lo que se dice al otro. */
 .tema-nuevo.es-horizontal #vista-vivo .scroll {
   --col-tomas: clamp(360px, calc(var(--parte-tomas, 0.42) * 100%), calc(100% - 436px));
   display: grid;
@@ -192,58 +195,85 @@
   overflow: hidden;
 }
 
-.tema-nuevo.es-horizontal #vista-vivo .scroll > .seccion {
+.tema-nuevo.es-horizontal #vista-vivo .seccion-tomas { order: 1; }
+.tema-nuevo.es-horizontal #vista-vivo .divisor-secciones { order: 2; }
+.tema-nuevo.es-horizontal #vista-vivo .seccion-ahora { order: 3; }
+
+/* Con el texto a la izquierda: el texto primero, y las tomas al otro lado. */
+.tema-nuevo.es-horizontal.es-texto-izquierda #vista-vivo .scroll { grid-template-columns: minmax(0, 1fr) var(--sp-5) var(--col-tomas); }
+.tema-nuevo.es-horizontal.es-texto-izquierda #vista-vivo .seccion-ahora { order: 1; }
+.tema-nuevo.es-horizontal.es-texto-izquierda #vista-vivo .seccion-tomas { order: 3; }
+
+/* Vertical: «Ahora» arriba y las tomas abajo. Solo con texto en «Ahora»: la
+   tarjeta de una clase grabada que se está mirando es un renglón, y ahí la
+   pantalla sigue siendo una sola lista con su scroll. */
+.tema-nuevo:not(.es-horizontal) #vista-vivo .scroll:has(#ahora [data-texto]) {
+  --fila-ahora: clamp(220px, calc(var(--parte-ahora, 0.45) * 100%), calc(100% - 220px));
+  display: grid;
+  grid-template-rows: var(--fila-ahora) var(--sp-5) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.tema-nuevo:not(.es-horizontal) #vista-vivo .seccion-ahora { order: 1; }
+.tema-nuevo:not(.es-horizontal) #vista-vivo .divisor-secciones { order: 2; }
+.tema-nuevo:not(.es-horizontal) #vista-vivo .seccion-tomas { order: 3; }
+.tema-nuevo:not(.es-horizontal) #vista-vivo .scroll:not(:has(#ahora [data-texto])) > .divisor-secciones { display: none; }
+
+/* Las dos partes, cada una con su scroll. */
+.tema-nuevo.es-horizontal #vista-vivo .scroll > .seccion,
+.tema-nuevo #vista-vivo .scroll:has(#ahora [data-texto]) > .seccion {
   min-height: 0;
   overflow-y: auto;
   margin: 0;
   padding-right: var(--sp-2);
 }
 
-.tema-nuevo.es-horizontal #vista-vivo .seccion-tomas { order: 1; }
-.tema-nuevo.es-horizontal #vista-vivo .divisor-columnas { order: 2; }
-.tema-nuevo.es-horizontal #vista-vivo .seccion-ahora { order: 3; }
+/* «Ahora» se lleva su parte entera: el texto llega hasta el borde, con o sin
+   toma abierta, y tiene su propio scroll. Solo la tarjeta con texto. */
+.tema-nuevo #vista-vivo .seccion-ahora { display: flex; flex-direction: column; }
+.tema-nuevo #ahora { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.tema-nuevo #ahora > .tarjeta:has([data-texto]),
+.tema-nuevo #ahora > .tarjeta:has([data-texto]) > .tarjeta-cuerpo,
+.tema-nuevo #ahora [data-texto] { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.tema-nuevo #ahora [data-texto] > .transcript { flex: 1 1 auto; min-height: 5em; max-height: none; }
 
-/* Con el texto a la izquierda: el texto primero, y las tomas en la columna angosta. */
-.tema-nuevo.es-horizontal.es-texto-izquierda #vista-vivo .scroll { grid-template-columns: minmax(0, 1fr) var(--sp-5) var(--col-tomas); }
-.tema-nuevo.es-horizontal.es-texto-izquierda #vista-vivo .seccion-ahora { order: 1; }
-.tema-nuevo.es-horizontal.es-texto-izquierda #vista-vivo .seccion-tomas { order: 3; }
-.tema-nuevo.es-horizontal .seccion + .seccion { margin-top: 0; }
-
-/* «Ahora» se lleva la columna entera: el texto llega hasta abajo, con o sin
-   toma abierta, y tiene su propio scroll. Solo la tarjeta con texto; la de una
-   clase grabada que se está mirando es un renglón y se queda como está. */
-.tema-nuevo.es-horizontal #vista-vivo .seccion-ahora { display: flex; flex-direction: column; }
-.tema-nuevo.es-horizontal #ahora { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.tema-nuevo.es-horizontal #ahora > .tarjeta:has([data-texto]),
-.tema-nuevo.es-horizontal #ahora > .tarjeta:has([data-texto]) > .tarjeta-cuerpo,
-.tema-nuevo.es-horizontal #ahora [data-texto] { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.tema-nuevo.es-horizontal #ahora [data-texto] > .transcript { flex: 1 1 auto; min-height: 8em; max-height: none; }
-
-/* El divisor: invisible hasta que se le pasa por encima, y se arrastra. */
-.divisor-columnas { display: none; }
-.tema-nuevo.es-horizontal .divisor-columnas {
+/* El divisor: invisible hasta que se le pasa por encima, y se arrastra.
+   Parado entre dos columnas, acostado entre dos filas. */
+.divisor-secciones { display: none; }
+.tema-nuevo .divisor-secciones {
   display: block;
   position: relative;
-  cursor: col-resize;
+  cursor: row-resize;
   touch-action: none;
   outline: none;
 }
-.tema-nuevo.es-horizontal .divisor-columnas::after {
+.tema-nuevo .divisor-secciones::after {
   content: '';
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 2px;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
   border-radius: 1px;
   background: transparent;
   transition: background var(--ease);
 }
-.tema-nuevo.es-horizontal .divisor-columnas:hover::after,
-.tema-nuevo.es-horizontal .divisor-columnas:focus-visible::after,
-.tema-nuevo.es-horizontal .divisor-columnas.es-arrastrando::after { background: var(--accent); }
-body.es-moviendo-divisor { cursor: col-resize; user-select: none; -webkit-user-select: none; }
+.tema-nuevo.es-horizontal .divisor-secciones { cursor: col-resize; }
+.tema-nuevo.es-horizontal .divisor-secciones::after {
+  left: 50%;
+  right: auto;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  height: auto;
+  transform: translateX(-50%);
+}
+.tema-nuevo .divisor-secciones:hover::after,
+.tema-nuevo .divisor-secciones:focus-visible::after,
+.tema-nuevo .divisor-secciones.es-arrastrando::after { background: var(--accent); }
+body.es-moviendo-divisor { cursor: row-resize; user-select: none; -webkit-user-select: none; }
+body.es-horizontal.es-moviendo-divisor { cursor: col-resize; }
 .tema-nuevo.es-horizontal .buscar-tomas kbd,
 .tema-nuevo.es-horizontal #vivo-cuantas { display: none; }
 .tema-nuevo.es-horizontal #lista-vivo .fila-dato.tc { display: none; }

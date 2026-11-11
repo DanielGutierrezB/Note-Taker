@@ -45,7 +45,7 @@ import * as fotos from './fotos.js';
 import * as panelFoto from './panel-foto.js';
 import * as tema from './tema.js';
 import * as buscar from './grabar/buscar-tomas.js';
-import * as divisor from './grabar/divisor-columnas.js';
+import * as divisor from './grabar/divisor-secciones.js';
 
 let app = null;
 let estado = null;
