@@ -1186,6 +1186,25 @@ la alineación contra el sonido, y ESE texto es el del XML. Así el transcript
 del XML nunca se arma pegando pedazos, que es de donde salen las palabras
 cortadas y los tiempos que no cierran.
 
+**Y va por `whisper-cli`, en su propio proceso, aunque el servidor del vivo
+tenga el mismo modelo cargado.** Parece desperdicio —recarga 1,6 GB en cada
+toma y deja dos copias del modelo en memoria— y se probó pasarlo al servidor.
+No sirve, por dos medidas:
+
+- **El servidor atiende de a un pedido.** Con el vivo andando, una relectura de
+  tres minutos lo deja esperando 3,6 s, y eso es justo lo que no puede pasar
+  mientras alguien habla. En su propio proceso compite por la GPU, pero no
+  bloquea a nadie.
+- **Y no dice lo mismo.** El servidor del vivo arranca con sus banderas
+  (`-sns`, entre otras): sobre el mismo audio devolvió 251 palabras contra las
+  261 de `whisper-cli`, y otra puntuación. Que el texto del XML dependa de si
+  la toma se releyó durante la clase o al cerrarla es peor que cualquier
+  segundo que se ahorre.
+
+Lo que sí se gana con el modelo ya cargado, medido sobre una toma de tres
+minutos: 3,8 s contra 5,0 s. Son 1,2 s por toma, y solo se cobrarían al cerrar,
+que es el único momento sin vivo a quien bloquear.
+
 **El solape no es un descuido.** Una señal que caiga justo en el borde entre dos
 pasadas aparece partida en las dos y completa en ninguna; con el solape llega
 entera en la segunda, y los duplicados se descartan donde se sabe qué es una
