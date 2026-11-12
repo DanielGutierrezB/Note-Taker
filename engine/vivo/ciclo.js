@@ -340,6 +340,7 @@ function aplicarSenales(estado, palabras, opciones) {
                 toma.inProvisional = true;
                 toma.unoMs = uno.t;
             }
+            toma.finDelConteoMs = uno.hasta != null ? uno.hasta : uno.t;
             // **Lo que se dijo antes del conteo se queda.** Antes acá se vaciaba
             // el colchón entero, y con él desaparecía de la pantalla todo lo
             // hablado entre la toma anterior y el «3, 2, 1»: ni se veía en el

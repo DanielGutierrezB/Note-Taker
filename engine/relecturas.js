@@ -370,6 +370,16 @@ async function rehacer(sesion, id) {
             }
         }
         delete toma.outProvisional;
+        // Y el IN del conteo se acerca a su primera palabra con la hora de esta
+        // lectura, que la escribe un poco antes que el ciclo: si no, quedaba en
+        // el gris de antes y la toma empezaba sin ella. Una vez, como el OUT:
+        // `moverBorde` borra la marca, y lo frena el OUT de la anterior.
+        const alConteo = comoSeLeyo ? vivo.inTrasElConteo(toma) : null;
+        if (alConteo != null && vivo.moverBorde(toma, 'in', alConteo, sesion.estado.tomas)) {
+            const todas = (toma.antes || []).concat(toma.palabras || [], toma.despues || []);
+            Object.assign(toma, vivo.repartir(todas, toma));
+        }
+        if (comoSeLeyo) delete toma.finDelConteoMs;
 
         // Con qué bordes y con cuánta orilla derecha quedó esta toma. De acá
         // salen las dos decisiones de la segunda pasada: si hace falta, y

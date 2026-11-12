@@ -61,6 +61,7 @@ const FILES = [
     'carga-del-sistema.test.js',
     'salud-del-vivo.test.js',
     'correr-el-in.test.js',
+    'primera-palabra-del-conteo.test.js',
     'uso.test.js',
     'senales-del-texto.test.js',
     'menu-de-palabra.test.js',

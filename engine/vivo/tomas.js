@@ -602,6 +602,7 @@ function moverInAbierta(estado, toma, ms) {
     if (donde === toma.inMs) return false;
     const todas = juntas(estado.sueltas, toma.palabras);
     toma.inMs = donde;
+    delete toma.finDelConteoMs;
     toma.palabras = todas.filter(w => w.t >= donde);
     estado.sueltas = todas.filter(w => w.t < donde);
     // El gris de antes del IN también se corre: una toma reabierta conserva el
@@ -737,6 +738,37 @@ function repartir(palabras, toma) {
  * @param {Array} [tomas] las de la sesión, para saber dónde están las vecinas
  * @returns {boolean} si se pudo mover
  */
+/**
+ * Cuánto antes del IN puede caer la primera palabra detrás del conteo.
+ *
+ * El IN del conteo cae en esa palabra con la hora del ciclo, y el modelo grande
+ * la escribe con la suya: en las clases de octubre, la mitad de las que se
+ * corrieron lo hizo menos de 30 ms y nueve de cada diez menos de medio segundo.
+ * Repartidas por el IN viejo, quedaban en `antes`, y una toma de cada cinco
+ * empezaba sin su primera palabra. Más lejos que esto ya no es la misma palabra
+ * corrida sino algo que el ciclo no oyó, y el IN no se toca.
+ */
+const HOLGURA_DEL_CONTEO_MS = 600;
+
+const comoPalabra = s => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+
+/**
+ * Dónde cae el IN del conteo con las horas de la relectura, o null si no se mueve.
+ *
+ * La primera palabra después del final del «1» que no sea el «1» mismo, si cae
+ * antes del IN y dentro de `HOLGURA_DEL_CONTEO_MS`. Solo para una toma que abrió
+ * un conteo y cuyo IN nadie movió (`finDelConteoMs`).
+ */
+function inTrasElConteo(toma) {
+    if (!toma || toma.finDelConteoMs == null) return null;
+    const cuenta = String(toma.cuenta || '').trim().split(/\s+/);
+    const uno = comoPalabra(cuenta[cuenta.length - 1]);
+    const primera = (toma.antes || []).concat(toma.palabras || [])
+        .find(w => w.t >= toma.finDelConteoMs && comoPalabra(w.texto) !== uno);
+    if (!primera || primera.t >= toma.inMs || toma.inMs - primera.t > HOLGURA_DEL_CONTEO_MS) return null;
+    return primera.t;
+}
+
 function moverBorde(toma, cual, paredMs, tomas) {
     // Finito, no solo distinto de null: un NaN pasaba las dos comparaciones de
     // abajo —las dos dan falso— y terminaba ESCRITO en el borde. Una toma con
@@ -749,6 +781,9 @@ function moverBorde(toma, cual, paredMs, tomas) {
         const donde = piso != null ? Math.max(paredMs, piso) : paredMs;
         if (donde === toma.inMs || (toma.outMs != null && donde >= toma.outMs)) return false;
         toma.inMs = donde;
+        // Un IN puesto a mano ya no es el del conteo, y la relectura no lo
+        // vuelve a acercar a ninguna palabra (`inTrasElConteo`).
+        delete toma.finDelConteoMs;
         return true;
     }
     if (toma.inMs != null && paredMs <= toma.inMs) return false;
@@ -791,5 +826,7 @@ module.exports = {
     DURACION_MINIMA_MS,
     cerrarProvisional,
     repartir,
-    moverBorde
+    moverBorde,
+    HOLGURA_DEL_CONTEO_MS,
+    inTrasElConteo
 };

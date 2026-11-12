@@ -74,6 +74,8 @@ module.exports = {
     repartir: tomas.repartir,
     cerrarProvisional: tomas.cerrarProvisional,
     moverBorde: tomas.moverBorde,
+    HOLGURA_DEL_CONTEO_MS: tomas.HOLGURA_DEL_CONTEO_MS,
+    inTrasElConteo: tomas.inTrasElConteo,
     dividir: tomas.dividir,
     correrNumeros: tomas.correrNumeros,
     tragarSueltas: ediciones.tragarSueltas,
