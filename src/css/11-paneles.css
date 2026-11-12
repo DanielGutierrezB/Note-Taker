@@ -335,25 +335,6 @@
   color: var(--text-primary);
 }
 
-.prproj-hecho {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-  flex: 1;
-  color: var(--text-primary);
-}
-
-/* El gris apagado sobre el verde del aviso queda en 3,9:1; el secundario pasa. */
-.prproj-hecho .v3 {
-  color: var(--text-secondary);
-}
-
-.prproj-avisos {
-  margin: 0;
-  padding-left: var(--sp-4);
-  color: var(--warn);
-}
-
 /* La versión y la actualización, en la cabecera de Ajustes. */
 .aj-version {
   display: flex;
@@ -478,8 +459,71 @@
    derecha cómo queda una clase, que se redibuja con cada cambio. Grande, porque
    con seis capturas la columna de la izquierda es alta y la línea de tiempo
    necesita ancho para leerse. */
+/* Se desplaza el cuerpo y no el panel: el pie, con Generar o con «Mostrar en
+   Finder», queda siempre a la vista. */
 .panel.es-prproj {
   width: min(1360px, 96vw);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel.es-prproj > .panel-cuerpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pp-pie {
+  flex: 0 0 auto;
+  align-items: center;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.pp-pie [hidden] {
+  display: none;
+}
+
+.pp-pie[data-tono='ok'] {
+  background: rgba(62, 216, 144, 0.1);
+}
+
+.pp-pie[data-tono='error'] {
+  background: rgba(255, 138, 138, 0.1);
+}
+
+.pp-resultado {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.pp-pie[data-tono='ok'] .pp-resultado-dice {
+  color: var(--ok);
+}
+
+.pp-pie[data-tono='error'] .pp-resultado-dice {
+  color: var(--error);
+}
+
+.pp-resultado-dice b {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pp-resultado-trae {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.pp-resultado-avisos {
+  margin: 0;
+  padding-left: var(--sp-4);
+  font-size: 12px;
+  color: var(--warn);
 }
 
 .pp-titulos {

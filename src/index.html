@@ -571,7 +571,6 @@
             <span class="ayuda" tabindex="0" id="prproj-pilas-dice">?</span></h3>
           <div class="prproj-vistas" id="prproj-vistas"></div>
         </section>
-        <div id="prproj-resultado"></div>
       </div>
       <section class="pp-bloque pp-mira">
         <h3 class="pp-paso"><span class="pp-num">3</span><span class="pp-paso-titulo">Así queda cada clase en Premiere</span>
@@ -585,11 +584,16 @@
         </div>
       </section>
     </div>
-    <div class="panel-pie">
+    <!-- El pie es también el resultado: al generar se tiñe y dice qué quedó,
+         con «Mostrar en Finder» donde estaba Generar (`pintarPie`). -->
+    <div class="panel-pie pp-pie" id="prproj-pie">
       <span class="pp-destino" id="prproj-destino"></span>
+      <div class="pp-resultado" id="prproj-resultado" hidden></div>
       <span class="crece"></span>
       <button class="btn btn-tenue" type="button" data-cerrar="telon-prproj"
-              title="Cerrar sin generar nada. Lo elegido acá queda guardado en la carpeta.">Cerrar</button>
+              title="Cerrar. Lo elegido acá queda guardado en la carpeta.">Cerrar</button>
+      <button id="btn-prproj-mostrar" class="btn btn-primario" type="button" hidden
+              title="Abrir el Finder con el proyecto recién escrito seleccionado">Mostrar en Finder</button>
       <button id="btn-prproj-generar" class="btn btn-primario" type="button"
               title="Escribir el proyecto en Proyecto/, adentro de la carpeta del curso. Si ya hay uno, el nuevo queda al lado sin pisarlo.">Generar proyecto</button>
     </div>

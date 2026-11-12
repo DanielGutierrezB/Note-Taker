@@ -361,6 +361,9 @@ window.nt = {
     prprojGenerar: async carpeta => ({
         ok: true,
         ruta: `${carpeta}/Proyecto/${String(carpeta).split('/').pop()}.prproj`,
+        clases: 3,
+        tomas: 41,
+        capturas: 2,
         cuenta: ['3 clase(s) en 2 captura(s) y 1 grupo(s), de 412 minutos con 5 de aire entre clases.',
             '3 precortada(s) con 41 toma(s).'],
         avisos: ['clase-2_2026-09-28_14-30-00 quedó sin terminar: entra con lo que tenía guardado.']

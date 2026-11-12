@@ -45,7 +45,7 @@ let pedidoDeLinea = 0;
 export function conectar() {
     $('#btn-prproj-cerrar').innerHTML = icono('cerrar');
     $('#prproj-capturas').addEventListener('click', alClic);
-    $('#prproj-resultado').addEventListener('click', alClic);
+    $('#btn-prproj-mostrar').addEventListener('click', e => window.nt.reveal(e.currentTarget.dataset.ruta));
     const filas = $('#prproj-vistas');
     filas.addEventListener('click', alClic);
     filas.addEventListener('dragstart', alEmpezarArrastre);
@@ -87,13 +87,58 @@ export async function abrir(laCarpeta) {
     $('#prproj-ejemplo').textContent = ejemplo
         ? `${ejemplo.nombre}${ejemplo.segundos ? ` · ${duracion(ejemplo.segundos)}` : ''}`
         : '';
-    $('#prproj-resultado').innerHTML = r.plantilla
-        ? ''
-        : '<div class="aviso" data-tono="error">Falta la plantilla de Premiere que viene con la app: reinstalala.</div>';
-    $('#btn-prproj-generar').disabled = !r.clases || !r.plantilla;
     $('#btn-prproj-generar').textContent = 'Generar proyecto';
     pintar();
+    if (!r.plantilla) pintarPie({ tono: 'error', dice: 'Falta la plantilla de Premiere que viene con la app: reinstalala.' });
+    $('#btn-prproj-generar').disabled = !r.clases || !r.plantilla;
     verPanel('telon-prproj', true);
+}
+
+const cuantas = (n, una, varias) => `${n} ${n === 1 ? una : varias}`;
+
+/**
+ * El pie: adónde se va a guardar y Generar, o lo que salió de generar.
+ *
+ * El resultado ocupa el pie entero y no un recuadro más en la columna de la
+ * izquierda: ahí quedaba debajo de las vistas, y con varias había que bajar
+ * para encontrar «Mostrar en Finder». Cualquier cambio en lo de arriba lo
+ * devuelve a Generar (`pintar`), porque ya no describe lo que se elegiría.
+ */
+function pintarPie(resultado) {
+    const pie = $('#prproj-pie');
+    const caja = $('#prproj-resultado');
+    const mostrar = $('#btn-prproj-mostrar');
+    const hecho = resultado && resultado.tono === 'ok';
+    if (resultado) pie.dataset.tono = resultado.tono;
+    else delete pie.dataset.tono;
+    $('#prproj-destino').hidden = !!resultado;
+    caja.hidden = !resultado;
+    mostrar.hidden = !hecho;
+    $('#btn-prproj-generar').hidden = hecho;
+    if (!resultado) {
+        caja.innerHTML = '';
+        return;
+    }
+    if (!hecho) {
+        caja.innerHTML = `<span class="pp-resultado-dice">${esc(resultado.dice)}</span>`;
+        return;
+    }
+    const r = resultado.r;
+    const nombre = r.ruta.split('/').pop();
+    const trae = [
+        cuantas(r.clases, 'clase', 'clases'),
+        cuantas(r.tomas, 'toma', 'tomas'),
+        cuantas(r.capturas, 'captura', 'capturas')
+    ].join(' · ');
+    // Lo que hay que mirar va aparte de la cuenta: es lo único de acá que pide
+    // hacer algo.
+    const avisos = (r.avisos || []).map(a => `<li>${esc(a)}</li>`).join('');
+    caja.innerHTML = `
+        <span class="pp-resultado-dice" title="${esc(r.ruta)}">Listo: <b>${esc(nombre)}</b></span>
+        <span class="pp-resultado-trae" title="${esc((r.cuenta || []).slice(0, 2).join(' '))}">${trae}</span>
+        ${avisos ? `<ul class="pp-resultado-avisos">${avisos}</ul>` : ''}`;
+    mostrar.dataset.ruta = r.ruta;
+    mostrar.focus();
 }
 
 /** La muestra de la leyenda, con los colores de las primeras vistas y no unos fijos. */
@@ -106,6 +151,7 @@ function pintarMuestra() {
 }
 
 function pintar() {
+    pintarPie(null);
     pintarMuestra();
     const ids = Array.from({ length: config.capturas }, (_, i) => i + 1);
     $('#prproj-capturas').innerHTML = ids.map(id => `
@@ -347,9 +393,6 @@ function alClic(e) {
             pintar();
             break;
         }
-        case 'mostrar':
-            window.nt.reveal(boton.dataset.ruta);
-            break;
     }
 }
 
@@ -463,7 +506,7 @@ async function generar() {
     const boton = $('#btn-prproj-generar');
     boton.disabled = true;
     boton.textContent = 'Generando…';
-    $('#prproj-resultado').innerHTML = '';
+    pintarPie(null);
     let r;
     try {
         r = await window.nt.prprojGenerar(carpeta, config);
@@ -475,21 +518,8 @@ async function generar() {
     boton.textContent = 'Generar proyecto';
     if (r.cancelado) return;
     if (!r.ok) {
-        $('#prproj-resultado').innerHTML = `<div class="aviso" data-tono="error">${esc(r.error)}</div>`;
+        pintarPie({ tono: 'error', dice: r.error });
         return;
     }
-    // Lo que hay que mirar va primero y separado de la cuenta: es lo único de
-    // acá que pide hacer algo.
-    const avisos = (r.avisos || []).map(a => `<li>${esc(a)}</li>`).join('');
-    $('#prproj-resultado').innerHTML = `
-        <div class="aviso" data-tono="ok">
-          <div class="prproj-hecho">
-            <span>Listo: ${esc(r.ruta.split('/').pop())}</span>
-            <span class="v3">${(r.cuenta || []).slice(0, 2).map(esc).join(' ')}</span>
-            ${avisos ? `<ul class="prproj-avisos v3">${avisos}</ul>` : ''}
-          </div>
-          <button class="btn" type="button" data-hace="mostrar" data-ruta="${esc(r.ruta)}"
-                  title="Abrir el Finder con el proyecto recién escrito seleccionado">Mostrar en Finder</button>
-        </div>`;
-    avisar('Proyecto de Premiere listo.', 'ok');
+    pintarPie({ tono: 'ok', r });
 }
