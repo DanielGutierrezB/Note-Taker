@@ -991,6 +991,10 @@ module.exports = async function (t) {
         const p = prproj.Proyecto.leer(destino);
         const revision = p.verificar();
         t.ok(revision.ok, `sin referencias colgando, índices salteados ni GUID repetidos: ${JSON.stringify(revision).slice(0, 300)}`);
+        const internos = (p.texto().match(/<Media ObjectUID="[^"]*"[^>]*>[\s\S]*?<\/Media>/g) || [])
+            .filter(m => /<FilePath>\d+<\/FilePath>/.test(m));
+        t.ok(internos.length > 0, 'trae los medios internos de Premiere');
+        t.ok(internos.every(m => m.includes('<ModificationState')), 'y todos con su ModificationState: sin él, «damaged»');
         const nombre = k => (/<Name>([^<]*)<\/Name>/.exec(p.contenido(k)) || [])[1];
         const secuencias = p.porClase('Sequence').map(nombre);
         for (const s of ['Captura 1', 'Captura 2', 'X2']) t.ok(secuencias.includes(s), s);

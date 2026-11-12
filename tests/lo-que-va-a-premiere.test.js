@@ -24,6 +24,7 @@ const workspace = require('../engine/workspace');
 const paths = require('../engine/paths');
 const prproj = require('../engine/prproj');
 const carpetaPrproj = require('../engine/prproj-carpeta');
+const { neutralizar } = require('../tools/limpiar-plantilla');
 
 const RAIZ = path.join(__dirname, '..');
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), 'utf8');
@@ -131,10 +132,34 @@ module.exports = function (t) {
     });
 
     t.test('la herramienta que la limpia también quita las rutas relativas', () => {
-        const { neutralizar } = require('../tools/limpiar-plantilla');
-        const r = neutralizar('<Media>\n\t\t<RelativePath>../../CUR/curso-x/Clase 1/grabacion-clase-1.wav</RelativePath>'
-            + '\n\t\t<FilePath>/Users/x/CUR/curso-x/grabacion-clase-1.wav</FilePath>\n</Media>');
+        const r = neutralizar('<Media ObjectUID="a" Version="30">\n\t\t<RelativePath>../../CUR/curso-x/Clase 1/grabacion-clase-1.wav</RelativePath>'
+            + '\n\t\t<FilePath>/Users/x/CUR/curso-x/grabacion-clase-1.wav</FilePath>\n\t</Media>');
         t.ok(!/RelativePath|curso-x/.test(r.texto), r.texto);
+    });
+
+    // La 1.0.0 salió con la plantilla limpiada sin esta distinción, y todo
+    // proyecto que armaba Premiere lo daba por dañado.
+    const MEDIO_INTERNO = '<Media ObjectUID="s" Version="30">\n\t\t<DataStream ObjectRef="1"/>'
+        + '\n\t\t<ModificationState Encoding="base64" BinaryHash="h">DyKV==\n\t\t</ModificationState>'
+        + '\n\t\t<FilePath>1398035014</FilePath>\n\t\t<Title>SyntheticTranscript</Title>\n\t</Media>';
+
+    t.test('la herramienta le quita las huellas al medio de un archivo, no al interno de Premiere', () => {
+        const deArchivo = '<Media ObjectUID="a" Version="30">'
+            + '\n\t\t<ModificationState Encoding="base64" BinaryHash="h">QUJD\n\t\t</ModificationState>'
+            + '\n\t\t<FilePath>/Users/x/clase.wav</FilePath>\n\t</Media>';
+        const r = neutralizar(`${deArchivo}\n\t${MEDIO_INTERNO}`);
+        const [archivo, interno] = r.texto.split('\n\t<Media');
+        t.ok(!archivo.includes('ModificationState'), archivo);
+        t.ok(interno.includes('<ModificationState'), interno);
+    });
+
+    t.test('la plantilla guarda el ModificationState de cada medio interno', () => {
+        const texto = prproj.Proyecto.leer(path.join(RAIZ, 'plantillas', paths.PLANTILLA_PRPROJ)).texto();
+        const internos = (texto.match(/<Media ObjectUID="[^"]*"[^>]*>[\s\S]*?<\/Media>/g) || [])
+            .filter(m => /<FilePath>\d+<\/FilePath>/.test(m));
+        t.ok(internos.length > 0, 'los tiene');
+        const sin = internos.filter(m => !m.includes('<ModificationState'));
+        t.eq(sin.length, 0, sin.map(m => m.slice(0, 80)).join('\n'));
     });
 
     t.group('premiere · el fps antes de preguntar');

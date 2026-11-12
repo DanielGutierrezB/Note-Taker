@@ -127,19 +127,31 @@ function neutralizar(texto) {
     for (const [viejo, nuevo] of deRuta.concat(nombres)) salida = salida.split(viejo).join(nuevo);
     // El proyecto se llama como el archivo del que salió, y eso también se ve.
     salida = salida.replace(/<Name>[^<]*\.prproj<\/Name>/g, '<Name>Plantilla.prproj</Name>');
-    // Y lo que no es una ruta absoluta pero dice de dónde salió: la ruta
-    // RELATIVA de cada medio —«../../CUR/<el curso>/Clase 11…»— y las huellas
-    // que Premiere guarda del archivo, en base64. Son las mismas que el
-    // generador quita de cada medio que importa (`importarMedio`), pero acá
-    // sobre el archivo entero: por eso sin `[\s\S]`, que cruzaba de un objeto
-    // al de al lado y dejaba referencias colgando.
     const antesDeHuellas = salida.length;
-    salida = salida
+    salida = salida.replace(MEDIO, medio => (DE_ARCHIVO.test(medio) ? sinHuellas(medio) : medio));
+    return { texto: salida, rutas: rutas.length, huellas: antesDeHuellas !== salida.length };
+}
+
+/** Un objeto `Media` entero: adentro no hay otro, solo referencias que se cierran solas. */
+const MEDIO = /<Media ObjectUID="[^"]*"[^>]*>[\s\S]*?<\/Media>/g;
+/** El que apunta a un archivo. Los internos de Premiere dicen un número («SyntheticTranscript»). */
+const DE_ARCHIVO = /<FilePath>\//;
+
+/**
+ * Lo que no es una ruta absoluta pero dice de dónde salió un archivo: la ruta
+ * RELATIVA —«../../CUR/<el curso>/Clase 11…»— y las huellas que Premiere
+ * guarda de él, en base64. Son las mismas que el generador quita de cada medio
+ * que importa (`importarMedio`).
+ *
+ * Solo de los medios con archivo: el `ModificationState` de un medio interno
+ * no dice nada del curso, y sin él Premiere da el proyecto por dañado.
+ */
+function sinHuellas(medio) {
+    return medio
         .replace(/\n\t*<RelativePath>[^<]*<\/RelativePath>/g, '')
         .replace(/\n\t*<ModificationState\b[^>]*>[^<]*<\/ModificationState>/g, '')
         .replace(/\n\t*<ContentAndMetadataState\b[^>]*>[^<]*<\/ContentAndMetadataState>/g, '')
         .replace(/\n\t*<CCFileModTime>[^<]*<\/CCFileModTime>/g, '');
-    return { texto: salida, rutas: rutas.length, huellas: antesDeHuellas !== salida.length };
 }
 
 function main() {
