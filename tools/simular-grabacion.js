@@ -5,6 +5,12 @@
  *   node tools/simular-grabacion.js --wav=<audio.wav> [--minutos=8] [--detalle]
  *   node tools/simular-grabacion.js --wav=… --contra=<xml de referencia>
  *
+ * Las frases de señal salen de los Ajustes de esta Mac, como en la app y como
+ * en `banco-carga.js`: con las de fábrica, una clase de alguien que apagó el
+ * conteo y abre con «retomamos» no da las mismas tomas, y entonces comparar
+ * contra el XML de ese día no dice nada. Con `--de-fabrica` se usan las que
+ * trae la app.
+ *
  * Es la única forma de probar esto sin un Zoom abierto y sin ponerse a contar
  * "3, 2, 1" delante del micrófono. Lee el audio de una clase de verdad, se lo
  * mete al motor pedazo por pedazo como si estuviera entrando ahora, y con
@@ -29,15 +35,26 @@ const os = require('os');
 const { spawnSync } = require('child_process');
 
 const paths = require('../engine/paths');
+const ajustes = require('../engine/ajustes');
 const grabacion = require('../engine/grabacion');
 const ciclo = require('../engine/ciclo-senales');
 const residente = require('../engine/oido-residente');
+const registro = require('../engine/registro');
 const rodecaster = require('./rodecaster-xml');
 const { arg, horaDelDia: hhmmss, mmss } = require('./lib/cli');
 
 /** El mismo tamaño de pedazo que manda el capturador de la ventana. */
 const MUESTRAS_POR_PEDAZO = 4096;
 const TASA = 48000;
+
+/**
+ * Una pasada que no llega a esto no le preguntó a Whisper: era silencio.
+ *
+ * El mismo corte que usa `banco-carga.js`, y acá sirve para lo que no se puede
+ * contar de otra manera: la pasada que se saltea no anota nada en el diario
+ * —no pasó nada—, así que lo único que la delata es que no tardó.
+ */
+const PASADA_LIVIANA_MS = 100;
 
 /** El WAV, pasado a 16 bits mono a la tasa que declara la captura. */
 function aPcm(wav, segundos) {
@@ -64,6 +81,37 @@ function aPcm(wav, segundos) {
  */
 function comoLaVentana(trozo) {
     return new Int16Array(trozo.buffer.slice(trozo.byteOffset, trozo.byteOffset + trozo.byteLength));
+}
+
+/** Cuánto tardó algo, en milisegundos. */
+async function cuantoTarda(hacer) {
+    const desde = Date.now();
+    await hacer();
+    return Date.now() - desde;
+}
+
+/**
+ * Lo que costó el vivo, que es lo que se compara entre dos corridas.
+ *
+ * Las pasadas se cuentan además de mirar el reloj de punta a punta porque el
+ * reloj se lleva también la conversión del audio y la relectura del final, y
+ * esas dos no cambian cuando cambia el vivo.
+ */
+function loQueCosto(pasadas, audioSec) {
+    const ordenadas = pasadas.slice().sort((a, b) => a - b);
+    const cuantil = p => ordenadas[Math.min(ordenadas.length - 1, Math.floor(ordenadas.length * p))] || 0;
+    const livianas = pasadas.filter(ms => ms < PASADA_LIVIANA_MS).length;
+    const transcribiendoSec = pasadas.reduce((a, b) => a + b, 0) / 1000;
+    const salteado = registro.todo().filter(l => l.evento === 'senal.salteado').pop();
+
+    console.log(`\nLo que costó el vivo (${pasadas.length} pasadas):`);
+    console.log(`  ${pasadas.length - livianas} le preguntaron a Whisper, ${livianas} no: era silencio`);
+    console.log(`  mediana ${cuantil(0.5)} ms · p95 ${cuantil(0.95)} ms · la peor ${ordenadas[ordenadas.length - 1] || 0} ms`);
+    console.log(`  ${Math.round(transcribiendoSec)}s transcribiendo para ${mmss(audioSec)} de clase`
+        + ` (${(100 * transcribiendoSec / audioSec).toFixed(0)} %)`);
+    console.log(`  audio que no oyó nadie: ${salteado ? `${salteado.datos.enTotalSec}s` : '0s'}`);
+    const alChico = registro.todo().filter(l => l.evento === 'vivo.con-el-chico').length;
+    if (alChico) console.log(`  la Mac no dio abasto ${alChico} vez/veces: el vivo pasó al modelo chico`);
 }
 
 /**
@@ -134,6 +182,7 @@ async function main() {
     const detalle = process.argv.includes('--detalle');
 
     console.log(`Audio:   ${wav}`);
+    console.log(`Frases:  ${process.argv.includes('--de-fabrica') ? 'las de fábrica' : 'las de los Ajustes de esta Mac'}`);
     console.log(`Minutos: ${minutos}`);
     console.log(`Cuadros: ${fps}`);
     console.log(`Salida:  ${dir}\n`);
@@ -153,6 +202,7 @@ async function main() {
         sampleRate: TASA,
         canales: 1,
         sinReloj: true,
+        frases: process.argv.includes('--de-fabrica') ? null : (ajustes.leer() || {}).frases || null,
         avisar: aviso => {
             if (aviso.oyendo !== undefined) {
                 // Con `--detalle` se ve qué oyó cada pasada del ciclo de señales.
@@ -185,12 +235,13 @@ async function main() {
     }
     let pedazos = 0;
     const arranque = Date.now();
+    const pasadas = [];
 
     for (let off = 0; off < pcm.byteLength; off += bytesPorPedazo) {
         grabacion.pcm(comoLaVentana(pcm.subarray(off, Math.min(off + bytesPorPedazo, pcm.byteLength))));
         pedazos++;
         if (pedazos % pedazosPorCiclo === 0) {
-            await grabacion.buscarSenales();
+            pasadas.push(await cuantoTarda(() => grabacion.buscarSenales()));
             const hecho = off / pcm.byteLength;
             const ahora = grabacion.resumen();
             if (!detalle) process.stdout.write(
@@ -198,7 +249,7 @@ async function main() {
                 `${ahora.tomas.length} tomas · ${Math.round((Date.now() - arranque) / 1000)}s de reloj   `);
         }
     }
-    await grabacion.buscarSenales();
+    pasadas.push(await cuantoTarda(() => grabacion.buscarSenales()));
     process.stdout.write('\n\n');
 
     // Como en vivo: cierra la toma abierta y la relee con el modelo grande antes
@@ -209,6 +260,8 @@ async function main() {
     console.log('Lo que pasó:');
     for (const ev of eventos) console.log(`  ${ev}`);
     if (!eventos.length) console.log('  (nada: ni una señal)');
+
+    loQueCosto(pasadas, totalMuestras / TASA);
 
     console.log(`\nTomas (${final.tomas.length}):`);
     for (const t of final.tomas) {
