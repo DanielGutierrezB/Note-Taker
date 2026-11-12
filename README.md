@@ -1186,6 +1186,23 @@ que alivia la Mac pero mueve las tomas o pierde texto no sirve, y así se ve.
 Todo medido con el banco en un M3 Max, sobre clases de verdad. Queda escrito
 para no volver a probarlo a ciegas:
 
+- **Saltear la pasada cuando lo NUEVO de la ventana es silencio.** Dos pasadas
+  seguidas comparten casi toda su ventana, así que cuando el profesor se calla
+  las siguientes vuelven a transcribir lo mismo de antes hasta que el silencio
+  llena los seis segundos. Saltearlas parecía gratis, y llegó a entrar. Medido
+  después sobre cinco clases del curso de NemoClaw (88 minutos, las dos
+  versiones una atrás de la otra): **un 5 % menos de trabajo** —en la clase 12,
+  700 pasadas con Whisper contra 722— y en cuatro de las cinco clases el mismo
+  texto y las mismas tomas. En la quinta **se perdió una toma**: la de 21:58,
+  que está en el XML de ese día y que la versión anterior abre. Y lo que lo
+  cierra: concediendo dos pasadas de confirmación en vez de una, la toma vuelve
+  y el ahorro desaparece entero —las mismas 722 pasadas de antes del cambio—.
+  O sea que lo único que ahorraba era no confirmar lo último que se dijo antes
+  de callarse, que es justo donde viven la «Pausa» y el «3, 2, 1». Aparte, y
+  conviene saberlo: el vivo es sensible a la alineación de las ventanas. A la
+  1.0.3, corriéndole el audio de esa clase medio segundo, se le pierde esa
+  misma toma y además otra. No salva al salteo, pero evita atribuirle a un
+  cambio cada toma que baila.
 - **El codificador en el Neural Engine (Core ML).** Es la idea más prometedora
   —el codificador se va al ANE, que está ocioso, y el decodificador se queda en
   la GPU—, y funciona: compilando whisper.cpp con `-DWHISPER_COREML=1` y
@@ -1379,6 +1396,14 @@ compara las tomas que salieron contra un XML escrito a mano. Funciona a toda
 velocidad porque los tiempos no salen de `Date.now()` sino de la posición en el
 audio: seis minutos de clase se pasan en dos minutos de reloj y los timecodes
 que salen son los que habrían salido en vivo.
+
+Las frases de señal salen de los **Ajustes de esta Mac**, como en la app: con
+las de fábrica, una clase de alguien que apagó el conteo y abre con
+«retomamos» no da las mismas tomas, y entonces compararla contra el XML de ese
+día no dice nada. Con `--de-fabrica` se usan las que trae la app. Al final
+también dice lo que costó el vivo —cuántas pasadas hubo, cuántas no le
+preguntaron a Whisper porque era silencio, y qué parte de la clase se pasó
+transcribiendo—, que es lo que se compara entre dos corridas.
 
 Y `node tools/probar-vistas.js` comprueba sobre qué toma caen las vistas de la
 barra en los tres casos —grabando, con una fila desplegada y entre dos tomas—,

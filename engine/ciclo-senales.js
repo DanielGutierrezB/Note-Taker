@@ -151,8 +151,7 @@ function mirarSiDaAbasto(s) {
 /** Un tramo de esta sesión, transcripto (`oir-toma.js` no sabe de sesiones). */
 function oirTramo(desdeMs, hastaMs, liviano, s) {
     return oirToma.tramo(espejo.archivosDeLaSesion(s), desdeMs, hastaMs, liviano,
-        s.estado.idioma, s.estado.idiomaOido,
-        { nuevoDesdeMs: s.escuchadoHastaMs, apurado: Boolean(s.apurado) });
+        s.estado.idioma, s.estado.idiomaOido, { apurado: Boolean(s.apurado) });
 }
 
 /**

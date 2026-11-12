@@ -43,13 +43,6 @@ module.exports = function (t) {
         t.eq(sonido.algoSuena(n), true);
     });
 
-    t.test('y se puede preguntar solo por el final, que es lo que trae de nuevo una pasada', () => {
-        // Habla los dos primeros segundos y después se calla.
-        const n = sonido.niveles(wav([[2, 0.2], [4, 0]]));
-        t.eq(sonido.algoSuena(n), true, 'la ventana entera sí suena');
-        t.eq(sonido.algoSuena(n, null, 2), false, 'y de los dos segundos en adelante, no');
-    });
-
     t.test('«Gracias.» sobre el silencio se va, lo dicho se queda', () => {
         // 0-3 s silencio, 3-5 s voz.
         const n = sonido.niveles(wav([[3, 0], [2, 0.2]]));

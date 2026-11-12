@@ -76,45 +76,6 @@ function pisoDe(sesion) {
 }
 
 /**
- * Si en la pasada anterior sonó algo en lo que traía de nuevo. Por captura, que
- * es lo que dura lo que dura el WAV; de fábrica sí, para no saltear la primera.
- */
-const sonoLoNuevo = new WeakMap();
-
-/**
- * ¿Hay que preguntarle a Whisper por esta ventana?
- *
- * Con la ventana entera muda, no: lo único que puede devolver es lo que inventa
- * sobre el silencio (`sonido.js`).
- *
- * **Y con lo NUEVO mudo, tampoco, pero recién a la segunda.** Dos pasadas
- * seguidas comparten casi toda su ventana, así que cuando el profesor deja de
- * hablar las siguientes vuelven a transcribir lo mismo de antes hasta que el
- * silencio llena los seis segundos: en una clase con pausas eso es media
- * docena de pasadas por pausa, cada una medio segundo de GPU, para no traer
- * una palabra nueva.
- *
- * La que NO se puede saltear es la primera de esas, y es por `firmeHastaMs`: a
- * la última palabra de cada ventana no se le cree hasta que la pasada siguiente
- * la oiga entera, así que saltear enseguida dejaba sin confirmar lo último que
- * se dijo justo antes de callarse — que es, entre otras, la «Pausa» que cierra
- * la toma. Por eso se mira si lo nuevo sonó en la pasada ANTERIOR: si sonó,
- * esta pasada es la que confirma y corre igual; si tampoco sonó, ya no queda
- * nada pendiente y se saltea.
- *
- * Solo en el vivo. La relectura lee la toma entera y no se saltea nunca.
- */
-function hayQueOir(p, nivel, corte) {
-    if (!sonido.algoSuena(nivel, corte)) return false;
-    if (!p.liviano || p.nuevoDesdeMs == null) return true;
-    const desdeSec = Math.max(0, (p.nuevoDesdeMs - p.desdeMs) / 1000);
-    const suena = sonido.algoSuena(nivel, corte, desdeSec);
-    const confirmaba = sonoLoNuevo.get(p.sesion) !== false;
-    sonoLoNuevo.set(p.sesion, suena);
-    return suena || confirmaba;
-}
-
-/**
  * Cada cuánto se mide el idioma en el vivo, con uno pedido.
  *
  * Medirlo vuelve a pasar la ventana por el codificador: medido con
@@ -206,17 +167,23 @@ async function escuchar(params) {
         // siempre en silencio dejaría a la toma marcada como degradada mintiendo.
         if (!p.liviano && p.modelo && p.modelo.path) opciones.model = p.modelo;
 
-        // Lo que no se habló no se le pasa a Whisper (ver `hayQueOir`). «Nada»
-        // es contra el ruido de ESTA sala, que se aprende de las pasadas del
-        // ciclo —cortas y seguidas, casi siempre con algún silencio adentro— y
-        // no de la relectura de una toma, que es habla de punta a punta.
+        // Un recorte donde no suena nada no se le pasa a Whisper: lo único que
+        // puede devolver es lo que inventa sobre el silencio (`sonido.js`).
+        // «Nada» es contra el ruido de ESTA sala, que se aprende de las pasadas
+        // del ciclo —cortas y seguidas, casi siempre con algún silencio adentro—
+        // y no de la relectura de una toma, que es habla de punta a punta.
         const nivel = sonido.niveles(recortado.archivo);
         const piso = pisoDe(p.sesion);
         if (p.liviano) sonido.aprender(piso, nivel);
         const corte = sonido.umbral(piso);
         // Sobre un silencio no se detecta nada: `oido` va en null para que el
         // rótulo no cambie de idioma con el ruido de la sala.
-        if (!hayQueOir(p, nivel, corte)) return { palabras: [], colapsadas: 0, mudas: 0, oido: null };
+        // Mirar solo lo NUEVO de la ventana —y saltear la pasada cuando lo
+        // nuevo es la pausa que sigue a la frase— se probó y se sacó: el
+        // ahorro salía justo de las pasadas que confirman lo último que se
+        // dijo, y con eso se perdió una toma de una clase de verdad (README,
+        // «Lo que se probó para aliviar la Mac y no entró»).
+        if (!sonido.algoSuena(nivel, corte)) return { palabras: [], colapsadas: 0, mudas: 0, oido: null };
 
         // Con tope: un whisper-cli colgado dejaba el ciclo esperando para
         // siempre —ni una señal más en toda la clase— y a «Terminar» también.
@@ -299,6 +266,5 @@ async function escuchar(params) {
 module.exports = {
     MEDIR_IDIOMA_CADA_MS,
     aHoraDelDia,
-    hayQueOir,
     escuchar
 };
