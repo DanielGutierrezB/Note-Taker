@@ -330,6 +330,36 @@ export function bordesQuePuede(texto, w) {
 const PASO_DE_SCROLL = 14;
 
 /**
+ * Que la línea recién agarrada siga donde la vio la mano.
+ *
+ * En Compacto, al agarrarla aparece lo gris de los costados y el texto se
+ * reacomoda: sin esto la palabra bajo el puntero ya era otra y el primer
+ * movimiento mandaba el borde lejos. Fuera de Compacto no hace falta —lo único
+ * que cambia es la pastilla, que se vuelve una rayita— y no se toca. Lo vertical
+ * se corrige desplazando lo que tenga scroll, para que el renglón quede a la
+ * misma altura; lo que no se puede corregir así queda como desfase entre el
+ * puntero y la línea, y el arrastre lo suma (`mover`).
+ *
+ * @returns {{x:number, y:number}} cuánto sumarle al puntero
+ */
+function seguirALaLinea(texto, b, agarre) {
+    const medio = r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+    const antes = medio(agarre);
+    const dy = medio(b.getBoundingClientRect()).y - antes.y;
+    if (Math.abs(dy) > 1) {
+        for (let n = texto; n; n = n.parentElement) {
+            const desborda = n.scrollHeight > n.clientHeight + 1;
+            if (desborda && /auto|scroll/.test(getComputedStyle(n).overflowY)) {
+                n.scrollTop += dy;
+                break;
+            }
+        }
+    }
+    const ahora = medio(b.getBoundingClientRect());
+    return { x: ahora.x - antes.x, y: ahora.y - antes.y };
+}
+
+/**
  * Arrastrar una línea hasta el hueco entre dos palabras.
  *
  * **Los eventos se escuchan en la ventana y no en la línea**: mover la línea
@@ -348,28 +378,37 @@ function empezar(texto, b, alSoltar) {
     const desde = previa ? previa.dataset.t : null;
     const origen = { padre: b.parentNode, siguiente: b.nextSibling };
     agarrado = texto;
+    const agarre = b.getBoundingClientRect();
+    const habiaEscondido = [...texto.querySelectorAll('.palabra.es-orilla')].some(w => !w.getClientRects().length);
     b.classList.add('es-arrastrando');
+    // Con `es-moviendo` vuelve lo gris que esconde Compacto: el borde se mueve
+    // sobre el texto entero, que es donde se elige dónde cortar.
     texto.classList.add('es-moviendo');
+    const desfase = habiaEscondido ? seguirALaLinea(texto, b, agarre) : { x: 0, y: 0 };
 
     const mover = e => {
         if (!(e.buttons & 1)) { cancelar(); return; }
+        // Donde estaría el puntero si el texto no se hubiera reacomodado al
+        // agarrar: la mano se mide desde la línea, no desde la pantalla.
+        const x = e.clientX + desfase.x;
+        const y = e.clientY + desfase.y;
         // Llevado más allá del borde de arriba o de abajo del texto, se
         // desplaza: si no, solo se podía soltar en lo que ya estaba a la vista.
         // Afuera y no «cerca»: en un campo de tres renglones, una zona adentro
         // del borde tapaba el renglón entero y el texto se movía debajo del
         // cursor justo al ir a soltar ahí.
         const caja = texto.getBoundingClientRect();
-        if (e.clientY < caja.top) texto.scrollTop -= PASO_DE_SCROLL;
-        else if (e.clientY > caja.bottom) texto.scrollTop += PASO_DE_SCROLL;
+        if (y < caja.top) texto.scrollTop -= PASO_DE_SCROLL;
+        else if (y > caja.bottom) texto.scrollTop += PASO_DE_SCROLL;
 
-        const span = palabraBajo(texto, e.clientX, e.clientY);
+        const span = palabraBajo(texto, x, y);
         if (!span) return;
         const antes = { padre: b.parentNode, siguiente: b.nextSibling };
         // A qué lado de la palabra: por la mitad, como cualquier cursor de
         // texto. Si ya está de ese lado no se toca, que mover el nodo en cada
         // pixel hace saltar el renglón entero.
         const r = span.getBoundingClientRect();
-        if (e.clientX > r.left + r.width / 2) {
+        if (x > r.left + r.width / 2) {
             if (b.previousElementSibling === span) return;
             span.after(b);
         } else {

@@ -4,7 +4,7 @@
  * Mover bordes en cada distribución, con la ventana de verdad y el motor de verdad.
  *
  *   node tools/probar-bordes.js --sidecar=<…_notas-en-vivo.json> [--tomas=1,5] [--ver]
- *       [--otras=3] [--relectura-vacia] [--sin-abierta]
+ *       [--otras=3] [--relectura-vacia] [--sin-abierta] [--compacto]
  *
  * La maqueta tiene la ventana entera pero no el motor, y las pruebas tienen el
  * motor pero no la ventana: un gesto que sale mal solo en una distribución —la
@@ -184,21 +184,30 @@ async function arrastrar(pagina, id, cual, pasos) {
         const r = l.getBoundingClientRect();
         return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     }, id, cual);
-    const destino = await pagina.evaluate((id, palabra, t) => {
-        const w = [...document.querySelectorAll(`#lista-vivo [data-texto][data-toma="${id}"] .transcript .palabra`)]
-            .find(p => Number(p.dataset.t) === t);
-        if (!w) return null;
-        const r = w.getBoundingClientRect();
-        return { left: r.left, right: r.right, y: r.top + r.height / 2 };
-    }, id, donde.palabra, donde.t);
-    if (!destino) return null;
-    const x = pasos > 0 ? destino.right - 2 : destino.left + 2;
     await pagina.mouse.move(medido.x, medido.y);
     await pagina.mouse.down();
+    await espera(60);
+    // Como una persona: se apunta mirando lo que hay DESPUÉS de agarrar —en
+    // Compacto aparece lo gris y todo se reacomoda—, y la mano se mueve lo que
+    // separa la línea de la palabra.
+    const ahora = await pagina.evaluate((id, cual, t) => {
+        const texto = document.querySelector(`#lista-vivo [data-texto][data-toma="${id}"] .transcript`);
+        const l = texto.querySelector(`.borde[data-borde="${cual}"]`).getBoundingClientRect();
+        const w = [...texto.querySelectorAll('.palabra')].find(p => Number(p.dataset.t) === t);
+        if (!w) return null;
+        const r = w.getBoundingClientRect();
+        return { linea: { x: l.left + l.width / 2, y: l.top + l.height / 2 }, left: r.left, right: r.right, y: r.top + r.height / 2 };
+    }, id, cual, donde.t);
+    if (!ahora) { await pagina.mouse.up(); return null; }
+    const x = medido.x + ((pasos > 0 ? ahora.right - 2 : ahora.left + 2) - ahora.linea.x);
+    const yDestino = medido.y + (ahora.y - ahora.linea.y);
     for (let k = 1; k <= 12; k++) {
-        await pagina.mouse.move(medido.x + (x - medido.x) * k / 12, medido.y + (destino.y - medido.y) * k / 12);
+        await pagina.mouse.move(medido.x + (x - medido.x) * k / 12, medido.y + (yDestino - medido.y) * k / 12);
         await espera(15);
     }
+    // Lo gris escondido mientras se arrastra: el borde no tendría dónde ir.
+    donde.grisEscondido = await pagina.evaluate(id => [...document.querySelectorAll(
+        `#lista-vivo [data-texto][data-toma="${id}"] .transcript .palabra.es-orilla`)].filter(w => !w.getClientRects().length).length, id);
     await pagina.mouse.up();
     // Y la mano se va, como después de cualquier arrastre: con el puntero
     // sobre la línea el texto no se repinta a propósito (`sobreBorde`).
@@ -283,7 +292,7 @@ async function porElMenu(pagina, id, desde, pasos, borde) {
     return donde;
 }
 
-async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras) {
+async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras, compacto) {
     const { json } = copiaDe(sidecar);
     const avisos = [];
     grabacion.reanudar(json, { sinReloj: true, avisar: a => avisos.push(a) });
@@ -312,7 +321,8 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras) {
     await pagina.evaluateOnNewDocument(d => {
         localStorage.setItem('nt.tema', JSON.stringify(d.tema));
         localStorage.setItem('nt.tema.distribucion', JSON.stringify(d.distribucion));
-    }, d);
+        localStorage.setItem('nt.vivo.compactoTerminadas', JSON.stringify(d.compacto));
+    }, { ...d, compacto });
     await pagina.goto(`${url}?e=sesiones`, { waitUntil: 'networkidle0' });
     await espera(400);
     const puesta = await pagina.evaluate(() => ({
@@ -510,6 +520,7 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras) {
             if (!await desplegar(pagina, id)) { fallos.push(`toma ${id}, ${gesto}: se plegó sola`); break; }
             const donde = await arrastrar(pagina, id, cual, pasos);
             if (!donde) { filas.push({ id, gesto, nota: 'no hay a dónde' }); continue; }
+            if (donde.grisEscondido) fallos.push(`toma ${id}, ${gesto}: ${donde.grisEscondido} palabras grises escondidas durante el arrastre`);
             await mirar(id, gesto, donde);
         }
         await pagina.keyboard.down('Meta');
@@ -630,13 +641,14 @@ async function main() {
     }
     const tomas = String(arg('tomas', '1,5')).split(',').filter(Boolean).map(Number);
     const ver = process.argv.includes('--ver');
+    const compacto = process.argv.includes('--compacto');
     const otras = String(arg('otras', '3')).split(',').filter(Boolean).map(Number);
     const abierta = process.argv.includes('--sin-abierta') ? null : (process.argv.includes('--relectura-vacia') ? 'vacia' : 'llena');
     const { url, bajar } = await maqueta.levantar(5193);
     let rotas = 0;
     try {
         for (const d of DISTRIBUCIONES) {
-            const r = await unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras);
+            const r = await unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras, compacto);
             console.log(`\n${d.nombre}`);
             for (const f of r.filas) {
                 if (f.nota) { console.log(`  toma ${f.id} ${f.gesto}: ${f.nota}`); continue; }

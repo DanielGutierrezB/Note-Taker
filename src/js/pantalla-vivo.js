@@ -101,7 +101,9 @@ let focoPendiente = null;
 const vista = {
     abierta: null,
     elegida: null,
-    compacto: pref.leer('vivo.compacto', false),
+    // Con otro nombre que antes: cambió lo que hace (solo las terminadas), y
+    // el que había quedado prendido sin saberlo arranca apagado.
+    compacto: pref.leer('vivo.compactoTerminadas', false),
     sinDesactivadas: pref.leer('vivo.sinDesactivadas', false),
     // { toma, desdeMs, hastaMs, texto }: el pedazo seleccionado que se está comentando.
     comentando: null,
@@ -184,7 +186,7 @@ export function conectar(contexto) {
 
     $('#btn-compacto').addEventListener('click', () => {
         vista.compacto = !vista.compacto;
-        pref.guardar('vivo.compacto', vista.compacto);
+        pref.guardar('vivo.compactoTerminadas', vista.compacto);
         pintar();
     });
     $('#btn-desactivadas').addEventListener('click', () => {

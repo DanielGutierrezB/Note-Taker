@@ -87,8 +87,11 @@
   color: var(--text-primary);
 }
 
-/* Compacto: fuera lo gris de alrededor de cada toma. El campo de espera no,
-   porque ahí TODO es gris: es lo que se oye sin toma. */
-.es-compacto .transcript:not(.es-inactiva) .es-orilla {
+/* Compacto: fuera lo gris de alrededor de cada toma terminada. La abierta no:
+   ahí lo gris es lo que se acaba de decir. Y mientras se arrastra un borde
+   vuelve entero (`es-moviendo`), porque el borde se mueve sobre ese texto:
+   escondido, correr el IN solo podía achicar la toma, y lo que quedaba afuera
+   desaparecía sin dónde volver a ponerlo. */
+.es-compacto .transcript.es-cerrada:not(.es-moviendo) .es-orilla {
   display: none;
 }

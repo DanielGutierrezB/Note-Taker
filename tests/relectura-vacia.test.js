@@ -77,4 +77,24 @@ module.exports = function (t) {
         t.ok(/const volver = cual => historia\.volver\(cual, nuevo => \{ estado = nuevo; sobreBorde = null; pintar\(\); \}\);/.test(js),
             'y al deshacer o rehacer');
     });
+
+    t.group('compacto · el borde se mueve sobre el texto entero');
+
+    t.test('esconde lo gris solo de las terminadas, y nunca mientras se arrastra', () => {
+        const css = fs.readFileSync(path.join(RAIZ, 'src', 'css', '03-armazon.css'), 'utf8');
+        t.ok(css.includes('.es-compacto .transcript.es-cerrada:not(.es-moviendo) .es-orilla'), 'la regla');
+        t.ok(!/\.es-compacto \.transcript:not\(\.es-inactiva\)/.test(css), 'y no la de antes, que tocaba la abierta');
+    });
+
+    t.test('arranca apagado: la preferencia vieja no se hereda', () => {
+        const js = fs.readFileSync(path.join(RAIZ, 'src', 'js', 'pantalla-vivo.js'), 'utf8');
+        t.ok(/pref\.leer\('vivo\.compactoTerminadas', false\)/.test(js));
+        t.ok(!/'vivo\.compacto'/.test(js));
+    });
+
+    t.test('al agarrar, la línea sigue donde la vio la mano solo si apareció lo escondido', () => {
+        const js = fs.readFileSync(path.join(RAIZ, 'src', 'js', 'grabar', 'texto-toma.js'), 'utf8');
+        t.ok(/const desfase = habiaEscondido \? seguirALaLinea\(texto, b, agarre\) : \{ x: 0, y: 0 \};/.test(js));
+        t.ok(/const span = palabraBajo\(texto, x, y\);/.test(js), 'y el arrastre mide con el desfase');
+    });
 };
