@@ -4,7 +4,7 @@
  * Mover bordes en cada distribución, con la ventana de verdad y el motor de verdad.
  *
  *   node tools/probar-bordes.js --sidecar=<…_notas-en-vivo.json> [--tomas=1,5] [--ver]
- *       [--relectura-vacia] [--sin-abierta]
+ *       [--otras=3] [--relectura-vacia] [--sin-abierta]
  *
  * La maqueta tiene la ventana entera pero no el motor, y las pruebas tienen el
  * motor pero no la ventana: un gesto que sale mal solo en una distribución —la
@@ -207,6 +207,45 @@ async function arrastrar(pagina, id, cual, pasos) {
 }
 
 /**
+ * Agarrar la línea y moverla apenas, como un pulso: `dx`/`dy` en píxeles.
+ * Devuelve cuántas palabras se corrió el borde al soltar (0 si no se movió).
+ */
+async function pulso(pagina, id, cual, dx, dy, donde) {
+    const sel = donde || `#lista-vivo [data-texto][data-toma="${id}"] .transcript`;
+    const antes = await pagina.evaluate((sel, cual) => {
+        const t = document.querySelector(sel);
+        const l = t && t.querySelector(`.borde[data-borde="${cual}"]`);
+        if (!l) return null;
+        l.scrollIntoView({ block: 'center' });
+        return true;
+    }, sel, cual);
+    if (!antes) return null;
+    await espera(150);
+    const r = await pagina.evaluate((sel, cual) => {
+        const t = document.querySelector(sel);
+        const l = t.querySelector(`.borde[data-borde="${cual}"]`);
+        const hijos = [...t.children];
+        const indice = hijos.filter(n => n.classList.contains('palabra') || n === l).indexOf(l);
+        const b = l.getBoundingClientRect();
+        return { x: b.left + b.width / 2, y: b.top + b.height / 2, indice };
+    }, sel, cual);
+    await pagina.mouse.move(r.x, r.y);
+    await pagina.mouse.down();
+    await pagina.mouse.move(r.x + dx / 2, r.y + dy / 2);
+    await espera(30);
+    await pagina.mouse.move(r.x + dx, r.y + dy);
+    await espera(30);
+    const durante = await pagina.evaluate((sel, cual) => {
+        const t = document.querySelector(sel);
+        const l = t.querySelector(`.borde[data-borde="${cual}"]`);
+        return [...t.children].filter(n => n.classList.contains('palabra') || n === l).indexOf(l);
+    }, sel, cual);
+    await pagina.mouse.up();
+    await pagina.mouse.move(5, 5);
+    return durante - r.indice;
+}
+
+/**
  * Clic derecho sobre la palabra que queda a `pasos` de la línea `desde`, y la
  * opción del menú que pone `borde` ahí (o «Dividir»). Devuelve la palabra, o
  * null si el menú no la ofrece.
@@ -244,7 +283,7 @@ async function porElMenu(pagina, id, desde, pasos, borde) {
     return donde;
 }
 
-async function unaDistribucion(url, sidecar, d, tomas, ver, abierta) {
+async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras) {
     const { json } = copiaDe(sidecar);
     const avisos = [];
     grabacion.reanudar(json, { sinReloj: true, avisar: a => avisos.push(a) });
@@ -269,12 +308,23 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta) {
         }
         return JSON.parse(JSON.stringify(r == null ? null : r));
     });
+    // Como las guarda `pref` en chrome.js: en JSON.
     await pagina.evaluateOnNewDocument(d => {
-        localStorage.setItem('nt.tema', d.tema);
-        localStorage.setItem('nt.tema.distribucion', d.distribucion);
+        localStorage.setItem('nt.tema', JSON.stringify(d.tema));
+        localStorage.setItem('nt.tema.distribucion', JSON.stringify(d.distribucion));
     }, d);
     await pagina.goto(`${url}?e=sesiones`, { waitUntil: 'networkidle0' });
     await espera(400);
+    const puesta = await pagina.evaluate(() => ({
+        nuevo: document.body.classList.contains('tema-nuevo'),
+        horizontal: document.body.classList.contains('es-horizontal'),
+        izquierda: document.body.classList.contains('es-texto-izquierda')
+    }));
+    const quiere = { nuevo: d.tema === 'nuevo', horizontal: d.distribucion !== 'vertical' && d.tema === 'nuevo',
+        izquierda: d.distribucion === 'horizontal-izquierda' && d.tema === 'nuevo' };
+    if (JSON.stringify(puesta) !== JSON.stringify(quiere)) {
+        throw new Error(`La distribución no quedó puesta: ${JSON.stringify(puesta)} en vez de ${JSON.stringify(quiere)}`);
+    }
     await pagina.evaluate(() => {
         const nt = window.nt;
         nt.grabarEditar = c => window.__motor('editar', c);
@@ -352,6 +402,62 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta) {
         await pagina.evaluate(estado => window.maqueta.avisar({ tipo: 'estado', estado }),
             JSON.parse(JSON.stringify(grabacion.resumen())));
         await espera(500);
+        // Pulsos sobre el OUT de la abierta: en ella, mover el OUT es CERRAR,
+        // así que un temblor al agarrarlo no puede cerrar la toma.
+        for (const [dx, dy] of [[2, 0], [0, 4], [-3, 0], [-3, 3], [-6, 2], [0, 9], [4, -6]]) {
+            const salto = await pulso(pagina, ultima, 'out', dx, dy, '#ahora [data-texto="abierta"] .transcript');
+            await quieto();
+            await reenviar();
+            await espera(300);
+            const sigue = grabacion._sesion().estado.tomas.find(t => t.id === ultima);
+            const cerrada = sigue && sigue.outMs != null;
+            filas.push({ id: ultima, gesto: `pulso OUT abierta ${dx},${dy}`,
+                nota: salto == null ? 'sin línea' : `la línea se corrió ${salto} palabra(s)${cerrada ? ' y CERRÓ la toma' : ''}` });
+            if (cerrada) {
+                fallos.push(`toma ${ultima} abierta: un pulso de ${dx},${dy} px sobre su OUT la cerró`);
+                break;
+            }
+        }
+        // Y un arrastre de verdad, corto, que se desvía: dos palabras hacia
+        // atrás con la mano bajando o subiendo. Se mide adónde iría a parar la
+        // línea sin soltarla —soltar cierra—, y se cancela con Escape... que no
+        // existe: se cancela volviendo la línea a su sitio antes de soltar.
+        for (const deriva of [0, 8, 16, 24, -12, -24]) {
+            const r = await pagina.evaluate(deriva => {
+                const t = document.querySelector('#ahora [data-texto="abierta"] .transcript');
+                const l = t && t.querySelector('.borde[data-borde="out"]');
+                if (!l) return null;
+                const ps = [...t.querySelectorAll('.palabra')];
+                const w = ps[ps.length - 2];
+                const a = l.getBoundingClientRect();
+                const b = w.getBoundingClientRect();
+                const caja = t.getBoundingClientRect();
+                return { a: { x: a.left + a.width / 2, y: a.top + a.height / 2 }, b: { x: b.left + 2, y: b.top + b.height / 2 + deriva },
+                    total: ps.length, alFondo: Math.round(caja.bottom - (a.top + a.height / 2)) };
+            }, deriva);
+            if (!r) break;
+            await pagina.mouse.move(r.a.x, r.a.y);
+            await pagina.mouse.down();
+            for (let k = 1; k <= 10; k++) { await pagina.mouse.move(r.a.x + (r.b.x - r.a.x) * k / 10, r.a.y + (r.b.y - r.a.y) * k / 10); await espera(20); }
+            const queda = await pagina.evaluate(() => {
+                const t = document.querySelector('#ahora [data-texto="abierta"] .transcript');
+                const l = t.querySelector('.borde[data-borde="out"]');
+                const hijos = [...t.children].filter(n => n.classList.contains('palabra') || n === l);
+                return { antes: hijos.indexOf(l), total: hijos.length - 1 };
+            });
+            // Volver al sitio de partida antes de soltar: no cambia nada.
+            for (let k = 1; k <= 10; k++) { await pagina.mouse.move(r.b.x + (r.a.x - r.b.x) * k / 10, r.b.y + (r.a.y - r.b.y) * k / 10); await espera(20); }
+            await pagina.mouse.move(r.a.x + 30, r.a.y);
+            await pagina.mouse.up();
+            await pagina.mouse.move(5, 5);
+            await espera(300);
+            const fuera = queda.total - queda.antes;
+            filas.push({ id: ultima, gesto: `arrastre −2 palabras, deriva ${deriva}px`,
+                nota: `la línea iba a dejar ${fuera} palabra(s) afuera (la caja termina ${r.alFondo}px debajo de la línea)` });
+            if (deriva > -20 && fuera > 4) fallos.push(`toma ${ultima} abierta: arrastrar 2 palabras con ${deriva}px de deriva dejaba ${fuera} afuera`);
+            const sigue = grabacion._sesion().estado.tomas.find(t => t.id === ultima);
+            if (sigue && sigue.outMs != null) { fallos.push(`toma ${ultima} abierta: el arrastre de prueba la cerró`); break; }
+        }
         const antes = await pagina.evaluate(ahoraSeVe);
         const r = await pagina.evaluate(() => {
             const t = document.querySelector('#ahora [data-texto="abierta"] .transcript');
@@ -386,6 +492,19 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta) {
     for (const id of tomas) {
         if (!await desplegar(pagina, id)) { fallos.push(`toma ${id}: no se pudo desplegar`); continue; }
         await mirar(id, 'desplegada');
+        // Pulsos: la mano que agarra la línea nunca está quieta. Un par de
+        // píxeles no puede llevarse el borde más de una palabra.
+        for (const [cual, dx, dy] of [['out', 2, 0], ['out', 0, 4], ['out', -3, 3], ['out', 6, -5], ['out', 0, 9],
+            ['in', 2, 0], ['in', 0, 6], ['in', -4, 4]]) {
+            if (!await desplegar(pagina, id)) break;
+            const salto = await pulso(pagina, id, cual, dx, dy);
+            await quieto();
+            await reenviar();
+            await espera(250);
+            const gesto = `pulso ${cual.toUpperCase()} ${dx},${dy}`;
+            filas.push({ id, gesto, nota: salto == null ? 'sin línea' : `la línea se corrió ${salto} palabra(s)` });
+            if (salto != null && Math.abs(salto) > 1) fallos.push(`toma ${id}, ${gesto}: la línea saltó ${salto} palabras con un pulso`);
+        }
         for (const [cual, pasos, gesto] of [['out', 3, 'OUT +3'], ['out', -4, 'OUT −4'], ['out', 12, 'OUT +12'],
             ['in', 2, 'IN +2'], ['in', -3, 'IN −3']]) {
             if (!await desplegar(pagina, id)) { fallos.push(`toma ${id}, ${gesto}: se plegó sola`); break; }
@@ -414,6 +533,89 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta) {
         }
     }
 
+    // El resto de lo que se le hace a una toma: la vista, los tres estados, la
+    // nota, la letra y Enter. Ninguno toca el texto, así que después de cada uno
+    // ninguna toma puede tener menos palabras que antes.
+    const cuentas = () => new Map(grabacion._sesion().estado.tomas.map(t => [t.id, (t.palabras || []).length]));
+    const nadiePierde = (antes, gesto, salvo) => {
+        for (const [id, n] of cuentas()) {
+            if (id !== salvo && antes.has(id) && n < antes.get(id)) fallos.push(`${gesto}: la toma ${id} pasó de ${antes.get(id)} a ${n} palabras`);
+        }
+    };
+    const clic = sel => pagina.evaluate(sel => {
+        const b = document.querySelector(sel);
+        if (!b) return false;
+        b.scrollIntoView({ block: 'center' });
+        b.click();
+        return true;
+    }, sel);
+    for (const id of otras) {
+        const gestos = [
+            ['vista', async () => {
+                await desplegar(pagina, id);
+                const actual = grabacion._sesion().estado.tomas.find(t => t.id === id).vista;
+                return pagina.evaluate((id, actual) => {
+                    const b = [...document.querySelectorAll(`#lista-vivo [data-hace="vista"][data-toma="${id}"]`)]
+                        .find(x => x.dataset.vista !== actual);
+                    if (!b) return false;
+                    b.click();
+                    return b.dataset.vista;
+                }, id, actual);
+            }],
+            ['desactivar', () => desplegar(pagina, id).then(() => clic(`#lista-vivo [data-hace="desactivar"][data-toma="${id}"]`))],
+            ['mantener', () => desplegar(pagina, id).then(() => clic(`#lista-vivo [data-hace="mantener"][data-toma="${id}"]`))],
+            ['descartar', () => desplegar(pagina, id).then(() => clic(`#lista-vivo [data-hace="descartar"][data-toma="${id}"]`))],
+            ['⌘Z del descarte', async () => {
+                await pagina.keyboard.down('Meta'); await pagina.keyboard.press('z'); await pagina.keyboard.up('Meta');
+                return true;
+            }],
+            ['nota', async () => {
+                if (!await desplegar(pagina, id)) return false;
+                const campo = `#lista-vivo [data-campo="nota"][data-toma="${id}"]`;
+                const enfocado = await pagina.evaluate(sel => {
+                    const c = document.querySelector(sel);
+                    if (!c) return false;
+                    c.scrollIntoView({ block: 'center' });
+                    c.focus();
+                    return document.activeElement === c;
+                }, campo);
+                if (!enfocado) return false;
+                await pagina.keyboard.type('nota de prueba');
+                await pagina.keyboard.press('Tab');
+                return true;
+            }],
+            ['letra +', () => clic('[data-hace="letra-mas"]')],
+            ['letra −', () => clic('[data-hace="letra-menos"]')],
+            ['Enter abre', async () => { await pagina.keyboard.press('Enter'); return true; }],
+            ['Enter cierra', async () => { await pagina.keyboard.press('Enter'); return true; }]
+        ];
+        for (const [gesto, hacer] of gestos) {
+            const antes = cuentas();
+            const hecho = await hacer();
+            await quieto();
+            await reenviar();
+            await espera(400);
+            const t = grabacion._sesion().estado.tomas.find(x => x.id === id);
+            const s = grabacion._sesion().estado;
+            const dice = !hecho ? 'no se pudo hacer'
+                : gesto === 'vista' ? `quedó en ${t && t.vista}`
+                    : gesto === 'nota' ? `nota «${t && t.comentario}»`
+                        : gesto.startsWith('Enter') ? `abierta: ${s.tomas.some(x => x.outMs == null) ? 'sí' : 'no'}`
+                            : t ? `${t.descartada ? 'desactivada' : 'activa'}` : 'fuera de la sesión';
+            filas.push({ id, gesto: `acción ${gesto}`, nota: dice });
+            if (!hecho && !gesto.startsWith('letra')) fallos.push(`toma ${id}, ${gesto}: no se pudo hacer`);
+            nadiePierde(antes, `toma ${id}, ${gesto}`, gesto === 'descartar' ? id : null);
+            if (t && gesto !== 'descartar') {
+                const p = await enLaPantalla(pagina, id);
+                const m = enElMotor(id);
+                if (p && m && p.palabras !== m.palabras) fallos.push(`toma ${id}, ${gesto}: la pantalla muestra ${p.palabras} y el motor tiene ${m.palabras}`);
+            }
+        }
+        if (grabacion._sesion().estado.tomas.find(x => x.id === id)?.comentario !== 'nota de prueba') {
+            fallos.push(`toma ${id}: la nota no quedó guardada`);
+        }
+    }
+
     clearInterval(latido);
     await navegador.close();
     grabacion.apagar();
@@ -428,12 +630,13 @@ async function main() {
     }
     const tomas = String(arg('tomas', '1,5')).split(',').filter(Boolean).map(Number);
     const ver = process.argv.includes('--ver');
+    const otras = String(arg('otras', '3')).split(',').filter(Boolean).map(Number);
     const abierta = process.argv.includes('--sin-abierta') ? null : (process.argv.includes('--relectura-vacia') ? 'vacia' : 'llena');
     const { url, bajar } = await maqueta.levantar(5193);
     let rotas = 0;
     try {
         for (const d of DISTRIBUCIONES) {
-            const r = await unaDistribucion(url, sidecar, d, tomas, ver, abierta);
+            const r = await unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras);
             console.log(`\n${d.nombre}`);
             for (const f of r.filas) {
                 if (f.nota) { console.log(`  toma ${f.id} ${f.gesto}: ${f.nota}`); continue; }
