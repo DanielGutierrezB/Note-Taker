@@ -208,6 +208,20 @@ async function leer(archivos, toma, opciones) {
                 });
             }
             const palabras = await rescatarHuecos(oido, { ...pedido, modelo }, toma);
+            // **Una lectura vacía no borra la nota.** Repartida, dejaba la toma
+            // sin una palabra aunque el vivo la tuviera escrita: se ve como que
+            // mover un borde borró el texto. Sale como la que no se pudo leer,
+            // con su marca, y la toma se queda con lo que tenía.
+            const dentro = vivo.repartir(palabras, toma).palabras;
+            if (!dentro.length && (toma.palabras || []).length) {
+                registro.anotar('main', 'relectura.vacia', {
+                    toma: toma && toma.id != null ? toma.id : null,
+                    teniaPalabras: toma.palabras.length,
+                    leidas: palabras.length,
+                    mudas: oido.mudas || 0
+                });
+                return { relectura: insistir.vacia({ bueno: bueno.name }) };
+            }
             return {
                 ...vivo.repartir(palabras, toma),
                 colapsadas: oido.colapsadas || 0,

@@ -389,7 +389,9 @@ async function rehacer(sesion, id) {
         // mitad de lectura, el gesto ya encoló la relectura entera, y dejar la
         // marca puesta la convertiría en una pasada de orilla: la toma se
         // quedaría con el texto del reparto viejo y nadie volvería a leerla.
-        if (comoSeLeyo) {
+        // Sin palabras no hay nada leído que marcar: el próximo borde que se
+        // mueva tiene que volver a pedirle la toma a Whisper.
+        if (comoSeLeyo && leido.palabras) {
             // Acercar el OUT le suma a la orilla lo mismo que le quitó a la toma:
             // el audio leído llega igual de lejos, solo que el borde se corrió.
             const yaTiene = orillaMs + Math.max(0, seLeyoCon.outMs - toma.outMs);

@@ -1217,6 +1217,10 @@ function montarTextos(quedan) {
             enVuelo = { clave, el, hasta: Date.now() + 8000 };
             Promise.resolve(hacer(borde, ms)).finally(() => {
                 if (enVuelo && enVuelo.el === el) enVuelo = null;
+                // Al soltar, el puntero queda sobre la línea, y `sobreBorde`
+                // congelaba justo este texto: la respuesta del motor no se
+                // dibujaba hasta mover el mouse.
+                if (sobreBorde === clave) sobreBorde = null;
                 pintar();
             });
         };
@@ -1782,7 +1786,9 @@ async function pedir(hacer) {
     pintar();
 }
 
-const volver = cual => historia.volver(cual, nuevo => { estado = nuevo; pintar(); });
+// Sin congelar el texto bajo el puntero: ⌘Z justo después de soltar un borde no
+// se veía mientras el mouse siguiera sobre la línea.
+const volver = cual => historia.volver(cual, nuevo => { estado = nuevo; sobreBorde = null; pintar(); });
 
 /**
  * El idioma de la clase, cambiado a mitad (`idiomas.cambiar`, que es el que

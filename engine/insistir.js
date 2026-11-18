@@ -191,7 +191,29 @@ function sinLeer(params) {
     };
 }
 
+/**
+ * La marca de una toma que el modelo grande leyó y no escribió nada.
+ *
+ * Pasa con una voz que entra muy baja —un invitado por la llamada queda debajo
+ * del corte de `sonido.conSonido`— o con un tramo donde Whisper solo inventa.
+ * La toma se queda con el texto del vivo, que es mejor que ninguno: antes la
+ * lectura vacía lo reemplazaba y la nota desaparecía entera.
+ */
+function vacia(params) {
+    const p = params || {};
+    return {
+        estado: 'sin-leer',
+        modelo: null,
+        bueno: p.bueno || null,
+        porque: 'El modelo grande releyó esta toma y no escribió nada: la voz sonaba ' +
+            'muy baja o solo había ruido. Se dejó el texto del vivo. "Regenerar" la ' +
+            'vuelve a leer.',
+        detalle: p.detalle || ''
+    };
+}
+
 module.exports = {
+    vacia,
     CICLO_MS,
     PASADA_MS,
     ESPERA_MS,
