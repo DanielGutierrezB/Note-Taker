@@ -205,6 +205,73 @@ const VENTANA_DE_SUELTAS_SEC = 600;
 const MARGEN_DE_SUELTAS_SEC = 300;
 
 /**
+ * Hasta dónde del borde de una toma se queda lo dicho afuera cuando el colchón
+ * lo recorta.
+ *
+ * El recorte tiraba todo lo de hace más de diez minutos, y con eso el texto de
+ * entre dos tomas viejas: abierta la tarjeta de una para correrle el OUT, solo
+ * quedaba el gris que escribió su relectura —doce segundos— y más allá no había
+ * dónde apoyarlo. Lo que sirve para mover un borde es lo que está cerca de él,
+ * así que eso se queda en la orilla de la toma (`antes`/`despues`), que ya
+ * viaja con ella a la ventana y al sidecar. Cuarenta y cinco segundos son unas
+ * cien palabras por lado: cuatro veces lo que deja la relectura, y nada al lado
+ * del texto de la toma misma.
+ */
+const ORILLA_RESCATADA_SEC = 45;
+
+/**
+ * Lo que el colchón está por tirar, a la orilla de la toma que tenga cerca.
+ *
+ * Una palabra entre dos tomas puede quedar en las dos: la de antes la tiene
+ * detrás de su OUT y la de después delante de su IN, y cada tarjeta necesita la
+ * suya. No se escribe dos veces en la misma orilla: si ya hay una palabra en ese
+ * instante —la relectura escribe el mismo tramo con otras horas— gana la que
+ * estaba (`juntas`, por cercanía). Las desactivadas no cuentan: su tramo es de
+ * nadie.
+ */
+function guardarEnLasOrillas(estado, tiradas) {
+    const vivas = (estado.tomas || []).filter(t => !t.descartada && t.inMs != null);
+    const lejos = ORILLA_RESCATADA_SEC * 1000;
+    for (const w of tiradas) {
+        let previa = null;
+        let siguiente = null;
+        for (const t of vivas) {
+            if (t.outMs != null && t.outMs <= w.t && (!previa || t.outMs > previa.outMs)) previa = t;
+            if (t.inMs > w.t && (!siguiente || t.inMs < siguiente.inMs)) siguiente = t;
+        }
+        if (previa && w.t - previa.outMs <= lejos) previa.despues = conLaPalabra(previa.despues, w);
+        if (siguiente && siguiente.inMs - w.t <= lejos) siguiente.antes = conLaPalabra(siguiente.antes, w);
+    }
+}
+
+/** La orilla con `w` en su lugar, salvo que ya tenga una palabra en ese instante. */
+function conLaPalabra(orilla, w) {
+    const lista = orilla || [];
+    if (lista.some(x => Math.abs(x.t - w.t) < MISMA_PALABRA_EN_ORILLA_MS)) return lista;
+    return lista.concat([w]).sort((a, b) => a.t - b.t);
+}
+
+/** La misma palabra en dos lecturas del mismo tramo cae a menos de esto (ver `juntarSinRepetir` en la ventana). */
+const MISMA_PALABRA_EN_ORILLA_MS = 350;
+
+/**
+ * Las orillas que tenía la toma, fuera de lo que una relectura acaba de leer.
+ *
+ * La relectura escribe `antes` y `despues` con lo que leyó —doce segundos por
+ * lado— y eso pisaba lo que el colchón había dejado más allá
+ * (`guardarEnLasOrillas`): releer una toma vieja borraba el texto de alrededor.
+ * Se queda lo de afuera del tramo leído, que la lectura no vio y no puede
+ * corregir.
+ */
+function conservarOrillas(toma, viejas, tramo) {
+    if (!tramo) return;
+    const antes = (viejas.antes || []).filter(w => w.t < tramo.desdeMs);
+    const despues = (viejas.despues || []).filter(w => w.t >= tramo.hastaMs);
+    if (antes.length) toma.antes = antes.concat(toma.antes || []);
+    if (despues.length) toma.despues = (toma.despues || []).concat(despues);
+}
+
+/**
  * Cuán vieja puede ser la última palabra oída para que cuente como "el
  * profesor está hablando ahora".
  *
@@ -810,6 +877,9 @@ module.exports = {
     RETROCESO_MAX_SEC,
     VENTANA_DE_SUELTAS_SEC,
     MARGEN_DE_SUELTAS_SEC,
+    ORILLA_RESCATADA_SEC,
+    guardarEnLasOrillas,
+    conservarOrillas,
     FRESCURA_MAX_SEC,
     arranqueDeLaTirada,
     abrirToma,

@@ -64,6 +64,7 @@ const FILES = [
     'primera-palabra-del-conteo.test.js',
     'relectura-vacia.test.js',
     'transcript-que-no-se-va.test.js',
+    'orillas-rescatadas.test.js',
     'uso.test.js',
     'senales-del-texto.test.js',
     'menu-de-palabra.test.js',

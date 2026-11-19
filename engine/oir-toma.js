@@ -222,8 +222,13 @@ async function leer(archivos, toma, opciones) {
                 });
                 return { relectura: insistir.vacia({ bueno: bueno.name }) };
             }
+            // Y lo que la toma tenía en sus orillas más allá de lo leído —lo que
+            // el colchón dejó ahí al recortarse— se queda: la lectura no lo vio.
+            const leido = vivo.repartir(palabras, toma);
+            vivo.conservarOrillas(leido, { antes: toma.antes, despues: toma.despues },
+                { desdeMs: pedido.desdeMs, hastaMs: pedido.hastaMs });
             return {
-                ...vivo.repartir(palabras, toma),
+                ...leido,
                 colapsadas: oido.colapsadas || 0,
                 relectura: modelo.name === bueno.name ? null : insistir.degradada({
                     modelo: modelo.name, bueno: bueno.name, detalle: ultimoMotivo

@@ -549,6 +549,9 @@ async function cerrarSesion() {
     // abierta y por lo tanto reanudable; el cierre lo dice.
     try {
         s.estado.terminada = Date.now();
+        // El sidecar guarda solo las últimas sueltas: lo que está cerca de una
+        // toma queda en su orilla, para poder correrle el borde al volver a abrir.
+        vivo.guardarEnLasOrillas(s.estado, s.estado.sueltas || []);
         let final;
         let comprobacion;
         try {

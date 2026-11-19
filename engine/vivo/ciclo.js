@@ -10,7 +10,7 @@ const { norm } = require('../texto');
 const { textoDe, mismaPalabra, MISMA_DEL_CICLO_MS, meterEnOrden } = require('./palabras');
 const { vistaDeLaProxima } = require('./vistas');
 const { reglasDeFrases, MISMA_SENAL_MS, senales } = require('./senales');
-const { tomaAbierta, nuevaToma, VENTANA_DE_SUELTAS_SEC, MARGEN_DE_SUELTAS_SEC, pisoDeLasSueltas, finDeToma } = require('./tomas');
+const { tomaAbierta, nuevaToma, VENTANA_DE_SUELTAS_SEC, MARGEN_DE_SUELTAS_SEC, pisoDeLasSueltas, finDeToma, guardarEnLasOrillas } = require('./tomas');
 
 /**
  * Cuánto después de empezar su última palabra se corta una toma por una frase
@@ -411,6 +411,8 @@ function aplicarSenales(estado, palabras, opciones) {
     const piso = estado.ultimaPalabraMs - VENTANA_DE_SUELTAS_SEC * 1000;
     const tope = piso - MARGEN_DE_SUELTAS_SEC * 1000;
     if (estado.sueltas.length && estado.sueltas[0].t < tope) {
+        // Lo que está cerca del borde de una toma no se tira: pasa a su orilla.
+        guardarEnLasOrillas(estado, estado.sueltas.filter(w => w.t < piso));
         estado.sueltas = estado.sueltas.filter(w => w.t >= piso);
     }
     return eventos;
