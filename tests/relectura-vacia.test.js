@@ -92,9 +92,9 @@ module.exports = function (t) {
         t.ok(!/'vivo\.compacto'/.test(js));
     });
 
-    t.test('al agarrar, la línea sigue donde la vio la mano solo si apareció lo escondido', () => {
+    t.test('al agarrar, la línea sigue donde la vio la mano aunque el texto se reacomode', () => {
         const js = fs.readFileSync(path.join(RAIZ, 'src', 'js', 'grabar', 'texto-toma.js'), 'utf8');
-        t.ok(/const desfase = habiaEscondido \? seguirALaLinea\(texto, b, agarre\) : \{ x: 0, y: 0 \};/.test(js));
+        t.ok(/const desfase = seguirALaLinea\(texto, b, agarre\);/.test(js));
         t.ok(/const span = palabraBajo\(texto, x, y\);/.test(js), 'y el arrastre mide con el desfase');
     });
 };

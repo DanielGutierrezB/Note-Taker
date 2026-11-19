@@ -1228,8 +1228,11 @@ function montarTextos(quedan) {
         };
         const soltar = enviar((borde, ms) => ponerBorde(cual, toma && toma.id, borde, ms));
         if (cual === 'espera') {
+            const atras = alrededor.antesDeLaEspera(estado);
             hueco.append(texto.textoDe({
                 modo: 'inactiva',
+                antes: atras.antes,
+                limite: atras.limite,
                 palabras: sueltasLibres(),
                 vacio: 'Escuchando… lo que se diga va a aparecer acá.'
             }, soltar, previo));

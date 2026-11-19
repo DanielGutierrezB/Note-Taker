@@ -332,10 +332,11 @@ const PASO_DE_SCROLL = 14;
 /**
  * Que la línea recién agarrada siga donde la vio la mano.
  *
- * En Compacto, al agarrarla aparece lo gris de los costados y el texto se
- * reacomoda: sin esto la palabra bajo el puntero ya era otra y el primer
- * movimiento mandaba el borde lejos. Fuera de Compacto no hace falta —lo único
- * que cambia es la pastilla, que se vuelve una rayita— y no se toca. Lo vertical
+ * Al agarrarla el texto se reacomoda: la pastilla se vuelve una rayita y, en
+ * Compacto, aparece lo gris de los costados. Con la pastilla al final de un
+ * renglón, lo de después sube al renglón de ella, y bajo el puntero quedaba
+ * otro renglón: un temblor de dos píxeles mandaba el borde treinta palabras
+ * más allá (medido en la distribución vertical, con renglones largos). Lo vertical
  * se corrige desplazando lo que tenga scroll, para que el renglón quede a la
  * misma altura; lo que no se puede corregir así queda como desfase entre el
  * puntero y la línea, y el arrastre lo suma (`mover`).
@@ -379,12 +380,11 @@ function empezar(texto, b, alSoltar) {
     const origen = { padre: b.parentNode, siguiente: b.nextSibling };
     agarrado = texto;
     const agarre = b.getBoundingClientRect();
-    const habiaEscondido = [...texto.querySelectorAll('.palabra.es-orilla')].some(w => !w.getClientRects().length);
     b.classList.add('es-arrastrando');
     // Con `es-moviendo` vuelve lo gris que esconde Compacto: el borde se mueve
     // sobre el texto entero, que es donde se elige dónde cortar.
     texto.classList.add('es-moviendo');
-    const desfase = habiaEscondido ? seguirALaLinea(texto, b, agarre) : { x: 0, y: 0 };
+    const desfase = seguirALaLinea(texto, b, agarre);
 
     const mover = e => {
         if (!(e.buttons & 1)) { cancelar(); return; }
@@ -513,7 +513,9 @@ export function textoDe(p, alSoltar, previo) {
 
     if (p.modo === 'inactiva') {
         // Todo lo oído es orilla, y el IN espera al final: arrastrarlo hacia
-        // atrás es decir "la toma empezaba acá".
+        // atrás es decir "la toma empezaba acá". Arriba, el final de la última
+        // toma con su marca, que el IN no cruza (`antesDeLaEspera`).
+        ponerAntes(texto, p, poner);
         for (const w of p.palabras || []) poner(w);
         conBarra('in', 'Arrastralo hasta la palabra donde empieza la toma');
     } else {
@@ -550,15 +552,16 @@ export function textoDe(p, alSoltar, previo) {
  */
 function ponerAntes(texto, p, poner) {
     const ws = p.antes || [];
-    let puesta = false;
+    // Detrás de la ÚLTIMA palabra que es de una toma, y no delante de la primera
+    // que no lo es: lo gris de «Ahora» es la clase de corrido, con varias tomas y
+    // lo dicho entre ellas, y la pared es el OUT de la más nueva.
+    let ultimaDeToma = -1;
+    for (let i = 0; i < ws.length; i++) if (ws[i].de) ultimaDeToma = i;
+    if (p.limite && ultimaDeToma === -1) texto.append(limiteDe(p.limite, 'antes'), document.createTextNode(' '));
     for (let i = 0; i < ws.length; i++) {
-        if (p.limite && !puesta && !ws[i].de) {
-            texto.append(limiteDe(p.limite, 'antes'), document.createTextNode(' '));
-            puesta = true;
-        }
         poner(ws[i]);
+        if (p.limite && i === ultimaDeToma) texto.append(limiteDe(p.limite, 'antes'), document.createTextNode(' '));
     }
-    if (p.limite && !puesta) texto.append(limiteDe(p.limite, 'antes'), document.createTextNode(' '));
 }
 
 /**

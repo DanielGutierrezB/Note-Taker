@@ -38,6 +38,7 @@ const maqueta = require('./maqueta/abrir');
 const grabacion = require('../engine/grabacion');
 const oirToma = require('../engine/oir-toma');
 const oir = require('../engine/oir');
+const vivo = require('../engine/notas-vivo');
 const { arg } = require('./lib/cli');
 
 const CHROME = process.env.NT_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -348,6 +349,83 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras, comp
         abierto: true, caido: false, pico: 0.3, dispositivo: 'prueba', clase: 'llamada'
     }), JSON.parse(JSON.stringify(grabacion.resumen())));
     await espera(400);
+    // El vigilante: cada vez que la pantalla cambia, mira qué palabras se ven en
+    // «Ahora» y en cada toma desplegada. Una que se veía y ya no —sin otra en
+    // el mismo instante, que es una relectura que la reescribió— es texto que
+    // desapareció, aunque sea por un momento. Que la toma se pliegue no cuenta.
+    await pagina.evaluate(() => {
+        const vistas = new Map();
+        const perdidas = [];
+        const mirar = () => {
+            const ahora = new Map();
+            for (const hueco of document.querySelectorAll('#vista-vivo [data-texto]')) {
+                const clave = hueco.closest('#ahora') ? 'ahora' : `toma ${hueco.dataset.toma}`;
+                // Lo gris que Compacto esconde a propósito cuenta como a la vista.
+                const compacta = hueco.closest('.es-compacto') && hueco.querySelector('.transcript.es-cerrada');
+                const ws = [...hueco.querySelectorAll('.palabra[data-t]')]
+                    .filter(w => w.getClientRects().length || (compacta && w.classList.contains('es-orilla')));
+                ahora.set(clave, ws.map(w => ({ t: Number(w.dataset.t), texto: w.textContent.trim(), ajena: w.hasAttribute('data-de-toma') })));
+            }
+            // En cualquier lado de la pantalla: al partir una toma, la segunda
+            // mitad pasa a su propia tarjeta, y eso no es perderla.
+            // Y dentro de lo que ese texto todavía muestra: «Ahora» enseña las
+            // últimas trescientas, y las que se van por arriba al correrse la
+            // ventana no se perdieron de donde uno está mirando.
+            const todas = [...ahora.values()].flat().map(w => w.t);
+            for (const [clave, antes] of vistas) {
+                const hoy = ahora.get(clave);
+                if (!hoy) continue;
+                const desde = hoy.length ? Math.min(...hoy.map(w => w.t)) : Infinity;
+                for (const w of antes) {
+                    if (w.t < desde) continue;
+                    // En una tarjeta, lo de otra toma es un asomo: tiene su
+                    // propia tarjeta. En «Ahora», no: ahí es la clase de corrido.
+                    if (w.ajena && clave !== 'ahora') continue;
+                    if (!todas.some(t => Math.abs(t - w.t) < 400)) perdidas.push({ clave, ...w, cuando: Date.now() });
+                }
+            }
+            vistas.clear();
+            for (const [k, v] of ahora) vistas.set(k, v);
+        };
+        new MutationObserver(mirar).observe(document.querySelector('#vista-vivo'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'hidden'] });
+        mirar();
+        window.__perdidas = perdidas;
+    });
+    const perdidasDe = async gesto => {
+        // Lo que el motor ya no tiene —pasó su ventana de diez minutos,
+        // `VENTANA_DE_SUELTAS_SEC`— no es un error de la pantalla: se cuenta aparte.
+        const e = grabacion._sesion().estado;
+        const enElMotor = (e.sueltas || []).concat(...e.tomas.map(t => (t.antes || []).concat(t.palabras || [], t.despues || []))).map(w => w.t);
+        const sigue = p => enElMotor.some(t => Math.abs(t - p.t) < 400);
+        const todas = await pagina.evaluate(() => window.__perdidas.splice(0));
+        const fueraDelMotor = todas.filter(p => !sigue(p));
+        if (fueraDelMotor.length) filas.push({ id: '—', gesto, nota: `${fueraDelMotor.length} palabra(s) que el motor ya no tiene (colchón de 10 min)` });
+        // En una tarjeta, una palabra que ahora cae dentro de OTRA toma se ve en
+        // la tarjeta de esa: al partir, lo que seguía al OUT viejo pasa a ser de
+        // la toma de más allá.
+        // Y lo que quedó más allá de la toma vecina —detrás del IN de la
+        // siguiente o antes del OUT de la anterior— se ve en la tarjeta de esa.
+        const deOtra = p => {
+            if (p.clave === 'ahora') return false;
+            const id = Number(p.clave.replace('toma ', ''));
+            const esta = e.tomas.find(t => t.id === id);
+            const dueña = e.tomas.find(t => !t.descartada && t.inMs <= p.t && (t.outMs == null || p.t < t.outMs));
+            if (dueña && dueña.id !== id) return true;
+            if (!esta) return false;
+            const vivas = e.tomas.filter(t => !t.descartada && t.id !== id);
+            const siguiente = vivas.filter(t => t.inMs > esta.inMs).sort((a, b) => a.inMs - b.inMs)[0];
+            const anterior = vivas.filter(t => t.outMs != null && t.inMs < esta.inMs).sort((a, b) => b.outMs - a.outMs)[0];
+            return Boolean((siguiente && p.t >= siguiente.inMs) || (anterior && p.t < anterior.outMs));
+        };
+        const ps = todas.filter(p => sigue(p) && !deOtra(p));
+        if (ps.length) {
+            const por = new Map();
+            for (const p of ps) por.set(p.clave, (por.get(p.clave) || []).concat(p.texto));
+            for (const [clave, ws] of por) {
+                fallos.push(`${gesto}: en ${clave} desaparecieron ${ws.length} palabra(s): «${ws.slice(0, 6).join(' ')}${ws.length > 6 ? '…' : ''}»`);
+            }
+        }
+    };
 
     // Lo que el motor avisa (la relectura que terminó, sobre todo) llega a la
     // ventana como por el IPC.
@@ -370,6 +448,7 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras, comp
         await quieto();
         await reenviar();
         await espera(350);
+        await perdidasDe(`toma ${id}, ${gesto}`);
         const motor = enElMotor(id);
         const pantalla = await enLaPantalla(pagina, id);
         const pedido = pedidos[pedidos.length - 1];
@@ -419,6 +498,7 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras, comp
             await quieto();
             await reenviar();
             await espera(300);
+            await perdidasDe(`toma ${ultima} abierta, pulso ${dx},${dy}`);
             const sigue = grabacion._sesion().estado.tomas.find(t => t.id === ultima);
             const cerrada = sigue && sigue.outMs != null;
             filas.push({ id: ultima, gesto: `pulso OUT abierta ${dx},${dy}`,
@@ -432,7 +512,7 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras, comp
         // atrás con la mano bajando o subiendo. Se mide adónde iría a parar la
         // línea sin soltarla —soltar cierra—, y se cancela con Escape... que no
         // existe: se cancela volviendo la línea a su sitio antes de soltar.
-        for (const deriva of [0, 8, 16, 24, -12, -24]) {
+        for (const deriva of [0, 8, 16, 24, -8, -12, -24]) {
             const r = await pagina.evaluate(deriva => {
                 const t = document.querySelector('#ahora [data-texto="abierta"] .transcript');
                 const l = t && t.querySelector('.borde[data-borde="out"]');
@@ -443,11 +523,22 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras, comp
                 const b = w.getBoundingClientRect();
                 const caja = t.getBoundingClientRect();
                 return { a: { x: a.left + a.width / 2, y: a.top + a.height / 2 }, b: { x: b.left + 2, y: b.top + b.height / 2 + deriva },
-                    total: ps.length, alFondo: Math.round(caja.bottom - (a.top + a.height / 2)) };
+                    total: ps.length, alFondo: Math.round(caja.bottom - (a.top + a.height / 2)),
+                    renglon: parseFloat(getComputedStyle(t).lineHeight) || b.height };
             }, deriva);
             if (!r) break;
             await pagina.mouse.move(r.a.x, r.a.y);
             await pagina.mouse.down();
+            await espera(60);
+            // Apuntando como una persona: a la palabra, medida desde la línea ya agarrada.
+            const ya = await pagina.evaluate(deriva => {
+                const t = document.querySelector('#ahora [data-texto="abierta"] .transcript');
+                const l = t.querySelector('.borde[data-borde="out"]').getBoundingClientRect();
+                const ps = [...t.querySelectorAll('.palabra')];
+                const w = ps[ps.length - 2].getBoundingClientRect();
+                return { dx: w.left + 2 - (l.left + l.width / 2), dy: w.top + w.height / 2 + deriva - (l.top + l.height / 2) };
+            }, deriva);
+            r.b = { x: r.a.x + ya.dx, y: r.a.y + ya.dy };
             for (let k = 1; k <= 10; k++) { await pagina.mouse.move(r.a.x + (r.b.x - r.a.x) * k / 10, r.a.y + (r.b.y - r.a.y) * k / 10); await espera(20); }
             const queda = await pagina.evaluate(() => {
                 const t = document.querySelector('#ahora [data-texto="abierta"] .transcript');
@@ -464,7 +555,8 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras, comp
             const fuera = queda.total - queda.antes;
             filas.push({ id: ultima, gesto: `arrastre −2 palabras, deriva ${deriva}px`,
                 nota: `la línea iba a dejar ${fuera} palabra(s) afuera (la caja termina ${r.alFondo}px debajo de la línea)` });
-            if (deriva > -20 && fuera > 4) fallos.push(`toma ${ultima} abierta: arrastrar 2 palabras con ${deriva}px de deriva dejaba ${fuera} afuera`);
+            // Medio renglón para arriba ya es el renglón de arriba: eso es geometría.
+            if (Math.abs(deriva) < r.renglon / 2 && fuera > 4) fallos.push(`toma ${ultima} abierta: arrastrar 2 palabras con ${deriva}px de deriva dejaba ${fuera} afuera`);
             const sigue = grabacion._sesion().estado.tomas.find(t => t.id === ultima);
             if (sigue && sigue.outMs != null) { fallos.push(`toma ${ultima} abierta: el arrastre de prueba la cerró`); break; }
         }
@@ -491,6 +583,7 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras, comp
             await reenviar();
             await espera(600);
             const despues = await pagina.evaluate(ahoraSeVe);
+            await perdidasDe(`toma ${ultima} cerrada desde «Ahora»`);
             const motor = enElMotor(ultima);
             filas.push({ id: ultima, gesto: 'OUT de la abierta −5', palabra: r.palabra, motor,
                 pantalla: { palabras: despues.enLaLista }, nota2: `«Ahora» antes: ${antes.resumen} · después: ${despues.resumen}` });
@@ -614,6 +707,7 @@ async function unaDistribucion(url, sidecar, d, tomas, ver, abierta, otras, comp
                         : gesto.startsWith('Enter') ? `abierta: ${s.tomas.some(x => x.outMs == null) ? 'sí' : 'no'}`
                             : t ? `${t.descartada ? 'desactivada' : 'activa'}` : 'fuera de la sesión';
             filas.push({ id, gesto: `acción ${gesto}`, nota: dice });
+            await perdidasDe(`toma ${id}, ${gesto}`);
             if (!hecho && !gesto.startsWith('letra')) fallos.push(`toma ${id}, ${gesto}: no se pudo hacer`);
             nadiePierde(antes, `toma ${id}, ${gesto}`, gesto === 'descartar' ? id : null);
             if (t && gesto !== 'descartar') {

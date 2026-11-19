@@ -13,9 +13,6 @@
 
 import { coloresDeVista } from '../colores.js';
 
-/** Cuántas palabras de antes del IN se ven con la toma abierta: las que hacen falta para correrlo. */
-export const ORILLA_ABIERTA = 24;
-
 /**
  * La toma de antes de una: la más cercana que termina antes de que esta empiece.
  *
@@ -95,19 +92,77 @@ export const ANTERIOR_MAX = 300;
  */
 export function antesDeLaAbierta(estado, toma) {
     const previa = tomaAnterior(estado, toma);
-    const libres = sueltasEntre(estado, previa ? previa.outMs : -Infinity, toma.inMs);
-    if (!previa) return { antes: libres.slice(-ORILLA_ABIERTA), limite: null };
-    // De la toma anterior, con su dueña pegada para que se distinga al dibujar.
-    const suyas = (previa.palabras || []).slice(-ANTERIOR_MAX)
-        .map(w => ({ ...w, de: { id: previa.id, vista: previa.vista, ...coloresDeVista(estado.vistas, previa.vista) } }));
-    // Entre su OUT y este IN: su orilla de después y las sueltas son la misma
-    // tirada contada dos veces, así que se juntan sin repetir.
-    const medio = juntarSinRepetir([
-        (previa.despues || []).filter(w => w.t >= previa.outMs && w.t < toma.inMs),
-        libres
-    ]);
     return {
-        antes: suyas.concat(medio),
+        antes: laClaseHasta(estado, toma.inMs),
+        limite: previa ? { toma: previa.id, ms: previa.outMs, ...coloresDeVista(estado.vistas, previa.vista) } : null
+    };
+}
+
+/**
+ * Las últimas `ANTERIOR_MAX` palabras de la clase antes de `hasta`, de corrido:
+ * cada toma con su dueña pegada y, entre una y otra, lo que se dijo afuera.
+ *
+ * Es lo que va arriba en «Ahora», y es de corrido y no la toma anterior sola
+ * porque el texto no puede desaparecer de donde uno lo está mirando: con una
+ * sola toma hacia atrás, cerrar la abierta —o abrir y cerrar una vacía con
+ * Enter— cambiaba cuál era «la anterior», y lo que se estaba leyendo se iba.
+ *
+ * Entre dos tomas, la orilla de después de una, la de antes de la otra y las
+ * sueltas son la misma tirada contada hasta tres veces: se juntan sin repetir.
+ * Una desactivada no es dueña de nada —su tramo queda libre—, así que su texto
+ * va como el de afuera.
+ */
+function laClaseHasta(estado, hasta) {
+    const suya = t => w => ({ ...w, de: { id: t.id, vista: t.vista, ...coloresDeVista(estado.vistas, t.vista) } });
+    const cerradas = (estado.tomas || [])
+        .filter(t => t.inMs != null && t.outMs != null && t.inMs < hasta)
+        .sort((a, b) => a.inMs - b.inMs);
+    const salida = [];
+    let piso = -Infinity;
+    let previa = null;
+    const hueco = (tope, siguiente, libresDeMas) => {
+        const enElTramo = w => w.t >= piso && w.t < tope;
+        return juntarSinRepetir([
+            (previa ? (previa.despues || []) : []).filter(enElTramo),
+            (siguiente ? (siguiente.antes || []) : []).filter(enElTramo),
+            libresDeMas.filter(enElTramo),
+            sueltasEntre(estado, piso, tope)
+        ]);
+    };
+    let desactivadas = [];
+    for (const t of cerradas) {
+        if (t.descartada) { desactivadas = desactivadas.concat(t.palabras || []); continue; }
+        salida.push(...hueco(Math.min(t.inMs, hasta), t, desactivadas));
+        salida.push(...(t.palabras || []).filter(w => w.t < hasta).map(suya(t)));
+        piso = t.outMs;
+        previa = t;
+        desactivadas = [];
+    }
+    salida.push(...hueco(hasta, null, desactivadas));
+    return salida.slice(-ANTERIOR_MAX);
+}
+
+/**
+ * Lo que se ve en «Ahora» sin toma abierta, antes de lo que se está oyendo: la
+ * clase hasta el OUT de la última toma, con su marca.
+ *
+ * Al cerrarse una toma —«Pausa», Enter, su OUT arrastrado— «Ahora» pasaba a
+ * mostrar solo lo dicho después de su OUT, y todo lo que se estaba leyendo se
+ * iba de golpe a la lista, plegado. El texto no tiene que desaparecer de donde
+ * uno lo está mirando: queda arriba, del color de su toma y detrás de su marca,
+ * que el IN no puede cruzar.
+ *
+ * Llega hasta el OUT y no más: lo de después es lo que crece abajo (`palabras`
+ * del campo de espera), y así lo de arriba no cambia con cada palabra nueva y
+ * el campo sigue creciendo sin redibujarse.
+ *
+ * @returns {{antes: Array, limite: object|null}}
+ */
+export function antesDeLaEspera(estado) {
+    const previa = tomaAnterior(estado, { id: null, inMs: Infinity });
+    if (!previa) return { antes: [], limite: null };
+    return {
+        antes: laClaseHasta(estado, previa.outMs),
         limite: { toma: previa.id, ms: previa.outMs, ...coloresDeVista(estado.vistas, previa.vista) }
     };
 }
@@ -123,6 +178,9 @@ export function antesDeLaAbierta(estado, toma) {
  * segundos: lo justo para reconocer dónde empieza.
  */
 export const SIGUIENTE_MAX = 25;
+
+/** Dos tomas sin nada en medio: el OUT de una es el IN de la otra. */
+const pegadas = (una, otra) => una.outMs != null && una.outMs === otra.inMs;
 
 /**
  * Lo que va después del OUT de una toma cerrada, y desde dónde es de otra.
@@ -159,7 +217,10 @@ export function despuesDeLaCerrada(estado, toma) {
     ]);
     if (!siguiente) return { despues: medio, limiteDespues: null };
     // De la toma siguiente, con su dueña pegada para que se distinga al dibujar.
-    const suyas = (siguiente.palabras || []).slice(0, SIGUIENTE_MAX)
+    // Pegada —partida de esta, o abierta por un cambio de vista— es la misma
+    // frase que sigue, y entera: al dividir, la segunda mitad desaparecía de la
+    // tarjeta donde se acababa de partir.
+    const suyas = (siguiente.palabras || []).slice(0, pegadas(toma, siguiente) ? ANTERIOR_MAX : SIGUIENTE_MAX)
         .map(w => ({ ...w, de: { id: siguiente.id, vista: siguiente.vista, ...coloresDeVista(estado.vistas, siguiente.vista) } }));
     return {
         despues: medio.concat(suyas),
@@ -207,7 +268,7 @@ export function antesDeLaCerrada(estado, toma) {
     // Del final de la toma anterior se asoman pocas, como del principio de la
     // siguiente del otro lado: acá lo que hace falta es entender dónde se frena
     // el IN, no releer esa toma (para eso está su propia tarjeta).
-    const suyas = (previa.palabras || []).slice(-SIGUIENTE_MAX)
+    const suyas = (previa.palabras || []).slice(pegadas(previa, toma) ? -ANTERIOR_MAX : -SIGUIENTE_MAX)
         .map(w => ({ ...w, de: { id: previa.id, vista: previa.vista, ...coloresDeVista(estado.vistas, previa.vista) } }));
     return {
         antes: suyas.concat(medio),
