@@ -86,10 +86,12 @@ module.exports = function (t) {
         t.ok(!/\.es-compacto \.transcript:not\(\.es-inactiva\)/.test(css), 'y no la de antes, que tocaba la abierta');
     });
 
-    t.test('arranca apagado: la preferencia vieja no se hereda', () => {
+    t.test('cada sesión arranca sin compactar, y no se recuerda', () => {
         const js = fs.readFileSync(path.join(RAIZ, 'src', 'js', 'pantalla-vivo.js'), 'utf8');
-        t.ok(/pref\.leer\('vivo\.compactoTerminadas', false\)/.test(js));
-        t.ok(!/'vivo\.compacto'/.test(js));
+        t.ok(/compacto: false,/.test(js), 'apagado de entrada');
+        const ver = js.slice(js.indexOf('export function ver('), js.indexOf('\n}', js.indexOf('export function ver(')));
+        t.ok(/vista\.compacto = false;/.test(ver), 'y otra vez al entrar a cada sesión');
+        t.ok(!/pref\.(leer|guardar)\('vivo\.compacto/.test(js), 'sin guardarlo en ningún lado');
     });
 
     t.test('al agarrar, la línea sigue donde la vio la mano aunque el texto se reacomode', () => {
