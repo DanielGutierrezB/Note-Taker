@@ -41,6 +41,7 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const { execFile } = require('child_process');
+const { version: VERSION } = require('../../package.json');
 
 const RAIZ = path.join(__dirname, '..', '..');
 const SRC = path.join(RAIZ, 'src');
@@ -79,6 +80,8 @@ function html() {
     return crudo
         .replace(/<meta http-equiv="Content-Security-Policy"[\s\S]*?>/, '')
         .replace('<script type="module" src="js/app.js"></script>',
+            // La versión de verdad, para que las capturas no digan una inventada.
+            `<script>window.versionDeLaApp = ${JSON.stringify(VERSION)};</script>\n` +
             '<script type="module" src="/maqueta/doble.js"></script>\n' +
             '<script type="module" src="js/app.js"></script>\n' +
             '<div style="position:fixed;right:0;bottom:0;background:#f5b43c;color:#2a1e00;' +

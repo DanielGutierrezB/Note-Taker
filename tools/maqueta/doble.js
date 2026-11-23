@@ -178,7 +178,7 @@ function sesiones() {
 
 
 window.nt = {
-    appInfo: async () => ({ version: '0.1.0', arch: 'arm64', electron: '43.7.5', platform: 'darwin' }),
+    appInfo: async () => ({ version: window.versionDeLaApp || '0.1.0', arch: 'arm64', electron: '43.7.5', platform: 'darwin' }),
     doctor: async () => doctor,
 
     ajustesLeer: async () => ajustes,

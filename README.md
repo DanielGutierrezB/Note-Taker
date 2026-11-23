@@ -1,18 +1,71 @@
 # Note Taker
 
-App local de macOS (Apple Silicon) que toma las notas de rodaje **mientras la
-clase se está grabando en vivo**, y devuelve un XML listo para importar en
-**Premiere Pro** con el audio adentro.
+App de escritorio para macOS (Apple Silicon) que toma las notas de rodaje
+**mientras la clase se graba en vivo** y deja todo listo para **Premiere Pro**:
+un XML por clase con el audio adentro y, para la carpeta entera del curso, un
+proyecto `.prproj` con cada clase ya precortada.
 
-El profesor dice "3, 2, 1" y la toma se abre; dice "Pausa" y se cierra. Al
-final hay **un solo XML** con todas las tomas y el WAV de la clase en A1, que se
-sincroniza con el audio de las cámaras por forma de onda.
+El profesor dice "3, 2, 1" y la toma se abre; dice "Pausa" y se cierra. Quien
+toma notas mira el texto en vivo, corrige los bordes arrastrándolos sobre las
+palabras, elige la vista de cada toma y escribe notas. Al final hay **un solo
+XML** por clase con todas las tomas y el WAV en A1, que se sincroniza con el
+audio de las cámaras por forma de onda.
 
 ```
-Zoom / interfaz ──► Note Taker ──► xml/clase.xml ──► Premiere
-                       │
-                       └─► xml/Audio/clase-1.wav
+Zoom / micrófono ──► Note Taker ──► xml/clase.xml ─────────► Premiere
+                         │      └─► xml/Audio/clase-1.wav
+                         └────────► Proyecto/curso.prproj ──► Premiere
 ```
+
+![En vivo, diseño nuevo: una toma abierta en «Profesor» con el texto de la clase de corrido arriba, y la lista de tomas](docs/capturas/toma-abierta-1180.png)
+
+**Versión actual: 1.1.1** · [descargas](https://github.com/DanielGutierrezB/Note-Taker/releases/latest) · [qué cambió en cada versión](notas/)
+
+## Qué hace
+
+- **Oye las señales.** "3, 2, 1", "Retomamos" y "Pausa" de fábrica, en español
+  y en inglés, más las frases que cada uno agregue en Ajustes, incluidas las de
+  cambiar de vista («vamos a la pantalla»).
+- **Escribe el texto en vivo y lo relee.** Whisper corre en la Mac mientras se
+  graba; al cerrar cada toma, el modelo grande la vuelve a leer con el glosario
+  del curso. Si la Mac no da abasto, el vivo pasa al modelo liviano y lo dice.
+- **Los bordes se corrigen mirando el texto.** El IN y el OUT se arrastran sobre
+  las palabras o se ponen con el clic derecho, una toma se divide en dos para
+  cambiar de plano sin cortar, y todo se deshace con ⌘Z. En el XML, cada corte
+  se corre solo al silencio de al lado.
+- **Cinco vistas** —Profesor, Pantalla, Slides, Motion Graphics y Acelerar— con
+  las teclas P R S M X, cada una con el color de su marcador.
+- **El texto no se va de donde uno lo mira.** «Ahora» muestra la clase de
+  corrido: al cerrarse una toma su texto queda arriba, con su color, y lo nuevo
+  entra abajo.
+- **El audio de la llamada.** De Zoom, del sistema o de un micrófono, y se
+  cambia de entrada sin parar la clase.
+- **La foto del OUT.** Un fotograma de la cámara de referencia al cerrar cada
+  toma, para retomar con la pantalla como estaba.
+- **El proyecto de Premiere de la carpeta.** Las capturas, cada vista anidada o
+  suelta, una precortada por clase y su versión sin cortar.
+- **Dos diseños.** El nuevo, que es el de fábrica —texto grande, vertical u
+  horizontal, tamaño de letra a mano, búsqueda con ⌘F y una línea que dice si
+  el texto va al día—, y el clásico.
+- **Para cuando algo sale mal.** Reanudar una clase que se cortó, Regenerar el
+  texto de una ya grabada, Rehacer su XML, y un Reporte en un zip con el diario
+  de lo que pasó.
+- **Se actualiza sola** desde los releases de GitHub.
+
+## Instalar
+
+1. Bajá `NoteTaker-x.y.z-arm64.pkg` del
+   [último release](https://github.com/DanielGutierrezB/Note-Taker/releases/latest)
+   y abrilo. Pide macOS 12 o más nuevo y un Mac con Apple Silicon.
+2. La app no está firmada con un Developer ID de Apple, así que macOS la frena
+   la primera vez: **Ajustes del Sistema → Privacidad y seguridad → Abrir
+   igual**. Es solo esa vez.
+3. Al abrirla avisa que faltan los modelos de Whisper (unos 2 GB) y los baja con
+   **Instalar dependencias**, una sola vez.
+
+Las versiones nuevas aparecen solas en la barra de arriba (**Actualizar**), o en
+**Ajustes → Buscar una versión nueva**. Actualizar no borra nada de lo que esté
+configurado ni vuelve a bajar los modelos.
 
 Tuvo un segundo modo, **grabarse explicando lo que se hizo en la semana y salir
 con el vídeo ya cortado**. Salió de la app: esos vídeos pasaron a editarse en
@@ -46,17 +99,38 @@ audio grabado y no contra el reloj de pared (ver **Un solo reloj**).
    crean `xml/` con el archivo que se importa en Premiere, `xml/Audio/` con el
    WAV y `xml/Datos/` con lo que la app se guarda para sí misma.
 2. **Preparar** — una lista de verificación: la entrada de audio con su
-   medidor, Whisper, la carpeta, qué clase es y los cuadros por segundo. El
-   botón de **Iniciar grabación** se enciende cuando lo esencial está en verde,
-   y cada renglón dice qué falta y ofrece el arreglo ahí mismo.
-3. **En vivo** — el timecode grande, el estado de la sesión, la tarjeta de lo
-   que está pasando ahora y la lista de todo lo que ya pasó. Las tomas se
-   abren y se cierran solas; la nota se escribe a mano.
+   medidor, Whisper, la carpeta, qué clase es, el glosario y los cuadros por
+   segundo. **Iniciar grabación** pide tres cosas —Whisper, la carpeta y una
+   entrada abierta—; lo demás avisa y no frena: un micrófono local o una entrada
+   que todavía no suena se arreglan grabando. Cada renglón dice qué falta y
+   ofrece el arreglo ahí mismo.
+3. **En vivo** — el timecode grande, la clase cortada, el estado de la sesión
+   y, debajo, una línea que dice si el texto va al día («Al día · el texto va
+   unos 1 s detrás de lo que decís») o se atrasó. Después la tarjeta **Ahora**
+   y la lista de todo lo que ya pasó. Las tomas se abren y se cierran solas; la
+   nota se escribe a mano.
 4. **Cierre** — qué quedó, dónde está el XML, y qué hay que rehacer si algo
    salió mal.
+5. **Proyecto de Premiere** — desde Sesiones, el `.prproj` de la carpeta del
+   curso: cuántas capturas hay y qué se ve en cada vista, con la línea de
+   tiempo de una clase dibujada en vivo (ver **El proyecto de Premiere de la
+   carpeta**).
 
-Ajustes y Diagnóstico son paneles: se abren encima de cualquier pantalla,
-porque la pregunta que contestan aparece en cualquier momento.
+Ajustes, Diagnóstico y el Reporte son paneles: se abren encima de cualquier
+pantalla, porque la pregunta que contestan aparece en cualquier momento.
+
+### Los dos diseños
+
+Arriba, al lado de la versión, se elige **Clásico** o **Nuevo**, y en el nuevo
+la distribución: el texto arriba y las tomas abajo, o los dos lado a lado con el
+texto a la izquierda o a la derecha. Lo que se lleva cada parte se ajusta
+arrastrando el divisor del medio, y el tamaño de la letra con **A−** / **A+**.
+Es cómo se ve esta Mac: se guarda en la ventana y el motor no lo mira nunca.
+Desde la 1.0.0 el nuevo es el de fábrica.
+
+![Diseño nuevo en horizontal, con el texto a la izquierda](docs/capturas/en-vivo-horizontal-1440.png)
+
+![Diseño clásico, con la misma toma abierta](docs/capturas/en-vivo-clasico-1180.png)
 
 ### Cómo se llama cada clase
 
@@ -168,8 +242,10 @@ Y lo que se hace a mano, para cuando nada de eso se dijo:
 | **P R S M X** | la vista de la toma |
 | **⌘Z** · **⇧⌘Z** | deshacer · rehacer |
 
-Están escritos debajo del timecode y **son botones**: lo mismo se hace
-con la tecla o con el mouse, sin tener que acordarse de cuál era. El de Enter
+Están a la vista y **son botones**: lo mismo se hace con la tecla o con el
+mouse, sin tener que acordarse de cuál era. En el clásico van debajo del
+timecode; en el nuevo, las vistas encima de «Ahora» y Enter en el mismo botón
+de abrir o cerrar la toma, y la búsqueda en las tomas con ⌘F. El de Enter
 dice qué va a hacer —«abrir toma» o «cerrar toma»— en vez de las dos cosas, y el
 de vista muestra encendida la de la toma sobre la que caen las teclas.
 
@@ -255,24 +331,43 @@ hable, que es como se usa cuando uno se adelanta.
 ![La tarjeta «Ahora» sin toma abierta: lo que se oye entra abajo y el IN espera al final](docs/capturas/en-vivo-1180.png)
 
 Sin ninguna toma abierta, la tarjeta **Ahora** es el campo de la toma que
-todavía no empezó: borde punteado, lo que se va oyendo entrando abajo en gris y
-lo viejo desvaneciéndose arriba, tres renglones y no más. Al final espera la
-pastilla azul del **IN**.
+todavía no empezó: borde punteado, lo que se va oyendo entrando abajo en gris y,
+al final, la pastilla azul del **IN** esperando.
+
+**Arriba sigue la clase de corrido**: las últimas trescientas palabras, cada
+toma con su color y la marca **«fin de la toma N»** donde termina la última, que
+el IN no puede cruzar. Antes ahí se veía solo lo dicho después del último OUT, y
+al cerrarse una toma —con «Pausa», con Enter o arrastrando su OUT— todo lo que
+se estaba leyendo se iba de golpe a la lista, plegado. El texto no tiene que
+desaparecer de donde uno lo está mirando. Lo de arriba no cambia con cada
+palabra nueva —llega hasta el último OUT, y lo que crece es lo de abajo—, así
+que el campo sigue agregando al final sin redibujarse ni perder una selección.
 
 **Arrastrar el IN hasta una palabra abre la toma ahí**, exacto y sin el
 retroceso automático de Enter: quien arrastró ya eligió dónde. Es el arreglo
 para cuando el profesor arrancó sin conteo y el retroceso no acertó la frase.
 
-Con una toma abierta, la tarjeta pasa a ser **la toma**, y el texto suelto deja
-de verse hasta que se cierre. Adelante quedan unas pocas palabras en gris, las
-justas para correr el IN hacia atrás, y al final del texto la pastilla roja del
-**OUT**: arrastrarla hacia atrás cierra la toma en esa palabra. En las tomas ya
-cerradas de la lista, las dos pastillas se mueven sobre lo que quedó guardado
-y el tramo se relee. Ninguna de las dos puede pasar al otro lado de la otra.
+Con una toma abierta, la tarjeta pasa a ser **la toma**. Arriba, en gris, sigue
+la clase de corrido —también en la primera toma de la clase, que antes veía
+solo veinticuatro palabras hacia atrás—, para poder correr el IN, y al final del
+texto la pastilla roja del **OUT**: arrastrarla hacia atrás cierra la toma en
+esa palabra. En las tomas ya cerradas de la lista, las dos pastillas se mueven
+sobre lo que quedó guardado y el tramo se relee. Ninguna de las dos puede pasar
+al otro lado de la otra.
 
 Es el mismo gesto que en Class Cut: la línea viaja por el texto mientras se
 arrastra y lo gris cambia en el acto, así que se ve qué entra antes de soltar.
-Mientras hay una agarrada, la pantalla no se repinta.
+Mientras hay una agarrada, la pantalla no se repinta, y en cuanto el motor
+contesta se dibuja lo que dijo aunque el mouse siga encima de la línea.
+
+**La línea sigue a la mano desde donde estaba.** Al agarrarla el texto se
+reacomoda: la pastilla se vuelve una rayita y, en Compacto, aparece lo gris.
+Con la pastilla al final de un renglón, lo de después subía a ese renglón y bajo
+el puntero quedaba otro: un temblor de dos píxeles mandaba el borde treinta
+palabras más allá, y al soltar se perdía ese pedazo. Ahora se mide cuánto se
+corrió la línea al agarrarla, se compensa con el scroll lo que se puede, y el
+resto se le suma al puntero mientras dura el arrastre (`seguirALaLinea` en
+`src/js/grabar/texto-toma.js`).
 
 **Y con el clic derecho sobre una palabra, el mismo borde se pone sin
 arrastrar**: un menú de dos opciones, poner el IN en esa palabra o poner el OUT
@@ -302,10 +397,17 @@ no aparece encima.
 
 El bloque de cada toma lleva el color de su vista, que es **el mismo color con
 el que llega su marcador a Premiere**: rojo para Profesor (PV), naranja para
-Pantalla (R), verde para Slides (S), cian para Multi (MG) y lila para Doble
-(X2). Sale del mismo entero que se escribe en el XML, así que no pueden
+Pantalla (R), verde para Slides (S), azul para Motion Graphics (MG) y lila para
+Acelerar (X2). Sale del mismo entero que se escribe en el XML, así que no pueden
 separarse. En el selector de vista, la elegida va rellena de su color y las
 otras lo llevan en una rayita abajo.
+
+**En el diseño nuevo, Profesor va cerúleo.** Es la vista de casi todas las
+tomas, y una lista entera de bloques rojos se lee densa y como si avisara algo.
+El cerúleo es la etiqueta con la que la cámara del profesor llega al proyecto de
+Premiere (`ETIQUETA_DE_VISTA` en `engine/prproj-plan.js`), y vale en toda la
+interfaz donde aparece esa vista. El marcador del XML sigue siendo el de
+siempre, y en el clásico Profesor sigue en rojo.
 
 El color va de **fondo**, nunca de letra: el rojo de Profesor da 3,2:1 sobre la
 tarjeta, debajo del 4,5 que pide el texto. La sigla va rellena con la tinta que
@@ -368,9 +470,13 @@ La abierta no se descarta: primero se cierra. **Reabrir** aparece en la última
 toma cuando no hay otra abierta, para cuando «Pausa» cerró de más.
 **Ocultar desactivadas** las saca de la vista sin tocarlas.
 
-**Compacto** esconde lo gris de antes del IN y de después del OUT de cada toma,
-para leer solo el texto de la toma; apagado, se ve el antes y el después para
-validar dónde quedó cada borde. El campo de espera no cambia: ahí todo es gris.
+**Compacto** esconde lo gris de antes del IN y de después del OUT de cada toma
+terminada, para leer solo su texto; apagado, se ve el antes y el después para
+validar dónde quedó cada borde. La toma abierta y el campo de espera no cambian.
+**Mientras se arrastra un borde, la toma se ve entera**: escondido lo gris, la
+línea solo podía moverse entre las palabras de la toma, así que correrla la
+achicaba y lo que quedaba afuera desaparecía sin dónde volver a ponerlo. Y
+**cada sesión arranca sin compactar**: no se recuerda, se prende a propósito.
 
 **Y lo gris de después del OUT de una toma cerrada es lo mismo del revés.**
 Ahí iba solo la orilla que escribe la relectura, o sea nada hasta que Whisper
@@ -409,6 +515,19 @@ anterior al OUT de la última toma cerrada no cruza: la ventana lo descarta
 apenas llega (`sueltasLibres`), así que mandarlo era mandar palabras para que
 las tiren del otro lado. El tope sigue existiendo porque sin ninguna toma
 cerrada las sueltas son todo lo que se oyó, y el motor se guarda diez minutos.
+
+**Lo de entre dos tomas no se va con esos diez minutos.** Al recortarse el
+colchón se tiraba también el texto de entre dos tomas viejas, y abierta la
+tarjeta de una para correrle el OUT solo quedaban los doce segundos de gris que
+escribió su relectura. Ahora, antes de tirar, lo que está a menos de 45 s de un
+borde pasa a la orilla de esa toma (`guardarEnLasOrillas`), que viaja con ella
+a la ventana y al sidecar; lo lejano de toda toma se tira como antes. Lo mismo
+al terminar la clase, porque el sidecar guarda solo las últimas sueltas. Y una
+relectura posterior conserva lo de la orilla que quedó fuera del tramo que leyó.
+
+**Al partir una toma, la segunda mitad se ve entera** desde la tarjeta de la
+primera, y al revés: de dos tomas pegadas se muestra la vecina completa, no las
+veinticinco palabras del asomo de siempre.
 
 **Comentar un pedazo**: seleccionar palabras del texto de una toma abre un campo
 para comentarlas. El comentario va al XML como un marcador blanco en ese tramo,
@@ -895,9 +1014,13 @@ de una clase vieja y una toma desactivada que no tiene que aparecer.
 
 ## El proyecto de Premiere de la carpeta
 
-«Generar .prproj», en la cabecera de Sesiones, arma un proyecto de Premiere con
-todas las clases de la carpeta, en `<carpeta>/Proyecto/<carpeta>.prproj`. Antes
-abre un menú para decir qué capturas hay y qué capturas componen cada vista.
+**Crear proyecto**, en la cabecera de Sesiones, arma un proyecto de Premiere
+con todas las clases de la carpeta, en `<carpeta>/Proyecto/<carpeta>.prproj`.
+Antes abre un panel en tres pasos —cuántas capturas hay, qué se ve en cada vista
+y cómo queda cada clase en Premiere, dibujado en vivo— y al generar, el pie del
+panel dice el archivo y lo que trae, con **Mostrar en Finder** al lado.
+
+![El panel del proyecto de Premiere, ya generado](docs/capturas/prproj-listo-1180.png)
 
 **Lo que sale:**
 
@@ -1014,6 +1137,13 @@ transcripción de esa clase —1,4 de sus 1,8 MB— y cambia todas las rutas y
 nombres de archivo por unos neutros que no existen en ninguna máquina. De 516 KB
 queda en 33, y lo que queda son las piezas y sus medidas.
 
+**Las huellas de archivo se quitan solo de los medios que apuntan a un
+archivo.** La 1.0.0 salió con la plantilla limpiada sin esa distinción: perdió
+el `ModificationState` de un medio interno de Premiere («SyntheticTranscript»),
+y Premiere daba por dañado todo proyecto que armaba la app. La plantilla lo tiene
+de vuelta desde la 1.0.5, la herramienta ya no lo toca, y
+`tests/lo-que-va-a-premiere.test.js` falla si una plantilla instalada lo pierde.
+
 ```
 node tools/limpiar-plantilla.js <proyecto.prproj> /tmp/Plantilla.prproj
 node tools/validar-plantilla.js /tmp/Plantilla.prproj --instalar
@@ -1118,6 +1248,13 @@ se lee aparte, con un segundo y medio de margen a cada lado, y lo que salga se
 mete en su sitio sin repetir. Un recorte corto no le deja a Whisper dónde
 descolocar las palabras. Un silencio de verdad —el de cambiar de slide— no se
 relee: no hay nada que rescatar y sería pagar una pasada para que invente.
+
+**Y una lectura que no escribe nada no borra la nota.** Pasa con una voz que
+entra muy baja por la llamada —el filtro la deja debajo del corte— o con un
+tramo donde Whisper solo inventa: el reparto dejaba la toma sin una palabra, y
+como mover un borde manda a releer, se veía como que el gesto había borrado el
+texto. Ahora la toma se queda con el texto del vivo y marcada **sin releer**,
+para pasarle Regenerar, y el diario lo dice (`relectura.vacia`).
 
 ### El texto en vivo
 
@@ -1354,7 +1491,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 864 pruebas, sin red y sin abrir nada
+npm test           # 1142 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```
@@ -1405,6 +1542,26 @@ también dice lo que costó el vivo —cuántas pasadas hubo, cuántas no le
 preguntaron a Whisper porque era silencio, y qué parte de la clase se pasó
 transcribiendo—, que es lo que se compara entre dos corridas.
 
+**Los gestos sobre una toma, en cada distribución**, con la ventana de verdad
+y el motor de verdad:
+
+```bash
+node tools/probar-bordes.js --sidecar=<…_notas-en-vivo.json> [--compacto]
+```
+
+Retoma una copia de una clase grabada (el WAV se enlaza y solo se lee) y le
+conecta la ventana de la maqueta, así que cada pedido va al motor como iría por
+el IPC, relectura con Whisper incluida. En las cuatro distribuciones —clásica,
+nueva vertical, nueva horizontal y horizontal con el texto a la izquierda— hace
+con el mouse cada gesto: arrastrar el IN y el OUT para los dos lados, un temblor
+de pocos píxeles al agarrar la línea, ⌘Z, el clic derecho, dividir, cerrar la
+abierta desde «Ahora», la vista, los tres estados, la nota, la letra y Enter.
+Un vigilante mira cada cambio de la pantalla y anota toda palabra que estaba a
+la vista y deja de estarlo mientras el motor todavía la tiene. Una toma vacía,
+una palabra repetida o un texto que desaparece, aunque sea un momento, es un
+fallo. Con `--relectura-vacia` el Whisper de mentira no escribe nada, que es lo
+que deja el filtro de nivel con una voz que entra baja por la llamada.
+
 Y `node tools/probar-vistas.js` comprueba sobre qué toma caen las vistas de la
 barra en los tres casos —grabando, con una fila desplegada y entre dos tomas—,
 incluida la parte que no se ve en una captura: que apretar una vista entre dos
@@ -1433,12 +1590,16 @@ toma, fuera del XML, la ruta comprobada antes de abrirla— están en
 ```
 main.js · preload.js     Electron (el motor corre en el proceso principal)
 ipc/grabar.js            el puente de la grabación
+ipc/prproj.js            el del proyecto de Premiere
 ipc/referencias.js       el de las fotos del OUT
 engine/
   grabacion.js           la sesión: los relojes y el ciclo de señales
+  audio-de-la-sesion.js  la entrada de audio: abrir, cambiarla en medio, reintentar
   espejo.js              lo que se ve de la sesión: el disco y la pantalla
-  notas-vivo.js          qué es una toma
+  notas-vivo.js          qué es una toma (fachada de engine/vivo/)
+  vivo/                  tomas, señales, el ciclo, las ediciones y las vistas
   notas-xml.js           cómo se escribe todo eso para Premiere
+  prproj*.js             el proyecto de Premiere de la carpeta, desde la plantilla
   ajustar-corte.js       correr el IN y el OUT al silencio de al lado
   fcp-xml.js             el formato FCP7, con marcadores de secuencia y de clip
   captura.js             el WAV que se escribe mientras entra
@@ -1455,12 +1616,16 @@ engine/
 src/js/
   app.js                 el cableado: qué pantalla sigue a cuál
   pantalla-*.js          Sesiones · Preparar · En vivo · Cierre
+  panel-prproj.js        el menú del proyecto de Premiere
+  tema.js                el diseño clásico o el nuevo, la distribución y la letra
   estados.js             el vocabulario de estados, en un solo sitio
   formato.js             el timecode, que tiene que dar lo mismo que el XML
   iconos.js              SVG de trazo, un dibujo por concepto
   grabar/oido.js         getUserMedia y el worklet que manda el PCM
   grabar/ojo.js          la cámara de referencia y el anillo de fotogramas
   grabar/lista-tomas.js  las fichas de la lista de tomas
+  grabar/texto-toma.js   el texto de una toma con sus dos bordes que se arrastran
+  grabar/alrededor-de-la-toma.js  lo gris de cada lado, y la clase de corrido de «Ahora»
   fotos.js               cuándo se guarda la foto de una toma
 tools/                   maqueta, auditoría, simulación, build
 tests/                   corredor propio: node tests/run.js
@@ -1481,12 +1646,16 @@ falta: al abrir, la app ve qué le falta y lo ofrece instalar.
 
 ### Subir una versión
 
-```bash
-bash tools/subir-version.sh 0.1.2 notas/0.1.2.md
-```
+1. La versión nueva en `package.json`, `version.json` y `package-lock.json`, y
+   sus notas en `notas/x.y.z.md`: es lo que se lee en el release y en el aviso
+   de **Actualizar**. Commit «Versión x.y.z» y push.
+2. `bash tools/build-pkg.sh` arma el `.pkg`. Antes de publicarlo, conviene
+   abrir el `app.asar` y ver que `version.json` diga la versión nueva.
+3. `bash tools/publish-release.sh notas/x.y.z.md` publica el release en GitHub
+   con ese `.pkg`.
 
-Iguala `package.json` y `version.json`, arma el instalador y publica el release.
-Se planta si la versión no es posterior a la que hay, que es el error que deja a
+`bash tools/subir-version.sh x.y.z notas/x.y.z.md` hace los tres pasos de una;
+se planta si la versión no es posterior a la que hay, que es el error que deja a
 la app ofreciéndose a sí misma para siempre. El commit lo hace quien lo llama.
 
 Las apps instaladas lo ven al abrir y cada media hora: aparece **Versión x.y.z ·
@@ -1504,10 +1673,12 @@ pantalla y los modelos de Whisper viven en
 
 ### Lo que falta se instala desde la app
 
-Al abrir la primera vez, si falta algo, aparece un aviso con la lista y un botón
-por cada cosa, más «Instalar lo que falta». Lo imprescindible (sin lo que no se
-puede grabar) se avisa cada vez que se abre mientras falte; lo recomendado, una
-sola vez. La misma lista está siempre en **Ajustes → Lo que la app necesita**.
+Al abrir la primera vez, si falta algo, aparece el panel de dependencias:
+arriba **Instalar dependencias**, con lo que va a bajar y cuánto pesa, y abajo
+lo que falta y lo que ya está, en dos desplegables, con un botón por cada cosa.
+Lo imprescindible (sin lo que no se puede grabar) se avisa cada vez que se abre
+mientras falte; lo recomendado, una sola vez. La misma lista está siempre en
+**Ajustes → Lo que la app necesita**.
 
 | qué | cómo se instala |
 |---|---|
@@ -1524,10 +1695,21 @@ Privacidad y seguridad.
 
 ## Estado
 
-El motor está probado de punta a punta contra audio real: sobre seis minutos de
-una clase grabada, abre las siete tomas que se dijeron y el bloque de referencia
-que el director había marcado a mano cae dentro del segundo (IN +0,6 s,
-OUT +0,9 s).
+**En uso, en la versión 1.1.1.** El equipo la usa para tomar notas en clases
+de verdad, y sus XML y sus proyectos se abren en Premiere Pro 2026. Lo que se
+reporta grabando entra en la versión siguiente: lo que cambió en cada una está
+en [`notas/`](notas/) y en los
+[releases](https://github.com/DanielGutierrezB/Note-Taker/releases).
 
-Lo que falta es la vuelta que solo la da el uso: una clase entera de verdad, con
-el XML importado en Premiere y el corte hecho encima.
+Cómo se comprueba que una versión no rompe lo que andaba:
+
+- **1142 pruebas** (`npm test`), sin red y sin abrir nada.
+- **El XML de cuarenta clases reales**, rehecho con la versión nueva y con la
+  0.6.1, sale igual: las mismas tomas, los mismos marcadores en los mismos
+  cuadros y los mismos cortes ajustados al silencio.
+- **Una clase grabada pasada por el motor** (`tools/simular-grabacion.js`) da
+  las mismas tomas, abiertas y cerradas por las mismas señales.
+- **Cada gesto en cada distribución** (`tools/probar-bordes.js`), con el
+  vigilante de texto que desaparece.
+- **El proyecto de Premiere** se abre en Premiere: la plantilla que viaja con la
+  app tiene un test que cuida lo que Premiere necesita para no darlo por dañado.
