@@ -296,6 +296,38 @@ module.exports = async function (t) {
         t.ok(texto.includes('# El primer corte de Curso X'), texto.slice(0, 80));
     });
 
+    t.group('openfilm · la carpeta abre como un proyecto');
+
+    t.test('deja un film.html vacío, para que OpenFilm no pregunte si empezar uno', async () => {
+        const dir = dosClases();
+        const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        const film = path.join(r.ruta, 'film.html');
+        t.ok(fs.existsSync(film), 'está');
+        const texto = fs.readFileSync(film, 'utf8');
+        t.ok(/<meta name="viewport" content="width=1920, height=1080">/.test(texto), 'con su escenario');
+        t.ok(!/<section/.test(texto), 'y sin ninguna pista: el montaje es del agente');
+        t.ok(texto.includes(NOMBRE_DE_LA_GUIA), 'y dice dónde está la guía');
+    });
+
+    t.test('y lo escribe una sola vez: el del agente no se pisa', async () => {
+        const dir = dosClases();
+        const primera = await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        const film = path.join(primera.ruta, 'film.html');
+        fs.writeFileSync(film, 'el corte del agente');
+        t.eq(openfilm.filmDeArranque(film), false, 'no lo vuelve a escribir');
+        const segunda = await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        t.ok(segunda.ok, segunda.error || '');
+        t.eq(fs.readFileSync(film, 'utf8'), 'el corte del agente');
+    });
+
+    t.test('la guía dice que ese film está vacío a propósito y cómo poner los subtítulos', async () => {
+        const dir = dosClases();
+        const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        const texto = fs.readFileSync(r.guia, 'utf8');
+        t.ok(/vacío y es para que OpenFilm abra la carpeta/.test(texto), 'lo del film');
+        t.ok(/<track kind="captions"/.test(texto), 'y cómo cuelga una pista de subtítulos');
+    });
+
     t.group('openfilm · el audio de cada clase');
 
     t.test('se enlaza en vez de copiarse: el mismo archivo con dos nombres', async () => {

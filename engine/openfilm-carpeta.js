@@ -174,6 +174,38 @@ function lasTomas(clase, porId, audios) {
     });
 }
 
+/**
+ * El `film.html` con el que la carpeta ya es un proyecto, si todavía no hay uno.
+ *
+ * **Vacío a propósito, y escrito una sola vez.** El montaje lo arma el agente
+ * (`PRIMER-CORTE.md`), así que acá no va ni una pista: lo único que hace este
+ * archivo es que OpenFilm reconozca la carpeta como un proyecto suyo. Sin él
+ * pregunta «No film in this folder: ¿empezamos uno?» apenas se abre, que es una
+ * pregunta rara cuando la carpeta se acaba de exportar llena de material.
+ *
+ * Es el mismo que hace `openfilm open` con una carpeta nueva —el `<meta>` del
+ * escenario y nada más— con un comentario que dice dónde mirar. En cuanto el
+ * agente escriba el suyo, exportar otra vez no lo toca.
+ */
+function filmDeArranque(destino) {
+    if (fs.existsSync(destino)) return false;
+    workspace.writeAtomic(destino, [
+        '<!doctype html>',
+        '<html>',
+        '<head>',
+        '<meta charset="utf-8">',
+        '<meta name="viewport" content="width=1920, height=1080">',
+        '</head>',
+        '<body>',
+        `<!-- Todavía sin montar. Lo que va acá está en ${NOMBRE_DE_LA_GUIA}, en esta misma carpeta:`,
+        '     las clases, sus tomas y qué armar con ellas. -->',
+        '</body>',
+        '</html>',
+        ''
+    ].join('\n'));
+    return true;
+}
+
 /** El guion de una clase: lo que se lee antes de tocar nada. */
 function guionDeLaClase(clase, fuentes) {
     // Las fuentes se nombran como se leen —«Captura 2 sobre Captura 1»— y no por
@@ -329,6 +361,7 @@ async function exportar(opciones) {
         const texto = guia(datos);
         const rutaGuia = path.join(raiz, NOMBRE_DE_LA_GUIA);
         workspace.writeAtomic(rutaGuia, texto);
+        filmDeArranque(path.join(raiz, 'film.html'));
 
         const tomas = clases.reduce((n, c) => n + c.tomas.length, 0);
         return {
@@ -357,5 +390,6 @@ module.exports = {
     exportar,
     lasCapturas,
     lasVistas,
-    guionDeLaClase
+    guionDeLaClase,
+    filmDeArranque
 };

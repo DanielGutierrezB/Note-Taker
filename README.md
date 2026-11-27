@@ -1193,6 +1193,7 @@ app escribiera el `film.html`, el primer cambio del agente lo pisaría.
 **Exportar a OpenFilm** escribe `<carpeta>/OpenFilm/`:
 
 ```
+film.html              vacío: para que OpenFilm abra la carpeta como un proyecto
 PRIMER-CORTE.md        la guía: qué hay acá y qué armar con eso
 notas-de-rodaje/
   clases.json          todas las clases y sus tomas, con los tiempos en segundos
@@ -1235,6 +1236,13 @@ qué revisar antes de darlo por hecho. Lo único que no se le puede dar hecho es
 guía le pide que lo calcule y que lo diga antes de seguir. Y trae un plan B: si
 un film anidado recortado no reproduce bien o la vista previa se arrastra, que
 los clips apunten directo al vídeo de la cámara con el desfase ya sumado.
+
+**El `film.html` va vacío y una sola vez.** Sin ninguno, OpenFilm abre la carpeta
+preguntando «No film in this folder: ¿empezamos uno?», que es una pregunta rara
+sobre una carpeta recién exportada llena de material. Así que se deja el mismo
+que hace `openfilm open` con una carpeta nueva —el `<meta>` del escenario y nada
+más— con un comentario que dice dónde mirar. En cuanto el agente escriba el suyo,
+no se vuelve a tocar.
 
 **Exportar otra vez no le pisa el trabajo a nadie.** Se rehacen la guía, las
 notas y los audios, que son datos; el `film.html` y `parts/` son del agente y no
@@ -1569,7 +1577,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 1164 pruebas, sin red y sin abrir nada
+npm test           # 1167 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```
@@ -1784,7 +1792,7 @@ en [`notas/`](notas/) y en los
 
 Cómo se comprueba que una versión no rompe lo que andaba:
 
-- **1164 pruebas** (`npm test`), sin red y sin abrir nada.
+- **1167 pruebas** (`npm test`), sin red y sin abrir nada.
 - **El XML de cuarenta clases reales**, rehecho con la versión nueva y con la
   0.6.1, sale igual: las mismas tomas, los mismos marcadores en los mismos
   cuadros y los mismos cortes ajustados al silencio.

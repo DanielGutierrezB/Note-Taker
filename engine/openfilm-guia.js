@@ -74,6 +74,7 @@ function guia(datos) {
     // y no como una lista de renglones de largos distintos.
     const enColumna = (izquierda, dice) => `  ${izquierda}${' '.repeat(Math.max(1, 21 - izquierda.length))}${dice}`;
     L.push('```');
+    L.push(enColumna('film.html', 'vacío: el montaje es tuyo, y esto es para que la carpeta abra'));
     L.push('notas-de-rodaje/');
     L.push(enColumna('clases.json', 'todas las clases y sus tomas, con los tiempos ya en segundos'));
     for (const c of clases.slice(0, 3)) {
@@ -213,7 +214,21 @@ function guia(datos) {
     L.push('');
     L.push(`### ${vistas.some(v => v.film) ? 5 : 4}. El film principal`);
     L.push('');
-    L.push('En `film.html`, las precortadas una detrás de otra, en orden de clase.');
+    L.push('En `film.html`, las precortadas una detrás de otra, en orden de clase. El que hay ahora está'
+        + ' vacío y es para que OpenFilm abra la carpeta como un proyecto: escribilo encima.');
+    L.push('');
+    L.push(`### ${vistas.some(v => v.film) ? 6 : 5}. Los subtítulos, si los querés`);
+    L.push('');
+    L.push('Cada WAV tiene su `.vtt` al lado, con las palabras y su hora en los segundos de ese archivo.'
+        + ' Para ponerlos en una clase hay que pasarlos a los segundos de su precortada —cada toma se'
+        + ' corre a su `at`— y dejarlos en un archivo propio al lado de ese film'
+        + ' (`parts/<clase>/captions/captions.vtt`), colgado de una pista sola:');
+    L.push('');
+    L.push('```html');
+    L.push('<section hidden>');
+    L.push('  <track kind="captions" src="captions/captions.vtt" label="Captions">');
+    L.push('</section>');
+    L.push('```');
     L.push('');
 
     L.push('## Antes de darlo por hecho');
