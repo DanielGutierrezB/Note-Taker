@@ -1195,17 +1195,43 @@ escribe al lado de lo que ya hay:
 
 ```
 <curso>/
-  film.html            vacío: para que OpenFilm abra la carpeta como un proyecto
-  PRIMER-CORTE.md      la guía: qué hay acá y qué armar con eso
+  film.html                  las clases precortadas, una detrás de otra
+  parts/captura-1/film.html  la anidación de esa captura: ahí se suelta su vídeo
+  parts/vista-r/film.html    la de una vista compuesta, con sus capturas apiladas
+  parts/clase-01/film.html   la precortada de esa clase, con sus tomas
+  parts/clase-01-sin-cortar/ la misma clase de punta a punta
+  PRIMER-CORTE.md            la guía: qué hay acá, qué falta y qué sigue
   notas-de-rodaje/
-    clases.json        todas las clases y sus tomas, con los tiempos en segundos
-    clase-01.md …      el guion de cada clase: toma, vista, nota y lo que se dice
-  xml/                 lo que la app ya escribía al grabar
-    Audio/*.wav        el audio de cada clase, donde siempre estuvo
-    Audio/*.vtt        lo que se dijo, palabra por palabra, en segundos de ese WAV
-  assets/captura-1/ …  vacías: ahí se suelta el vídeo de cada cámara o pantalla
-  Proyecto/            el `.prproj`, si se exportó también para Premiere
+    clases.json              todas las clases y sus tomas, con los tiempos en segundos
+    clase-01.md …            el guion de cada clase: toma, vista, nota y lo que se dice
+    secuencias.json          la huella de cada film escrito, para no pisar lo editado
+  xml/                       lo que la app ya escribía al grabar
+    Audio/*.wav              el audio de cada clase, donde siempre estuvo
+    Audio/*.vtt              lo que se dijo, palabra por palabra, en segundos de ese WAV
+  assets/captura-1/ …        vacías: ahí se suelta el vídeo de cada cámara o pantalla
+  Proyecto/                  el `.prproj`, si se exportó también para Premiere
 ```
+
+**El corte va armado, no explicado.** Al principio esto escribía solo los datos y
+la guía le pedía al agente que montara; abrir el proyecto entonces no mostraba
+nada, y lo que había que montar es justamente lo que la app ya sabe de memoria.
+Ahora escribe las secuencias (`engine/openfilm-film.js`), con el mismo armado que
+el `.prproj`: una anidación por captura con las clases en fila y el audio de
+referencia muteado, una por vista compuesta, una precortada por clase y la clase
+entera al lado. Al abrir, la línea de tiempo ya está cortada y cada clase es una
+anidación en la que entrar a iterar.
+
+En la precortada hay **una pista por vista**, igual que en Premiere: en cada toma
+está encendida la de su plano y las demás quedan ahí, apagadas con `disabled`
+—ni se ven ni se oyen, y su lugar se mantiene— así que cambiar de plano es
+encender el clip que ya está. Una pista es de **su vista** y no de su fuente: dos
+vistas pueden usar la misma captura, y mirando la fuente el mismo clip quedaba
+encendido en dos pistas a la vez.
+
+**Lo que se edite no se pisa.** Al escribir cada secuencia se anota su huella en
+`notas-de-rodaje/secuencias.json`; al volver a exportar se refrescan las que
+siguen igual que como quedaron y se dejan las que cambiaron, con un aviso que las
+nombra. Borrar una la devuelve con los cortes de hoy.
 
 Primero esto escribía una subcarpeta `OpenFilm/` con el audio adentro, y tenía
 dos costos. Uno a la vista: en OpenFilm había que abrir la subcarpeta, y quien
@@ -1253,16 +1279,10 @@ guía le pide que lo calcule y que lo diga antes de seguir. Y trae un plan B: si
 un film anidado recortado no reproduce bien o la vista previa se arrastra, que
 los clips apunten directo al vídeo de la cámara con el desfase ya sumado.
 
-**El `film.html` va vacío y una sola vez.** Sin ninguno, OpenFilm abre la carpeta
-preguntando «No film in this folder: ¿empezamos uno?», que es una pregunta rara
-sobre una carpeta recién exportada llena de material. Así que se deja el mismo
-que hace `openfilm open` con una carpeta nueva —el `<meta>` del escenario y nada
-más— con un comentario que dice dónde mirar. En cuanto el agente escriba el suyo,
-no se vuelve a tocar.
-
-**Exportar otra vez no le pisa el trabajo a nadie.** Se rehacen la guía, las
-notas y los audios, que son datos; el `film.html` y `parts/` son del agente y no
-se tocan. Es la misma pregunta que el `.prproj` resuelve con un diálogo —¿se
+**Lo único que falta es el vídeo de cada captura**, que la app no tiene: se
+suelta en su anidación y se sincroniza ahí una vez, contra la onda del audio de
+referencia, y con eso queda sincronizado el curso entero. Es lo mismo que se hace
+en Premiere, y la guía se lo pide al agente con los números de cada clase. Es la misma pregunta que el `.prproj` resuelve con un diálogo —¿se
 reemplaza lo que ya está?— resuelta de otra manera: acá el montaje vive en
 archivos distintos de los datos.
 
@@ -1593,7 +1613,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 1170 pruebas, sin red y sin abrir nada
+npm test           # 1177 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```
@@ -1703,6 +1723,7 @@ engine/
   notas-xml.js           cómo se escribe todo eso para Premiere
   prproj*.js             el proyecto de Premiere de la carpeta, desde la plantilla
   openfilm-carpeta.js    la misma carpeta para OpenFilm: datos, audio y la guía
+  openfilm-film.js       sus secuencias: film.html y parts/, ya cortadas
   openfilm-guia.js       el PRIMER-CORTE.md que lee su agente
   vtt.js                 lo que se dijo, en WebVTT, palabra por palabra
   ajustar-corte.js       correr el IN y el OUT al silencio de al lado
@@ -1808,7 +1829,7 @@ en [`notas/`](notas/) y en los
 
 Cómo se comprueba que una versión no rompe lo que andaba:
 
-- **1170 pruebas** (`npm test`), sin red y sin abrir nada.
+- **1177 pruebas** (`npm test`), sin red y sin abrir nada.
 - **El XML de cuarenta clases reales**, rehecho con la versión nueva y con la
   0.6.1, sale igual: las mismas tomas, los mismos marcadores en los mismos
   cuadros y los mismos cortes ajustados al silencio.

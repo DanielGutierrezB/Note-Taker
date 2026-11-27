@@ -32,6 +32,16 @@ function largo(seg) {
     return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min` : `${m} min`;
 }
 
+/**
+ * Un árbol de archivos alineado: lo que se dice de cada uno arranca en la misma
+ * columna, calculada del más largo. Con una columna fija, una ruta más larga que
+ * ella se comía su propia separación y el árbol dejaba de leerse como tal.
+ */
+function arbol(filas) {
+    const ancho = Math.max(...filas.map(([izq]) => izq.length)) + 2;
+    return filas.map(([izq, dice]) => `${izq}${' '.repeat(ancho - izq.length)}${dice}`);
+}
+
 /** Cómo se compone una vista, dicho de abajo hacia arriba como sus pistas. */
 function comoSeCompone(v, capturas) {
     const nombre = id => (capturas.find(c => c.id === id) || { nombre: `Captura ${id}` }).nombre;
@@ -133,102 +143,95 @@ function guia(datos) {
         L.push('');
     }
 
-    L.push('## Qué armar');
+    L.push('## El corte ya está armado');
     L.push('');
-    L.push('### 1. Un film por captura');
+    L.push('**No hay que montar nada de cero: las secuencias ya están escritas**, con los cortes que marcó'
+        + ' el director mientras grababa. Abrí `film.html` y vas a ver las clases precortadas, una detrás'
+        + ' de otra, cada una anidada para entrar a iterarla.');
     L.push('');
-    L.push('En `parts/captura-N/film.html`, las clases una detrás de otra, cada una en su franja, con'
-        + ` **${d.aireSeg} s de aire** entre clase y clase. Las franjas ya están calculadas en`
-        + ' `clases.json` (`clase.franja.desdeSeg`):');
+    const conTomas = clases.filter(c => (c.tomas || []).length);
+    L.push('```');
+    L.push(...arbol([
+        ['film.html', 'las clases precortadas, en fila'],
+        ...capturas.map(c => [c.film, `la ${c.nombre}: acá se suelta su vídeo`]),
+        ...vistas.filter(x => x.film).map(v => [v.film, `la vista ${v.vista}: ${comoSeCompone(v, capturas)}`]),
+        ...conTomas.slice(0, 2).map(c => [c.film, `${c.titulo}, cortada: ${c.tomas.length} toma(s)`]),
+        ...(conTomas.length > 2 ? [['parts/…', `y ${conTomas.length - 2} clase(s) más`]] : []),
+        ...(conTomas.length ? [[conTomas[0].pre, 'la misma clase sin cortar, por si falta algo']] : [])
+    ]));
+    L.push('```');
     L.push('');
-    L.push('| Clase | Empieza en | Dura | Su audio |');
+    L.push('Cómo está armado, que es el mismo armado que en Premiere:');
+    L.push('');
+    L.push('- **Una anidación por captura** (`parts/captura-N/`), con las clases una detrás de otra en su'
+        + ` franja y **${d.aireSeg} s de aire** entre una y otra. Adentro está el audio de cada clase,`
+        + ' muteado, que es contra lo que se sincroniza.');
+    if (vistas.some(v => v.film)) {
+        L.push('- **Una anidación por vista compuesta**, con sus capturas apiladas. El encuadre va en el'
+            + ' `style` del clip de arriba, una vez para todo el curso.');
+    }
+    L.push('- **Una precortada por clase** (`parts/<clase>/`): un clip por toma, pegados y sin lo que'
+        + ' quedó afuera, más la voz sacada del audio de la clase. Hay **una pista por vista**, y en cada'
+        + ' toma está encendida la de su plano: las demás quedan ahí, apagadas (`disabled`), así que'
+        + ' cambiar de plano es encender el clip que ya está, sin mover nada.');
+    L.push('- **La clase entera al lado** (`-sin-cortar`), con las mismas pistas: es a donde volver'
+        + ' cuando un borde quedó corto o una frase que valía se cayó del corte.');
+    L.push('');
+
+    L.push('## Lo único que falta: el vídeo de cada captura');
+    L.push('');
+    L.push('Las anidaciones de captura están armadas pero **vacías de imagen**: el vídeo de la cámara y el'
+        + ' de la pantalla no los tiene la app, los tenés vos.');
+    L.push('');
+    for (const c of capturas) {
+        L.push(`1. Poné el vídeo de la **${c.nombre}** en \`${c.material}\` y soltalo en \`${c.film}\`,`
+            + ' en su pista de arriba.');
+    }
+    L.push('');
+    L.push('**Y sincronizalo**, que es lo único que no te puedo dar hecho. El vídeo de cada cámara arranca'
+        + ' cuando alguien apretó grabar en ella, y el audio cuando se apretó Iniciar en la app: entre los'
+        + ' dos hay un desfase de segundos o de minutos. Calculalo comparando el audio del vídeo con el de'
+        + ' su clase (ffmpeg sirve), movelo con su `at` y **decime cuánto te dio en cada clase**. Como todo'
+        + ' cuelga de estas anidaciones, sincronizar acá deja bien el curso entero.');
+    L.push('');
+    L.push('| Clase | Su franja empieza en | Dura | Su audio |');
     L.push('|---|---|---|---|');
     for (const c of clases) {
         const a = (c.audio || [])[0];
         L.push(`| ${c.titulo} | ${c.franja.desdeSeg} s | ${largo(c.franja.largoSeg)} | ${a ? `\`${a.archivo}\`` : 'sin audio'} |`);
     }
     L.push('');
-    L.push('En cada franja van dos cosas: **el WAV de la clase**, `muted`, que es contra lo que se'
-        + ' sincroniza, y **el video de esa captura**, también `muted` acá adentro. El audio bueno del'
-        + ' corte sale del WAV en la precortada, no de la cámara.');
-    L.push('');
-    L.push('**La sincronía es lo único que no te puedo dar hecho.** El video de cada cámara arranca'
-        + ' cuando alguien apretó grabar en ella, y el WAV cuando se apretó Iniciar en la app: entre los'
-        + ' dos hay un desfase de segundos o de minutos. Calculalo comparando el audio del video con el'
-        + ' WAV de su clase (ffmpeg sirve) y **decime cuánto te dio en cada clase antes de seguir**. Si'
-        + ' el número no cuadra, todo lo que armes encima queda corrido y no se ve hasta mirar el corte.');
-    L.push('');
-    if (vistas.some(v => v.film)) {
-        L.push('### 2. Un film por vista anidada');
-        L.push('');
-        for (const v of vistas.filter(x => x.film)) {
-            L.push(`- \`${v.film}\`: ${comoSeCompone(v, capturas)}. Una pista por captura, en ese orden,`
-                + ' con el film de cada una adentro y el encuadre en su `style`.');
-        }
-        L.push('');
-    }
-    L.push(`### ${vistas.some(v => v.film) ? 3 : 2}. Una precortada por clase`);
-    L.push('');
-    L.push('En `parts/<clase>/film.html`, un clip por toma, en orden y pegados: el final de una es el'
-        + ' principio de la siguiente, sin huecos. Cada clip es el film de la captura que le toca a su'
-        + ' vista, recortado a la toma:');
-    L.push('');
-    L.push('```html');
-    const ejemplo = clases.find(c => (c.tomas || []).length);
-    const t = ejemplo ? ejemplo.tomas[0] : null;
-    if (t) {
-        const fuente = (d.fuentes || []).find(f => f.clave === t.fuentes[0]);
-        const anidado = !fuente || /film\.html$/.test(fuente.film);
-        const tag = anidado ? 'iframe' : 'video';
-        L.push(`<!-- ${ejemplo.titulo}, toma ${t.toma} (${t.vista}) -->`);
-        L.push(`<${tag} id="toma-${t.toma}" src="../../${fuente ? fuente.film : 'parts/captura-1/film.html'}`
-            + `#t=${t.enLaCaptura.desdeSeg},${t.enLaCaptura.hastaSeg}"`);
-        L.push(`        at="${t.enLaPrecortada.desdeSeg}" data-toma="${t.toma}" data-vista="${t.vista}"`
-            + `${t.nota ? ` title="${t.nota}"` : ''}></${tag}>`);
-    }
-    L.push('```');
-    L.push('');
-    L.push('Un film anidado es un `<iframe>` y una cámara suelta un `<video>`: usá el elemento que'
-        + ' corresponda a lo que estés poniendo. **Ponele a cada clip su `id`** (`toma-1`, `toma-2`):'
-        + ' sin uno, el id sale del nombre del archivo y todos los clips de una precortada se llaman'
-        + ' igual, así que no hay cómo nombrar uno para corregirlo después.');
-    L.push('');
-    L.push('Las pistas van **de arriba hacia abajo en el orden en que se dibujan**: la primera `<section>`'
-        + ' queda encima. Y abajo de todo, una pista con el WAV de la clase recortado igual que las tomas,'
-        + ' que es el audio que se oye.');
-    L.push('');
-    L.push('Cada clase tiene que quedar con estas tomas:');
+
+    L.push('## Lo que quedó cortado');
     L.push('');
     L.push('| Clase | Tomas | Cortado | Su precortada | Su guion |');
     L.push('|---|---|---|---|---|');
     for (const c of clases) {
-        L.push(`| ${c.titulo} | ${(c.tomas || []).length} | ${largo(c.duracionSeg)} | \`${c.film}\``
+        L.push(`| ${c.titulo} | ${(c.tomas || []).length} | ${largo(c.duracionSeg)} | `
+            + `${(c.tomas || []).length ? `\`${c.film}\`` : '—'}`
             + ` | \`notas-de-rodaje/${c.corto}.md\` |`);
     }
+    L.push('');
     const sinTomas = clases.filter(c => !(c.tomas || []).length);
     if (sinTomas.length) {
         L.push(`**${sinTomas.length === 1 ? 'Una clase no tiene ninguna toma' : `${sinTomas.length} clases no tienen ninguna toma`}**`
-            + ` (${sinTomas.map(c => c.titulo).join(', ')}): esas no llevan precortada. Van enteras y`
-            + ' nada más, por si hay algo adentro que rescatar.');
+            + ` (${sinTomas.map(c => c.titulo).join(', ')}): esas no llevan precortada, y no entran en`
+            + ' `film.html`. Van enteras y nada más, por si hay algo adentro que rescatar.');
         L.push('');
     }
-    L.push(`### ${vistas.some(v => v.film) ? 4 : 3}. La clase entera, sin cortar`);
+    L.push('Leé el guion de una clase antes de tocarla: trae cada toma con su vista, la nota que escribió'
+        + ' el director y lo que se dice adentro. Es con lo que se decide qué sacar y en qué orden.');
     L.push('');
-    L.push('Al lado de cada precortada, la misma clase de punta a punta, con las mismas pistas y todo lo'
-        + ' que se dijo (`clase.pre` en `clases.json`). Es a donde se vuelve cuando un borde quedó corto'
-        + ' o una frase que valía se cayó del corte.');
+
+    L.push('## Y de ahí en adelante, es tuyo');
     L.push('');
-    L.push(`### ${vistas.some(v => v.film) ? 5 : 4}. El film principal`);
+    L.push('Lo de arriba es el corte en bruto: están los planos y está la voz. Lo que hace que se vea como'
+        + ' una clase y no como una grabación es lo que sigue, y eso es tu trabajo: el ritmo, los títulos,'
+        + ' lo que se muestra en pantalla, la música, los subtítulos.');
     L.push('');
-    L.push('En `film.html`, las precortadas una detrás de otra, en orden de clase. El que hay ahora está'
-        + ' vacío y es para que OpenFilm abra la carpeta como un proyecto: escribilo encima.');
-    L.push('');
-    L.push(`### ${vistas.some(v => v.film) ? 6 : 5}. Los subtítulos, si los querés`);
-    L.push('');
-    L.push('Cada WAV tiene su `.vtt` al lado, con las palabras y su hora en los segundos de ese archivo.'
-        + ' Para ponerlos en una clase hay que pasarlos a los segundos de su precortada —cada toma se'
-        + ' corre a su `at`— y dejarlos en un archivo propio al lado de ese film'
-        + ' (`parts/<clase>/captions/captions.vtt`), colgado de una pista sola:');
+    L.push('Para los subtítulos ya está lo más caro hecho: cada audio tiene su `.vtt` al lado, con las'
+        + ' palabras y su hora en los segundos de ese archivo. Pasalas a los segundos de la precortada'
+        + ' —cada toma se corre a su `at`— y colgalas de una pista sola:');
     L.push('');
     L.push('```html');
     L.push('<section hidden>');
@@ -239,20 +242,23 @@ function guia(datos) {
 
     L.push('## Antes de darlo por hecho');
     L.push('');
-    L.push('1. Corré `openfilm look` sobre una clase y sobre el film principal.');
-    L.push('2. Contá las tomas de cada precortada y comparalas con la tabla de arriba.');
-    L.push('3. Mirá la primera y la última toma de una clase: que empiecen y terminen donde dice'
-        + ' `clases.json`, y que se oiga la voz desde el primer segundo.');
-    L.push('4. Decime el desfase que calculaste para cada clase.');
+    L.push('1. Corré `openfilm look` sobre el film del curso y sobre una clase.');
+    L.push('2. Mirá la primera y la última toma de una clase: que empiecen y terminen donde dice su guion,'
+        + ' y que se oiga la voz desde el primer segundo.');
+    L.push('3. Decime el desfase que calculaste para cada captura y cada clase.');
     L.push('');
-    L.push('**Si un film anidado recortado no reproduce bien ese tramo, o la vista previa se arrastra**'
-        + ' con muchas tomas, cambiá de plan: que los clips de las precortadas apunten directo al video'
-        + ' de la cámara, con el desfase ya sumado a sus tiempos. El resultado es el mismo y se pierde'
-        + ' solo la comodidad de encuadrar una vez; decime si tuviste que hacerlo.');
+    L.push('**Si una anidación recortada no reproduce bien ese tramo, o la vista previa se arrastra** con'
+        + ' muchas tomas, decímelo: se puede cambiar a que los clips apunten directo al vídeo de la cámara'
+        + ' con el desfase ya sumado. El corte es el mismo y se pierde solo la comodidad de encuadrar una'
+        + ' vez.');
     L.push('');
-    L.push('No cambies nada de `notas-de-rodaje/` ni de `xml/`: lo reescribe Note Taker cada vez que se'
-        + ' exporta, y `xml/` además es de donde sale todo esto. Lo que armes vos —`film.html`,'
-        + ' `parts/`— no lo toca nunca.');
+    L.push('**Lo que edites se respeta.** Note Taker anota la huella de cada secuencia que escribe'
+        + ' (`notas-de-rodaje/secuencias.json`): al volver a exportar refresca las que siguen como las'
+        + ' dejó y **no toca las que cambiaste**, aunque los cortes hayan cambiado en la app. Si una clase'
+        + ' se re-cortó allá y querés su versión nueva, borrá su film y volvé a exportar.');
+    L.push('');
+    L.push('Y no cambies nada de `notas-de-rodaje/` ni de `xml/`: lo reescribe Note Taker en cada'
+        + ' exportación, y `xml/` además es de donde sale todo esto.');
     L.push('');
 
     return `${L.join('\n')}\n`;

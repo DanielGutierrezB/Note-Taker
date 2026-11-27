@@ -189,8 +189,9 @@ function pintarPie(resultado) {
     // escribir: la carpeta sola no dice que hay que abrirla en su app.
     const avisos = (r.avisos || []).map(a => `<li>${esc(a)}</li>`).join('');
     const queSigue = resultado.cual === 'openfilm'
-        ? `<span class="pp-resultado-trae">Abrí esta carpeta en OpenFilm y pedile a su agente que lea `
-            + `<code>${esc((r.guia || '').split('/').pop())}</code>.</span>`
+        ? '<span class="pp-resultado-trae">Abrí esta carpeta en OpenFilm: las clases ya están cortadas. '
+            + `Falta soltar el vídeo de cada captura, y <code>${esc((r.guia || '').split('/').pop())}</code>`
+            + ' se lo explica a su agente.</span>'
         : '';
     caja.innerHTML = `
         <span class="pp-resultado-dice" title="${esc(r.ruta)}">Listo: <b>${esc(nombre)}</b></span>

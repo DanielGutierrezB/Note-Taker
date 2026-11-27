@@ -21,6 +21,7 @@
  * puede negociar entre dos exportadores de la misma clase.
  */
 
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -29,9 +30,10 @@ const nombreDeSesion = require('./nombre-de-sesion');
 const sesionesGrabadas = require('./sesiones-grabadas');
 const workspace = require('./workspace');
 const vtt = require('./vtt');
-const { planear, AIRE_SEG, nombreDeCaptura } = require('./prproj-plan');
+const { planear, AIRE_SEG, nombreDeCaptura, nombreDeFuente } = require('./prproj-plan');
 const { normalizar, vistasUsadas, vistaDe, gruposDe } = require('./prproj-carpeta-config');
 const { guia, NOMBRE_DE_LA_GUIA } = require('./openfilm-guia');
+const { films } = require('./openfilm-film');
 
 /**
  * **La carpeta del curso ES el proyecto de OpenFilm.**
@@ -185,36 +187,32 @@ function lasTomas(clase, porId, audios) {
     });
 }
 
+/** Dónde se anota qué secuencias escribió la app, y con qué contenido. */
+const HUELLAS = `${NOTAS}/secuencias.json`;
+
+const huellaDe = texto => crypto.createHash('sha256').update(texto, 'utf8').digest('hex').slice(0, 16);
+
 /**
- * El `film.html` con el que la carpeta ya es un proyecto, si todavía no hay uno.
+ * Si una secuencia se puede volver a escribir, o si alguien la editó.
  *
- * **Vacío a propósito, y escrito una sola vez.** El montaje lo arma el agente
- * (`PRIMER-CORTE.md`), así que acá no va ni una pista: lo único que hace este
- * archivo es que OpenFilm reconozca la carpeta como un proyecto suyo. Sin él
- * pregunta «No film in this folder: ¿empezamos uno?» apenas se abre, que es una
- * pregunta rara cuando la carpeta se acaba de exportar llena de material.
+ * Es la pregunta que hace que la app pueda escribir el montaje sin quitárselo a
+ * nadie. Al exportar se anota la huella de cada archivo que se escribió
+ * (`notas-de-rodaje/secuencias.json`); la próxima vez, un archivo que sigue
+ * teniendo esa huella es el nuestro y se refresca con los cortes de hoy, y uno
+ * que cambió es de quien lo editó y se deja como está.
  *
- * Es el mismo que hace `openfilm open` con una carpeta nueva —el `<meta>` del
- * escenario y nada más— con un comentario que dice dónde mirar. En cuanto el
- * agente escriba el suyo, exportar otra vez no lo toca.
+ * Sin anotación y con el archivo ahí, no se toca: puede ser de una exportación
+ * vieja o del agente, y entre perder un corte y no refrescarlo, no refrescarlo.
  */
-function filmDeArranque(destino) {
-    if (fs.existsSync(destino)) return false;
-    workspace.writeAtomic(destino, [
-        '<!doctype html>',
-        '<html>',
-        '<head>',
-        '<meta charset="utf-8">',
-        '<meta name="viewport" content="width=1920, height=1080">',
-        '</head>',
-        '<body>',
-        `<!-- Todavía sin montar. Lo que va acá está en ${NOMBRE_DE_LA_GUIA}, en esta misma carpeta:`,
-        '     las clases, sus tomas y qué armar con ellas. -->',
-        '</body>',
-        '</html>',
-        ''
-    ].join('\n'));
-    return true;
+function sePuedePisar(destino, huellas, ruta) {
+    if (!fs.existsSync(destino)) return true;
+    const anotada = huellas[ruta];
+    if (!anotada) return false;
+    try {
+        return huellaDe(fs.readFileSync(destino, 'utf8')) === anotada;
+    } catch (e) {
+        return false;
+    }
 }
 
 /** El guion de una clase: lo que se lee antes de tocar nada. */
@@ -340,6 +338,9 @@ async function exportar(opciones) {
                 pre: `parts/${corto}-sin-cortar/film.html`,
                 franja: { desdeSeg: seg(clase.franja.desdeSeg), largoSeg: seg(clase.franja.largoSeg) },
                 duracionSeg: seg(clase.duracionSeg),
+                // Con qué vista queda encendida la clase sin cortar: la primera
+                // que se usó, como en la PRE del `.prproj`.
+                vistaDeLaPre: clase.pre ? clase.pre.vista : null,
                 audio: audios.map(({ ruta, ...resto }) => resto),
                 tomas: lasTomas(clase, porId, audios)
             });
@@ -352,6 +353,15 @@ async function exportar(opciones) {
             largoSeg: seg(plan.largoSeg),
             capturas: lasCapturas(config),
             vistas: lasVistas(config, usadas),
+            // Las pistas de la precortada, de V1 para arriba: las mismas que en
+            // Premiere, y con el mismo significado (`repartirPistas`).
+            pistas: plan.pistas.map(p => ({
+                clave: p.clave,
+                vista: p.vista,
+                nombre: nombreDeFuente(p.ids),
+                capturas: p.ids.slice(),
+                siempre: p.siempre
+            })),
             fuentes: plan.fuentes.map(f => ({
                 clave: f.clave,
                 nombre: f.nombre,
@@ -373,7 +383,33 @@ async function exportar(opciones) {
         const texto = guia(datos);
         const rutaGuia = path.join(raiz, NOMBRE_DE_LA_GUIA);
         workspace.writeAtomic(rutaGuia, texto);
-        filmDeArranque(path.join(raiz, 'film.html'));
+
+        // Y las secuencias: el film del curso, las anidaciones y la precortada de
+        // cada clase (`engine/openfilm-film.js`). Así el proyecto abre con la
+        // línea de tiempo ya cortada, en vez de con una carpeta de datos.
+        decir(plan.clases.length, plan.clases.length, 'Armando las secuencias…');
+        let huellas = {};
+        try { huellas = JSON.parse(fs.readFileSync(path.join(raiz, HUELLAS), 'utf8')).huellas || {}; } catch (e) { /* la primera vez no hay */ }
+        const nuevas = {};
+        const editadas = [];
+        for (const [ruta, contenido] of Object.entries(films(datos))) {
+            const destino = path.join(raiz, ruta);
+            if (sePuedePisar(destino, huellas, ruta)) {
+                workspace.writeAtomic(destino, contenido);
+                nuevas[ruta] = huellaDe(contenido);
+            } else {
+                editadas.push(ruta);
+                // La huella que tenía se conserva: si mañana vuelve a su forma
+                // —un ⌘Z en el editor— se puede volver a refrescar.
+                if (huellas[ruta]) nuevas[ruta] = huellas[ruta];
+            }
+        }
+        workspace.writeJson(path.join(raiz, HUELLAS), { version: 1, huellas: nuevas });
+        if (editadas.length) {
+            avisos.push(`${editadas.length} secuencia(s) ya estaban editadas y se dejaron como estaban: `
+                + `${editadas.slice(0, 3).join(', ')}${editadas.length > 3 ? '…' : ''}. `
+                + 'Lo que cambió de los cortes no entró ahí.');
+        }
 
         const tomas = clases.reduce((n, c) => n + c.tomas.length, 0);
         return {
@@ -398,9 +434,9 @@ module.exports = {
     NOTAS,
     ASSETS,
     enElProyecto,
+    HUELLAS,
     exportar,
     lasCapturas,
     lasVistas,
-    guionDeLaClase,
-    filmDeArranque
+    guionDeLaClase
 };

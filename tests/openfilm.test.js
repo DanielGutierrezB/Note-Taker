@@ -114,6 +114,56 @@ const CONFIG = {
 
 const leerJson = ruta => JSON.parse(fs.readFileSync(ruta, 'utf8'));
 
+/**
+ * Un `film.html` leído: sus pistas y sus clips.
+ *
+ * Es un lector propio y chico, a propósito. El de OpenFilm vive adentro de su
+ * app, y estas pruebas corren sin nada instalado; además lo que acá se comprueba
+ * es lo que ESCRIBE Note Taker —qué clip, en qué pista, con qué tiempos— y no si
+ * su lector lo acepta, que es otra pregunta (`LECTOR_DE_OPENFILM`).
+ */
+function leerFilm(ruta) {
+    const texto = fs.readFileSync(ruta, 'utf8');
+    const cuerpo = texto.slice(texto.indexOf('<body>'), texto.indexOf('</body>'));
+    const tracks = [];
+    for (const sec of cuerpo.matchAll(/<section([^>]*)>([\s\S]*?)<\/section>/g)) {
+        const clips = [];
+        for (const el of sec[2].matchAll(/<(iframe|video|audio|img)\s([^>]*)><\/\1>/g)) {
+            const attrs = {};
+            for (const a of el[2].matchAll(/([a-z-]+)(?:="([^"]*)")?/g)) attrs[a[1]] = a[2] == null ? true : a[2];
+            const corte = /#t=([\d.]+),([\d.]+)$/.exec(attrs.src || '');
+            clips.push({
+                tipo: el[1],
+                id: attrs.id,
+                src: (attrs.src || '').replace(/#t=.*$/, ''),
+                time: corte ? [Number(corte[1]), Number(corte[2])] : null,
+                at: Number(attrs.at),
+                muted: Boolean(attrs.muted),
+                disabled: Boolean(attrs.disabled),
+                attrs
+            });
+        }
+        tracks.push({ clips, hidden: /\bhidden\b/.test(sec[1]) });
+    }
+    return { tracks };
+}
+
+/** El lector de OpenFilm, si su app está en esta Mac. Sin ella, las pruebas que lo usan se saltean. */
+const LECTOR_DE_OPENFILM = '/Applications/OpenFilm.app/Contents/Resources/app.asar.unpacked/node_modules/openfilm/src/film-doc.mjs';
+
+/** Todos los `film.html` de una carpeta, relativos a ella. */
+function filmsDe(dir) {
+    const salida = [];
+    const buscar = d => {
+        for (const f of fs.readdirSync(d, { withFileTypes: true })) {
+            if (f.isDirectory()) buscar(path.join(d, f.name));
+            else if (f.name === 'film.html') salida.push(path.relative(dir, path.join(d, f.name)));
+        }
+    };
+    buscar(dir);
+    return salida;
+}
+
 module.exports = async function (t) {
     t.group('openfilm · los segundos son los mismos que van a Premiere');
 
@@ -250,9 +300,9 @@ module.exports = async function (t) {
         const dir = dosClases();
         const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
         const texto = fs.readFileSync(r.guia, 'utf8');
-        t.ok(/decime cuánto te dio en cada clase antes de seguir/.test(texto), 'la sincronía, dicha antes');
+        t.ok(/decime cuánto te dio en cada clase/.test(texto), 'la sincronía, que es lo único que falta');
         t.ok(/openfilm look/.test(texto), 'cómo comprobarlo');
-        t.ok(/apunten directo al video de la cámara/.test(texto), 'y qué hacer si la anidación no sirve');
+        t.ok(/apunten directo al vídeo de la cámara/.test(texto), 'y qué hacer si la anidación no sirve');
     });
 
     t.test('una clase sin tomas se dice, en vez de dejar una precortada vacía', async () => {
@@ -287,35 +337,150 @@ module.exports = async function (t) {
         t.ok(texto.includes('# El primer corte de Curso X'), texto.slice(0, 80));
     });
 
-    t.group('openfilm · la carpeta abre como un proyecto');
+    t.group('openfilm · las secuencias, ya cortadas');
 
-    t.test('deja un film.html vacío, para que OpenFilm no pregunte si empezar uno', async () => {
+    t.test('el film del curso trae las clases con tomas, una detrás de otra', async () => {
         const dir = dosClases();
         const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
-        const film = path.join(r.ruta, 'film.html');
-        t.ok(fs.existsSync(film), 'está');
-        const texto = fs.readFileSync(film, 'utf8');
-        t.ok(/<meta name="viewport" content="width=1920, height=1080">/.test(texto), 'con su escenario');
-        t.ok(!/<section/.test(texto), 'y sin ninguna pista: el montaje es del agente');
-        t.ok(texto.includes(NOMBRE_DE_LA_GUIA), 'y dice dónde está la guía');
+        const doc = leerFilm(path.join(dir, 'film.html'));
+        const clips = doc.tracks[0].clips;
+        t.eq(clips.length, 2, 'las dos clases');
+        t.eq(clips[0].at, 0);
+        t.eq(clips[1].at, clips[0].time[1], 'pegada a la anterior, sin aire en el corte');
+        t.ok(/^parts\/clase-01\/film\.html$/.test(clips[0].src), clips[0].src);
     });
 
-    t.test('y lo escribe una sola vez: el del agente no se pisa', async () => {
+    t.test('la anidación de una captura trae el audio de cada clase en su franja, muteado', async () => {
         const dir = dosClases();
-        const primera = await openfilm.exportar({ carpeta: dir, config: CONFIG });
-        const film = path.join(primera.ruta, 'film.html');
-        fs.writeFileSync(film, 'el corte del agente');
-        t.eq(openfilm.filmDeArranque(film), false, 'no lo vuelve a escribir');
+        const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        const doc = leerFilm(path.join(dir, 'parts', 'captura-1', 'film.html'));
+        t.eq(doc.tracks.length, 2, 'una pista para el vídeo y una para el audio');
+        t.deep(doc.tracks[0].clips, [], 'la del vídeo va vacía: ahí se suelta la cámara');
+        const audio = doc.tracks[1].clips;
+        t.eq(audio.length, 2, 'un audio por clase');
+        t.ok(audio.every(c => c.muted), 'muteados: son la referencia para sincronizar');
+        const datos = leerJson(path.join(dir, openfilm.NOTAS, 'clases.json'));
+        t.eq(audio[1].at, datos.clases[1].franja.desdeSeg, 'cada uno en la franja de su clase');
+    });
+
+    t.test('la precortada tiene una pista por vista, con cada toma encendida en la suya', async () => {
+        const dir = dosClases();
+        const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        const doc = leerFilm(path.join(dir, 'parts', 'clase-01', 'film.html'));
+        const video = doc.tracks.slice(0, -1);
+        const datos = leerJson(path.join(dir, openfilm.NOTAS, 'clases.json'));
+        t.eq(video.length, datos.pistas.length, 'una pista por pista del plan');
+        for (const toma of datos.clases[0].tomas) {
+            const suyos = video.flatMap(t2 => t2.clips)
+                .filter(c => c.attrs && Number(c.attrs['data-toma']) === toma.toma);
+            const encendidos = suyos.filter(c => !c.disabled);
+            t.eq(encendidos.length, 1, `la toma ${toma.toma} se ve en una sola pista`);
+            t.eq(encendidos[0].attrs['data-vista'], toma.vista);
+        }
+    });
+
+    t.test('y abajo la voz, sacada del audio de la clase', async () => {
+        const dir = dosClases();
+        const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        const doc = leerFilm(path.join(dir, 'parts', 'clase-01', 'film.html'));
+        const audio = doc.tracks[doc.tracks.length - 1].clips;
+        const datos = leerJson(path.join(dir, openfilm.NOTAS, 'clases.json'));
+        t.eq(audio.length, datos.clases[0].tomas.length, 'un clip por toma');
+        t.eq(audio[0].at, datos.clases[0].tomas[0].enLaPrecortada.desdeSeg);
+        t.deep(audio[0].time, [datos.clases[0].tomas[0].enElAudio.desdeSeg, datos.clases[0].tomas[0].enElAudio.hastaSeg]);
+        t.ok(!audio[0].muted, 'esta sí se oye: es la clase');
+    });
+
+    t.test('la clase sin cortar va entera, con la vista con la que empezó encendida', async () => {
+        const dir = dosClases();
+        const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        const datos = leerJson(path.join(dir, openfilm.NOTAS, 'clases.json'));
+        const doc = leerFilm(path.join(dir, datos.clases[0].pre));
+        const video = doc.tracks.slice(0, -1);
+        const encendidos = video.flatMap(t2 => t2.clips).filter(c => !c.disabled);
+        t.eq(encendidos.length, 1, 'una sola vista encendida');
+        t.eq(encendidos[0].attrs['data-vista'], datos.clases[0].vistaDeLaPre);
+        t.eq(video[0].clips[0].time[1] - video[0].clips[0].time[0], datos.clases[0].franja.largoSeg, 'la clase entera');
+    });
+
+    t.test('cada film cierra solo: ids únicos, archivos que existen y clips que no se solapan', async () => {
+        const dir = dosClases();
+        const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        t.ok(r.ok, r.error || '');
+        let cuantos = 0;
+        for (const ruta of filmsDe(dir)) {
+            cuantos++;
+            const doc = leerFilm(path.join(dir, ruta));
+            const clips = doc.tracks.flatMap(t2 => t2.clips);
+            const ids = clips.map(c => c.id);
+            t.eq(new Set(ids).size, ids.length, `${ruta}: ids únicos`);
+            for (const c of clips) {
+                t.ok(fs.existsSync(path.resolve(dir, path.dirname(ruta), c.src)), `${ruta}: falta ${c.src}`);
+            }
+            for (const pista of doc.tracks) {
+                const orden = pista.clips.slice().sort((a, b) => a.at - b.at);
+                for (let i = 1; i < orden.length; i++) {
+                    const fin = orden[i - 1].at + (orden[i - 1].time ? orden[i - 1].time[1] - orden[i - 1].time[0] : 0);
+                    t.ok(orden[i].at >= fin - 0.0015, `${ruta}: ${orden[i].id} se solapa con el anterior`);
+                }
+            }
+        }
+        t.ok(cuantos >= 6, `se escribieron ${cuantos} films`);
+    });
+
+    if (!fs.existsSync(LECTOR_DE_OPENFILM)) {
+        t.skip('y el lector de OpenFilm los acepta sin una sola queja', 'OpenFilm no está instalado en esta Mac');
+    } else {
+        t.test('y el lector de OpenFilm los acepta sin una sola queja', async () => {
+            // La prueba de verdad del formato: el mismo módulo con el que su app
+            // lee un film. Solo corre donde OpenFilm está instalado.
+            const { readFilmFile } = await import(LECTOR_DE_OPENFILM);
+            const dir = dosClases();
+            await openfilm.exportar({ carpeta: dir, config: CONFIG });
+            for (const ruta of filmsDe(dir)) {
+                const r = readFilmFile(fs.readFileSync(path.join(dir, ruta), 'utf8'));
+                t.deep(r.problems || [], [], `${ruta}: lo que su lector reporta`);
+            }
+        });
+    }
+
+    t.group('openfilm · lo que el agente edita no se pisa');
+
+    t.test('una secuencia sin tocar se refresca, y una editada se deja con su aviso', async () => {
+        const dir = dosClases();
+        await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        const suyo = path.join(dir, 'parts', 'clase-01', 'film.html');
+        const otro = path.join(dir, 'parts', 'clase-02', 'film.html');
+        fs.writeFileSync(suyo, '<!doctype html><html><head><meta name="viewport" content="width=1920, height=1080"></head><body></body></html>\n');
+        const antesDelOtro = fs.readFileSync(otro, 'utf8');
+
         const segunda = await openfilm.exportar({ carpeta: dir, config: CONFIG });
         t.ok(segunda.ok, segunda.error || '');
-        t.eq(fs.readFileSync(film, 'utf8'), 'el corte del agente');
+        t.ok(/^<!doctype html><html><head>/.test(fs.readFileSync(suyo, 'utf8')), 'la editada se queda como estaba');
+        t.eq(fs.readFileSync(otro, 'utf8'), antesDelOtro, 'y la intacta se refresca igual');
+        t.ok(segunda.avisos.some(a => /ya estaban editadas/.test(a)), segunda.avisos.join(' '));
     });
 
-    t.test('la guía dice que ese film está vacío a propósito y cómo poner los subtítulos', async () => {
+    t.test('borrar una secuencia editada la vuelve a escribir', async () => {
+        const dir = dosClases();
+        await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        const suyo = path.join(dir, 'parts', 'clase-01', 'film.html');
+        fs.writeFileSync(suyo, 'tocado');
+        await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        t.eq(fs.readFileSync(suyo, 'utf8'), 'tocado', 'mientras está, no se toca');
+        fs.rmSync(suyo);
+        const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        t.ok(r.ok, r.error || '');
+        t.ok(fs.existsSync(suyo), 'borrada, vuelve con los cortes de hoy');
+        t.ok(/Note Taker al exportar/.test(fs.readFileSync(suyo, 'utf8')));
+    });
+
+    t.test('la guía dice que el corte ya está y que lo editado se respeta', async () => {
         const dir = dosClases();
         const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
         const texto = fs.readFileSync(r.guia, 'utf8');
-        t.ok(/vacío y es para que OpenFilm abra la carpeta/.test(texto), 'lo del film');
+        t.ok(/El corte ya está armado/.test(texto), 'lo primero');
+        t.ok(/no toca las que cambiaste/.test(texto), 'y que lo editado se respeta');
         t.ok(/<track kind="captions"/.test(texto), 'y cómo cuelga una pista de subtítulos');
     });
 
