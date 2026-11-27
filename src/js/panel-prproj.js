@@ -126,12 +126,11 @@ export async function abrir(laCarpeta) {
     $('#prproj-dice').textContent = r.clases
         ? `${r.curso} · ${r.clases === 1 ? '1 clase' : `${r.clases} clases`}`
         : `${r.curso} · todavía no tiene ninguna clase grabada`;
-    // Las dos salidas escriben adentro de la carpeta del curso, cada una en la
-    // suya: se nombra la carpeta una vez y después qué deja cada botón.
+    // Las dos salidas van a la carpeta del curso: el `.prproj` en `Proyecto/`, y
+    // lo de OpenFilm en la carpeta misma, que es su proyecto.
     const corte = r.destino.lastIndexOf('/Proyecto/');
     const enElCurso = corte > 0 ? r.destino.slice(0, corte) : r.destino;
-    $('#prproj-destino').innerHTML = `Se guarda en <code title="${esc(enElCurso)}">${esc(enElCurso)}</code>`
-        + ', en <code>Proyecto/</code> o en <code>OpenFilm/</code>';
+    $('#prproj-destino').innerHTML = `Se guarda en <code title="${esc(enElCurso)}">${esc(enElCurso)}</code>`;
     $('#prproj-ejemplo').textContent = ejemplo
         ? `${ejemplo.nombre}${ejemplo.segundos ? ` · ${duracion(ejemplo.segundos)}` : ''}`
         : '';

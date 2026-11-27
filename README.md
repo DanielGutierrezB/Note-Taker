@@ -1190,19 +1190,35 @@ app escribiera el `film.html`, el primer cambio del agente lo pisaría.
 
 ![El panel después de exportar a OpenFilm: el pie dice qué quedó y qué hacer con eso](docs/capturas/openfilm-listo-1180.png)
 
-**Exportar a OpenFilm** escribe `<carpeta>/OpenFilm/`:
+**La carpeta del curso ES el proyecto de OpenFilm.** **Exportar a OpenFilm**
+escribe al lado de lo que ya hay:
 
 ```
-film.html              vacío: para que OpenFilm abra la carpeta como un proyecto
-PRIMER-CORTE.md        la guía: qué hay acá y qué armar con eso
-notas-de-rodaje/
-  clases.json          todas las clases y sus tomas, con los tiempos en segundos
-  clase-01.md …        el guion de cada clase: toma, vista, nota y lo que se dice
-assets/
-  audio/<clase>-1.wav  el audio de la clase, enlazado (copiado si está en otro disco)
-  audio/<clase>-1.vtt  lo que se dijo, palabra por palabra, en segundos de ese WAV
-  captura-1/ …         vacías: ahí se suelta el vídeo de cada cámara o pantalla
+<curso>/
+  film.html            vacío: para que OpenFilm abra la carpeta como un proyecto
+  PRIMER-CORTE.md      la guía: qué hay acá y qué armar con eso
+  notas-de-rodaje/
+    clases.json        todas las clases y sus tomas, con los tiempos en segundos
+    clase-01.md …      el guion de cada clase: toma, vista, nota y lo que se dice
+  xml/                 lo que la app ya escribía al grabar
+    Audio/*.wav        el audio de cada clase, donde siempre estuvo
+    Audio/*.vtt        lo que se dijo, palabra por palabra, en segundos de ese WAV
+  assets/captura-1/ …  vacías: ahí se suelta el vídeo de cada cámara o pantalla
+  Proyecto/            el `.prproj`, si se exportó también para Premiere
 ```
+
+Primero esto escribía una subcarpeta `OpenFilm/` con el audio adentro, y tenía
+dos costos. Uno a la vista: en OpenFilm había que abrir la subcarpeta, y quien
+abría el curso recibía «No film in this folder». El otro, peor: **el audio ya
+está en `xml/Audio/`**, así que llevarlo adentro era duplicar gigabytes o llenar
+la carpeta de enlaces. Abriendo el curso, el audio se nombra donde vive y el
+`.vtt` va a su lado, que además es donde el protocolo de OpenFilm lo busca.
+
+Una carpeta de curso **copiada** —el editor recibe una copia y la original sigue
+en su sitio— deja los sidecars nombrando la original. Para OpenFilm gana el audio
+que esta carpeta tiene en su `xml/Audio/`, porque es lo único que puede servir; y
+si el audio no está en ninguna parte adentro, se dice en vez de escribir una ruta
+que no resuelve.
 
 **Los cortes son los mismos que van a Premiere.** El plan sale de
 `prproj-plan.planear` —el mismo que arma el `.prproj`— y el exportador solo lo
@@ -1577,7 +1593,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 1167 pruebas, sin red y sin abrir nada
+npm test           # 1170 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```
@@ -1792,7 +1808,7 @@ en [`notas/`](notas/) y en los
 
 Cómo se comprueba que una versión no rompe lo que andaba:
 
-- **1167 pruebas** (`npm test`), sin red y sin abrir nada.
+- **1170 pruebas** (`npm test`), sin red y sin abrir nada.
 - **El XML de cuarenta clases reales**, rehecho con la versión nueva y con la
   0.6.1, sale igual: las mismas tomas, los mismos marcadores en los mismos
   cuadros y los mismos cortes ajustados al silencio.

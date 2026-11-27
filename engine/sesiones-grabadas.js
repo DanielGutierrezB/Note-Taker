@@ -747,6 +747,19 @@ function quitar(ruta) {
 }
 
 /** Los WAV de una sesión que están hoy en el disco. */
+/**
+ * Lo que acompaña a un WAV y se llama como él.
+ *
+ * Hoy es uno solo: el `.vtt` con lo que se dijo, que escribe el exportador de
+ * OpenFilm al lado del audio porque así lo nombra su protocolo (§Words). Va acá
+ * y no en ese exportador porque el problema es de la clase y no de la salida:
+ * renombrar o borrar una clase tiene que llevárselo, o queda un archivo
+ * hablando de un audio que ya no está.
+ */
+function alLadoDelWav(archivo) {
+    return [archivo.replace(/\.wav$/i, '.vtt')].filter(r => r !== archivo);
+}
+
 function audiosDe(sitio, estado) {
     const vistos = new Set();
     const salida = [];
@@ -873,6 +886,15 @@ function renombrar(json, cambio, enCurso) {
             }
             fs.renameSync(wav.archivo, nuevo);
             movidos.push([wav.archivo, nuevo]);
+            // Y lo que se llama como él: si no, queda nombrando una clase que
+            // ya no existe con ese nombre.
+            for (const suyo of alLadoDelWav(wav.archivo)) {
+                const destinoSuyo = wavRenombrado(suyo, sitio.nombre, nombre);
+                if (!destinoSuyo || !fs.existsSync(suyo) || fs.existsSync(destinoSuyo)) continue;
+                if (!workspace.dentroDe(sitio.base, destinoSuyo)) continue;
+                fs.renameSync(suyo, destinoSuyo);
+                movidos.push([suyo, destinoSuyo]);
+            }
             // El sidecar que se va a escribir tiene que decir dónde está el
             // audio AHORA: es de donde sale el clip de A1 y "Regenerar".
             wav.sesion.archivo = nuevo;
@@ -948,6 +970,7 @@ function borrar(json, enCurso) {
         // más: acá se está borrando de verdad.
         if (!workspace.dentroDe(sitio.base, wav.archivo)) continue;
         if (quitar(wav.archivo)) audios++;
+        for (const suyo of alLadoDelWav(wav.archivo)) quitar(suyo);
     }
 
     const fotos = referencias.borrar(sitio.base, sitio.nombre);

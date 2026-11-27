@@ -33,13 +33,21 @@ const { planear, AIRE_SEG, nombreDeCaptura } = require('./prproj-plan');
 const { normalizar, vistasUsadas, vistaDe, gruposDe } = require('./prproj-carpeta-config');
 const { guia, NOMBRE_DE_LA_GUIA } = require('./openfilm-guia');
 
-/** La carpeta que se abre en OpenFilm, adentro de la del curso. */
-const CARPETA = 'OpenFilm';
-
-/** Y las de adentro, que son las que el `.md` nombra. */
+/**
+ * **La carpeta del curso ES el proyecto de OpenFilm.**
+ *
+ * Primero esto escribía una subcarpeta `OpenFilm/` con el audio adentro, y eso
+ * tenía dos costos. Uno a la vista: en OpenFilm había que abrir la subcarpeta y
+ * no el curso, y quien abría el curso recibía «No film in this folder». El otro,
+ * peor: el audio de las clases ya está en `xml/Audio/`, así que llevarlo adentro
+ * era duplicar gigabytes o llenar la carpeta de enlaces.
+ *
+ * Abriendo el curso, el audio se nombra donde ya vive. Lo que se agrega al lado
+ * de `xml/` son las notas de rodaje, la guía y dónde soltar el vídeo de cada
+ * captura; `Proyecto/`, que es lo de Premiere, sigue donde estaba.
+ */
 const NOTAS = 'notas-de-rodaje';
 const ASSETS = 'assets';
-const AUDIO = `${ASSETS}/audio`;
 
 /** Entre clase y clase, el mismo aire que en Premiere: lo pidió el editor. */
 const AIRE_SEG_OPENFILM = AIRE_SEG;
@@ -55,30 +63,33 @@ function nombreCorto(sesion, i) {
 }
 
 /**
- * El WAV de una clase, en la carpeta de OpenFilm.
+ * Un archivo del proyecto, dicho como lo lee OpenFilm: relativo a la carpeta.
  *
- * **Enlazado, no copiado.** Una clase de tres horas son 1,2 GB, y el WAV ya está
- * en la carpeta del curso: un enlace duro deja el mismo archivo con dos nombres
- * y no ocupa un byte más. Entre discos distintos no se puede enlazar —el enlace
- * vive en el sistema de archivos, no entre dos— así que ahí se copia, que es lo
- * que OpenFilm necesita: solo lee lo que está adentro del proyecto.
- *
- * @returns {'enlace'|'copia'|'ya-estaba'}
+ * OpenFilm sirve el proyecto por HTTP con la carpeta como raíz, así que solo
+ * puede nombrar lo que está adentro. Un WAV de afuera —grabado en otra Mac y
+ * nunca traído— no se puede nombrar, y eso se dice en vez de escribir una ruta
+ * que no va a resolver.
  */
-function traerElAudio(origen, destino) {
-    if (fs.existsSync(destino)) {
-        const mismo = workspace.sameFingerprint(
-            workspace.fingerprint(origen), workspace.fingerprint(destino));
-        if (mismo) return 'ya-estaba';
-        fs.rmSync(destino);
-    }
-    try {
-        fs.linkSync(origen, destino);
-        return 'enlace';
-    } catch (e) {
-        fs.copyFileSync(origen, destino);
-        return 'copia';
-    }
+function enElProyecto(carpeta, ruta) {
+    const dentro = path.relative(carpeta, ruta);
+    return dentro && !dentro.startsWith('..') && !path.isAbsolute(dentro) ? dentro : null;
+}
+
+/**
+ * El WAV de una clase, visto desde el proyecto: el de ESTA carpeta si está.
+ *
+ * El sidecar guarda dónde estaba el audio el día de la grabación, y la app lo
+ * usa tal cual mientras ese archivo siga existiendo (`dondeQuedoElWav`), que es
+ * lo correcto para ella. Pero una carpeta de curso COPIADA —el editor recibe una
+ * copia y la original sigue en su sitio— deja los sidecars nombrando la
+ * original, y OpenFilm solo puede leer lo que está adentro del proyecto. Así que
+ * acá gana el audio que esta carpeta tiene en su `xml/Audio/`, y la ruta del
+ * sidecar es el respaldo.
+ */
+function audioDelProyecto(carpeta, ruta) {
+    const aca = path.join(workspace.audioDir(carpeta), path.basename(ruta));
+    if (fs.existsSync(aca)) return aca;
+    return ruta;
 }
 
 /**
@@ -281,36 +292,37 @@ async function exportar(opciones) {
 
     const plan = planear(sesiones, config);
     const avisos = plan.avisos.slice();
-    const raiz = path.join(op.carpeta, CARPETA);
+    const raiz = op.carpeta;
 
     try {
         workspace.ensureDir(path.join(raiz, NOTAS));
-        workspace.ensureDir(path.join(raiz, AUDIO));
         for (const captura of lasCapturas(config)) workspace.ensureDir(path.join(raiz, captura.material));
 
         const clases = [];
         for (const [i, clase] of plan.clases.entries()) {
-            decir(i, plan.clases.length, `Llevando ${clase.nombre}…`);
+            decir(i, plan.clases.length, `Escribiendo lo de ${clase.nombre}…`);
             const corto = nombreCorto(clase.sesion, i);
 
-            // El audio de la clase, y lo que se dijo en él. Un WAV que no está
-            // se salta con su aviso: el plan ya lo dijo, y la clase entra igual.
+            // El audio de la clase, nombrado donde ya vive, y lo que se dijo en
+            // él al lado (§Words: el `.vtt` se llama como su audio). Un WAV que
+            // no está se salta con su aviso: el plan ya lo dijo, y la clase
+            // entra igual.
             const audios = [];
             for (const w of clase.wavs) {
-                const nombre = path.basename(w.ruta);
-                const destino = path.join(raiz, AUDIO, nombre);
-                const como = traerElAudio(w.ruta, destino);
-                if (como === 'copia') {
-                    avisos.push(`${clase.nombre}: su audio está en otro disco, así que se copió `
-                        + `(${Math.round(w.segundos / 60)} min).`);
+                const suyo = audioDelProyecto(raiz, w.ruta);
+                const archivo = enElProyecto(raiz, suyo);
+                if (!archivo) {
+                    avisos.push(`${clase.nombre}: su audio está fuera de la carpeta del curso `
+                        + `(${w.ruta}), así que OpenFilm no lo puede leer. Traelo adentro y volvé a exportar.`);
+                    continue;
                 }
                 const palabras = vtt.deLaSesion(clase.sesion, w);
-                const vttNombre = nombre.replace(/\.wav$/i, '.vtt');
-                if (palabras) workspace.writeAtomic(path.join(raiz, AUDIO, vttNombre), palabras);
+                const suVtt = suyo.replace(/\.wav$/i, '.vtt');
+                if (palabras) workspace.writeAtomic(suVtt, palabras);
                 audios.push({
                     ruta: w.ruta,
-                    archivo: `${AUDIO}/${nombre}`,
-                    palabras: palabras ? `${AUDIO}/${vttNombre}` : null,
+                    archivo,
+                    palabras: palabras ? enElProyecto(raiz, suVtt) : null,
                     desdeSeg: seg((w.desdeMs - clase.sesion.ceroMs) / 1000),
                     segundos: seg(w.segundos)
                 });
@@ -373,7 +385,7 @@ async function exportar(opciones) {
             avisos,
             cuenta: [
                 `${clases.length} clase(s) con ${tomas} toma(s), en ${config.capturas} captura(s).`,
-                `Abrí ${CARPETA}/ en OpenFilm y pedile al agente que lea ${NOMBRE_DE_LA_GUIA}.`
+                `Abrí esta carpeta en OpenFilm y pedile al agente que lea ${NOMBRE_DE_LA_GUIA}.`
             ],
             error: null
         };
@@ -383,10 +395,9 @@ async function exportar(opciones) {
 }
 
 module.exports = {
-    CARPETA,
     NOTAS,
     ASSETS,
-    AUDIO,
+    enElProyecto,
     exportar,
     lasCapturas,
     lasVistas,

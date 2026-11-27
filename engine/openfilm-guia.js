@@ -81,11 +81,17 @@ function guia(datos) {
         L.push(enColumna(`${c.corto}.md`, 'el guion de esa clase: cada toma, su vista, su nota y lo que se dice'));
     }
     if (clases.length > 3) L.push(enColumna('…', `y ${clases.length - 3} clase(s) más`));
+    L.push('xml/');
+    L.push(enColumna('Audio/*.wav', 'el audio de cada clase, grabado por la app'));
+    L.push(enColumna('Audio/*.vtt', 'lo que se dijo, palabra por palabra, en los segundos de ese WAV'));
+    L.push(enColumna('*.xml', 'las mismas notas para Premiere; acá no hacen falta'));
     L.push('assets/');
-    L.push(enColumna('audio/*.wav', 'el audio de cada clase, grabado por la app'));
-    L.push(enColumna('audio/*.vtt', 'lo que se dijo, palabra por palabra, en los segundos de ese WAV'));
     for (const c of capturas) L.push(enColumna(`captura-${c.id}/`, `acá va el video de la ${c.nombre}`));
     L.push('```');
+    L.push('');
+    L.push('Esta carpeta es la del curso: `xml/` es lo que escribió la app al grabar y **no se toca**, y'
+        + ' `Proyecto/`, si está, es un proyecto de Premiere de las mismas clases. Lo que armes vos va al'
+        + ' lado, en `film.html` y `parts/`.');
     L.push('');
     L.push('**Los tiempos de `clases.json` ya están en segundos**, redondeados a la milésima, que es como'
         + ' OpenFilm los escribe. No hay ninguna cuenta que hacer: cada toma trae su lugar en tres relojes.');
@@ -244,8 +250,9 @@ function guia(datos) {
         + ' de la cámara, con el desfase ya sumado a sus tiempos. El resultado es el mismo y se pierde'
         + ' solo la comodidad de encuadrar una vez; decime si tuviste que hacerlo.');
     L.push('');
-    L.push('No cambies nada de `notas-de-rodaje/` ni de `assets/audio/`: lo reescribe Note Taker cada vez'
-        + ' que se exporta. Lo que armes vos —`film.html`, `parts/`— no lo toca nunca.');
+    L.push('No cambies nada de `notas-de-rodaje/` ni de `xml/`: lo reescribe Note Taker cada vez que se'
+        + ' exporta, y `xml/` además es de donde sale todo esto. Lo que armes vos —`film.html`,'
+        + ' `parts/`— no lo toca nunca.');
     L.push('');
 
     return `${L.join('\n')}\n`;

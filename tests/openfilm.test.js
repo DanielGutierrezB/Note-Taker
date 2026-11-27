@@ -150,7 +150,7 @@ module.exports = async function (t) {
         const deLaSesion = primera.tomas.find(x => x.id === suya.toma);
         const desde = (ajustar.inAjustado(deLaSesion) - primera.sesiones[0].desdeMs) / 1000;
         t.eq(suya.enElAudio.desdeSeg, Math.round(desde * 1000) / 1000);
-        t.eq(suya.enElAudio.archivo, `${openfilm.AUDIO}/${path.basename(primera.sesiones[0].archivo)}`);
+        t.eq(suya.enElAudio.archivo, path.relative(dir, primera.sesiones[0].archivo));
     });
 
     t.test('una toma desactivada no está: lo que se ve es lo que va al corte', async () => {
@@ -218,18 +218,9 @@ module.exports = async function (t) {
     t.test('en una clase muda no se escribe ningún .vtt', async () => {
         const dir = carpetaConClases({ clases: [{ cero: T0, numero: 1, tomas: [] }] });
         const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
-        const audio = fs.readdirSync(path.join(r.ruta, openfilm.AUDIO));
+        const audio = fs.readdirSync(workspace.audioDir(r.ruta));
         t.ok(audio.some(f => f.endsWith('.wav')), 'el audio sí va');
         t.ok(!audio.some(f => f.endsWith('.vtt')), `pero no un .vtt vacío: ${audio.join(' ')}`);
-    });
-
-    t.test('y el .vtt de una clase con tomas queda al lado de su WAV, con su nombre', async () => {
-        const dir = dosClases();
-        const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
-        const datos = leerJson(path.join(r.ruta, openfilm.NOTAS, 'clases.json'));
-        const audio = datos.clases[0].audio[0];
-        t.eq(audio.palabras, audio.archivo.replace(/\.wav$/, '.vtt'));
-        t.ok(fs.existsSync(path.join(r.ruta, audio.palabras)), audio.palabras);
     });
 
     t.group('openfilm · la guía que lee el agente');
@@ -330,32 +321,88 @@ module.exports = async function (t) {
 
     t.group('openfilm · el audio de cada clase');
 
-    t.test('se enlaza en vez de copiarse: el mismo archivo con dos nombres', async () => {
+    t.test('se nombra donde ya vive, sin copiarlo ni enlazarlo', async () => {
         const dir = dosClases();
         const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
         const datos = leerJson(path.join(r.ruta, openfilm.NOTAS, 'clases.json'));
-        const copia = path.join(r.ruta, datos.clases[0].audio[0].archivo);
-        const original = path.join(workspace.audioDir(dir), path.basename(copia));
-        t.eq(fs.statSync(copia).ino, fs.statSync(original).ino, 'es el mismo archivo, no una copia');
+        const archivo = datos.clases[0].audio[0].archivo;
+        t.ok(/^xml\/Audio\//.test(archivo), `relativo al curso: ${archivo}`);
+        t.ok(fs.existsSync(path.join(dir, archivo)), 'y ahí está, que es el WAV de siempre');
+        t.ok(!fs.existsSync(path.join(dir, 'assets', 'audio')), 'sin ninguna copia al lado');
     });
 
-    t.test('y si no se puede enlazar, se copia: OpenFilm solo lee lo suyo', async () => {
-        // Entre dos discos no hay enlace posible. Se simula con un `linkSync`
-        // que falla, que es exactamente lo que el sistema contesta ahí.
+    t.test('y el .vtt queda al lado del WAV, con su mismo nombre', async () => {
         const dir = dosClases();
-        const linkSync = fs.linkSync;
-        fs.linkSync = () => { const e = new Error('EXDEV'); e.code = 'EXDEV'; throw e; };
-        let r;
-        try {
-            r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
-        } finally {
-            fs.linkSync = linkSync;
-        }
-        t.ok(r.ok, r.error || '');
+        const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
         const datos = leerJson(path.join(r.ruta, openfilm.NOTAS, 'clases.json'));
-        const copia = path.join(r.ruta, datos.clases[0].audio[0].archivo);
-        t.ok(fs.existsSync(copia), 'el audio está igual');
-        t.ok(r.avisos.some(a => /otro disco/.test(a)), `y se dice: ${r.avisos.join(' ')}`);
+        const audio = datos.clases[0].audio[0];
+        t.eq(audio.palabras, audio.archivo.replace(/\.wav$/, '.vtt'), 'el nombre que pide su protocolo');
+        t.ok(fs.existsSync(path.join(dir, audio.palabras)), audio.palabras);
+    });
+
+    t.test('un audio fuera de la carpeta del curso se dice: OpenFilm no lo puede leer', async () => {
+        const dir = dosClases();
+        // Como queda el sidecar de una clase grabada en otra Mac y nunca traída.
+        const afuera = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-afuera-'));
+        const json = fs.readdirSync(workspace.datosDir(dir)).find(f => f.endsWith('.json'));
+        const ruta = path.join(workspace.datosDir(dir), json);
+        const sidecar = leerJson(ruta);
+        const suWav = path.join(afuera, path.basename(sidecar.sesiones[0].archivo));
+        fs.copyFileSync(sidecar.sesiones[0].archivo, suWav);
+        fs.rmSync(sidecar.sesiones[0].archivo);
+        sidecar.sesiones[0].archivo = suWav;
+        workspace.writeJson(ruta, sidecar);
+
+        const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        t.ok(r.ok, r.error || '');
+        t.ok(r.avisos.some(a => /fuera de la carpeta del curso/.test(a)), r.avisos.join(' '));
+    });
+
+    t.test('en una carpeta copiada gana el audio de ESTA carpeta, no el de la original', async () => {
+        // El editor recibe una copia del curso y la original sigue en su sitio:
+        // los sidecars nombran la original, que OpenFilm no puede leer.
+        const original = dosClases();
+        const copia = carpeta();
+        workspace.ensureDir(workspace.datosDir(copia));
+        workspace.ensureDir(workspace.audioDir(copia));
+        for (const f of fs.readdirSync(workspace.datosDir(original))) {
+            fs.copyFileSync(path.join(workspace.datosDir(original), f), path.join(workspace.datosDir(copia), f));
+        }
+        for (const f of fs.readdirSync(workspace.audioDir(original))) {
+            fs.copyFileSync(path.join(workspace.audioDir(original), f), path.join(workspace.audioDir(copia), f));
+        }
+        const r = await openfilm.exportar({ carpeta: copia, config: CONFIG });
+        t.ok(r.ok, r.error || '');
+        const datos = leerJson(path.join(copia, openfilm.NOTAS, 'clases.json'));
+        const archivo = datos.clases[0].audio[0].archivo;
+        t.ok(/^xml\/Audio\//.test(archivo), `el de la copia: ${archivo}`);
+        t.ok(fs.existsSync(path.join(copia, archivo)), 'y está ahí');
+        t.ok(!r.avisos.some(a => /fuera de la carpeta/.test(a)), r.avisos.join(' '));
+    });
+
+    t.test('`enElProyecto` solo nombra lo de adentro', () => {
+        t.eq(openfilm.enElProyecto('/curso', '/curso/xml/Audio/x.wav'), 'xml/Audio/x.wav');
+        t.eq(openfilm.enElProyecto('/curso', '/otro/x.wav'), null);
+        t.eq(openfilm.enElProyecto('/curso', '/curso'), null, 'ni la carpeta misma');
+    });
+
+    t.test('renombrar la clase se lleva su .vtt, y borrarla también', async () => {
+        const dir = dosClases();
+        const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
+        const datos = leerJson(path.join(r.ruta, openfilm.NOTAS, 'clases.json'));
+        const antes = path.join(dir, datos.clases[0].audio[0].palabras);
+        t.ok(fs.existsSync(antes), 'está antes de tocar nada');
+
+        const sesiones = require('../engine/sesiones-grabadas');
+        const json = workspace.archivosDeSesion(dir, datos.clases[0].nombre).json;
+        const movida = sesiones.renombrar(json, { numero: 7 }, null);
+        t.ok(!fs.existsSync(antes), 'el viejo no quedó nombrando una clase que ya no está');
+        const ahora = path.join(workspace.audioDir(dir),
+            `${path.basename(movida.archivos.json).replace(sesiones.SUFIJO_SIDECAR, '')}-1.vtt`);
+        t.ok(fs.existsSync(ahora), `se movió con ella: ${ahora}`);
+
+        sesiones.borrar(movida.archivos.json, null);
+        t.ok(!fs.existsSync(ahora), 'y borrar la clase se lo lleva');
     });
 
     t.group('openfilm · exportar otra vez');
@@ -390,7 +437,8 @@ module.exports = async function (t) {
         const r = await openfilm.exportar({ carpeta: dir, config: CONFIG });
         t.eq(r.ok, false);
         t.ok(/ninguna clase/.test(r.error), r.error);
-        t.ok(!fs.existsSync(path.join(dir, openfilm.CARPETA)), 'y no la crea');
+        t.ok(!fs.existsSync(path.join(dir, openfilm.NOTAS)), 'y no escribe nada');
+        t.ok(!fs.existsSync(path.join(dir, 'film.html')), 'ni el film de arranque');
     });
 
     t.test('una carpeta que no está tampoco rompe nada', async () => {
