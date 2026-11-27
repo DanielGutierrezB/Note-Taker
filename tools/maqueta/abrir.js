@@ -157,7 +157,7 @@ const ESCENARIOS = [
     'en-vivo', 'en-vivo,desplegada',
     'toma-abierta', 'releyendo', 'sin-audio', 'terminada', 'terminada-vacia', 'notas-de-antes', 'muchas-clases',
     'foto', 'foto-cien',
-    'prproj', 'prproj-lleno', 'prproj-listo',
+    'prproj', 'prproj-lleno', 'prproj-listo', 'openfilm-listo',
     'ajustes', 'diagnostico',
     'iconos'
 ];

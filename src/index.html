@@ -86,10 +86,10 @@
             </div>
           </div>
           <div class="ses-barra" id="ses-barra">
-            <button id="btn-prproj" class="btn btn-premiere" type="button"
-                    title="Un proyecto de Premiere con todas las clases de este curso: las capturas para sincronizar y cada clase precortada">
-              <svg class="logo-premiere" viewBox="0 0 24 23" aria-hidden="true"><rect width="24" height="23" rx="5.4" fill="#00005b"/><text x="12" y="16.4" text-anchor="middle" font-size="12.5" font-weight="700" fill="#9999ff" font-family="-apple-system, Helvetica, Arial, sans-serif">Pr</text></svg>
-              Crear proyecto</button>
+            <button id="btn-prproj" class="btn" type="button"
+                    title="Las clases de este curso listas para editar: un proyecto de Premiere, o la carpeta que arma el primer corte en OpenFilm">
+              <span class="hp-ico" id="btn-prproj-ico"></span>
+              Exportar proyecto</button>
             <span class="crece"></span>
             <span class="v3">La próxima es la <code id="curso-ejemplo">—</code></span>
             <button id="btn-nueva" class="btn btn-primario" type="button"
@@ -552,7 +552,7 @@
   <div class="panel es-prproj">
     <div class="panel-cabeza">
       <div class="pp-titulos">
-        <span class="v1">Proyecto de Premiere</span>
+        <span class="v1">Exportar proyecto</span>
         <span class="v3" id="prproj-dice"></span>
       </div>
       <span class="crece"></span>
@@ -573,8 +573,8 @@
         </section>
       </div>
       <section class="pp-bloque pp-mira">
-        <h3 class="pp-paso"><span class="pp-num">3</span><span class="pp-paso-titulo">Así queda cada clase en Premiere</span>
-          <span class="ayuda" tabindex="0" title="La secuencia precortada de una clase, con todas las pistas encendidas para que se vea qué hay en cada una. En Premiere, cada toma enciende las pistas de su vista. Se redibuja al cambiar lo de la izquierda.">?</span>
+        <h3 class="pp-paso"><span class="pp-num">3</span><span class="pp-paso-titulo">Así queda cada clase</span>
+          <span class="ayuda" tabindex="0" title="La precortada de una clase, con todas las pistas encendidas para que se vea qué hay en cada una. Cada toma enciende las pistas de su vista. Vale para las dos salidas, y se redibuja al cambiar lo de la izquierda.">?</span>
           <span class="crece"></span><span class="pp-ejemplo" id="prproj-ejemplo"></span></h3>
         <div class="pp-linea" id="prproj-linea"></div>
         <div class="pp-leyenda">
@@ -593,9 +593,15 @@
       <button class="btn btn-tenue" type="button" data-cerrar="telon-prproj"
               title="Cerrar. Lo elegido acá queda guardado en la carpeta.">Cerrar</button>
       <button id="btn-prproj-mostrar" class="btn btn-primario" type="button" hidden
-              title="Abrir el Finder con el proyecto recién escrito seleccionado">Mostrar en Finder</button>
-      <button id="btn-prproj-generar" class="btn btn-primario" type="button"
-              title="Escribir el proyecto en Proyecto/, adentro de la carpeta del curso. Si ya hay uno, el nuevo queda al lado sin pisarlo.">Generar proyecto</button>
+              title="Abrir el Finder con lo que se acaba de escribir seleccionado">Mostrar en Finder</button>
+      <button id="btn-prproj-openfilm" class="btn btn-con-logo" type="button"
+              title="Escribir OpenFilm/, adentro de la carpeta del curso: el audio de cada clase, lo que se dijo palabra por palabra, las tomas en segundos y la guía para que su agente arme el primer corte">
+        <span class="hp-ico" id="btn-openfilm-ico"></span>
+        <span data-dice>Exportar a OpenFilm</span></button>
+      <button id="btn-prproj-generar" class="btn btn-con-logo" type="button"
+              title="Escribir el proyecto en Proyecto/, adentro de la carpeta del curso. Si ya hay uno, el nuevo queda al lado sin pisarlo.">
+        <svg class="logo-premiere" viewBox="0 0 24 23" aria-hidden="true"><rect width="24" height="23" rx="5.4" fill="#00005b"/><text x="12" y="16.4" text-anchor="middle" font-size="12.5" font-weight="700" fill="#9999ff" font-family="-apple-system, Helvetica, Arial, sans-serif">Pr</text></svg>
+        <span data-dice>Exportar .prproj</span></button>
     </div>
   </div>
 </div>

@@ -59,6 +59,7 @@ export function conectar(contexto) {
         if (!e.target.closest('#ses-menu, [data-hace="menu"]')) cerrarMenu();
     }, true);
     document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarMenu(); });
+    $('#btn-prproj-ico').innerHTML = icono('exportar');
     $('#btn-prproj').addEventListener('click', () => panelPrproj.abrir(app.ajustes.carpeta));
     panelPrproj.conectar();
 }

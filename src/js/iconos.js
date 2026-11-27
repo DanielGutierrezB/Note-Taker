@@ -161,7 +161,23 @@ const DIBUJOS = {
     sinEnlace: '<path d="M10.3 13.7a3.4 3.4 0 0 1 0-4.8l2.4-2.4a3.4 3.4 0 0 1 4.8 4.8l-1.2 1.2"/>'
         + '<path d="M13.7 10.3a3.4 3.4 0 0 1 0 4.8l-2.4 2.4a3.4 3.4 0 0 1-4.8-4.8l1.2-1.2"/>'
         + '<path d="m4.6 4.6 14.8 14.8"/>',
-    cerrar: '<path d="m6.4 6.4 11.2 11.2M17.6 6.4 6.4 17.6"/>'
+    cerrar: '<path d="m6.4 6.4 11.2 11.2M17.6 6.4 6.4 17.6"/>',
+
+    // Exportar el proyecto: la línea de tiempo con sus clips y una flecha que
+    // sale de ella. No es «guardar» ni «compartir» —de esto salen archivos para
+    // otro programa— y por eso la flecha se va del recuadro y no entra en él.
+    exportar:
+        '<path d="M12.8 19.4H5a1.6 1.6 0 0 1-1.6-1.6V6.2A1.6 1.6 0 0 1 5 4.6h14a1.6 1.6 0 0 1 1.6 1.6v4.4"/>'
+        + '<path d="M3.4 9.2h17.2"/><path d="M8.2 9.2v10.2"/>'
+        + '<path d="M15.4 17.4h5.2M18.2 14.8l2.6 2.6-2.6 2.6"/>',
+
+    // OpenFilm: un fotograma de película, con sus perforaciones a los costados.
+    // Dibujado acá y no tomado de su marca: su `TRADEMARK.md` no deja usar su
+    // logo sin permiso escrito, y nombrarlo sí.
+    pelicula:
+        '<rect x="3.4" y="5.2" width="17.2" height="13.6" rx="1.6"/>'
+        + '<path d="M7.6 5.2v13.6M16.4 5.2v13.6"/>'
+        + '<path d="M5.5 8.4h.1M5.5 12h.1M5.5 15.6h.1M18.5 8.4h.1M18.5 12h.1M18.5 15.6h.1"/>'
 };
 
 /**

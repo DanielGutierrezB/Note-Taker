@@ -42,6 +42,29 @@ let generando = false;
 /** Cuál fue el último pedido de pistas: uno viejo que contesta tarde no se dibuja. */
 let pedidoDeLinea = 0;
 
+/**
+ * Las dos salidas de la misma carpeta.
+ *
+ * Los tres pasos de arriba —las capturas, qué se ve en cada vista y cómo queda
+ * cada clase— valen para las dos, así que se eligen una vez y lo que cambia es
+ * a dónde va: un `.prproj` que abre Premiere, o la carpeta con la que el agente
+ * de OpenFilm arma el primer corte (`engine/openfilm-carpeta.js`). Cada una
+ * trae lo suyo y lo demás es igual, incluido el botón.
+ */
+const SALIDAS = {
+    premiere: {
+        boton: 'btn-prproj-generar',
+        dice: 'Exportar .prproj',
+        haciendo: 'Generando…',
+        pedir: () => window.nt.prprojGenerar(carpeta, config)
+    },
+    openfilm: {
+        boton: 'btn-prproj-openfilm',
+        dice: 'Exportar a OpenFilm',
+        haciendo: 'Exportando…',
+        pedir: () => window.nt.openfilmExportar(carpeta, config)
+    }
+};
 export function conectar() {
     $('#btn-prproj-cerrar').innerHTML = icono('cerrar');
     $('#prproj-capturas').addEventListener('click', alClic);
@@ -53,12 +76,32 @@ export function conectar() {
     filas.addEventListener('drop', alSoltar);
     filas.addEventListener('dragend', alTerminarArrastre);
     filas.addEventListener('keydown', alTecla);
-    $('#btn-prproj-generar').addEventListener('click', generar);
+    $('#btn-openfilm-ico').innerHTML = icono('pelicula');
+    $('#btn-prproj-generar').addEventListener('click', () => exportar('premiere'));
+    $('#btn-prproj-openfilm').addEventListener('click', () => exportar('openfilm'));
     window.nt.onPrprojAviso(p => {
         if (!generando || p.carpeta !== carpeta) return;
-        $('#btn-prproj-generar').textContent = p.que || 'Generando…';
+        rotulo(SALIDAS[generando].boton, p.que || SALIDAS[generando].haciendo);
     });
 }
+
+/**
+ * Lo que dice un botón de exportar, sin tocarle el logo.
+ *
+ * El rótulo vive en su propio `<span data-dice>` justamente para esto: mientras
+ * exporta, el botón va contando en qué clase va, y escribir eso sobre el botón
+ * entero se llevaba puesto el logo de al lado.
+ */
+function rotulo(id, dice) {
+    const span = $(`#${id}`).querySelector('[data-dice]');
+    if (span) span.textContent = dice;
+}
+
+/** Los dos botones con lo que dicen de entrada. */
+function pintarBotones() {
+    for (const salida of Object.values(SALIDAS)) rotulo(salida.boton, salida.dice);
+}
+
 
 /** Abre el menú para una carpeta, con la configuración que tenga guardada. */
 export async function abrir(laCarpeta) {
@@ -83,14 +126,24 @@ export async function abrir(laCarpeta) {
     $('#prproj-dice').textContent = r.clases
         ? `${r.curso} · ${r.clases === 1 ? '1 clase' : `${r.clases} clases`}`
         : `${r.curso} · todavía no tiene ninguna clase grabada`;
-    $('#prproj-destino').innerHTML = `Se guarda en <code title="${esc(r.destino)}">${esc(r.destino)}</code>`;
+    // Las dos salidas escriben adentro de la carpeta del curso, cada una en la
+    // suya: se nombra la carpeta una vez y después qué deja cada botón.
+    const corte = r.destino.lastIndexOf('/Proyecto/');
+    const enElCurso = corte > 0 ? r.destino.slice(0, corte) : r.destino;
+    $('#prproj-destino').innerHTML = `Se guarda en <code title="${esc(enElCurso)}">${esc(enElCurso)}</code>`
+        + ', en <code>Proyecto/</code> o en <code>OpenFilm/</code>';
     $('#prproj-ejemplo').textContent = ejemplo
         ? `${ejemplo.nombre}${ejemplo.segundos ? ` · ${duracion(ejemplo.segundos)}` : ''}`
         : '';
-    $('#btn-prproj-generar').textContent = 'Generar proyecto';
+    pintarBotones();
     pintar();
-    if (!r.plantilla) pintarPie({ tono: 'error', dice: 'Falta la plantilla de Premiere que viene con la app: reinstalala.' });
+    // Sin la plantilla no hay `.prproj` que armar, pero OpenFilm sí: su carpeta
+    // no sale de ninguna plantilla. Así que el aviso apaga un botón y no los dos.
     $('#btn-prproj-generar').disabled = !r.clases || !r.plantilla;
+    $('#btn-prproj-openfilm').disabled = !r.clases;
+    $('#btn-prproj-generar').title = r.plantilla
+        ? 'Escribir el proyecto en Proyecto/, adentro de la carpeta del curso. Si ya hay uno, el nuevo queda al lado sin pisarlo.'
+        : 'Falta la plantilla de Premiere que viene con la app: reinstalala. Exportar a OpenFilm no la necesita.';
     verPanel('telon-prproj', true);
 }
 
@@ -114,7 +167,9 @@ function pintarPie(resultado) {
     $('#prproj-destino').hidden = !!resultado;
     caja.hidden = !resultado;
     mostrar.hidden = !hecho;
-    $('#btn-prproj-generar').hidden = hecho;
+    // Hecho, los dos botones se van: lo que sigue es mirar lo que quedó. Volver
+    // a exportar es cambiar algo de arriba, y eso ya los trae de vuelta.
+    for (const salida of Object.values(SALIDAS)) $(`#${salida.boton}`).hidden = hecho;
     if (!resultado) {
         caja.innerHTML = '';
         return;
@@ -128,14 +183,20 @@ function pintarPie(resultado) {
     const trae = [
         cuantas(r.clases, 'clase', 'clases'),
         cuantas(r.tomas, 'toma', 'tomas'),
-        cuantas(r.capturas, 'captura', 'capturas')
+        ...(resultado.cual === 'premiere' ? [cuantas(r.capturas, 'captura', 'capturas')] : [])
     ].join(' · ');
     // Lo que hay que mirar va aparte de la cuenta: es lo único de acá que pide
-    // hacer algo.
+    // hacer algo. Y en OpenFilm, además, qué hacer con lo que se acaba de
+    // escribir: la carpeta sola no dice que hay que abrirla en su app.
     const avisos = (r.avisos || []).map(a => `<li>${esc(a)}</li>`).join('');
+    const queSigue = resultado.cual === 'openfilm'
+        ? `<span class="pp-resultado-trae">Abrí esta carpeta en OpenFilm y pedile a su agente que lea `
+            + `<code>${esc((r.guia || '').split('/').pop())}</code>.</span>`
+        : '';
     caja.innerHTML = `
         <span class="pp-resultado-dice" title="${esc(r.ruta)}">Listo: <b>${esc(nombre)}</b></span>
         <span class="pp-resultado-trae" title="${esc((r.cuenta || []).slice(0, 2).join(' '))}">${trae}</span>
+        ${queSigue}
         ${avisos ? `<ul class="pp-resultado-avisos">${avisos}</ul>` : ''}`;
     mostrar.dataset.ruta = r.ruta;
     mostrar.focus();
@@ -500,26 +561,31 @@ function mover(vista, id, vecina, despues) {
     pintar();
 }
 
-async function generar() {
+async function exportar(cual) {
     if (generando || !carpeta) return;
-    generando = true;
-    const boton = $('#btn-prproj-generar');
+    const salida = SALIDAS[cual];
+    generando = cual;
+    const boton = $(`#${salida.boton}`);
+    const otro = $(`#${SALIDAS[cual === 'premiere' ? 'openfilm' : 'premiere'].boton}`);
     boton.disabled = true;
-    boton.textContent = 'Generando…';
+    otro.disabled = true;
+    boton.textContent = salida.haciendo;
     pintarPie(null);
     let r;
     try {
-        r = await window.nt.prprojGenerar(carpeta, config);
+        r = await salida.pedir();
     } catch (err) {
         r = { ok: false, error: err.message };
     }
-    generando = false;
+    generando = null;
     boton.disabled = false;
-    boton.textContent = 'Generar proyecto';
+    otro.disabled = false;
+    // Con su logo de vuelta: el texto solo se reemplazó mientras duraba.
+    pintarBotones();
     if (r.cancelado) return;
     if (!r.ok) {
         pintarPie({ tono: 'error', dice: r.error });
         return;
     }
-    pintarPie({ tono: 'ok', r });
+    pintarPie({ tono: 'ok', cual, r });
 }

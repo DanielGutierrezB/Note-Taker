@@ -42,8 +42,10 @@ Zoom / micrófono ──► Note Taker ──► xml/clase.xml ─────�
   cambia de entrada sin parar la clase.
 - **La foto del OUT.** Un fotograma de la cámara de referencia al cerrar cada
   toma, para retomar con la pantalla como estaba.
-- **El proyecto de Premiere de la carpeta.** Las capturas, cada vista anidada o
-  suelta, una precortada por clase y su versión sin cortar.
+- **El proyecto de la carpeta, para dos editores.** Un `.prproj` con las
+  capturas, cada vista anidada o suelta, una precortada por clase y su versión
+  sin cortar; o la carpeta con la que el agente de **OpenFilm** arma el primer
+  corte, con el transcript palabra por palabra y los cortes ya en segundos.
 - **Dos diseños.** El nuevo, que es el de fábrica —texto grande, vertical u
   horizontal, tamaño de letra a mano, búsqueda con ⌘F y una línea que dice si
   el texto va al día—, y el clásico.
@@ -111,10 +113,11 @@ audio grabado y no contra el reloj de pared (ver **Un solo reloj**).
    nota se escribe a mano.
 4. **Cierre** — qué quedó, dónde está el XML, y qué hay que rehacer si algo
    salió mal.
-5. **Proyecto de Premiere** — desde Sesiones, el `.prproj` de la carpeta del
-   curso: cuántas capturas hay y qué se ve en cada vista, con la línea de
-   tiempo de una clase dibujada en vivo (ver **El proyecto de Premiere de la
-   carpeta**).
+5. **Exportar proyecto** — desde Sesiones, la carpeta del curso lista para
+   editar: cuántas capturas hay y qué se ve en cada vista, con la línea de
+   tiempo de una clase dibujada en vivo, y abajo las dos salidas, Premiere u
+   OpenFilm (ver **El proyecto de Premiere de la carpeta** y **Exportar para
+   OpenFilm**).
 
 Ajustes, Diagnóstico y el Reporte son paneles: se abren encima de cualquier
 pantalla, porque la pregunta que contestan aparece en cualquier momento.
@@ -1014,11 +1017,15 @@ de una clase vieja y una toma desactivada que no tiene que aparecer.
 
 ## El proyecto de Premiere de la carpeta
 
-**Crear proyecto**, en la cabecera de Sesiones, arma un proyecto de Premiere
-con todas las clases de la carpeta, en `<carpeta>/Proyecto/<carpeta>.prproj`.
-Antes abre un panel en tres pasos —cuántas capturas hay, qué se ve en cada vista
-y cómo queda cada clase en Premiere, dibujado en vivo— y al generar, el pie del
-panel dice el archivo y lo que trae, con **Mostrar en Finder** al lado.
+**Exportar proyecto**, en la cabecera de Sesiones, abre un panel en tres pasos
+—cuántas capturas hay, qué se ve en cada vista y cómo queda cada clase, dibujado
+en vivo— y abajo tiene **las dos salidas de la misma carpeta**: un proyecto de
+Premiere, o la carpeta con la que el agente de OpenFilm arma el primer corte (ver
+**Exportar para OpenFilm**). Los tres pasos valen para las dos, así que se eligen
+una vez; al exportar, el pie del panel dice qué quedó y trae **Mostrar en
+Finder**.
+
+**Exportar .prproj** escribe `<carpeta>/Proyecto/<carpeta>.prproj`.
 
 ![El panel del proyecto de Premiere, ya generado](docs/capturas/prproj-listo-1180.png)
 
@@ -1167,6 +1174,77 @@ cuántos cuadros por segundo está, genera un proyecto de juguete con ella y lo
 vuelve a leer antes de instalarla. Ojo con una cosa: quien abra el proyecto
 necesita **la misma versión de Premiere o una más nueva** que la que guardó la
 plantilla.
+
+## Exportar para OpenFilm
+
+La otra salida del mismo panel. [OpenFilm](https://openfilm.dev) es un editor de
+vídeo donde el montaje lo hace un agente al lado de la persona, y un proyecto
+suyo no es un archivo cerrado como el `.prproj` sino **una carpeta con un
+`film.html`**: HTML que dice qué clip entra cuándo, que se lee y se escribe como
+texto.
+
+Eso cambia qué tiene sentido exportar. Un `.prproj` se entrega armado porque lo
+abre un programa; acá lo que se entrega es **con qué armarlo**, y el montaje lo
+escribe el agente, que es su trabajo y donde la persona lo va a corregir. Si la
+app escribiera el `film.html`, el primer cambio del agente lo pisaría.
+
+![El panel después de exportar a OpenFilm: el pie dice qué quedó y qué hacer con eso](docs/capturas/openfilm-listo-1180.png)
+
+**Exportar a OpenFilm** escribe `<carpeta>/OpenFilm/`:
+
+```
+PRIMER-CORTE.md        la guía: qué hay acá y qué armar con eso
+notas-de-rodaje/
+  clases.json          todas las clases y sus tomas, con los tiempos en segundos
+  clase-01.md …        el guion de cada clase: toma, vista, nota y lo que se dice
+assets/
+  audio/<clase>-1.wav  el audio de la clase, enlazado (copiado si está en otro disco)
+  audio/<clase>-1.vtt  lo que se dijo, palabra por palabra, en segundos de ese WAV
+  captura-1/ …         vacías: ahí se suelta el vídeo de cada cámara o pantalla
+```
+
+**Los cortes son los mismos que van a Premiere.** El plan sale de
+`prproj-plan.planear` —el mismo que arma el `.prproj`— y el exportador solo lo
+traduce a segundos y a nombres de archivo. Dos exportadores de la misma clase
+pueden diferir en muchas cosas; en dónde cae un corte, no.
+
+**Cada toma trae su lugar en tres relojes**, y los tres hacen falta:
+
+| Campo | Qué mide | Para qué |
+|---|---|---|
+| `enElAudio` | dónde cae en el WAV de su clase | recortar el audio limpio, buscar sus palabras |
+| `enLaCaptura` | dónde cae en el film de su captura, con la clase en su franja | el `#t=` del clip |
+| `enLaPrecortada` | dónde cae en la precortada, con las tomas pegadas | el `at` del clip |
+
+Sin los tres, la cuenta la tiene que hacer el agente, y es la clase de cuenta
+cuyo error no se ve hasta mirar el corte.
+
+**El `.vtt` es lo que Premiere no puede recibir.** OpenFilm lee, al lado de cada
+audio y con su mismo nombre, un WebVTT con las palabras marcadas una por una
+(`engine/vtt.js`): con eso sus subtítulos salen solos y el agente puede editar
+leyendo lo que se dijo. Las palabras salen de las tres fuentes que la app tiene
+—lo que quedó en cada toma, sus orillas y el colchón del vivo— en ese orden de
+confianza y sin repetir, que es la misma regla con la que la pantalla dibuja el
+gris de alrededor de una toma.
+
+**La guía lleva los números de esa carpeta y no instrucciones generales**
+(`engine/openfilm-guia.js`): las clases con su franja, las capturas con su
+carpeta, las vistas con su apilado, cuántas tomas tiene que quedar cada clase, y
+qué revisar antes de darlo por hecho. Lo único que no se le puede dar hecho es
+**la sincronía** —el desfase entre el vídeo de cada cámara y el WAV—, así que la
+guía le pide que lo calcule y que lo diga antes de seguir. Y trae un plan B: si
+un film anidado recortado no reproduce bien o la vista previa se arrastra, que
+los clips apunten directo al vídeo de la cámara con el desfase ya sumado.
+
+**Exportar otra vez no le pisa el trabajo a nadie.** Se rehacen la guía, las
+notas y los audios, que son datos; el `film.html` y `parts/` son del agente y no
+se tocan. Es la misma pregunta que el `.prproj` resuelve con un diálogo —¿se
+reemplaza lo que ya está?— resuelta de otra manera: acá el montaje vive en
+archivos distintos de los datos.
+
+Lo que el formato de OpenFilm sí tiene y Premiere no es que **una vista anidada,
+una precortada y la clase entera son todas films**, y un film puede ser clip de
+otro: la misma idea de las anidaciones, sin un formato binario de por medio.
 
 ## Las dos lecturas de Whisper
 
@@ -1491,7 +1569,7 @@ micrófono—. Los escenarios se eligen por la URL y se combinan con coma
 ```bash
 npm install
 npm start          # la app
-npm test           # 1142 pruebas, sin red y sin abrir nada
+npm test           # 1164 pruebas, sin red y sin abrir nada
 npm run maqueta    # la interfaz con datos falsos
 npm run atajo      # un «Note Taker (Dev).app» en el Escritorio
 ```
@@ -1600,6 +1678,9 @@ engine/
   vivo/                  tomas, señales, el ciclo, las ediciones y las vistas
   notas-xml.js           cómo se escribe todo eso para Premiere
   prproj*.js             el proyecto de Premiere de la carpeta, desde la plantilla
+  openfilm-carpeta.js    la misma carpeta para OpenFilm: datos, audio y la guía
+  openfilm-guia.js       el PRIMER-CORTE.md que lee su agente
+  vtt.js                 lo que se dijo, en WebVTT, palabra por palabra
   ajustar-corte.js       correr el IN y el OUT al silencio de al lado
   fcp-xml.js             el formato FCP7, con marcadores de secuencia y de clip
   captura.js             el WAV que se escribe mientras entra
@@ -1703,7 +1784,7 @@ en [`notas/`](notas/) y en los
 
 Cómo se comprueba que una versión no rompe lo que andaba:
 
-- **1142 pruebas** (`npm test`), sin red y sin abrir nada.
+- **1164 pruebas** (`npm test`), sin red y sin abrir nada.
 - **El XML de cuarenta clases reales**, rehecho con la versión nueva y con la
   0.6.1, sale igual: las mismas tomas, los mismos marcadores en los mismos
   cuadros y los mismos cortes ajustados al silencio.

@@ -35,7 +35,7 @@ export const SE_HACEN = [
     'sin-whisper', 'sin-zoom', 'faltan-modelos', 'update',
     'en-vivo', 'desplegada', 'toma-abierta', 'releyendo', 'muchas-clases',
     'sin-audio', 'terminada', 'terminada-vacia', 'notas-de-antes', 'foto', 'foto-cien',
-    'prproj', 'prproj-lleno', 'prproj-listo',
+    'prproj', 'prproj-lleno', 'prproj-listo', 'openfilm-listo',
     'ajustes', 'diagnostico', 'iconos'
 ];
 
@@ -368,6 +368,17 @@ window.nt = {
             '3 precortada(s) con 41 toma(s).'],
         avisos: ['clase-2_2026-09-28_14-30-00 quedó sin terminar: entra con lo que tenía guardado.']
     }),
+    // La otra salida de la misma carpeta: lo que se abre en OpenFilm.
+    openfilmExportar: async carpeta => ({
+        ok: true,
+        ruta: `${carpeta}/OpenFilm`,
+        guia: `${carpeta}/OpenFilm/PRIMER-CORTE.md`,
+        clases: 3,
+        tomas: 41,
+        cuenta: ['3 clase(s) con 41 toma(s), en 2 captura(s).',
+            'Abrí OpenFilm/ en OpenFilm y pedile al agente que lea PRIMER-CORTE.md.'],
+        avisos: ['clase-2_2026-09-28_14-30-00 quedó sin terminar: entra con lo que tenía guardado.']
+    }),
     onPrprojAviso: () => {},
 
     fotosListar: async (carpeta, secuencia) => ({
@@ -585,12 +596,16 @@ async function aplicar() {
     }
 
     // El menú de «Generar .prproj», y con `prproj-listo` ya generado.
-    if (hay('prproj') || hay('prproj-listo') || hay('prproj-lleno')) {
+    if (hay('prproj') || hay('prproj-listo') || hay('prproj-lleno') || hay('openfilm-listo')) {
         await app.irASesiones();
         document.querySelector('#btn-prproj').click();
         await espera(80);
         if (hay('prproj-listo')) {
             document.querySelector('#btn-prproj-generar').click();
+            await espera(80);
+        }
+        if (hay('openfilm-listo')) {
+            document.querySelector('#btn-prproj-openfilm').click();
             await espera(80);
         }
         return;

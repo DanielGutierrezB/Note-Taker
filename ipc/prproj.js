@@ -16,6 +16,7 @@ const grabacion = require('../engine/grabacion');
 const carpetaPrproj = require('../engine/prproj-carpeta');
 const prprojConfig = require('../engine/prproj-carpeta-config');
 const prprojPlan = require('../engine/prproj-plan');
+const openfilm = require('../engine/openfilm-carpeta');
 
 /**
  * Dónde va el proyecto de una carpeta: `<carpeta>/Proyecto/<carpeta>.prproj`.
@@ -121,6 +122,35 @@ function registrar({ ipcMain, dialog, ventana, send, anotar }) {
         });
         anotar(r.ok ? 'prproj.generado' : 'prproj.falla', {
             carpeta, ruta: r.ruta, error: r.error, avisos: (r.avisos || []).length
+        });
+        return r;
+    });
+
+    /**
+     * La otra salida de la misma carpeta: lo que OpenFilm necesita para armar el
+     * primer corte (`engine/openfilm-carpeta.js`).
+     *
+     * No pregunta nada, al revés que generar el `.prproj`. Lo que escribe son
+     * datos —la guía, las notas y el audio— y el montaje del agente vive en
+     * otros archivos, así que exportar otra vez no puede pisarle el trabajo a
+     * nadie: no hay nada que confirmar.
+     */
+    ipcMain.handle('openfilm-exportar', async (event, carpeta, config) => {
+        anotar('openfilm.exportar', { carpeta, config });
+        let limpia;
+        try {
+            limpia = recordar(carpeta, config);
+        } catch (err) {
+            return { ok: false, error: `No pude guardar la configuración: ${err.message}` };
+        }
+        const r = await openfilm.exportar({
+            carpeta,
+            config: limpia,
+            enCurso: grabacion.enCurso(),
+            avisar: paso => send('prproj-aviso', { carpeta, ...paso })
+        });
+        anotar(r.ok ? 'openfilm.exportado' : 'openfilm.falla', {
+            carpeta, ruta: r.ruta, clases: r.clases, tomas: r.tomas, error: r.error, avisos: (r.avisos || []).length
         });
         return r;
     });

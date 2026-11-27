@@ -83,6 +83,7 @@ contextBridge.exposeInMainWorld('nt', {
     prprojConfig: carpeta => ipcRenderer.invoke('prproj-config', carpeta),
     prprojPistas: (config, usadas) => ipcRenderer.invoke('prproj-pistas', config, usadas),
     prprojGenerar: (carpeta, config) => ipcRenderer.invoke('prproj-generar', carpeta, config),
+    openfilmExportar: (carpeta, config) => ipcRenderer.invoke('openfilm-exportar', carpeta, config),
     onPrprojAviso: callback => {
         ipcRenderer.on('prproj-aviso', (_event, payload) => callback(payload));
     },

@@ -177,17 +177,26 @@
   color: var(--text-secondary);
 }
 
-/* «Crear proyecto»: con el logo de Premiere, y con borde y texto claros para
-   que se lea como un botón al lado del primario. */
-.btn.btn-premiere {
+/* Un botón que lleva el logo de a dónde va lo que exporta: las dos salidas del
+   panel, Premiere y OpenFilm. Con borde y texto claros, y **los dos con el
+   mismo peso**: son dos destinos del mismo trabajo y elegir uno no es más
+   principal que elegir el otro. El acento de ese pie queda para «Mostrar en
+   Finder», que es lo que sigue después de exportar. */
+.btn.btn-con-logo {
   gap: var(--sp-2);
   color: var(--text-primary);
   background: var(--bg-surface);
   border: 1px solid var(--border-field);
 }
 
-.btn.btn-premiere:hover:not(:disabled) {
+.btn.btn-con-logo:hover:not(:disabled) {
   background: var(--bg-surface-hover);
+}
+
+/* El icono del logo va al tamaño del de Premiere, que es el que manda acá. */
+.btn.btn-con-logo .hp-ico {
+  width: 20px;
+  height: 20px;
 }
 
 .logo-premiere {
